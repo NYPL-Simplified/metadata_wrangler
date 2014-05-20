@@ -73,6 +73,7 @@ class DataSource(Base):
     OVERDRIVE = "Overdrive"
     THREEM = "3M"
     OCLC = "OCLC Classify"
+    AXIS_360 = "Axis 360"
     WEB = "Web"
 
     __tablename__ = 'datasources'
@@ -81,6 +82,13 @@ class DataSource(Base):
 
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source") 
+
+    @classmethod
+    def well_known_sources(cls, _db):
+        """Make sure all the well-known sources exist."""
+        for name in (cls.GUTENBERG, cls.OVERDRIVE, cls.THREEM, cls.AXIS_360,
+                     cls.OCLC, cls.WEB):
+            yield get_one_or_create(_db, DataSource, name=name)
 
 # A join table for the many-to-many relationship between WorkRecord
 # and WorkIdentifier.
