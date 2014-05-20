@@ -46,7 +46,7 @@ class SessionManager(object):
     def initialize(cls, server, database):
         engine = cls.engine(server, database)
         Base.metadata.create_all(engine)
-        return engine.connect()
+        return engine, engine.connect()
 
 def get_one_or_create(db, model, create_method='',
                       create_method_kwargs=None,
@@ -88,7 +88,8 @@ class DataSource(Base):
         """Make sure all the well-known sources exist."""
         for name in (cls.GUTENBERG, cls.OVERDRIVE, cls.THREEM, cls.AXIS_360,
                      cls.OCLC, cls.WEB):
-            yield get_one_or_create(_db, DataSource, name=name)
+            obj, new = get_one_or_create(_db, DataSource, name=name)
+            yield obj
 
 # A join table for the many-to-many relationship between WorkRecord
 # and WorkIdentifier.
