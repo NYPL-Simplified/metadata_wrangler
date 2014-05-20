@@ -66,7 +66,7 @@ def get_one_or_create(db, model, create_method='',
 
 Base = declarative_base()
 
-class DataSource(object):
+class DataSource(Base):
     """A source for information about books, and possibly the books themselves."""
 
     GUTENBERG = "Gutenberg"
@@ -77,7 +77,7 @@ class DataSource(object):
 
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True)
-    name = Column(String(255))
+    name = Column(String)
 
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source") 
@@ -87,11 +87,11 @@ class DataSource(object):
 workrecord_workidentifier = Table(
     'workrecord_workidentifier',
     Base.metadata,
-    Column('workrecord_id', Integer, ForeignKey('workidentifier.id')),
-    Column('workidentifier_id', Integer, ForeignKey('workrecord.id'))
+    Column('workrecord_id', Integer, ForeignKey('workidentifiers.id')),
+    Column('workidentifier_id', Integer, ForeignKey('workrecords.id'))
 )
 
-class WorkIdentifier(object):
+class WorkIdentifier(Base):
     """A way of uniquely referring to a particular text.
     Whatever "text" means.
     """
@@ -132,7 +132,7 @@ class WorkRecord(Base):
     as a "book" with a "title" it can go in here.
     """
 
-    __tablename__ = ''
+    __tablename__ = 'workrecords'
     id = Column(Integer, primary_key=True)
 
     data_source_id = Column(Integer, ForeignKey('datasources.id'))
@@ -380,7 +380,7 @@ class CirculationEvent(Base):
     foreign_patron_id = Column(Integer)
 
     # One LicensePool can have many circulation events.
-    license_pool_id = Column(Integer, ForeignKey('licensepool.id'))
+    license_pool_id = Column(Integer, ForeignKey('licensepools.id'))
 
     # The names of the circulation events we recognize.
     CHECKOUT = "check_out"
