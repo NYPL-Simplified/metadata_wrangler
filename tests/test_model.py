@@ -126,7 +126,9 @@ class TestLicensePool(DatabaseTest):
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "541")
         eq_(True, was_new)
         eq_(DataSource.GUTENBERG, pool.data_source.name)
-        # TODO needs work after data model change.
+        eq_(WorkIdentifier.GUTENBERG_ID, pool.identifier.type)
+        eq_("541", pool.identifier.identifier)
+        
 
     def test_no_license_pool_for_data_source_that_offers_no_licenses(self):
         """OCLC doesn't offer licenses. It only provides metadata. We can get
