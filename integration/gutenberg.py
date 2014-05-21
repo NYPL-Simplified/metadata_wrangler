@@ -84,7 +84,7 @@ class GutenbergAPI(object):
                 yield pg_id, archive, next_item
             next_item = archive.next()
 
-    def missing_books(self):
+    def missing_books(self, _db):
         """Finds PG books that are missing from the WorkRecord and LicensePool
         tables.
 
@@ -92,7 +92,7 @@ class GutenbergAPI(object):
 
         """
         books = self.all_books()
-        source = WorkRecordSource.GUTENBERG
+        source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
             print "Considering %s" % pg_id
 
@@ -120,9 +120,9 @@ class GutenbergAPI(object):
                 data = fh.read()
                 fake_fh = StringIO(data)
                 for book, license in GutenbergRDFExtractor.books_in(
-                        pg_id, fake_fh):
+                        _db, pg_id, fake_fh):
                     yield (book, license)
-
+                    
  
 class GutenbergRDFExtractor(object):
 
@@ -155,7 +155,7 @@ class GutenbergRDFExtractor(object):
         return None
 
     @classmethod
-    def books_in(cls, pg_id, fh):
+    def books_in(cls, _db, pg_id, fh):
         """Yield a (WorkRecord, LicensePool) object for the book
         described by the given filehandle, creating them (but not
         committing them) if necessary.
@@ -177,15 +177,14 @@ class GutenbergRDFExtractor(object):
                 raise ValueError(
                     "More than one title associated with Project Gutenberg ID %s" % pg_id)
             uri, ignore, title = title_triples[0]
-            yield cls.parse_book(g, uri, title)
+            yield cls.parse_book(_db, g, uri, title)
 
     @classmethod
-    def parse_book(cls, g, uri, title):
+    def parse_book(cls, _db, g, uri, title):
         """Turn an RDF graph into a (WorkRecord, LicensePool) 2-tuple
         for the given `uri` and `title`.
         """
         source_id = unicode(cls.ID_IN_URI.search(uri).groups()[0])
-        set_trace()
         # Split a subtitle out from the main title.
         title = unicode(title)
         subtitle = None
@@ -198,7 +197,7 @@ class GutenbergRDFExtractor(object):
         print " %s" % title
 
         issued = cls._value(g, (uri, cls.dcterms.issued, None))
-        issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT)
+        issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT).date()
 
         summary = cls._value(g, (uri, cls.dcterms.description, None))
         summary = WorkRecord._content(summary)
@@ -218,7 +217,7 @@ class GutenbergRDFExtractor(object):
                     g, (link, cls.dcterms['format'], None)):
                 media_type = cls._value(g, (format_uri, cls.rdf.value, None))
                 link = WorkRecord._link(
-                    Edition.OPEN_ACCESS_DOWNLOAD, link, media_type)
+                    WorkRecord.OPEN_ACCESS_DOWNLOAD, link, media_type)
                 links.append(link)
         
         subjects = []
@@ -237,6 +236,9 @@ class GutenbergRDFExtractor(object):
 
         # Create or fetch a WorkRecord and LicensePool for
         # this book.
+        source = DataSource.lookup(_db, DataSource.GUTENBERG)
+        identifier, new = WorkIdentifier.for_foreign_id(
+            _db, WorkIdentifier.GUTENBERG_ID, source_id)
         book, new = get_one_or_create(
             _db, WorkRecord,
             create_method_kwargs=dict(
@@ -249,13 +251,19 @@ class GutenbergRDFExtractor(object):
                 links=links,
                 subjects=subjects,
                 authors=authors),
-            source=WorkRecordSource.GUTENBERG,
-            source_id=source_id,
-            source_id_type=WorkIdentifier.GUTENBERG,
-
+            data_source=source,
+            primary_identifier=identifier,
         )
 
-        license_pool, new = LicensePool.open_access_license_for(_db, book)
+        license_pool, new = get_one_or_create(
+            _db, LicensePool,
+            data_source=source,
+            identifier=identifier,
+            create_method_kwargs=dict(
+                open_access=True,
+                last_checked=datetime.datetime.now(),
+            )
+        )
         return book, license_pool
 
 
