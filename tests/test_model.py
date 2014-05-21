@@ -144,11 +144,8 @@ class TestLicensePool(DatabaseTest):
 
     def test_no_license_pool_for_non_primary_identifier(self):
         """Overdrive offers licenses, but to get an Overdrive license pool for
-        a book you must identify the book by its primary
-        identifier. It only provides metadata. We can get a WorkRecord
-        for OCLC's view of a book, but we cannot get a LicensePool for
-        OCLC's view of a book.
-
+        a book you must identify the book by Overdrive's primary
+        identifier, not some other kind of identifier.
         """
         assert_raises_regexp(
             ValueError, 
