@@ -82,7 +82,7 @@ class DataSource(Base):
     name = Column(String, unique=True)
     offers_licenses = Column(Boolean, default=False)
     primary_identifier_type = Column(String)
-    circulation_refresh_rate_seconds = Column(Integer)
+    extra = Column(JSON, default={})
 
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
@@ -100,20 +100,25 @@ class DataSource(Base):
 
         for (name, offers_licenses, primary_identifier_type,
              refresh_rate) in (
-                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
-                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
-                (cls.THREEM, True, WorkIdentifier.THREEM_ID, ),
-                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                (cls.OCLC, False, WorkIdentifier.OCLC_WORK, None),
-                (cls.WEB, True, WorkIdentifier.URI, None)
+                 (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
+                 (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
+                 (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
+                 (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
+                 (cls.OCLC, False, WorkIdentifier.OCLC_WORK, None),
+                 (cls.WEB, True, WorkIdentifier.URI, None)
         ):
+
+            extra = dict()
+            if refresh_rate:
+                extra['circulation_refresh_rate_seconds'] = refresh_rate
+
             obj, new = get_one_or_create(
                 _db, DataSource,
                 name=name,
                 create_method_kwargs=dict(
                     offers_licenses=offers_licenses,
                     primary_identifier_type=primary_identifier_type,
-                    circulation_refresh_rate_seconds=refresh_rate,
+                    extra=extra,
                 )
             )
             yield obj
@@ -391,7 +396,8 @@ class LicensePool(Base):
         if not self.last_checked:
             # This pool has never had its circulation info checked.
             return True
-        maximum_stale_time = self.data_source.circulation_refresh_rate_seconds
+        maximum_stale_time = self.data_source.extra.get(
+            'circulation_refresh_rate_seconds')
         if maximum_stale_time is None:
             # This pool never needs to have its circulation info checked.
             return False
