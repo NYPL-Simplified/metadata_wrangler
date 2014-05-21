@@ -348,10 +348,10 @@ class LicensePool(Base):
 
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
-    licenses_owned = Column(Integer)
-    licenses_available = Column(Integer)
-    licenses_reserved = Column(Integer)
-    patrons_in_hold_queue = Column(Integer)
+    licenses_owned = Column(Integer,default=0)
+    licenses_available = Column(Integer,default=0)
+    licenses_reserved = Column(Integer,default=0)
+    patrons_in_hold_queue = Column(Integer,default=0)
 
     # A WorkIdentifier should have at most one LicensePool.
     __table_args__ = (UniqueConstraint('identifier_id'),)
@@ -448,24 +448,23 @@ class LicensePool(Base):
 
     def update_from_event(self, event):
         """Update the license pool based on an event."""
-
-        # TODO: Update to the number of licenses owned needs to also
-        # increase availability.  This needs to wait until we have a
-        # proper lifecycle state machine, though.
         name = event.type
+        delta = event.delta
         if name in (
                 CirculationEvent.LICENSE_ADD,
                 CirculationEvent.LICENSE_REMOVE):
             self.licenses_owned = event.new_value
-        elif name in (CirculationEvent.CHECKOUT, CirculationEvent.CHECKIN):
+            self.licenses_available += delta
+        elif name in (CirculationEvent.CHECKIN, CirculationEvent.CHECKOUT):
             self.licenses_available = event.new_value
         elif name == CirculationEvent.AVAILABILITY_NOTIFY:
             # People move from the hold queue to the reserves.
+            self.licenses_available -= delta
             self.licenses_reserved += delta
             self.patrons_in_hold_queue -= delta
         elif name in (CirculationEvent.HOLD_RELEASE,
                       CirculationEvent.HOLD_PLACE):
-            patrons_in_hold_queue  = event.new_value
+            self.patrons_in_hold_queue = event.new_value
 
 class CirculationEvent(Base):
 
@@ -581,6 +580,9 @@ class CirculationEvent(Base):
 
         if was_new:
             # Update the LicensePool to reflect the information in this event.
+            print event.type
+            if event.type == 'availablity_notify':
+                set_trace()
             license_pool.update_from_event(event)
         return event, was_new
 
