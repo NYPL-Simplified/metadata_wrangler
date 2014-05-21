@@ -86,6 +86,9 @@ class DataSource(Base):
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
 
+    # One DataSource can hold many LicensePools.
+    license_pools = relationship("LicensePool", backref="data_source")
+
     @classmethod
     def lookup(cls, _db, name):
         return _db.query(cls).filter_by(name=name).one()
@@ -148,6 +151,12 @@ class WorkIdentifier(Base):
     # several WorkRecords.
     primarily_identifies = relationship(
         "WorkRecord", backref="primary_identifier"
+    )
+
+    # One WorkIdentifier may serve as the identifier for
+    # a single LicensePool.
+    licensed_through = relationship(
+        "LicensePool", backref="identifier", uselist=False
     )
 
     # Type + identifier is unique.
@@ -314,21 +323,20 @@ class WorkRecord(Base):
 class LicensePool(Base):
 
     """A pool of undifferentiated licenses for a work from a given source.
-
-    The source is identified in terms of the WorkRecord we created for it.
     """
 
     __tablename__ = 'licensepools'
     id = Column(Integer, primary_key=True)
 
-    # Each LicensePool is associated with one WorkRecord.
-    work_record_id = Column(Integer, ForeignKey('workrecords.id'))
-    work_record = relationship(
-        "WorkRecord", uselist=False, backref="license_pool")
+    # Each LicensePool is associated with one DataSource and one
+    # WorkIdentifier.
+    data_source_id = Column(Integer, ForeignKey('datasources.id'))
+    identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
 
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
         "CirculationEvent", backref="license_pool")
+
 
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
@@ -337,12 +345,13 @@ class LicensePool(Base):
     licenses_reserved = Column(Integer)
     patrons_in_hold_queue = Column(Integer)
 
-    # A WorkRecord should have at most one LicensePool.
-    __table_args__ = (UniqueConstraint('work_record_id'),)
+    # A WorkIdentifier should have at most one LicensePool.
+    __table_args__ = (UniqueConstraint('identifier_id'),)
 
     @classmethod
     def for_foreign_id(self, _db, data_source, foreign_id, foreign_id_type):
 
+        # Get the DataSource.
         if isinstance(data_source, basestring):
             data_source = DataSource.lookup(_db, data_source)
 
@@ -351,7 +360,7 @@ class LicensePool(Base):
             raise ValueError(
                 'Data source "%s" does not offer licenses.' % data_source.name)
 
-        # The foreign ID type must be the data source's primary
+        # The type of the foreign ID must be the data source's primary
         # identifier type.
         if foreign_id_type != data_source.primary_identifier_type:
             raise ValueError(
@@ -362,14 +371,15 @@ class LicensePool(Base):
                 )
             )
 
-        # Get the WorkRecord.
-        work_record, ignore = WorkRecord.for_foreign_id(
-            _db, data_source, foreign_id, foreign_id_type)
+        # Get the WorkIdentifier.
+        identifier, ignore = WorkIdentifier.for_foreign_id(
+            _db, foreign_id, foreign_id_type
+            )
 
         # Get the LicensePool that corresponds to the
-        # WorkRecord.
+        # DataSource and the Identifier
         license_pool, was_new = get_one_or_create(
-            _db, LicensePool, work_record=work_record)
+            _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
 
     def needs_update(self, maximum_stale_time):
