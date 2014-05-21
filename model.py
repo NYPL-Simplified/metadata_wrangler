@@ -1,4 +1,5 @@
 import datetime
+from nose.tools import set_trace
 
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.declarative import declarative_base
@@ -52,17 +53,17 @@ def get_one_or_create(db, model, create_method='',
                       create_method_kwargs=None,
                       **kwargs):
     try:
-        return db.query(model).filter_by(**kwargs).one(), True
+        return db.query(model).filter_by(**kwargs).one(), False
     except NoResultFound:
         kwargs.update(create_method_kwargs or {})
         created = getattr(model, create_method, model)(**kwargs)
         try:
             db.add(created)
             db.flush()
-            return created, False
+            return created, True
         except IntegrityError:
             db.rollback()
-            return self.query(model).filter_by(**kwargs).one(), True
+            return db.query(model).filter_by(**kwargs).one(), False
 
 Base = declarative_base()
 
@@ -78,17 +79,37 @@ class DataSource(Base):
 
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True)
-    name = Column(String)
+    name = Column(String, unique=True)
+    offers_licenses = Column(Boolean, default=False)
+    primary_identifier_type = Column(String)
 
     # One DataSource can generate many WorkRecords.
-    work_records = relationship("WorkRecord", backref="data_source") 
+    work_records = relationship("WorkRecord", backref="data_source")
+
+    @classmethod
+    def lookup(cls, _db, name):
+        return _db.query(cls).filter_by(name=name).one()
 
     @classmethod
     def well_known_sources(cls, _db):
         """Make sure all the well-known sources exist."""
-        for name in (cls.GUTENBERG, cls.OVERDRIVE, cls.THREEM, cls.AXIS_360,
-                     cls.OCLC, cls.WEB):
-            obj, new = get_one_or_create(_db, DataSource, name=name)
+
+        for name, offers_licenses, primary_identifier_type in (
+                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID),
+                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID),
+                (cls.THREEM, True, WorkIdentifier.THREEM_ID),
+                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID),
+                (cls.OCLC, False, WorkIdentifier.OCLC_WORK),
+                (cls.WEB, True, WorkIdentifier.URI)
+        ):
+            obj, new = get_one_or_create(
+                _db, DataSource,
+                name=name,
+                create_method_kwargs=dict(
+                    offers_licenses=offers_licenses,
+                    primary_identifier_type=primary_identifier_type,
+                )
+            )
             yield obj
 
 # A join table for the many-to-many relationship between WorkRecord
@@ -109,6 +130,7 @@ class WorkIdentifier(Base):
     OVERDRIVE_ID = "Overdrive ID"
     THREEM_ID = "3M ID"
     GUTENBERG_ID = "Gutenberg ID"
+    AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work"
@@ -133,6 +155,12 @@ class WorkIdentifier(Base):
         UniqueConstraint('type', 'identifier'),
     )
 
+    @classmethod
+    def for_foreign_id(cls, _db, foreign_identifier_type, foreign_id):
+        work_identifier, was_new = get_one_or_create(
+            _db, cls, type=foreign_identifier_type,
+            identifier=foreign_id)
+        return work_identifier, was_new
 
 class WorkRecord(Base):
 
@@ -164,10 +192,12 @@ class WorkRecord(Base):
 
     languages = Column(JSON, default=[])
     publisher = Column(Unicode)
+    imprint = Column(Unicode)
 
-    # `published is the original publication date of the text. `issued`
-    # is when made available in an edition. A Project Gutenberg text
-    # was likely `published` long before being `issued`.
+    # `published is the original publication date of the
+    # text. `issued` is when made available in this ebook edition. A
+    # Project Gutenberg text was likely `published` long before being
+    # `issued`.
     issued = Column(Date)
     published = Column(Date)
 
@@ -180,6 +210,39 @@ class WorkRecord(Base):
     IMAGE = "http://opds-spec.org/image"
     THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
     SAMPLE = "http://opds-spec.org/acquisition/sample"
+
+    @classmethod
+    def for_foreign_id(cls, _db, data_source,
+                       foreign_id_type, foreign_id):
+        """Find the WorkRecord representing the given data source's view of
+        the work that it primarily identifies by foreign ID.
+
+        e.g. for_foreign_id(_db, DataSource.OVERDRIVE,
+                            WorkIdentifier.OVERDRIVE_ID, uuid)
+
+        finds the WorkRecord for Overdrive's view of a book identified
+        by Overdrive UUID.
+
+        This:
+
+        for_foreign_id(_db, DataSource.OVERDRIVE, WorkIdentifier.ISBN, isbn)
+
+        will probably return nothing, because although Overdrive knows
+        that books have ISBNs, it doesn't use ISBN as a primary
+        identifier.
+        """
+        # Look up the data source if necessary.
+        if isinstance(data_source, basestring):
+            data_source = DataSource.lookup(_db, data_source)
+
+        # Then look up the identifier.
+        work_identifier, ignore = WorkIdentifier.for_foreign_id(
+            _db, foreign_id, foreign_id_type)
+
+        # Combine the two to get/create a WorkRecord.
+        return get_one_or_create(
+            _db, WorkRecord, data_source=data_source,
+            primary_identifier=work_identifier)
 
     def add_language(self, language, type="ISO-639-1"):
         # TODO: Convert ISO-639-2 to ISO-639-1
@@ -278,18 +341,36 @@ class LicensePool(Base):
     __table_args__ = (UniqueConstraint('work_record_id'),)
 
     @classmethod
-    def open_access_license_for(self, _db, work_record):
-        """Find or create an open-access license for the given
-        WorkRecord."""
-        return get_one_or_create(
-            _db,
-            LicensePool,
-            work_record=work_record,
-            create_method_kwargs=dict(
-                open_access=True,
-                last_checked=datetime.datetime.utcnow()
+    def for_foreign_id(self, _db, data_source, foreign_id, foreign_id_type):
+
+        if isinstance(data_source, basestring):
+            data_source = DataSource.lookup(_db, data_source)
+
+        # The data source must be one that offers licenses.
+        if not data_source.offers_licenses:
+            raise ValueError(
+                'Data source "%s" does not offer licenses.' % data_source.name)
+
+        # The foreign ID type must be the data source's primary
+        # identifier type.
+        if foreign_id_type != data_source.primary_identifier_type:
+            raise ValueError(
+                "License pools for data source '%s' are keyed to "
+                "identifier type '%s' (not '%s', which was provided)" % (
+                    data_source.name, data_source.primary_identifier_type,
+                    foreign_id_type
+                )
             )
-        )
+
+        # Get the WorkRecord.
+        work_record, ignore = WorkRecord.for_foreign_id(
+            _db, data_source, foreign_id, foreign_id_type)
+
+        # Get the LicensePool that corresponds to the
+        # WorkRecord.
+        license_pool, was_new = get_one_or_create(
+            _db, LicensePool, work_record=work_record)
+        return license_pool, was_new
 
     def needs_update(self, maximum_stale_time):
         """Is it time to update the circulation info for this pool?"""
@@ -342,34 +423,26 @@ class LicensePool(Base):
             d[Event.EVENT_TYPE] = name
             yield d
 
-    def update_from_event(cls, event):
+    def update_from_event(self, event):
         """Update the license pool based on an event."""
 
-        # TODO: Update to owned needs to increase availability.
-        # This needs to wait until we have a proper lifecycle
-        # state machine, though.
-        name = event[Event.EVENT_TYPE]
-        if Event.DELTA not in event:
-            delta = 1
-        else:
-            delta = abs(event[Event.DELTA])
-
-        if name == Event.LICENSE_ADD:
-            self.licenses_owned += delta
-        elif name == Event.LICENSE_REMOVE:
-            self.licenses_owned -= delta
-        elif name == Event.CHECKOUT:
-            licenses_available -= delta
-        elif name == Event.CHECKIN:
-            licenses_available += delta
-        elif name == Event.AVAILABILITY_NOTIFY:
+        # TODO: Update to the number of licenses owned needs to also
+        # increase availability.  This needs to wait until we have a
+        # proper lifecycle state machine, though.
+        name = event.type
+        if name in (
+                CirculationEvent.LICENSE_ADD,
+                CirculationEvent.LICENSE_REMOVE):
+            self.licenses_owned = event.new_value
+        elif name in (CirculationEvent.CHECKOUT, CirculationEvent.CHECKIN):
+            self.licenses_available = event.new_value
+        elif name == CirculationEvent.AVAILABILITY_NOTIFY:
             # People move from the hold queue to the reserves.
-            licenses_reserved += delta
-            patrons_in_hold_queue -= delta
-        elif name == Event.HOLD_RELEASE:
-            patrons_in_hold_queue -= delta
-        elif name == Event.HOLD_PLACE:
-            patrons_in_hold_queue += delta
+            self.licenses_reserved += delta
+            self.patrons_in_hold_queue -= delta
+        elif name in (CirculationEvent.HOLD_RELEASE,
+                      CirculationEvent.HOLD_PLACE):
+            patrons_in_hold_queue  = event.new_value
 
 class CirculationEvent(Base):
 
@@ -381,15 +454,22 @@ class CirculationEvent(Base):
     __tablename__ = 'circulationevent'
 
     id = Column(Integer, primary_key=True)
-    type = Column(String(32))
-    start = Column(DateTime)
-    end = Column(DateTime)
-    old_value = Column(Integer)
-    new_value = Column(Integer)
-    foreign_patron_id = Column(Integer)
 
     # One LicensePool can have many circulation events.
     license_pool_id = Column(Integer, ForeignKey('licensepools.id'))
+
+    type = Column(String(32))
+    start = Column(DateTime, index=True)
+    end = Column(DateTime)
+    old_value = Column(Integer)
+    delta = Column(Integer)
+    new_value = Column(Integer)
+    foreign_patron_id = Column(Integer)
+
+    # A given license pool can only have one event of a given type for
+    # a given patron at a given time.
+    __table_args__ = (UniqueConstraint('license_pool_id', 'type', 'start',
+                                       'foreign_patron_id'),)
 
     # The names of the circulation events we recognize.
     CHECKOUT = "check_out"
@@ -408,6 +488,86 @@ class CirculationEvent(Base):
     # The time format used when exporting to JSON.
     TIME_FORMAT = "%Y-%m-%dT%H:%M:%S+00:00"
 
+    @classmethod
+    def _get_datetime(cls, data, key):
+        date = data.get(key, None)
+        if not date:
+            return None
+        elif isinstance(date, datetime.date):
+            return date
+        else:
+            return datetime.datetime.strptime(date, cls.TIME_FORMAT)
+
+    @classmethod
+    def _get_int(cls, data, key):
+        value = data.get(key, None)
+        if not value:
+            return value
+        else:
+            return int(value)
+
+    @classmethod
+    def from_string(cls, _db, s):
+        """Find or create a CirculationEvent based on an entry in a JSON
+        stream.
+
+        e.g.
+
+        {"foreign_patron_id": "23333085908570", "start": "2013-05-04T00:17:39+00:00", "id": "d5o289", "source": "3M", "event": "hold_place"}
+        """
+
+        data = json.loads(s.strip())
+        for k in 'start', 'end':
+            if k in data:
+                data[k] = self._parse_date(k)
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_dict(cls, _db, data):
+
+        # Identify the source of the event.
+        source_name = data['source']
+        source = DataSource.lookup(_db, source_name)
+
+        # Identify which work the event is talking about.
+        foreign_id = data['id']
+        identifier_type = data.get('id_type')
+        if not identifier_type:
+            # TODO: this is temporary; events should specify their
+            # identifier type from now on.
+            if source.name == DataSource.THREEM:
+                identifier = WorkIdentifier.THREEM_ID
+            elif source.name == DataSource.OVERDRIVE:
+                identifier = WorkIdentifier.OVERDRIVE_ID
+
+        license_pool = LicensePool.for_foreign_id(
+            _db, source, foreign_id, identifier_type)
+
+        # Finally, gather some information about the event itself.
+        type = data.get("type")
+        start = cls._get_datetime(data, 'start')
+        end = cls._get_datetime(data, 'end')
+        old_value = cls._get_int(data, 'old_value')
+        new_value = cls._get_int(data, 'new_value')
+        delta = cls._get_int(data, 'delta')
+        foreign_patron_id = data.get("foreign_patron_id")
+
+        # Finally, get or create the event.
+        event, was_new = get_one_or_create(
+            _db, CirculationEvent, license_pool=license_pool,
+            type=type, start=start, foreign_patron_id=foreign_patron_id,
+            create_method_kwargs=dict(
+                old_value=old_value,
+                new_value=new_value,
+                delta=delta,
+                end=end)
+            )
+
+        set_trace()
+        if was_new:
+            # Update the LicensePool to reflect the information in this event.
+            license_pool.update_from_event(event)
+        return event
 
 class Timestamp(Base):
     """A general-purpose timestamp for external services."""
