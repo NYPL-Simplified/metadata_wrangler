@@ -1,4 +1,3 @@
-import collections
 import datetime
 import os
 import json
@@ -16,34 +15,19 @@ import rdflib
 from rdflib import Namespace
 
 from model import (
-    _db,
     get_one_or_create,
-    BibliographicRecord,
-    BibliographicRecordSource,
-    BibliographicIdentifier,
+    WorkRecord,
+    DataSource,
+    WorkIdentifier,
     LicensePool,
     SubjectType,
 )
 
-from integration.circulation import (
-    FilesystemMonitorStore,
-    Monitor,
-)
-
-from integration.oclc import (
-    OCLC,
-    OCLCClassifyAPI,
-)
-from integration import FilesystemStore
-from metadata import FilesystemMetadataStore
-
-from model import (
-    _db,
-    BibliographicRecord,
-    Edition,
-    Event,
-    LicensedWork,
-)
+from monitor import Monitor
+#from integration.oclc import (
+#    OCLC,
+#    OCLCClassifyAPI,
+#)
 
 class GutenbergAPI(object):
 
@@ -101,23 +85,23 @@ class GutenbergAPI(object):
             next_item = archive.next()
 
     def missing_books(self):
-        """Finds PG books that are missing from the BibliographicRecord and
-        LicensePool tables.
+        """Finds PG books that are missing from the WorkRecord and LicensePool
+        tables.
 
-        Yields (BibliographicRecord, LicensePool) 2-tuples.
+        Yields (WorkRecord, LicensePool) 2-tuples.
+
         """
-        #books = sorted(self.all_books(), key=lambda x: int(x[0]))
         books = self.all_books()
-        source = BibliographicRecordSource.GUTENBERG
+        source = WorkRecordSource.GUTENBERG
         for pg_id, archive, archive_item in books:
             print "Considering %s" % pg_id
 
-            # Find an existing BibliographicRecord and LicensePool for
+            # Find an existing WorkRecord and LicensePool for
             # the book. Do *not* create them if they don't exist --
             # that's the job of books_in().
-            book = _db.query(BibliographicRecord).filter_by(
+            book = _db.query(WorkRecord).filter_by(
                 source=source, source_id=pg_id,
-                source_id_type=BibliographicIdentifier.GUTENBERG
+                source_id_type=WorkIdentifier.GUTENBERG
             ).first()
             book_exists = (book is not None)
 
@@ -128,7 +112,7 @@ class GutenbergAPI(object):
                 license_exists = (license is not None)
 
             if not book_exists or not license_exists:
-                # Fill in the BibliographicRecord and LicensePool
+                # Fill in the WorkRecord and LicensePool
                 # objects with information from the Project Gutenberg
                 # RDF file.
                 print "%s is new." % pg_id
@@ -143,7 +127,7 @@ class GutenbergAPI(object):
 class GutenbergRDFExtractor(object):
 
     """Transform a Project Gutenberg RDF description of a title into a
-    BibliographicRecord object and an open-access LicensePool object.
+    WorkRecord object and an open-access LicensePool object.
     """
 
     dcterms = Namespace("http://purl.org/dc/terms/")
@@ -172,8 +156,9 @@ class GutenbergRDFExtractor(object):
 
     @classmethod
     def books_in(cls, pg_id, fh):
-        """Yield a (BibliographicRecord, LicensePool) object for the book
-        described by the given filehandle, creating them if necessary.
+        """Yield a (WorkRecord, LicensePool) object for the book
+        described by the given filehandle, creating them (but not
+        committing them) if necessary.
 
         There should only be one book per filehandle.
         """
@@ -196,11 +181,11 @@ class GutenbergRDFExtractor(object):
 
     @classmethod
     def parse_book(cls, g, uri, title):
-        """Turn an RDF graph into a (BibliographicRecord, LicensePool) 2-tuple
+        """Turn an RDF graph into a (WorkRecord, LicensePool) 2-tuple
         for the given `uri` and `title`.
         """
         source_id = unicode(cls.ID_IN_URI.search(uri).groups()[0])
-
+        set_trace()
         # Split a subtitle out from the main title.
         title = unicode(title)
         subtitle = None
@@ -216,7 +201,7 @@ class GutenbergRDFExtractor(object):
         issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT)
 
         summary = cls._value(g, (uri, cls.dcterms.description, None))
-        summary = BibliographicRecord._content(summary)
+        summary = WorkRecord._content(summary)
         
         publisher = cls._value(g, (uri, cls.dcterms.publisher, None))
 
@@ -226,13 +211,13 @@ class GutenbergRDFExtractor(object):
             code = str(cls._value(g, (language_uri, cls.rdf.value, None)))
             languages.append(code)
 
-        links = [BibliographicRecord._link("canonical", uri)]
+        links = [WorkRecord._link("canonical", uri)]
         download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
         for link in download_links:
             for format_uri in cls._values(
                     g, (link, cls.dcterms['format'], None)):
                 media_type = cls._value(g, (format_uri, cls.rdf.value, None))
-                link = BibliographicRecord._link(
+                link = WorkRecord._link(
                     Edition.OPEN_ACCESS_DOWNLOAD, link, media_type)
                 links.append(link)
         
@@ -242,18 +227,18 @@ class GutenbergRDFExtractor(object):
             value = cls._value(g, (subject, cls.rdf.value, None))
             vocabulary = cls._value(g, (subject, cls.dcam.memberOf, None))
             vocabulary=SubjectType.by_uri[str(vocabulary)]
-            subjects.append(BibliographicRecord._subject(vocabulary, value))
+            subjects.append(WorkRecord._subject(vocabulary, value))
 
         authors = []
         for ignore, ignore, author_uri in g.triples((uri, cls.dcterms.creator, None)):
             name = cls._value(g, (author_uri, cls.gutenberg.name, None))
             aliases = cls._values(g, (author_uri, cls.gutenberg.alias, None))
-            authors.append(BibliographicRecord._author(name, aliases=aliases))
+            authors.append(WorkRecord._author(name, aliases=aliases))
 
-        # Create or fetch a BibliographicRecord and LicensePool for
+        # Create or fetch a WorkRecord and LicensePool for
         # this book.
         book, new = get_one_or_create(
-            _db, BibliographicRecord,
+            _db, WorkRecord,
             create_method_kwargs=dict(
                 title=title,
                 subtitle=subtitle,
@@ -264,9 +249,9 @@ class GutenbergRDFExtractor(object):
                 links=links,
                 subjects=subjects,
                 authors=authors),
-            source=BibliographicRecordSource.GUTENBERG,
+            source=WorkRecordSource.GUTENBERG,
             source_id=source_id,
-            source_id_type=BibliographicIdentifier.GUTENBERG,
+            source_id_type=WorkIdentifier.GUTENBERG,
 
         )
 
@@ -279,7 +264,7 @@ class GutenbergMonitor(object):
     """
 
     def __init__(self, data_directory):
-        path = os.path.join(data_directory, BibliographicRecordSource.GUTENBERG)
+        path = os.path.join(data_directory, WorkRecordSource.GUTENBERG)
         if not os.path.exists(path):
             os.makedirs(path)
         self.source = GutenbergAPI(path)
@@ -287,19 +272,16 @@ class GutenbergMonitor(object):
 
     def run(self):
         added_books = 0
-        for book, license_pool in self.source.missing_books():
-            event = dict()
-            event[Edition.SOURCE] = book.source
-            event[Edition.SOURCE_ID] = book.source_id
-            event[Event.START_TIME] = license_pool.last_checked
-
-            self.circulation_events.record_event(
-                Monitor.CIRCULATION_EVENTS, event)
-
-            added_books += 1
-            if added_books and not added_books % 10:
-                _db.commit()
-        _db.commit()
+        for work, license_pool in self.source.missing_books():
+            event = CirculationEvent._get_one_or_add(
+                type=CirculationEvent.TITLE_ADD,
+                license_pool=license_pool,
+                create_method_kwargs=dict(
+                    start=license_pool.last_checked
+                )
+            )
+            _db.commit()
+            #event.log()
 
 
 class OCLCMonitorForGutenberg(object):
@@ -336,25 +318,25 @@ class OCLCMonitorForGutenberg(object):
             author = authors[0]['name']
         return title, author
 
-    def run(self):
+    def run(self, _db):
         i = 0
-        # Look up all the bibliographic records we acquired directly
+        # Look up all the WorkRecords we acquired directly
         # from Project Gutenberg.
         counter = 0
-        for book in _db.query(BibliographicRecord).filter_by(
-                source=BibliographicRecordSource.GUTENBERG,
-                source_id_type=BibliographicIdentifier.GUTENBERG):
+        for book in _db.query(WorkRecord).filter_by(
+                source=WorkRecordSource.GUTENBERG,
+                source_id_type=WorkIdentifier.GUTENBERG):
             title, author = self.title_and_author(book)
 
-            # For each such record, check whether we have already
-            # searched OCLC for the book's title and author. Do *not*
+            # For each such record, check whether we have a WorkRecord
+            # from OCLC for the book's title and author. Do *not*
             # create this record if it doesn't exist; that's the job
             # of records_for().
             source_id = self.oclc.query_string(title=title, author=author)
-            workset_record = _db.query(BibliographicRecord).filter_by(
-                source=BibliographicRecordSource.OCLC, 
+            workset_record = _db.query(WorkRecord).filter_by(
+                source=WorkRecordSource.OCLC, 
                 source_id=source_id,
-                source_id_type=BibliographicIdentifier.QUERY_STRING
+                source_id_type=WorkIdentifier.QUERY_STRING
             ).first()
             if workset_record:
                 # We already did this one.
@@ -382,7 +364,7 @@ class OCLCMonitorForGutenberg(object):
                 print "-" * 80
                 works_looked_up = 0
                 for work_record in work_records:
-                    if work_record.source_id_type == BibliographicIdentifier.OCLC_SWID:
+                    if work_record.source_id_type == WorkIdentifier.OCLC_SWID:
                         swid = work_record.source_id
                         raw = self.oclc.lookup_by(swid=swid)
                         query_string = "swid=%s" % swid

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="2"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <work author="Ewan, Chris, 1976- | " editions="16" format="Book" holdings="1214" itemtype="itemtype-book" pswid="102673973" title="The good thief's guide to Amsterdam">124026738</work>
+  <orderBy>hold desc</orderBy>
+  <input type="isbn">9781429968683</input>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <editions>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="773" itemtype="itemtype-book" language="eng" oclc="163708537" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="0" sf2="22" sfa="823.92" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6105.W36" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="196" itemtype="itemtype-book" language="eng" oclc="244651932" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Large print book" holdings="105" itemtype="itemtype-book-largeprint" language="eng" oclc="190967622" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="60" itemtype="itemtype-book" language="eng" oclc="262430240" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6105.W36" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="38" itemtype="itemtype-book" language="eng" oclc="124026738" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="eBook" holdings="20" itemtype="itemtype-book-digital" language="eng" oclc="829027467" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6105.W36" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Large print book" holdings="7" itemtype="itemtype-book-largeprint" language="eng" oclc="851979867" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="[FIC]" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="4" itemtype="itemtype-book" language="eng" oclc="679948509" title="The good thief's guide to Asterdam"/>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="3" itemtype="itemtype-book" language="eng" oclc="779685311" title="The Good thief's guide to Asterdam : a mystery.">
+      <classifications>
+        <class edition="22" ind1="0" ind2="0" sf2="22" sfa="823.92" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6105.W36" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="eBook" holdings="2" itemtype="itemtype-book-digital" language="eng" oclc="854747877" title="The Good Thief's Guide to Amsterdam">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6105.W36" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.92" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="eBook" holdings="1" itemtype="itemtype-book-digital" language="eng" oclc="863541693" title="The good thief's guide to amsterdam">
+      <classifications>
+        <class ind1="0" ind2="4" sfa="823.92" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6105.W36" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="1" itemtype="itemtype-book" language="eng" oclc="255730258" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6105.W36" tag="050"/>
+        <class ind1="0" ind2="4" sfa="823.92" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="1" itemtype="itemtype-book" language="eng" oclc="695608748" title="The good thief's guide to Amsterdam"/>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="1" itemtype="itemtype-book" language="eng" oclc="809417379" title="The good thief's guide to Amsterdam"/>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="1" itemtype="itemtype-book" language="eng" oclc="796090357" title="The good thief's guide to Amsterdam."/>
+    <edition author="Ewan, Chris, 1976-" format="Book" holdings="1" itemtype="itemtype-book" language="eng" oclc="843760549" title="The good thief's guide to Amsterdam">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+  </editions>
+  <recommendations>
+    <graph>http://chart.apis.google.com/chart?cht=p&chs=350x200&chd=t:99.42339,0.5766063&chtt=All+Editions&chdl=Classified (99.42%)|Unclassified (0.58%)</graph>
+    <fast>
+      <graph>http://chart.apis.google.com/chart?cht=p&chs=475x175&chd=t:99.67051,99.67051,99.011536,71.08731,71.08731,71.08731,63.92092,6.589786&chdl=Novelists, English|Thieves|Netherlands--Amsterdam|Americans--Crimes against|Detective and mystery stories--Authorship|Figurines|Howard, Charlie (Fictitious character)|Art thefts</graph>
+      <headings>
+        <heading heldby="1210" ident="1039718" src="fast">Novelists, English</heading>
+        <heading heldby="1210" ident="1149995" src="fast">Thieves</heading>
+        <heading heldby="1202" ident="1204180" src="fast">Netherlands--Amsterdam</heading>
+        <heading heldby="863" ident="807494" src="fast">Americans--Crimes against</heading>
+        <heading heldby="863" ident="891462" src="fast">Detective and mystery stories--Authorship</heading>
+        <heading heldby="863" ident="924112" src="fast">Figurines</heading>
+        <heading heldby="776" ident="1894059" src="fast">Howard, Charlie (Fictitious character)</heading>
+        <heading heldby="80" ident="815827" src="fast">Art thefts</heading>
+      </headings>
+    </fast>
+    <ddc>
+      <mostPopular holdings="1199" nsfa="823.92" sfa="823.92"/>
+      <mostRecent holdings="1199" sfa="823.92"/>
+      <latestEdition holdings="1197" sf2="22" sfa="823.92"/>
+      <latestEdition holdings="1" sf2="22" sfa="823.914"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&chs=350x200&chd=t:98.76441,0.5766063,0.08237232,0.5766063&chtt=DDC&chdl=823.92|FIC|823.914|Unclassified</graph>
+    </ddc>
+    <lcc>
+      <mostPopular holdings="860" nsfa="PR6105.W36" sfa="PR6105.W36"/>
+      <mostRecent holdings="860" sfa="PR6105.W36"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&chs=350x200&chd=t:70.840195,29.159801&chtt=LCC&chdl=PR6105.W36|Unclassified</graph>
+    </lcc>
+  </recommendations>
+</classify>

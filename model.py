@@ -493,6 +493,10 @@ class CirculationEvent(Base):
     __table_args__ = (UniqueConstraint('license_pool_id', 'type', 'start',
                                        'foreign_patron_id'),)
 
+    # Constants for use in logging circulation events to JSON
+    SOURCE = "source"
+    TYPE = "event"
+
     # The names of the circulation events we recognize.
     CHECKOUT = "check_out"
     CHECKIN = "check_in"
@@ -607,3 +611,9 @@ class SubjectType(object):
         "http://purl.org/dc/terms/LCC" : LCC,
         "http://purl.org/dc/terms/LCSH" : LCSH,
     }
+
+
+class Author(object):
+    """Constants for common author fields."""
+    pass
+

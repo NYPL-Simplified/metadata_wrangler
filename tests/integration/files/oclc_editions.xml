@@ -1,0 +1,53 @@
+<classify xmlns="http://classify.oclc.org">
+  <response code="4"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <workCount>236</workCount>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <orderBy>hold desc</orderBy>
+  <input type="title/author">Moby+Dick|Herman+Melville</input>
+  <works>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  | " editions="883" format="eBook" holdings="24430" hyr="2013" itemtype="itemtype-book-digital" lyr="1800" swid="10155887" title="Moby Dick"/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  | " editions="1473" format="eBook" holdings="18064" hyr="2014" itemtype="itemtype-book-digital" lyr="1851" swid="10117733" title="Moby Dick notes"/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  | " editions="157" format="Book" holdings="4551" hyr="2012" itemtype="itemtype-book" lyr="1849" swid="10360105" title="Redburn, his first voyage; being the sailor-boy confessions and reminiscences of the son-of-a-gentleman, in the merchant service."/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  | " editions="150" format="eAudiobook" holdings="4500" hyr="2012" itemtype="itemtype-audiobook-digital" lyr="1965" swid="10517015" title="Moby Dick"/>
+    <work author="Huston, John, 1906-1987 |  |  |  |  | " editions="144" format="DVD video" holdings="3641" hyr="2013" itemtype="itemtype-video-dvd" lyr="1956" swid="10798812" title="Moby Dick"/>
+    <work author="Melville, Herman, 1819-1891 |  | " editions="24" format="Book" holdings="2936" hyr="2008" itemtype="itemtype-book" lyr="1983" swid="12468538" title="Redburn, his first voyage ; White-jacket, or, The world in a man-of-war ; Moby-Dick, or, The whale"/>
+    <work author="Melville, Herman, 1819-1891 |  | " editions="3" format="Book" holdings="1445" hyr="1967" itemtype="itemtype-book" lyr="1967" swid="652035540" title="Moby-Dick : An authoritative text"/>
+    <work author="Selden, Bernice |  |  |  |  | " editions="18" format="Book" holdings="605" hyr="2014" itemtype="itemtype-book" lyr="1988" swid="16082986" title="Moby Dick"/>
+    <work author="Melville, Herman, 1819-1891" editions="6" format="Book" holdings="520" hyr="1931" itemtype="itemtype-book" lyr="1928" swid="1413894" title="Romances of Herman Melville: Typee, Omoo, Mardi, Moby-Dick, White-Jacket, Israel Potter, Redburn."/>
+    <work author="Melville, Herman, 1819-1891 | " editions="4" format="Book" holdings="375" hyr="1956" itemtype="itemtype-book" lyr="1956" swid="2871934" title="Moby-Dick; or, The whale."/>
+    <work author="Melville, Herman, 1819-1891 | " editions="8" format="eBook" holdings="367" hyr="2012" itemtype="itemtype-book-digital" lyr="1974" swid="11403774" title="Moby Dick or, The whale"/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  |  | " editions="94" format="Book" holdings="357" hyr="2010" itemtype="itemtype-book" lyr="1969" swid="122280617" title="Bai jing ji" title_alt="&#30333;&#39912;&#35352;"/>
+    <work author="Melville, Herman, 1819-1891" editions="3" format="Book" holdings="329" hyr="1964" itemtype="itemtype-book" lyr="1964" swid="1836574" title="Melville: the best of Moby Dick and Typee; also Billy Budd complete."/>
+    <work author="Baldwin, Stanley P. |  |  |  |  | " editions="11" format="Book" holdings="301" hyr="2001" itemtype="itemtype-book" lyr="1928" swid="243696744" title="CliffsNotes."/>
+    <work author="Melville, Herman, 1819-1891" editions="4" format="Book" holdings="262" hyr="1983" itemtype="itemtype-book" lyr="1983" swid="11065951" title="The best of Herman Melville : Moby Dick : Omoo : Typee : Israel Potter."/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  |  | " editions="16" format="Book" holdings="253" hyr="1966" itemtype="itemtype-book" lyr="1929" swid="13065993" title="Moby Dick"/>
+    <work author="Melville, Herman, 1819-1891" editions="5" format="Book" holdings="227" hyr="1984" itemtype="itemtype-book" lyr="1984" swid="11450562" title="Moby Dick ; and, Billy Budd"/>
+    <work author="Melville, Herman, 1819-1891 |  | " editions="14" format="Large print book" holdings="222" hyr="1992" itemtype="itemtype-book-largeprint" lyr="1967" swid="1128782" title="Moby Dick; or, The whale."/>
+    <work author="Melville, Herman, 1819-1891 | " editions="8" format="Book" holdings="209" hyr="2011" itemtype="itemtype-book" lyr="1994" swid="271544564" title="Moby Dick, or, The whale"/>
+    <work author="Melville, Herman, 1819-1891 |  |  | " editions="13" format="Book" holdings="197" hyr="1978" itemtype="itemtype-book" lyr="1967" swid="34644035" title="Moby-Dick : an Authoritative Text, Reviews and Letters by Melville, Analogues and Sources, Criticism"/>
+    <work author="Melville, Herman, 1819-1891" editions="2" format="Book" holdings="163" hyr="2000" itemtype="itemtype-book" lyr="2000" swid="247734888" title="Moby-Dick, Billy Budd, and other writings"/>
+    <work author="Melville, Herman, 1819-1891 | " editions="5" format="Book" holdings="157" hyr="2007" itemtype="itemtype-book" lyr="1991" swid="181924554" title="Moby-Dick, or, The whale"/>
+    <work author="Melville, Herman, 1819-1891 |  |  |  | " editions="7" format="Audiobook on Cassette" holdings="140" hyr="1992" itemtype="itemtype-audiobook-cassette" lyr="1974" swid="11856966" title="Moby Dick (excerpts)"/>
+    <work author="Melville, Herman, 1819-1891 | " editions="3" format="Book" holdings="136" hyr="2008" itemtype="itemtype-book" lyr="2003" swid="434297747" title="Moby-Dick"/>
+    <work author="Reed, Henry, 1914-1986 | " editions="9" format="Book" holdings="120" hyr="1971" itemtype="itemtype-book" lyr="1947" swid="2099800" title="Moby Dick; a play for radio from Herman Melville's novel."/>
+  </works>
+  <navigation>
+    <pages>
+      <page>
+        <label>1</label>
+      </page>
+      <page>
+        <label>2</label>
+        <link>25</link>
+      </page>
+      <page>
+        <label>3</label>
+        <link>50</link>
+      </page>
+    </pages>
+    <next>25</next>
+    <last>225</last>
+  </navigation>
+</classify>
