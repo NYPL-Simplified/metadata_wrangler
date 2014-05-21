@@ -82,6 +82,7 @@ class DataSource(Base):
     name = Column(String, unique=True)
     offers_licenses = Column(Boolean, default=False)
     primary_identifier_type = Column(String)
+    circulation_refresh_rate_seconds = Column(Integer)
 
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
@@ -97,13 +98,14 @@ class DataSource(Base):
     def well_known_sources(cls, _db):
         """Make sure all the well-known sources exist."""
 
-        for name, offers_licenses, primary_identifier_type in (
-                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID),
-                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID),
-                (cls.THREEM, True, WorkIdentifier.THREEM_ID),
-                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID),
-                (cls.OCLC, False, WorkIdentifier.OCLC_WORK),
-                (cls.WEB, True, WorkIdentifier.URI)
+        for (name, offers_licenses, primary_identifier_type,
+             refresh_rate) in (
+                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
+                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
+                (cls.THREEM, True, WorkIdentifier.THREEM_ID, ),
+                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
+                (cls.OCLC, False, WorkIdentifier.OCLC_WORK, None),
+                (cls.WEB, True, WorkIdentifier.URI, None)
         ):
             obj, new = get_one_or_create(
                 _db, DataSource,
@@ -111,6 +113,7 @@ class DataSource(Base):
                 create_method_kwargs=dict(
                     offers_licenses=offers_licenses,
                     primary_identifier_type=primary_identifier_type,
+                    circulation_refresh_rate_seconds=refresh_rate,
                 )
             )
             yield obj
@@ -360,8 +363,8 @@ class LicensePool(Base):
             raise ValueError(
                 'Data source "%s" does not offer licenses.' % data_source.name)
 
-        # The type of the foreign ID must be the data source's primary
-        # identifier type.
+        # The type of the foreign ID must be the primary identifier
+        # type for the data source.
         if foreign_id_type != data_source.primary_identifier_type:
             raise ValueError(
                 "License pools for data source '%s' are keyed to "
@@ -376,18 +379,22 @@ class LicensePool(Base):
             _db, foreign_id, foreign_id_type
             )
 
-        # Get the LicensePool that corresponds to the
-        # DataSource and the Identifier
+        # Get the LicensePool that corresponds to the DataSource and
+        # the WorkIdentifier.
         license_pool, was_new = get_one_or_create(
             _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
 
-    def needs_update(self, maximum_stale_time):
-        """Is it time to update the circulation info for this pool?"""
+    def needs_update(self):
+        """Is it time to update the circulation info for this license pool?"""
         now = datetime.datetime.now()
         if not self.last_checked:
             # This pool has never had its circulation info checked.
             return True
+        maximum_stale_time = self.data_source.circulation_refresh_rate_seconds
+        if maximum_stale_time is None:
+            # This pool never needs to have its circulation info checked.
+            return False
         age = now - self.last_checked
         return age > maximum_stale_time
 
