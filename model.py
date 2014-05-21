@@ -87,7 +87,7 @@ class DataSource(Base):
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
 
-    # One DataSource can hold many LicensePools.
+    # One DataSource can grant access to many LicensePools.
     license_pools = relationship("LicensePool", backref="data_source")
 
     @classmethod
@@ -254,7 +254,7 @@ class WorkRecord(Base):
 
         # Then look up the identifier.
         work_identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, foreign_id, foreign_id_type)
+            _db, foreign_id_type, foreign_id)
 
         # Combine the two to get/create a WorkRecord.
         return get_one_or_create(
@@ -357,7 +357,7 @@ class LicensePool(Base):
     __table_args__ = (UniqueConstraint('identifier_id'),)
 
     @classmethod
-    def for_foreign_id(self, _db, data_source, foreign_id, foreign_id_type):
+    def for_foreign_id(self, _db, data_source, foreign_id_type, foreign_id):
 
         # Get the DataSource.
         if isinstance(data_source, basestring):
@@ -381,7 +381,7 @@ class LicensePool(Base):
 
         # Get the WorkIdentifier.
         identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, foreign_id, foreign_id_type
+            _db, foreign_id_type, foreign_id
             )
 
         # Get the LicensePool that corresponds to the DataSource and
@@ -552,19 +552,12 @@ class CirculationEvent(Base):
         source_name = data['source']
         source = DataSource.lookup(_db, source_name)
 
-        # Identify which work the event is talking about.
+        # Identify which LicensePool the event is talking about.
         foreign_id = data['id']
-        identifier_type = data.get('id_type')
-        if not identifier_type:
-            # TODO: this is temporary; events should specify their
-            # identifier type from now on.
-            if source.name == DataSource.THREEM:
-                identifier = WorkIdentifier.THREEM_ID
-            elif source.name == DataSource.OVERDRIVE:
-                identifier = WorkIdentifier.OVERDRIVE_ID
+        identifier_type = source.primary_identifier_type
 
-        license_pool = LicensePool.for_foreign_id(
-            _db, source, foreign_id, identifier_type)
+        license_pool, was_new = LicensePool.for_foreign_id(
+            _db, source, identifier_type, foreign_id)
 
         # Finally, gather some information about the event itself.
         type = data.get("type")
@@ -586,11 +579,10 @@ class CirculationEvent(Base):
                 end=end)
             )
 
-        set_trace()
         if was_new:
             # Update the LicensePool to reflect the information in this event.
             license_pool.update_from_event(event)
-        return event
+        return event, was_new
 
 class Timestamp(Base):
     """A general-purpose timestamp for external services."""
