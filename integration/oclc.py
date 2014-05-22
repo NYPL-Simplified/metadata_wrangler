@@ -7,7 +7,7 @@ import requests
 import time
 import urllib
 from integration import XMLParser
-#from integration.metadata import FilesystemCache
+from integration import FilesystemCache
 from model import (
     get_one_or_create,
     WorkIdentifier,
@@ -20,18 +20,8 @@ from lxml import etree
 
 class OCLC(object):
     """Repository for OCLC-related constants."""
-    DATA_SOURCE = "OCLC"
-    INTERNAL_RESPONSE_CODE = "OCLC.responseCode"
-    SWID = "OCLC.swid"
-    PSWID = "OCLC.pswid"
-    SWID_TYPE = "OCLC.swidtype"
-    PROVISIONAL_SWID = "OCLC.provisional"
-    WORK_COUNT = "OCLC.workCount"
-    WORKS = "OCLC.works"
     EDITION_COUNT = "OCLC.editionCount"
-    EDITIONS = "OCLC.editions"
     HOLDING_COUNT = "OCLC.holdings"
-    DATE_MOST_RECENT_EDITION = "OCLC.mostRecentEdition"
     FORMAT = "OCLC.format"
 
 
@@ -43,7 +33,7 @@ class OCLCClassifyAPI(object):
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
-            data_directory, OCLC.DATA_SOURCE, "cache")
+            data_directory, DataSource.OCLC, "cache")
         self.cache = FilesystemCache(self.cache_directory)
         self.last_access = None
 
