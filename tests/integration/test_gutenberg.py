@@ -25,18 +25,18 @@ from tests.test_model import (
 class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_rdf_parser(self):
+        """Parse RDF into a WorkRecord."""
         fh = StringIO.StringIO(pkgutil.get_data(
             "tests.integration",
             "files/gutenberg-17.rdf"))
-        [[book, license_pool]] = GutenbergRDFExtractor.books_in(self._db, "17", fh)
+        book, new = GutenbergRDFExtractor.book_in(self._db, "17", fh)
 
-        # Verify that the data model is hooked up correctly.
+        # Verify that the WorkRecord is hooked up to the correct
+        # DataSource and WorkIdentifier.
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
         identifier, ignore = get_one_or_create(
             self._db, WorkIdentifier, type=WorkIdentifier.GUTENBERG_ID,
             identifier="17")
-        eq_(gutenberg, license_pool.data_source)
-        eq_(identifier, license_pool.identifier)
         eq_(gutenberg, book.data_source)
         eq_(identifier, book.primary_identifier)
 
@@ -72,6 +72,6 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         fh = StringIO.StringIO(pkgutil.get_data(
             "tests.integration",
             "files/gutenberg-10130.rdf"))
-        [[book, license_pool]] = list(GutenbergRDFExtractor.books_in(self._db, "10130", fh))
+        book, new = GutenbergRDFExtractor.book_in(self._db, "10130", fh)
         eq_(u"The Works of Charles and Mary Lamb — Volume 3", book.title)
         eq_("Books for Children", book.subtitle)

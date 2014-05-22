@@ -84,44 +84,42 @@ class GutenbergAPI(object):
                 yield pg_id, archive, next_item
             next_item = archive.next()
 
-    def missing_books(self, _db):
-        """Finds PG books that are missing from the WorkRecord and LicensePool
-        tables.
+    def create_missing_books(self, _db):
+        """Finds books present in the PG catalog but missing from WorkRecord.
 
         Yields (WorkRecord, LicensePool) 2-tuples.
-
         """
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
             print "Considering %s" % pg_id
 
-            # Find an existing WorkRecord and LicensePool for
-            # the book. Do *not* create them if they don't exist --
-            # that's the job of books_in().
+            # Find an existing WorkRecord for the book.
             book = _db.query(WorkRecord).filter_by(
                 source=source, source_id=pg_id,
                 source_id_type=WorkIdentifier.GUTENBERG
             ).first()
-            book_exists = (book is not None)
 
-            license_exists = False
-            if book_exists:
-                license = _db.query(LicensePool).filter_by(
-                    bibliographic_record=book)
-                license_exists = (license is not None)
-
-            if not book_exists or not license_exists:
-                # Fill in the WorkRecord and LicensePool
-                # objects with information from the Project Gutenberg
-                # RDF file.
+            if book is None:
+                # Create a new WorkRecord object with bibliographic
+                # information from the Project Gutenberg RDF file.
                 print "%s is new." % pg_id
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
                 fake_fh = StringIO(data)
-                for book, license in GutenbergRDFExtractor.books_in(
-                        _db, pg_id, fake_fh):
-                    yield (book, license)
+                book = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
+
+            # Ensure that an open-access LicensePool exists for this book.
+            license = get_one_or_create(
+                _db, LicensePool,
+                data_source=book.data_source,
+                identifier=book.primary_identifier,
+                create_method_kwargs=dict(
+                    open_access=True,
+                    last_checked=datetime.datetime.now(),
+                )
+            )
+            yield (book, license)
                     
  
 class GutenbergRDFExtractor(object):
@@ -155,12 +153,15 @@ class GutenbergRDFExtractor(object):
         return None
 
     @classmethod
-    def books_in(cls, _db, pg_id, fh):
-        """Yield a (WorkRecord, LicensePool) object for the book
-        described by the given filehandle, creating them (but not
-        committing them) if necessary.
+    def book_in(cls, _db, pg_id, fh):
+        """Yield a WorkRecord object for the book described by the given
+        filehandle, creating it (but not committing it) if necessary.
 
-        There should only be one book per filehandle.
+        This assumes that there is at most one book per
+        filehandle--the one identified by ``pg_id``. However, a file
+        may turn out to describe no books at all (such as pg_id=1984,
+        reserved for George Orwell's "1984"). In that case,
+        ``book_in()`` will return None.
         """
         g = rdflib.Graph()
         g.load(fh)
@@ -169,20 +170,21 @@ class GutenbergRDFExtractor(object):
         # Determine the 'about' URI.
         title_triples = list(g.triples((None, cls.dcterms['title'], None)))
 
-        books = []
+        book = None
         if title_triples:
             if len(title_triples) > 1:
                 # Each filehandle is associated with one Project Gutenberg ID 
-                # and should thus have only one title.
+                # and should thus contain at most one title.
                 raise ValueError(
                     "More than one title associated with Project Gutenberg ID %s" % pg_id)
             uri, ignore, title = title_triples[0]
-            yield cls.parse_book(_db, g, uri, title)
+            book = cls.parse_book(_db, g, uri, title)
+        return book
 
     @classmethod
     def parse_book(cls, _db, g, uri, title):
-        """Turn an RDF graph into a (WorkRecord, LicensePool) 2-tuple
-        for the given `uri` and `title`.
+        """Turn an RDF graph into a WorkRecord for the given `uri` and
+        `title`.
         """
         source_id = unicode(cls.ID_IN_URI.search(uri).groups()[0])
         # Split a subtitle out from the main title.
@@ -234,8 +236,7 @@ class GutenbergRDFExtractor(object):
             aliases = cls._values(g, (author_uri, cls.gutenberg.alias, None))
             authors.append(WorkRecord._author(name, aliases=aliases))
 
-        # Create or fetch a WorkRecord and LicensePool for
-        # this book.
+        # Create or fetch a WorkRecord for this book.
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
         identifier, new = WorkIdentifier.for_foreign_id(
             _db, WorkIdentifier.GUTENBERG_ID, source_id)
@@ -255,16 +256,7 @@ class GutenbergRDFExtractor(object):
             primary_identifier=identifier,
         )
 
-        license_pool, new = get_one_or_create(
-            _db, LicensePool,
-            data_source=source,
-            identifier=identifier,
-            create_method_kwargs=dict(
-                open_access=True,
-                last_checked=datetime.datetime.now(),
-            )
-        )
-        return book, license_pool
+        return book, new
 
 
 class GutenbergMonitor(object):
