@@ -16,6 +16,7 @@ from rdflib import Namespace
 
 from model import (
     get_one_or_create,
+    CirculationEvent,
     WorkRecord,
     DataSource,
     WorkIdentifier,
@@ -95,23 +96,23 @@ class GutenbergAPI(object):
             print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
-            book = _db.query(WorkRecord).filter_by(
-                source=source, source_id=pg_id,
-                source_id_type=WorkIdentifier.GUTENBERG
-            ).first()
+            book = WorkRecord.for_foreign_id(
+                _db, source, WorkIdentifier.GUTENBERG_ID, pg_id,
+                create_if_not_exists=False)
 
-            if book is None:
+            if not book:
                 # Create a new WorkRecord object with bibliographic
                 # information from the Project Gutenberg RDF file.
                 print "%s is new." % pg_id
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
                 fake_fh = StringIO(data)
-                book = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
+                book, new = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
 
-            # Ensure that an open-access LicensePool exists for this book.
-            license = self.pg_license_for(book)
-            yield (book, license)
+            if book:
+                # Ensure that an open-access LicensePool exists for this book.
+                license, new = self.pg_license_for(_db, book)
+                yield (book, license)
 
     @classmethod
     def pg_license_for(cls, _db, work_record):
@@ -272,16 +273,17 @@ class GutenbergMonitor(Monitor):
     """
 
     def __init__(self, data_directory):
-        path = os.path.join(data_directory, WorkRecordSource.GUTENBERG)
+        path = os.path.join(data_directory, DataSource.GUTENBERG)
         if not os.path.exists(path):
             os.makedirs(path)
         self.source = GutenbergAPI(path)
-        self.circulation_events = FilesystemMonitorStore(path)
 
-    def run(self):
+    def run(self, _db):
         added_books = 0
-        for work, license_pool in self.source.missing_books():
-            event = CirculationEvent._get_one_or_add(
+        for work, license_pool in self.source.create_missing_books(_db):
+            # Log a circulation event for this work.
+            event = get_one_or_create(
+                _db, CirculationEvent,
                 type=CirculationEvent.TITLE_ADD,
                 license_pool=license_pool,
                 create_method_kwargs=dict(
@@ -289,7 +291,6 @@ class GutenbergMonitor(Monitor):
                 )
             )
             _db.commit()
-            #event.log()
 
 
 class OCLCMonitorForGutenberg(object):

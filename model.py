@@ -28,6 +28,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
+from sqlalchemy.orm.session import Session
+
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import sessionmaker
 
@@ -49,12 +51,33 @@ class SessionManager(object):
         Base.metadata.create_all(engine)
         return engine, engine.connect()
 
+    @classmethod
+    def session(cls, server, database):
+        engine, connection = cls.initialize(server, database)
+        session = Session(connection)
+        cls.initialize_data(session)
+        session.commit()
+        return session
+
+    @classmethod
+    def initialize_data(cls, session):
+        list(DataSource.well_known_sources(session))
+        session.commit()
+
+def get_one(db, model, **kwargs):
+    try:
+        return db.query(model).filter_by(**kwargs).one()
+    except NoResultFound:
+        return None
+
+
 def get_one_or_create(db, model, create_method='',
                       create_method_kwargs=None,
                       **kwargs):
-    try:
-        return db.query(model).filter_by(**kwargs).one(), False
-    except NoResultFound:
+    one = get_one(db, model, **kwargs)
+    if one:
+        return one, False
+    else:
         kwargs.update(create_method_kwargs or {})
         created = getattr(model, create_method, model)(**kwargs)
         try:
@@ -230,7 +253,8 @@ class WorkRecord(Base):
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
-                       foreign_id_type, foreign_id):
+                       foreign_id_type, foreign_id,
+                       create_if_not_exists=True):
         """Find the WorkRecord representing the given data source's view of
         the work that it primarily identifies by foreign ID.
 
@@ -257,9 +281,13 @@ class WorkRecord(Base):
             _db, foreign_id_type, foreign_id)
 
         # Combine the two to get/create a WorkRecord.
-        return get_one_or_create(
-            _db, WorkRecord, data_source=data_source,
-            primary_identifier=work_identifier)
+        if create_if_not_exists:
+            f = get_one_or_create
+        else:
+            f = get_one
+        return f(_db, WorkRecord, data_source=data_source,
+                 primary_identifier=work_identifier)
+
 
     def add_language(self, language, type="ISO-639-1"):
         # TODO: Convert ISO-639-2 to ISO-639-1
@@ -481,7 +509,7 @@ class CirculationEvent(Base):
     We log these so we can measure things like the velocity of
     individual books.
     """
-    __tablename__ = 'circulationevent'
+    __tablename__ = 'circulationevents'
 
     id = Column(Integer, primary_key=True)
 
@@ -597,6 +625,7 @@ class CirculationEvent(Base):
                 set_trace()
             license_pool.update_from_event(event)
         return event, was_new
+
 
 class Timestamp(Base):
     """A general-purpose timestamp for external services."""

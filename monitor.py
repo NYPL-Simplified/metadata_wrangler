@@ -13,7 +13,7 @@ class Monitor(object):
         self.interval_seconds = interval_seconds
         self.stop_running = False
         if not default_start_time:
-            default_start_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
+             default_start_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
         self.default_start_time = default_start_time
 
     def run(self, _db):

@@ -16,10 +16,6 @@ def setup_module():
     Base.metadata.drop_all(connection)
     Base.metadata.create_all(connection)
 
-    # Populate the list of well-known DataSources.
-    _db = Session(connection)
-    list(DataSource.well_known_sources(_db))
-    _db.close()
 
 def teardown_module():
     # Roll back the top level transaction and disconnect from the database
@@ -32,6 +28,7 @@ class DatabaseTest(object):
     def setup(self):
         self.__transaction = connection.begin_nested()
         self._db = Session(connection)
+        SessionManager.initialize_data(self._db)
 
     def teardown(self):
         self._db.close()
