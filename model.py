@@ -218,7 +218,7 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
-    links = Column(JSON)
+    links = Column(JSON, default={})
 
     extra = Column(JSON, default={})
     
@@ -283,25 +283,31 @@ class WorkRecord(Base):
         return dict(type=type, value=content)
 
     @classmethod
-    def _link(cls, rel, href, type=None, description=None):
-        """Represent a hypermedia link.
-        
-        `type`: Media type of the link.
+    def _add_link(cls, links, rel, href, type=None, description=None):
+        """Add a hypermedia link to a dictionary of links.
+
+        `links`: A dictionary of links like the one stored in WorkRecord.links.
+        `rel`: The relationship between a WorkRecord and the resource
+               on the other end of the link.
+        `type`: Media type of the representation available at the
+                other end of the link.
         `description`: Human-readable description of the link.
         """
-        d = dict(rel=rel, href=href)
+        if rel not in links:
+            links[rel] = []
+        d = dict(href=href)
         if type:
             d['type'] = type
         if description:
             d['description'] = type
-        return d
+        links[rel].append(d)
 
     @classmethod
-    def _subject(cls, type, id, value=None, weight=None):
-        """Represent a subject a book might be classified under.
+    def _add_subject(cls, subjects, type, id, value=None, weight=None):
+        """Add a new entry to a dictionary of bibliographic subjects.
 
         ``type``: Classification scheme; one of the constants from SubjectType.
-        ``id``: Internal ID of the subject according to the classification
+        ``id``: Internal ID of the subject according to that classification
                 scheme.
         ``value``: Human-readable description of the subject, if different
                    from the ID.
@@ -311,22 +317,24 @@ class WorkRecord(Base):
                     subject. The meaning of this number depends entirely
                     on the source of the information.
         """
-        d = dict(type=type, id=id)
+        if type not in subjects:
+            subjects[type] = []
+        d = dict(id=id)
         if value:
             d['value'] = value
         if weight:
             d['weight'] = weight
-        return d
+        subjects[type].append(d)
 
     @classmethod
-    def _author(self, name, role=None, aliases=None):
+    def _add_author(self, authors, name, role=None, aliases=None):
         """Represent an entity who had some role in creating a book."""
-        if not role:
-            role = "author"
-        a = dict(name=name, role=role)
+        a = { Author.NAME : name }
+        if role:
+            a[Author.ROLE] = role
         if aliases:
-            a['aliases'] = aliases
-        return a
+            a[Author.ALTERNATE_NAME] = aliases
+        authors.append(a)
 
 class LicensePool(Base):
 
@@ -615,5 +623,8 @@ class SubjectType(object):
 
 class Author(object):
     """Constants for common author fields."""
-    pass
+    NAME = 'name'
+    ALTERNATE_NAME = 'alternateName'
+    ROLE = 'role'
+    AUTHOR_ROLE = 'author'
 

@@ -212,29 +212,28 @@ class GutenbergRDFExtractor(object):
             code = str(cls._value(g, (language_uri, cls.rdf.value, None)))
             languages.append(code)
 
-        links = [WorkRecord._link("canonical", uri)]
+        links = dict(canonical=[dict(href=uri)])
         download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
-        for link in download_links:
+        for href in download_links:
             for format_uri in cls._values(
-                    g, (link, cls.dcterms['format'], None)):
+                    g, (href, cls.dcterms['format'], None)):
                 media_type = cls._value(g, (format_uri, cls.rdf.value, None))
-                link = WorkRecord._link(
-                    WorkRecord.OPEN_ACCESS_DOWNLOAD, link, media_type)
-                links.append(link)
+                WorkRecord._add_link(
+                    links, WorkRecord.OPEN_ACCESS_DOWNLOAD, href, media_type)
         
-        subjects = []
+        subjects = dict()
         subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
         for subject in subject_links:
             value = cls._value(g, (subject, cls.rdf.value, None))
             vocabulary = cls._value(g, (subject, cls.dcam.memberOf, None))
             vocabulary=SubjectType.by_uri[str(vocabulary)]
-            subjects.append(WorkRecord._subject(vocabulary, value))
+            WorkRecord._add_subject(subjects, vocabulary, value)
 
         authors = []
         for ignore, ignore, author_uri in g.triples((uri, cls.dcterms.creator, None)):
             name = cls._value(g, (author_uri, cls.gutenberg.name, None))
             aliases = cls._values(g, (author_uri, cls.gutenberg.alias, None))
-            authors.append(WorkRecord._author(name, aliases=aliases))
+            WorkRecord._add_author(authors, name, aliases=aliases)
 
         # Create or fetch a WorkRecord for this book.
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
