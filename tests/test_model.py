@@ -91,19 +91,19 @@ class TestWorkRecord(DatabaseTest):
         web = DataSource.lookup(self._db, DataSource.WEB)
 
         # Here are two Gutenberg records.
-        g1 = WorkRecord.for_foreign_id(
+        g1, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "1")
 
-        g2 = WorkRecord.for_foreign_id(
+        g2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
 
         # One of them is equivalent to an OCLC record.
-        o = WorkRecord.for_foreign_id(
-            self._db, oclc, WorkIdentifier.OCLC_WORK_ID, "10034")
-        g1.equivalent_identifiers.append(o)
+        o, ignore = WorkRecord.for_foreign_id(
+            self._db, oclc, WorkIdentifier.OCLC_WORK, "10034")
+        g1.equivalent_identifiers.append(o.primary_identifier)
 
         # Here's a web record, just sitting there.
-        g2 = WorkRecord.for_foreign_id(
+        g2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
 
         self._db.commit()
@@ -111,7 +111,7 @@ class TestWorkRecord(DatabaseTest):
         # with_no_equivalent_records from picks up the Gutenberg record with
         # no corresponding record from OCLC. It doesn't pick up the other Gutenberg
         # record, and it doesn't pick up the web record.
-        [in_gutenberg_but_not_in_oclc] = DataSource.with_no_equivalent_records_from(
+        [in_gutenberg_but_not_in_oclc] = WorkRecord.with_no_connections_to(
             gutenberg, oclc)
 
         eq(g2, in_gutenberg_but_not_in_oclc)

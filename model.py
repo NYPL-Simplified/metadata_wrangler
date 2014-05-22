@@ -290,16 +290,16 @@ class WorkRecord(Base):
                  primary_identifier=work_identifier)
 
     @classmethod
-    def with_no_equivalent_records_from(cls, _db, found_in, missing_in):
+    def with_no_connections_to(cls, _db, found_in, missing_in):
         """Find work records from a given source with no
         counterparts in some other source.
         """
 
-        parent = aliased(WorkRecord)
-        child = aliased(WorkRecord)
-
-        return _db.query(WorkRecord).outerjoin(WorkRecord.equivalent_ids).filter(
-            parent.source==found_in)
+        q = _db.query(WorkRecord).join(WorkRecord.primary_identifier).outerjoin(WorkRecord.equivalent_identifiers).filter(
+            WorkRecord.primary_identifier.source==found_in,
+        )
+        set_trace()
+        return q
 
         #    child.source==missing_in
         #    child==None)
