@@ -289,13 +289,20 @@ class WorkRecord(Base):
         return f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier)
 
+    @classmethod
+    def with_no_equivalent_records_from(cls, _db, found_in, missing_in):
+        """Find work records from a given source with no
+        counterparts in some other source.
+        """
 
-    def add_language(self, language, type="ISO-639-1"):
-        # TODO: Convert ISO-639-2 to ISO-639-1
-        if not self.languages:
-            self.languages = []
-        if language:
-            self.languages.append(language)
+        parent = aliased(WorkRecord)
+        child = aliased(WorkRecord)
+
+        return _db.query(WorkRecord).outerjoin(WorkRecord.equivalent_ids).filter(
+            parent.source==found_in)
+
+        #    child.source==missing_in
+        #    child==None)
 
     @classmethod
     def _content(cls, content, is_html=False):

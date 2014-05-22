@@ -9,6 +9,8 @@ import shutil
 import tarfile
 from StringIO import StringIO
 
+from sqlalchemy.orm import aliased
+
 from nose.tools import set_trace
 
 import rdflib
@@ -25,10 +27,9 @@ from model import (
 )
 
 from monitor import Monitor
-#from integration.oclc import (
-#    OCLC,
-#    OCLCClassifyAPI,
-#)
+from integration.oclc import (
+    OCLCClassifyAPI,
+)
 
 class GutenbergAPI(object):
 
@@ -310,9 +311,6 @@ class OCLCMonitorForGutenberg(object):
     def __init__(self, data_directory):
         self.gutenberg = GutenbergMonitor(data_directory)
         self.oclc = OCLCClassifyAPI(data_directory)
-        self.cache = self.oclc.cache
-        self.processed = FilesystemStore(
-            self.oclc.cache_directory, 'gutenberg.works.last_update', 'gutenberg.works', "Gutenberg.ID")
 
     def oclc_safe_title(self, title):
         return self.NON_TITLE_SAFE.sub("", title)
@@ -329,28 +327,16 @@ class OCLCMonitorForGutenberg(object):
 
     def run(self, _db):
         i = 0
-        # Look up all the WorkRecords we acquired directly
-        # from Project Gutenberg.
+        # TODO: Look up all the WorkRecords we acquired from Project
+        # Gutenberg which are not associated with any WorkRecords
+        # acquired from OCLC.
         counter = 0
-        for book in _db.query(WorkRecord).filter_by(
-                source=WorkRecordSource.GUTENBERG,
-                source_id_type=WorkIdentifier.GUTENBERG):
-            title, author = self.title_and_author(book)
 
-            # For each such record, check whether we have a WorkRecord
-            # from OCLC for the book's title and author. Do *not*
-            # create this record if it doesn't exist; that's the job
-            # of records_for().
-            source_id = self.oclc.query_string(title=title, author=author)
-            workset_record = _db.query(WorkRecord).filter_by(
-                source=WorkRecordSource.OCLC, 
-                source_id=source_id,
-                source_id_type=WorkIdentifier.QUERY_STRING
-            ).first()
-            if workset_record:
-                # We already did this one.
-                print 'IGNORE %s "%s" "%s"' % (source_id, title, author)
-                continue
+        gutenberg = DataSource.lookup(DataSource.GUTENBERG)
+        oclc = DataSource.lookup(DataSource.OCLC)
+
+        for book in WorkRecord.with_no_equivalent_records_from(gutenberg, oclc):
+            title, author = self.title_and_author(book)
 
             print '%s "%s" "%s"' % (source_id, title, author)
             # Perform the title/author lookup

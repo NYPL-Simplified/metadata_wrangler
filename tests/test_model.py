@@ -84,7 +84,40 @@ class TestWorkRecord(DatabaseTest):
         eq_(data_source, record.data_source)
         eq_(identifier, record.primary_identifier)
         eq_(False, was_new)
-        
+
+    def test_with_no_equivalent_records_from(self):
+        gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        oclc = DataSource.lookup(self._db, DataSource.OCLC)
+        web = DataSource.lookup(self._db, DataSource.WEB)
+
+        # Here are two Gutenberg records.
+        g1 = WorkRecord.for_foreign_id(
+            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "1")
+
+        g2 = WorkRecord.for_foreign_id(
+            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
+
+        # One of them is equivalent to an OCLC record.
+        o = WorkRecord.for_foreign_id(
+            self._db, oclc, WorkIdentifier.OCLC_WORK_ID, "10034")
+        g1.equivalent_identifiers.append(o)
+
+        # Here's a web record, just sitting there.
+        g2 = WorkRecord.for_foreign_id(
+            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
+
+        self._db.commit()
+
+        # with_no_equivalent_records from picks up the Gutenberg record with
+        # no corresponding record from OCLC. It doesn't pick up the other Gutenberg
+        # record, and it doesn't pick up the web record.
+        [in_gutenberg_but_not_in_oclc] = DataSource.with_no_equivalent_records_from(
+            gutenberg, oclc)
+
+        eq(g2, in_gutenberg_but_not_in_oclc)
+
+
+
 
 class TestLicensePool(DatabaseTest):
 
