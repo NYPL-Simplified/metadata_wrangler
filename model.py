@@ -167,7 +167,8 @@ class WorkIdentifier(Base):
     AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
     ISBN = "ISBN"
-    OCLC_WORK = "OCLC Work"
+    OCLC_WORK = "OCLC Work ID"
+    OCLC_NUMBER = "OCLC Number"
     OCLC_SWID = "OCLC SWID" # Let's try to do without this one, OK?
     URI = "URI"
     DOI = "DOI"
@@ -355,9 +356,10 @@ class WorkRecord(Base):
         subjects[type].append(d)
 
     @classmethod
-    def _add_author(self, authors, name, role=None, aliases=None):
+    def _add_author(self, authors, name, role=None, aliases=None, **kwargs):
         """Represent an entity who had some role in creating a book."""
         a = { Author.NAME : name }
+        a.update(kwargs)
         if role:
             a[Author.ROLE] = role
         if aliases:
@@ -656,4 +658,3 @@ class Author(object):
     ALTERNATE_NAME = 'alternateName'
     ROLE = 'role'
     AUTHOR_ROLE = 'author'
-

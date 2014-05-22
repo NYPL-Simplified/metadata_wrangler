@@ -12,10 +12,9 @@ def setup_module():
 
     # Connect to the database and create the schema within a transaction
     engine, connection = SessionManager.initialize(SERVER, TEST_DB)
-    transaction = connection.begin()
     Base.metadata.drop_all(connection)
     Base.metadata.create_all(connection)
-
+    transaction = connection.begin()
 
 def teardown_module():
     # Roll back the top level transaction and disconnect from the database
