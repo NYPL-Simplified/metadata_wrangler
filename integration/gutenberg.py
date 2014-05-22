@@ -335,7 +335,8 @@ class OCLCMonitorForGutenberg(object):
         gutenberg = DataSource.lookup(DataSource.GUTENBERG)
         oclc = DataSource.lookup(DataSource.OCLC)
 
-        for book in WorkRecord.with_no_equivalent_records_from(gutenberg, oclc):
+        for book in WorkRecord.with_no_identifiers_of_type(
+                gutenberg, [WorkIdentifier.OCLC.WORK, WorkIdentifier.EDITION]):
             title, author = self.title_and_author(book)
 
             print '%s "%s" "%s"' % (source_id, title, author)

@@ -7,6 +7,9 @@ from sqlalchemy.orm import (
     backref,
     relationship,
 )
+from sqlalchemy.orm import (
+    aliased
+)
 from sqlalchemy.orm.exc import (
     NoResultFound
 )
@@ -27,6 +30,10 @@ from sqlalchemy import (
     Unicode,
     UniqueConstraint,
 )
+
+import logging
+logging.basicConfig()
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 from sqlalchemy.orm.session import Session
 
@@ -169,7 +176,6 @@ class WorkIdentifier(Base):
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
-    OCLC_SWID = "OCLC SWID" # Let's try to do without this one, OK?
     URI = "URI"
     DOI = "DOI"
     UPC = "UPC"
@@ -290,19 +296,21 @@ class WorkRecord(Base):
                  primary_identifier=work_identifier)
 
     @classmethod
-    def with_no_connections_to(cls, _db, found_in, missing_in):
-        """Find work records from a given source with no
+    def with_no_identifiers_of_type(cls, _db, found_in, *not_identified_by):
+        """Find work records from a given source that are not equivalent
+        to WorkIdentifiers of 
         counterparts in some other source.
         """
 
-        q = _db.query(WorkRecord).join(WorkRecord.primary_identifier).outerjoin(WorkRecord.equivalent_identifiers).filter(
-            WorkRecord.primary_identifier.source==found_in,
-        )
-        set_trace()
-        return q
+        primary = aliased(WorkRecord)
+        equivalent = aliased(WorkRecord)
 
-        #    child.source==missing_in
-        #    child==None)
+        q = _db.query(WorkRecord).outerjoin(WorkIdentifier.equivalent_works).filter(
+            WorkRecord.data_source==found_in,            # The WorkRecord comes from the given source.
+            WorkIdentifier.type.in_(not_identified_by),  # The WorkIdentifier is of one of the given types.
+            WorkIdentifier.id==None                      # And the relationship doesn't exist.
+        )
+        return q.all()
 
     @classmethod
     def _content(cls, content, is_html=False):

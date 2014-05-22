@@ -85,7 +85,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(identifier, record.primary_identifier)
         eq_(False, was_new)
 
-    def test_with_no_equivalent_records_from(self):
+    def test_with_no_identifiers_of_type(self):
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
         oclc = DataSource.lookup(self._db, DataSource.OCLC)
         web = DataSource.lookup(self._db, DataSource.WEB)
@@ -111,8 +111,8 @@ class TestWorkRecord(DatabaseTest):
         # with_no_equivalent_records from picks up the Gutenberg record with
         # no corresponding record from OCLC. It doesn't pick up the other Gutenberg
         # record, and it doesn't pick up the web record.
-        [in_gutenberg_but_not_in_oclc] = WorkRecord.with_no_connections_to(
-            gutenberg, oclc)
+        [in_gutenberg_but_not_in_oclc] = WorkRecord.with_no_identifiers_of_type(
+            self._db, gutenberg, WorkIdentifier.OCLC_WORK)
 
         eq(g2, in_gutenberg_but_not_in_oclc)
 
