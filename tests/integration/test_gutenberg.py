@@ -17,7 +17,7 @@ from integration.gutenberg import (
     GutenbergRDFExtractor,
 )
 
-from tests.test_model import (
+from tests.db import (
     setup_module,
     teardown_module,
     DatabaseTest,

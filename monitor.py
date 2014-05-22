@@ -1,21 +1,34 @@
-from model import Timestamp
+import datetime
+import time
+
+from model import (
+    get_one_or_create,
+    Timestamp,
+)
 
 class Monitor(object):
 
-    def __init__(self, name, interval_seconds=1*60):
-        
+    def __init__(self, name, interval_seconds=1*60, default_start_time=None):
+        self.service_name = name
         self.interval_seconds = interval_seconds
         self.stop_running = False
+        if not default_start_time:
+            default_start_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
+        self.default_start_time = default_start_time
 
     def run(self, _db):
         
         timestamp, new = get_one_or_create(
             _db, Timestamp,
             service=self.service_name,
-            type="monitor")
-        start = timestamp.timestamp or datetime.datetime.utcnow() - 60
+            type="monitor",
+            create_method_kwargs=dict(
+                timestamp=self.default_start_time
+            )
+        )
+        start = timestamp.timestamp
 
-        while True:
+        while not self.stop_running:
             cutoff = datetime.datetime.utcnow()
             self.run_once(start, cutoff)
             duration = datetime.datetime.utcnow() - cutoff
@@ -26,8 +39,6 @@ class Monitor(object):
             if to_sleep > 0:
                 time.sleep(to_sleep)
                 start = cutoff
-            if self.stop_running:
-                break
 
     def run_once(self):
         raise NotImplementedError()

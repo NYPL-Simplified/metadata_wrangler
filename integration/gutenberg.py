@@ -267,7 +267,7 @@ class GutenbergRDFExtractor(object):
         return book, new
 
 
-class GutenbergMonitor(object):
+class GutenbergMonitor(Monitor):
     """Maintain license pool and metadata info for Gutenberg titles.
     """
 
