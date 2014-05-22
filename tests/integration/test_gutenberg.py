@@ -23,6 +23,22 @@ from tests.test_model import (
     DatabaseTest,
 )
 
+class TestGutenbergAPI(DatabaseTest):
+
+    def test_pg_license_is_open_access(self):
+
+        gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        identifier, ignore = get_one_or_create(
+            self._db, WorkIdentifier, type=WorkIdentifier.GUTENBERG_ID,
+            identifier="17")        
+        work_record, new = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+        eq_(True, new)
+
+        license, new = GutenbergAPI.pg_license_for(self._db, work_record)
+        eq_(True, new)
+        eq_(True, license.open_access)
+
 class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_rdf_parser(self):
@@ -79,3 +95,13 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         book, new = GutenbergRDFExtractor.book_in(self._db, "10130", fh)
         eq_(u"The Works of Charles and Mary Lamb — Volume 3", book.title)
         eq_("Books for Children", book.subtitle)
+
+    def test_rdf_file_describing_no_books(self):
+        """GutenbergRDFExtractor can handle an RDF document that doesn't
+        describe any books."""
+        fh = StringIO.StringIO(pkgutil.get_data(
+            "tests.integration",
+            "files/gutenberg-0.rdf"))
+        book, new = GutenbergRDFExtractor.book_in(self._db, "0", fh)
+        eq_(None, book)
+        eq_(False, new)

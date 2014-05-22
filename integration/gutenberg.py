@@ -110,17 +110,24 @@ class GutenbergAPI(object):
                 book = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
 
             # Ensure that an open-access LicensePool exists for this book.
-            license = get_one_or_create(
-                _db, LicensePool,
-                data_source=book.data_source,
-                identifier=book.primary_identifier,
-                create_method_kwargs=dict(
-                    open_access=True,
-                    last_checked=datetime.datetime.now(),
-                )
-            )
+            license = self.pg_license_for(book)
             yield (book, license)
-                    
+
+    @classmethod
+    def pg_license_for(cls, _db, work_record):
+        """Retrieve a LicensePool for the given Project Gutenberg work,
+        creating it (but not committing it) if necessary.
+        """
+        return get_one_or_create(
+            _db, LicensePool,
+            data_source=work_record.data_source,
+            identifier=work_record.primary_identifier,
+            create_method_kwargs=dict(
+                open_access=True,
+                last_checked=datetime.datetime.now(),
+            )
+        )
+
  
 class GutenbergRDFExtractor(object):
 
@@ -154,6 +161,7 @@ class GutenbergRDFExtractor(object):
 
     @classmethod
     def book_in(cls, _db, pg_id, fh):
+
         """Yield a WorkRecord object for the book described by the given
         filehandle, creating it (but not committing it) if necessary.
 
@@ -171,6 +179,7 @@ class GutenbergRDFExtractor(object):
         title_triples = list(g.triples((None, cls.dcterms['title'], None)))
 
         book = None
+        new = False
         if title_triples:
             if len(title_triples) > 1:
                 # Each filehandle is associated with one Project Gutenberg ID 
@@ -178,8 +187,8 @@ class GutenbergRDFExtractor(object):
                 raise ValueError(
                     "More than one title associated with Project Gutenberg ID %s" % pg_id)
             uri, ignore, title = title_triples[0]
-            book = cls.parse_book(_db, g, uri, title)
-        return book
+            book, new = cls.parse_book(_db, g, uri, title)
+        return book, new
 
     @classmethod
     def parse_book(cls, _db, g, uri, title):
