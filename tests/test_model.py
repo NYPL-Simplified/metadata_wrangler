@@ -106,15 +106,13 @@ class TestWorkRecord(DatabaseTest):
         g2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
 
-        self._db.commit()
-
         # with_no_equivalent_records from picks up the Gutenberg record with
         # no corresponding record from OCLC. It doesn't pick up the other Gutenberg
         # record, and it doesn't pick up the web record.
-        [in_gutenberg_but_not_in_oclc] = WorkRecord.with_no_identifiers_of_type(
-            self._db, gutenberg, WorkIdentifier.OCLC_WORK)
+        [in_gutenberg_but_not_in_oclc] = WorkRecord.missing_coverage_from(
+            self._db, WorkIdentifier.GUTENBERG_ID, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
 
-        eq(g2, in_gutenberg_but_not_in_oclc)
+        eq_(g2, in_gutenberg_but_not_in_oclc)
 
 
 

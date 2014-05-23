@@ -31,9 +31,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-import logging
-logging.basicConfig()
-logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+#import logging
+#logging.basicConfig()
+#logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 from sqlalchemy.orm.session import Session
 
@@ -158,8 +158,8 @@ class DataSource(Base):
 workrecord_workidentifier = Table(
     'workrecord_workidentifier',
     Base.metadata,
-    Column('workrecord_id', Integer, ForeignKey('workidentifiers.id')),
-    Column('workidentifier_id', Integer, ForeignKey('workrecords.id'))
+    Column('workrecord_id', Integer, ForeignKey('workrecords.id')),
+    Column('workidentifier_id', Integer, ForeignKey('workidentifiers.id'))
 )
 
 class WorkIdentifier(Base):
@@ -296,21 +296,51 @@ class WorkRecord(Base):
                  primary_identifier=work_identifier)
 
     @classmethod
-    def with_no_identifiers_of_type(cls, _db, found_in, *not_identified_by):
-        """Find work records from a given source that are not equivalent
-        to WorkIdentifiers of 
-        counterparts in some other source.
+    def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
+        """Find WorkRecords with primary identifier of the given type
+        `primary_id_type` and with no alternative identifiers of the types
+        `not_identified_by`.
+
+        e.g.
+
+        missing_coverage_from(_db, WorkIdentifier.GUTENBERG_ID,
+                                   WorkIdentifier.OCLC_WORK, 
+                                   WorkIdentifier.OCLC_NUMBER)
+
+        will find WorkRecords primarily associated with a Project
+        Gutenberg ID and not also identified with any OCLC Work ID or
+        OCLC Number. These are Gutenberg books that need to have an
+        OCLC lookup done.
+
+        Equivalent SQL:
+
+        select wr.* from workrecords wr join workidentifiers prim2 on wr.primary_identifier_id=prim2.id
+         where prim2.type='Gutenberg ID'
+         and wr.id not in (
+          select workrecords.id from
+            workrecords join workidentifiers prim on workrecords.primary_identifier_id=prim.id
+            join workrecord_workidentifier wr_wi on workrecords.id=wr_wi.workrecord_id
+            join workidentifiers secondary on wr_wi.workidentifier_id=secondary.id
+            where prim.type='Gutenberg ID' and secondary.type in ('OCLC Work ID', 'OCLC Number')
+        );
         """
 
-        primary = aliased(WorkRecord)
-        equivalent = aliased(WorkRecord)
+        # First build the subquery. This will find all the WorkRecords whose primary identifiers are
+        # of the correct type and who are *also* identified by one of the other types.
+        primary_identifier = aliased(WorkIdentifier)
+        secondary_identifier = aliased(WorkIdentifier)
+        qu = _db.query(WorkRecord.id).join(primary_identifier, WorkRecord.primary_identifier).join(
+            workrecord_workidentifier, WorkRecord.id==workrecord_workidentifier.columns['workrecord_id']).join(secondary_identifier).filter(
+                primary_identifier.type==primary_id_type,
+                secondary_identifier.type.in_(not_identified_by))
 
-        q = _db.query(WorkRecord).outerjoin(WorkIdentifier.equivalent_works).filter(
-            WorkRecord.data_source==found_in,            # The WorkRecord comes from the given source.
-            WorkIdentifier.type.in_(not_identified_by),  # The WorkIdentifier is of one of the given types.
-            WorkIdentifier.id==None                      # And the relationship doesn't exist.
-        )
-        return q.all()
+        # Now build the main query. This will find all the WorkRecords whose primary identifiers qualify them for
+        # the first list, but who just aren't in the first list.
+        primary_identifier = aliased(WorkIdentifier)
+        main_query = _db.query(WorkRecord).join(primary_identifier, WorkRecord.primary_identifier).filter(
+            primary_identifier.type==primary_id_type,
+            ~WorkRecord.id.in_(qu.subquery()))
+        return main_query.all()
 
     @classmethod
     def _content(cls, content, is_html=False):
