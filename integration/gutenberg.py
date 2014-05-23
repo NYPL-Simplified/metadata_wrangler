@@ -29,6 +29,7 @@ from model import (
 from monitor import Monitor
 from integration.oclc import (
     OCLCClassifyAPI,
+    OCLCXMLParser,
 )
 
 class GutenbergAPI(object):
@@ -326,53 +327,37 @@ class OCLCMonitorForGutenberg(object):
         return title, author
 
     def run(self, _db):
-        i = 0
-        # TODO: Look up all the WorkRecords we acquired from Project
-        # Gutenberg which are not associated with any WorkRecords
-        # acquired from OCLC.
         counter = 0
 
-        gutenberg = DataSource.lookup(DataSource.GUTENBERG)
-        oclc = DataSource.lookup(DataSource.OCLC)
+        in_gutenberg_but_not_in_oclc = WorkRecord.missing_coverage_from(
+            _db, WorkIdentifier.GUTENBERG_ID,
+            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
 
-        for book in WorkRecord.with_no_identifiers_of_type(
-                gutenberg, [WorkIdentifier.OCLC.WORK, WorkIdentifier.EDITION]):
+        for book in in_gutenberg_but_not_in_oclc:
             title, author = self.title_and_author(book)
 
-            print '%s "%s" "%s"' % (source_id, title, author)
-            # Perform the title/author lookup
+            print '%s "%s" "%s"' % (book.primary_identifier.identifier, title, author)
+            # Perform a title/author lookup
             xml = self.oclc.lookup_by(title=title, author=author)
 
             # Turn the raw XML into some number of bibliographic records.
-            workset_record, work_records, edition_records = (
-                self.oclc.records_for(source_id, xml))
+            representation_type, records = OCLCXMLParser.parse(_db, xml)
 
-            if work_records:
-                print " Created %s work records(s)." % len(work_records)
-            if edition_records:
-                print " Created %s edition records(s)." % len(edition_records)
+            if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
+                # `records` contains a bunch of SWIDs, not
+                # WorkRecords. Do another lookup to turn each SWID
+                # into a set of WorkRecords.
+                swids = records
+                records = []
+                for swid in swids:
+                    xml = self.oclc.lookup_by(swid=swid)
+                    representation_type, editions = OCLCXMLParser.parse(_db, xml)
 
-            if work_records and not edition_records:
-                # Our search turned up a number of works, but no
-                # editions. Editions are what we're really after--they
-                # tend to have juicy ISBNs. Look up some editions.
-                print " Looking up the top 5 of %s works." % len(work_records)
-                print "-" * 80
-                works_looked_up = 0
-                for work_record in work_records:
-                    if work_record.source_id_type == WorkIdentifier.OCLC_SWID:
-                        swid = work_record.source_id
-                        raw = self.oclc.lookup_by(swid=swid)
-                        query_string = "swid=%s" % swid
-                        ignore, ignore, editions = self.oclc.records_for(
-                            query_string, raw)
-                        edition_records.extend(editions)
-                    works_looked_up += 1
-                    if works_looked_up >= 5:
-                        break
-                print "-" * 80
-                print " Now there are %s edition record(s)." % len(edition_records)
-            counter += 1
-            if not counter % 10:
-                _db.commit()
+                    if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
+                        records.extend(editions)
+                    else:
+                        print " Got unexpected representation type from lookup: %s" % representation_type
+
+            print " Created %s records(s)." % len(records)
+            _db.commit()
         _db.commit()

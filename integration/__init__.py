@@ -1,3 +1,6 @@
+import os
+from lxml import etree
+
 class XMLParser(object):
 
     """Helper functions to process XML data."""
@@ -37,7 +40,7 @@ class FilesystemCache(object):
     def __init__(self, cache_directory):
         self.cache_directory = cache_directory
         if not os.path.exists(self.cache_directory):
-            os.makedirs(d)
+            os.makedirs(self.cache_directory)
 
     def _filename(self, key):
         if len(key) > 140:
