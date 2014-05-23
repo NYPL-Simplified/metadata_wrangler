@@ -85,7 +85,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(identifier, record.primary_identifier)
         eq_(False, was_new)
 
-    def test_with_no_identifiers_of_type(self):
+    def test_missing_coverage_from(self):
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
         oclc = DataSource.lookup(self._db, DataSource.OCLC)
         web = DataSource.lookup(self._db, DataSource.WEB)
@@ -103,18 +103,21 @@ class TestWorkRecord(DatabaseTest):
         g1.equivalent_identifiers.append(o.primary_identifier)
 
         # Here's a web record, just sitting there.
-        g2, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
+        w, ignore = WorkRecord.for_foreign_id(
+            self._db, web, WorkIdentifier.URI, "http://www.foo.com/")
 
-        # with_no_equivalent_records from picks up the Gutenberg record with
-        # no corresponding record from OCLC. It doesn't pick up the other Gutenberg
-        # record, and it doesn't pick up the web record.
+        # missing_coverage_from picks up the Gutenberg record with no
+        # corresponding record from OCLC. It doesn't pick up the other
+        # Gutenberg record, and it doesn't pick up the web record.
         [in_gutenberg_but_not_in_oclc] = WorkRecord.missing_coverage_from(
             self._db, WorkIdentifier.GUTENBERG_ID, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
 
         eq_(g2, in_gutenberg_but_not_in_oclc)
 
-
+        # We can pick up the web record by doing a lookup by URI instead of Gutenberg ID.
+        [in_web_but_not_in_oclc] = WorkRecord.missing_coverage_from(
+            self._db, WorkIdentifier.URI, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
+        eq_(w, in_web_but_not_in_oclc)
 
 
 class TestLicensePool(DatabaseTest):
