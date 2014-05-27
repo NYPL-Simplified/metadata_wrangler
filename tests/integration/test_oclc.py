@@ -68,18 +68,24 @@ class TestParser(DatabaseTest):
         eq_("Moby Dick", work.title)
         eq_("Moby Dick", edition.title)
 
-        work_authors = sorted([x['name'] for x in work.authors])
-        edition_authors = sorted([x['name'] for x in edition.authors])
-        # The work has a ton of authors, collated from all the
+        # The work has a ton of contributors, collated from all the
         # editions.
+        work_contributors = sorted([x['name'] for x in work.authors])
         eq_(['Cliffs Notes, Inc.', 
              'Hayford, Harrison', 
              'Kent, Rockwell', 
              'Melville, Herman',
              'Parker, Hershel', 
              'Tanner, Tony',
-             ], work_authors)
-        # The edition only has one author.
+             ], work_contributors)
+
+        # But only some of them are considered 'authors' by OCLC.
+        work_authors = sorted([x['name'] for x in work.authors
+                               if Author.AUTHOR_ROLE in x['roles']])
+        eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
+
+        # The edition only has one contributor.
+        edition_authors = sorted([x['name'] for x in edition.authors])
         eq_(['Melville, Herman'], edition_authors)
 
         eq_([], work.languages)
