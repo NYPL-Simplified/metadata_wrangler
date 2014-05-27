@@ -107,3 +107,92 @@ class TestParser(DatabaseTest):
             ('Whaling ships', '1174307', 18913)
         ]
         eq_(expect, fast)
+
+class TestAuthorParser(object):
+
+    MISSING = object()
+
+    def assert_author(self.author, string, name, role=Author.AUTHOR_ROLE, 
+                      birthdate=None, deathdate=None):
+        eq_(author[Author.NAME], name)
+        if role:
+            eq_([role], author[Author.ROLES])
+        if birthdate is self.MISSING:
+            assert Author.BIRTH_DATE not in author
+        elif birthdate:
+            eq_(birthdate, author[Author.BIRTH_DATE])
+        if deathdate is self.MISSING:
+            assert Author.DEATH_DATE not in author
+        elif deathdate:
+            eq_(deathdate, author[Author.DEATH_DATE])
+
+    def assert_parse(self, string, name, **kwargs):
+        [author] = OCLCXMLParser.parse_author_string(string)
+        self.assert_author(author, string, name, **kwargs)
+
+    def test_authors(self):
+
+        self.assert_parse(
+            "Carroll, Lewis, 1832-1898",
+            "Carroll, Lewis", Author.AUTHOR_ROLE, "1832", "1898")
+
+        self.assert_parse(
+            "Kent, Rockwell, 1882-1971 [Illustrator]",
+            "Kent, Rockwell", Author.ILLUSTRATOR_ROLE,
+            "1882", "1971")
+
+        self.assert_parse(
+            u"Карролл, Лувис, 1832-1898."
+            u"Карролл, Лувис", birthdate="1832", deathdate="1898")
+
+        kerry, melville = OCLCXMLParser.parse_author_string(
+            "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
+        self.assert_author(kerry, "McSweeney, Kerry", birthdate="1941", 
+                           deathdate=self.MISSING)
+
+        self.assert_author(melville, "Melville, Herman", birthdate="1819",
+                           deathdate="1891")
+
+
+        # Check out this mess.
+        s = "Sunzi, active 6th century B.C. | Giles, Lionel, 1875-1958 [Writer of added commentary; Translator] | Griffith, Samuel B. [Editor; Author of introduction; Translator] | Cleary, Thomas F., 1949- [Editor; Translator] | Sawyer, Ralph D. [Editor; Author of introduction; Translator] | Clavell, James"
+        sunzi, giles, griffith, cleary, sawyer, clavell = (
+            OCLCXMLParser.parse_author_string(s))
+
+        # This one could be better.
+        self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
+                           Author.AUTHOR_ROLE)
+        self.assert_author(giles, "Giles, Lionel",
+                           ["Writer of added commentary", "Translator"],
+                           "1875", "1958")
+        self.assert_author(griffith, "Griffith, Samuel B.",
+                           ["Editor", "Author of introduction", "Translator"],
+                           self.MISSING, self.MISSING)
+        self.assert_author(
+            cleary, "Cleary, Thomas F.", ["Editor", "Translator"],
+            "1949", self.MISSING)
+
+        self.assert_author(
+            sawyer, "Sawyer, Ralph D.", ["Editor", "Author of introduction",
+                                         "Translator"],
+            self.MISSING, self.MISSING)
+
+        # Once contributors start getting explicit roles, a
+        # contributor with no explicit role is treated as 'unknown'
+        # rather than 'author.'
+        self.assert_author(
+            clavell, "Clavell, James", [Author.UNKNOWN_ROLE],
+            self.MISSING, self.MISSING)
+
+        # These are titles we don't parse as well as we ought, but
+        # we are able to handle them without crashing.
+        self.assert_parse(
+            u"梅爾維爾 (Melville, Herman), 1819-1891",
+            u"梅爾維爾 (Melville, Herman)", birthdate="1819", deathdate="1891")
+
+        self.assert_parse(
+            u"卡洛爾 (Carroll, Lewis), (英), 1832-1898",
+            u"卡洛爾 (Carroll, Lewis), (英)", birthdate="1832", deathdate="1898")
+
+        s = u"杜格孫 (Dodgson, Charles Lutwidge,1832-1896)"
+        self.assert_parse(s, s)

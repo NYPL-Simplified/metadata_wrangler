@@ -401,12 +401,14 @@ class WorkRecord(Base):
         subjects[type].append(d)
 
     @classmethod
-    def _add_author(self, authors, name, role=None, aliases=None, **kwargs):
+    def _add_author(self, authors, name, roles=None, aliases=None, **kwargs):
         """Represent an entity who had some role in creating a book."""
+        if not isinstance(roles, list) and not isinstance(roles, tuple):
+            roles = [roles]            
         a = { Author.NAME : name }
         a.update(kwargs)
-        if role:
-            a[Author.ROLE] = role
+        if roles:
+            a[Author.ROLES].setdefault([]).extend(roles)
         if aliases:
             a[Author.ALTERNATE_NAME] = aliases
         authors.append(a)
@@ -701,5 +703,11 @@ class Author(object):
     """Constants for common author fields."""
     NAME = 'name'
     ALTERNATE_NAME = 'alternateName'
-    ROLE = 'role'
-    AUTHOR_ROLE = 'author'
+    ROLES = 'roles'
+    BIRTH_DATE = 'birthDate'
+    DEATH_DATE = 'deathDate'
+
+    # Specific common roles
+    AUTHOR_ROLE = 'Author'
+    ILLUSTRATOR_ROLE = 'Illustrator'
+    EDITOR_ROLE = 'Editor'

@@ -169,15 +169,58 @@ class OCLCXMLParser(XMLParser):
             swids.append(work_tag.get('swid'))
         return swids
 
+    ROLES = re.compile("\[([^]]+)\]$")
+    LIFESPAN = re.compile("([0-9]+)-([0-9]*)$")
+
     @classmethod
-    def _parse_author_string(cls, author_string):
+    def _parse_single_author(cls, authors, author, 
+                             default_role=Author.AUTHOR_ROLE):
+        # First find roles if present
+        # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
+        default_role_used = False
+        m = cls.ROLES.search(author)
+        if m:
+            author = author[:m.start].strip()
+            role_string = m.groups()[0]
+            roles = [x.strip() for x in role_string.split(";")]
+        else:
+            roles = [default_role]
+            default_role_used = True
+
+        # Author string now looks like 
+        # "Giles, Lionel, 1875-1958"
+        m = cls.LIFESPAN.search(author)
+        kwargs = dict()
+        if m:
+            author = author[:m.start].strip()
+            birth, death = m.groups()
+            if birth:
+                kwargs[Author.BIRTH_DATE] = birth
+            if death:
+                kwargs[Author.DEATH_DATE] = death
+
+        # Author string now looks like
+        # "Giles, Lionel,"
+        if author.endswith(","):
+            author = author[:-1]
+
+        WorkRecord.add_author(authors, name, roles, **kwargs)
+        return authors[-1], default_role_used
+
+    @classmethod
+    def parse_author_string(cls, author_string):
+        default_role = Author.AUTHOR_ROLE
         authors = []
         if not author_string:
             return authors
         for author in author_string.split("|"):            
-            # TODO: Separate out roles, e.g. "Kent, Rockwell, 1882-1971 [Illustrator]"
-            # TODO: Separate out lifespan when possible
-            WorkRecord._add_author(authors, author.strip())
+            author, default_role_used = cls._parse_single_author(authors, author.strip())
+            if not default_role_used:
+                # If we see someone with no explicit role after this
+                # point, it's probably because their role is so minor
+                # as to not be worth mentioning, not because it's so
+                # major that we can assume they're an author.
+                default_role = Author.UKNOWN_ROLE
         return authors
 
     @classmethod
