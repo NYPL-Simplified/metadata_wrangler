@@ -31,6 +31,7 @@ from integration.oclc import (
     OCLCClassifyAPI,
     OCLCXMLParser,
 )
+from util import LanguageCodes
 
 class GutenbergAPI(object):
 
@@ -226,7 +227,9 @@ class GutenbergRDFExtractor(object):
         for ignore, ignore, language_uri in g.triples(
                 (uri, cls.dcterms.language, None)):
             code = str(cls._value(g, (language_uri, cls.rdf.value, None)))
-            languages.append(code)
+            code = LanguageCodes.two_to_three[code]
+            if code:
+                languages.append(code)
 
         links = dict(canonical=[dict(href=uri)])
         download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))

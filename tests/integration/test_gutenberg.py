@@ -64,7 +64,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         eq_("An Account Written by the Hand of Mormon Upon Plates Taken from the Plates of Nephi", book.subtitle)
 
         eq_("Project Gutenberg", book.publisher)
-        eq_(["en"], book.languages)
+        eq_(["eng"], book.languages)
 
         eq_(datetime.date(2008, 6, 25), book.issued)
 
