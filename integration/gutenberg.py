@@ -367,6 +367,10 @@ class OCLCMonitorForGutenberg(object):
                         records.extend(editions)
                     else:
                         print " Got unexpected representation type from lookup: %s" % representation_type
+            # Connect the Gutenberg book to the OCLC works looked up by
+            # title/author.
+            book.equivalent_identifiers.extend(
+                [r.primary_identifier for r in records])
 
             print " Created %s records(s)." % len(records)
             _db.commit()

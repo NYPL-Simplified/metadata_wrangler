@@ -49,9 +49,7 @@ class MetadataSimilarity(object):
 
     @classmethod
     def _matching_author_in(cls, to_match, authors):
-        set_trace()
         for author in authors:
-            print "comparing %s to %s" % (author, to_match)
             if author == to_match:
                 return to_match
         return None
@@ -62,7 +60,7 @@ class MetadataSimilarity(object):
         b1 = cls._wordbag(s1)
         b2 = cls._wordbag(s2)
         total_words = len(b1.union(b2))
-        shared_words = len(b1.intersection(b1))
+        shared_words = len(b1.intersection(b2))
         return shared_words/float(total_words)
 
     @classmethod

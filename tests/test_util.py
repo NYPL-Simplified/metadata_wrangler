@@ -45,3 +45,32 @@ class TestMetadataSimilarity(object):
         eq_(1, MetadataSimilarity.authors([a1], [a2]))
         eq_(1, MetadataSimilarity.authors([a1], [a3]))
         eq_(1, MetadataSimilarity.authors([a2], [a3]))
+
+    def test_not_quite_identity(self):
+        main = "The Adventures of Huckleberry Finn (Tom Sawyer's Comrade)"
+        print MetadataSimilarity.title(
+            "The Adventures of Huckleberry Finn",
+            "The Adventures of Tom Sawyer")
+        for expect, i in [
+                (0.4444444444444445, "Adventures of Huckleberry Finn"),
+                (0.4, "The adventures of Huck Finn"),
+                (0.5555555555555556, "The adventures of Tom Sawyer"),
+              ]:
+            eq_(expect, MetadataSimilarity.title(main, i))
+
+        [{"alternateName": ["Twain, Mark (Samuel Clemens)", "Clemens, Samuel Langhorne"], "name": "Twain, Mark"}]
+
+        "Alice in Wonderland"
+        "Alice's adventures in Wonderland"
+        "Alice's adventures in Wonderland; and, Through the looking-glass and what Alice found there"
+        "Through the looking-glass and what Alice found there"
+        "The annotated Alice : Alice's adventures in Wonderland &amp; Through the looking-glass"
+        'The nursery "Alice,"'
+
+
+        "Alice in Zombieland"
+        [{"roles": ["Author"], "name": "Cook, Nickolas", "birthDate": "1969"}]
+
+        "Moby-Dick, or, The whale"
+        "Moby Dick; notes"
+        "Moby Dick; or, The white whale."
