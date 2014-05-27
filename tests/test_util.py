@@ -4,7 +4,7 @@ from util import LanguageCodes
 class TestLanguageCodes(object):
 
     def test_lookups(self):
-        c = LanguageCodes()
+        c = LanguageCodes
         eq_("eng", c.two_to_three['en'])
         eq_("en", c.three_to_two['eng'])
         eq_(["English"], c.english_names['en'])
