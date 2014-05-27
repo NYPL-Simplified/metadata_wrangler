@@ -112,11 +112,13 @@ class OCLCXMLParser(XMLParser):
         return values[0]
 
     @classmethod
-    def parse(cls, _db, xml):
+    def parse(cls, _db, xml, restrict_to_languages):
         """Turn XML data from the OCLC lookup service into a list of SWIDs
         (for a multi-work response) or a list of WorkRecord
         objects (for a single-work response).
         """
+        restrict_to_languages = set(restrict_to_languages)
+
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         response = cls._xpath1(tree, "oclc:response")
         representation_type = int(response.get('code'))
@@ -143,7 +145,12 @@ class OCLCXMLParser(XMLParser):
             records = [work_record]
             
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
-                edition_record, ignore = cls.extract_edition_record(_db, edition_tag)
+                edition_record, ignore = cls.extract_edition_record(
+                    _db, edition_tag, restrict_to_languages)
+                if not edition_record:
+                    # This edition did not become a WorkRecord because it
+                    # didn't meet the language restriction.
+                    continue
                 records.append(edition_record)
                 # We identify the edition with the work based on its primary identifier.
                 work_record.equivalent_identifiers.append(edition_record.primary_identifier)
@@ -298,7 +305,7 @@ class OCLCXMLParser(XMLParser):
         return work_record, new
 
     @classmethod
-    def extract_edition_record(cls, _db, edition_tag):
+    def extract_edition_record(cls, _db, edition_tag, restrict_to_languages):
         """Create a new WorkRecord object with information about an
         edition of a book (identified by OCLC Number).
         """
@@ -306,6 +313,9 @@ class OCLCXMLParser(XMLParser):
 
         # Fill in some basic information about this new record.
         title, authors, languages = cls._extract_basic_info(edition_tag)
+        if not restrict_to_languages.intersection(languages):
+            # This record is for a work in a different language.
+            return None, False
 
         subjects = {}
         for subject_type, oclc_code in (

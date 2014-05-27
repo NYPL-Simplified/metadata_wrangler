@@ -342,13 +342,15 @@ class OCLCMonitorForGutenberg(object):
 
         for book in in_gutenberg_but_not_in_oclc:
             title, author = self.title_and_author(book)
+            languages = book.languages
 
-            print '%s "%s" "%s"' % (book.primary_identifier.identifier, title, author)
+            print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, languages)
             # Perform a title/author lookup
             xml = self.oclc.lookup_by(title=title, author=author)
 
             # Turn the raw XML into some number of bibliographic records.
-            representation_type, records = OCLCXMLParser.parse(_db, xml)
+            representation_type, records = OCLCXMLParser.parse(
+                _db, xml, languages)
 
             if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
                 # `records` contains a bunch of SWIDs, not
@@ -358,7 +360,8 @@ class OCLCMonitorForGutenberg(object):
                 records = []
                 for swid in swids:
                     xml = self.oclc.lookup_by(swid=swid)
-                    representation_type, editions = OCLCXMLParser.parse(_db, xml)
+                    representation_type, editions = OCLCXMLParser.parse(
+                        _db, xml, languages)
 
                     if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                         records.extend(editions)

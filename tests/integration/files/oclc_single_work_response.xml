@@ -26,6 +26,12 @@
         <class ind1=" " ind2="4" sfa="PS2384" tag="050"/>
       </classifications>
     </edition>
+    <edition author="Melville, Herman, 1819-1891" format="eBook" holdings="1160" itemtype="itemtype-book-digital" language="spa" oclc="44955178" title="A fake Spanish edition which will not be picked up because the book we're trying to get info for is in English.">
+      <classifications>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="813" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PS2384" tag="050"/>
+      </classifications>
+    </edition>
   </editions>
   <recommendations>
     <graph>http://chart.apis.google.com/chart?cht=p&chs=350x200&chd=t:92.18653,7.813464&chtt=All+Editions&chdl=Classified (92.19%)|Unclassified (7.81%)</graph>

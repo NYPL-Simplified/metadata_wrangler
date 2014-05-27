@@ -28,7 +28,7 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_multi_work_response.xml")
 
-        status, swids = OCLCXMLParser.parse(self._db, xml)
+        status, swids = OCLCXMLParser.parse(self._db, xml, ["eng"])
         eq_(OCLCXMLParser.MULTI_WORK_STATUS, status)
 
         eq_(['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'], sorted(swids))
@@ -43,11 +43,12 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_single_work_response.xml")
 
-        status, records = OCLCXMLParser.parse(self._db, xml)
+        status, records = OCLCXMLParser.parse(self._db, xml, ["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
 
-        # We expect 3 work records: one for the work and two for editions. (In the real response
-        # there are 25 editions; I cut them to make the test run faster.)
+        # We expect 3 work records: one for the work and two for
+        # English editions. (In the real response there are 25
+        # editions; I cut them to make the test run faster.)
         eq_(3, len(records))
 
         # Work and edition both have a primary identifier.
@@ -116,6 +117,14 @@ class TestParser(DatabaseTest):
             ('Whaling ships', '1174307', 18913)
         ]
         eq_(expect, fast)
+
+        # If we were to parse the same data looking for Spanish works,
+        # we would get 2 work records: one for the work and one
+        # for a Spanish edition that didn't show up in the English
+        # list.
+        status, records = OCLCXMLParser.parse(self._db, xml, ["spa"])
+        eq_(2, len(records))
+        eq_(["spa"], records[1].languages)
 
 class TestAuthorParser(object):
 
