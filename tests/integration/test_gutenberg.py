@@ -71,11 +71,11 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         a1, a2 = sorted(book.authors, key = lambda x: x[Author.NAME])
         eq_("Church of Jesus Christ of Latter-day Saints", a1[Author.NAME])
         assert Author.ALTERNATE_NAME not in a1
-        assert Author.ROLE not in a2
+        assert Author.ROLES not in a2
 
         eq_("Smith, Joseph, Jr.", a2[Author.NAME])
         eq_(["Smith, Joseph"], a2[Author.ALTERNATE_NAME])
-        assert 'role' not in a2
+        assert Author.ROLES not in a2
 
         # The book has a LCC classification...
         subjects = book.subjects

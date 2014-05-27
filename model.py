@@ -403,7 +403,7 @@ class WorkRecord(Base):
     @classmethod
     def _add_author(self, authors, name, roles=None, aliases=None, **kwargs):
         """Represent an entity who had some role in creating a book."""
-        if not isinstance(roles, list) and not isinstance(roles, tuple):
+        if roles and not isinstance(roles, list) and not isinstance(roles, tuple):
             roles = [roles]            
         a = { Author.NAME : name }
         a.update(kwargs)
