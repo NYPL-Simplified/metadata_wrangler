@@ -432,16 +432,17 @@ class LicensePool(Base):
 
     __tablename__ = 'licensepools'
     id = Column(Integer, primary_key=True)
+    etext_id = Column('etext_id', Integer, ForeignKey('etext.id')),
 
-    # Each LicensePool is associated with one DataSource and one
-    # WorkIdentifier.
+    # Each LicensePool is associated with one DataSource, one
+    # WorkIdentifier, and at most one EText.
     data_source_id = Column(Integer, ForeignKey('datasources.id'))
     identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
+    etext_id = Column(Integer, ForeignKey('etexts.id'))
 
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
         "CirculationEvent", backref="license_pool")
-
 
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
@@ -486,6 +487,12 @@ class LicensePool(Base):
         license_pool, was_new = get_one_or_create(
             _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
+
+    @classmethod
+    def with_no_etext(self, _db):
+        """Find LicensePools that have no corresponding EText."""
+        return _db.query(LicensePool).outerjoin(EText).filter(
+            EText.id==None).all()
 
     def needs_update(self):
         """Is it time to update the circulation info for this license pool?"""

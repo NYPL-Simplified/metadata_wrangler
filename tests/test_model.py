@@ -13,6 +13,8 @@ from nose.tools import (
 from model import (
     CirculationEvent,
     DataSource,
+    get_one_or_create,
+    EText,
     LicensePool,
     WorkIdentifier,
     WorkRecord,
@@ -155,7 +157,20 @@ class TestLicensePool(DatabaseTest):
             "License pools for data source 'Overdrive' are keyed to identifier type 'Overdrive ID' \(not 'ISBN', which was provided\)",
             LicensePool.for_foreign_id,
             self._db, DataSource.OVERDRIVE, WorkIdentifier.ISBN, "{1-2-3}")
-            
+
+    def test_with_no_etext(self):
+        p1, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+
+        p2, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.OVERDRIVE, WorkIdentifier.OVERDRIVE_ID, "2")
+
+        etext, ignore = get_one_or_create(self._db, EText, title="Foo")
+        p1.etext = etext
+        
+        assert p1 in etext.license_pools
+
+        eq_([p2], LicensePool.with_no_etext(self._db))
 
 class TestCirculationEvent(DatabaseTest):
 
