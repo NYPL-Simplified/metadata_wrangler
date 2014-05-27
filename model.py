@@ -30,6 +30,7 @@ from sqlalchemy import (
     Unicode,
     UniqueConstraint,
 )
+from util import MetadataSimilarity
 
 #import logging
 #logging.basicConfig()
@@ -222,6 +223,9 @@ class WorkRecord(Base):
     data_source_id = Column(Integer, ForeignKey('datasources.id'))
     primary_identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
 
+    # A WorkRecord may be associated with an EText.
+    etext_id = Column(Integer, ForeignKey('etexts.id'))
+
     # Many WorkRecords may be equivalent to the same WorkIdentifier,
     # and a single WorkRecord may be equivalent to many
     # WorkIdentifiers.
@@ -412,6 +416,32 @@ class WorkRecord(Base):
         if aliases:
             a[Author.ALTERNATE_NAME] = aliases
         authors.append(a)
+   
+    def similarity_to(self, other_record):
+        """How likely is it that this record describes the same book as the
+        given record?
+
+        1 indicates very strong similarity, 0 indicates no similarity
+        at all.
+
+        For now we just compare the sets of words used in the titles
+        and the authors' names. This should be good enough for most
+        cases given that there is usually some preexisting reason to
+        suppose that the two records are related (e.g. OCLC said
+        they were).
+
+        Confounding factors include:
+
+        * Abbreviated names.
+        * Titles that include subtitles.
+        """
+        title_quotient = MetadataSimilarity.title_similarity(
+            self.title, self.other_title)
+
+        author_quotient = MetadataSimilarity.author_similarity(
+            self.authors, other.authors)
+
+        return (title_quotient / 2) + (author_quotient/2)
 
 class EText(Base):
 
@@ -569,6 +599,26 @@ class LicensePool(Base):
         elif name in (CirculationEvent.HOLD_RELEASE,
                       CirculationEvent.HOLD_PLACE):
             self.patrons_in_hold_queue = event.new_value
+
+    @classmethod
+    def consolidate_etexts(cls, _db):
+        """Assign a (possibly new) EText to every unassigned LicensePool."""
+        for unassigned in cls.with_no_etext(_db):
+            etext, new = unassigned.calculate_etext(_db)
+
+    def calculate_etext(self, _db):
+        """Find or create an EText for this LicensePool."""
+        primary_work_record = self.work_record
+        if primary_work_record.etext is not None:
+            # That was a freebie.
+            return primary_work_record.etext, False
+
+        # Find all work records that are similar to this one and
+        # see if the preponderance of them have an associated EText.
+        other_work_records = self.work_record.recursive_equivalents()
+        
+        return None, False
+
 
 class CirculationEvent(Base):
 
