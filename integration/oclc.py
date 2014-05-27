@@ -2,6 +2,7 @@ import collections
 import datetime
 import os
 import md5
+import re
 from nose.tools import set_trace
 import requests
 import time
@@ -9,6 +10,7 @@ import urllib
 from integration import XMLParser
 from integration import FilesystemCache
 from model import (
+    Author,
     get_one_or_create,
     WorkIdentifier,
     WorkRecord,
@@ -170,7 +172,7 @@ class OCLCXMLParser(XMLParser):
         return swids
 
     ROLES = re.compile("\[([^]]+)\]$")
-    LIFESPAN = re.compile("([0-9]+)-([0-9]*)$")
+    LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
     def _parse_single_author(cls, authors, author, 
@@ -180,7 +182,7 @@ class OCLCXMLParser(XMLParser):
         default_role_used = False
         m = cls.ROLES.search(author)
         if m:
-            author = author[:m.start].strip()
+            author = author[:m.start()].strip()
             role_string = m.groups()[0]
             roles = [x.strip() for x in role_string.split(";")]
         else:
@@ -192,7 +194,7 @@ class OCLCXMLParser(XMLParser):
         m = cls.LIFESPAN.search(author)
         kwargs = dict()
         if m:
-            author = author[:m.start].strip()
+            author = author[:m.start()].strip()
             birth, death = m.groups()
             if birth:
                 kwargs[Author.BIRTH_DATE] = birth
@@ -204,7 +206,7 @@ class OCLCXMLParser(XMLParser):
         if author.endswith(","):
             author = author[:-1]
 
-        WorkRecord.add_author(authors, name, roles, **kwargs)
+        WorkRecord._add_author(authors, author, roles, **kwargs)
         return authors[-1], default_role_used
 
     @classmethod
@@ -214,13 +216,14 @@ class OCLCXMLParser(XMLParser):
         if not author_string:
             return authors
         for author in author_string.split("|"):            
-            author, default_role_used = cls._parse_single_author(authors, author.strip())
+            author, default_role_used = cls._parse_single_author(
+                authors, author.strip(), default_role)
             if not default_role_used:
                 # If we see someone with no explicit role after this
                 # point, it's probably because their role is so minor
                 # as to not be worth mentioning, not because it's so
                 # major that we can assume they're an author.
-                default_role = Author.UKNOWN_ROLE
+                default_role = Author.UNKNOWN_ROLE
         return authors
 
     @classmethod
@@ -228,7 +231,7 @@ class OCLCXMLParser(XMLParser):
         """Extract information common to work tag and edition tag."""
         title = tag.get('title')
         author_string = tag.get('author')
-        authors = cls._parse_author_string(author_string)
+        authors = cls.parse_author_string(author_string)
         # TODO: convert ISO-639-2 to ISO-639-1
         languages = []
         if 'language' in tag.keys():

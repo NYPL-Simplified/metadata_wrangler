@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 import pkgutil
 import StringIO
 from integration.oclc import (
@@ -6,6 +8,7 @@ from integration.oclc import (
 from nose.tools import set_trace, eq_
 
 from model import (
+    Author,
     SubjectType,
     WorkIdentifier,
     WorkRecord,
@@ -70,14 +73,14 @@ class TestParser(DatabaseTest):
         # The work has a ton of authors, collated from all the
         # editions.
         eq_(['Cliffs Notes, Inc.', 
-             'Hayford, Harrison [Associated name; Editor]', 
-             'Kent, Rockwell, 1882-1971 [Illustrator]', 
-             'Melville, Herman, 1819-1891',
-             'Parker, Hershel [Editor]', 
-             'Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author]',
+             'Hayford, Harrison', 
+             'Kent, Rockwell', 
+             'Melville, Herman',
+             'Parker, Hershel', 
+             'Tanner, Tony',
              ], work_authors)
         # The edition only has one author.
-        eq_(['Melville, Herman, 1819-1891'], edition_authors)
+        eq_(['Melville, Herman'], edition_authors)
 
         eq_([], work.languages)
         eq_(["eng"], edition.languages)
@@ -112,11 +115,13 @@ class TestAuthorParser(object):
 
     MISSING = object()
 
-    def assert_author(self.author, string, name, role=Author.AUTHOR_ROLE, 
+    def assert_author(self, author, name, role=Author.AUTHOR_ROLE, 
                       birthdate=None, deathdate=None):
         eq_(author[Author.NAME], name)
         if role:
-            eq_([role], author[Author.ROLES])
+            if not isinstance(role, list) and not isinstance(role, tuple):
+                role = [role]
+            eq_(role, author[Author.ROLES])
         if birthdate is self.MISSING:
             assert Author.BIRTH_DATE not in author
         elif birthdate:
@@ -126,9 +131,10 @@ class TestAuthorParser(object):
         elif deathdate:
             eq_(deathdate, author[Author.DEATH_DATE])
 
-    def assert_parse(self, string, name, **kwargs):
+    def assert_parse(self, string, name, role=Author.AUTHOR_ROLE, 
+                     birthdate=None, deathdate=None):
         [author] = OCLCXMLParser.parse_author_string(string)
-        self.assert_author(author, string, name, **kwargs)
+        self.assert_author(author, name, role, birthdate, deathdate)
 
     def test_authors(self):
 
@@ -142,16 +148,18 @@ class TestAuthorParser(object):
             "1882", "1971")
 
         self.assert_parse(
-            u"Карролл, Лувис, 1832-1898."
-            u"Карролл, Лувис", birthdate="1832", deathdate="1898")
+            u"Карролл, Лувис, 1832-1898.",
+            u"Карролл, Лувис", Author.AUTHOR_ROLE, birthdate="1832",
+            deathdate="1898")
 
         kerry, melville = OCLCXMLParser.parse_author_string(
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
-        self.assert_author(kerry, "McSweeney, Kerry", birthdate="1941", 
-                           deathdate=self.MISSING)
+        self.assert_author(kerry, "McSweeney, Kerry", Author.AUTHOR_ROLE,
+                           birthdate="1941", deathdate=self.MISSING)
 
-        self.assert_author(melville, "Melville, Herman", birthdate="1819",
-                           deathdate="1891")
+        self.assert_author(
+            melville, "Melville, Herman", Author.AUTHOR_ROLE,
+            birthdate="1819", deathdate="1891")
 
 
         # Check out this mess.

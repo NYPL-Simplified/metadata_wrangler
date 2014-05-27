@@ -408,7 +408,7 @@ class WorkRecord(Base):
         a = { Author.NAME : name }
         a.update(kwargs)
         if roles:
-            a[Author.ROLES].setdefault([]).extend(roles)
+            a.setdefault(Author.ROLES, []).extend(roles)
         if aliases:
             a[Author.ALTERNATE_NAME] = aliases
         authors.append(a)
@@ -711,3 +711,4 @@ class Author(object):
     AUTHOR_ROLE = 'Author'
     ILLUSTRATOR_ROLE = 'Illustrator'
     EDITOR_ROLE = 'Editor'
+    UNKNOWN_ROLE = 'Unknown'
