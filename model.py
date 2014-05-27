@@ -413,6 +413,18 @@ class WorkRecord(Base):
             a[Author.ALTERNATE_NAME] = aliases
         authors.append(a)
 
+class EText(Base):
+
+    __tablename__ = 'etexts'
+    id = Column(Integer, primary_key=True)
+
+    # One EText may have copies scattered across many LicensePools.
+    license_pools = relationship("LicensePool", backref="etext")
+    
+    title = Column(Unicode)
+    authors = Column(Unicode)
+
+
 class LicensePool(Base):
 
     """A pool of undifferentiated licenses for a work from a given source.
