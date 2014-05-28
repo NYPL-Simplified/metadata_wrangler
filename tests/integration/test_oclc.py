@@ -28,7 +28,7 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_multi_work_response.xml")
 
-        status, swids = OCLCXMLParser.parse(self._db, xml, ["eng"])
+        status, swids = OCLCXMLParser.parse(self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.MULTI_WORK_STATUS, status)
 
         eq_(25, len(swids))
@@ -45,13 +45,13 @@ class TestParser(DatabaseTest):
             "files/oclc_multi_work_response.xml")
 
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, ["eng"], "No Such Person")
+            self._db, xml, languages=["eng"], authors=["No Such Person"])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, ["eng"], "Herman Melville")
+            self._db, xml, languages=["eng"], authors=["Herman Melville"])
         
         # We picked up 20 of the 25 works in the dataset.
         eq_(20, len(swids))
@@ -74,7 +74,8 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_single_work_response.xml")
 
-        status, records = OCLCXMLParser.parse(self._db, xml, ["eng"])
+        status, records = OCLCXMLParser.parse(
+            self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
 
         # We expect 3 work records: one for the work and two for
@@ -153,7 +154,8 @@ class TestParser(DatabaseTest):
         # we would get 2 work records: one for the work and one
         # for a Spanish edition that didn't show up in the English
         # list.
-        status, records = OCLCXMLParser.parse(self._db, xml, ["spa"])
+        status, records = OCLCXMLParser.parse(
+            self._db, xml, languages=["spa"])
         eq_(2, len(records))
         eq_(["spa"], records[1].languages)
 

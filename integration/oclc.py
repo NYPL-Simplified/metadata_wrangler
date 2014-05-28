@@ -115,16 +115,11 @@ class OCLCXMLParser(XMLParser):
         return values[0]
 
     @classmethod
-    def parse(cls, _db, xml, restrict_to_languages=None,
-              restrict_to_author=None):
+    def parse(cls, _db, xml, **restrictions):
         """Turn XML data from the OCLC lookup service into a list of SWIDs
         (for a multi-work response) or a list of WorkRecord
         objects (for a single-work response).
         """
-        if restrict_to_languages:
-            restrict_to_languages = set(restrict_to_languages)
-        else:
-            restrict_to_languages = set()
 
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         response = cls._xpath1(tree, "oclc:response")
@@ -149,19 +144,26 @@ class OCLCXMLParser(XMLParser):
             # plus summary classification information for the work.
             work_tag = cls._xpath1(tree, "//oclc:work")
             work_record, ignore = cls.extract_work_record(
-                _db, work_tag, restrict_to_author)
-            records = [work_record]
+                _db, work_tag, **restrictions)
+            records = []
+            if work_record:
+                records.append(work_record)
+            else:
+                # The work record itself failed one of the
+                # restrictions. None of its editions are likely to
+                # succeed either.
+                return representation_type, records
             
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
                 edition_record, ignore = cls.extract_edition_record(
-                    _db, edition_tag, restrict_to_languages, restrict_to_author)
+                    _db, edition_tag, **restrictions)
                 if not edition_record:
                     # This edition did not become a WorkRecord because it
-                    # didn't meet the language restriction or the
-                    # author restriction.
+                    # didn't meet one of the restrictions.
                     continue
                 records.append(edition_record)
-                # We identify the edition with the work based on its primary identifier.
+                # Identify the edition with the work based on its
+                # primary identifier.
                 work_record.equivalent_identifiers.append(
                     edition_record.primary_identifier)
                 edition_record.equivalent_identifiers.append(
@@ -170,7 +172,7 @@ class OCLCXMLParser(XMLParser):
             # The representation lists a set of works that match the
             # search query.
             print "Extracting SWIDs from search results."
-            records = cls.extract_swids(tree, restrict_to_author)
+            records = cls.extract_swids(tree, **restrictions)
         elif representation_type == cls.NOT_FOUND_STATUS:
             # No problem; OCLC just doesn't have any data.
             records = []
@@ -181,21 +183,26 @@ class OCLCXMLParser(XMLParser):
         return representation_type, records
 
     @classmethod
-    def extract_swids(cls, tree, restrict_to_author=None):
+    def extract_swids(cls, tree, **restrictions):
         """Turn a multi-work response into a list of SWIDs."""
 
         swids = []
         for work_tag in cls._xpath(tree, "//oclc:work"):
             good = True
-            if restrict_to_author:
-                # `restrict_to_author` had better be one of the authors,
+            # Can we use extract_basic_data
+            if 'authors' in restrictions:
+                restrict_to_authors = restrictions.get('authors')
+                # The given name had better be one of the authors,
                 # or we won't even bother.
                 authors_per_se = [
                     x for x in cls.parse_author_string(work_tag.get('author'))
                     if Author.AUTHOR_ROLE in x['roles']
                 ]
-                good = MetadataSimilarity.author_found_in(
-                    restrict_to_author, authors_per_se)
+                for author in restrict_to_authors:
+                    if not MetadataSimilarity.author_found_in(
+                        author, authors_per_se):
+                        good = False
+                        break
             if good:
                 swids.append(work_tag.get('swid'))
         return swids
@@ -256,19 +263,41 @@ class OCLCXMLParser(XMLParser):
         return authors
 
     @classmethod
-    def _extract_basic_info(cls, tag):
+    def _extract_basic_info(cls, tag, **restrictions):
         """Extract information common to work tag and edition tag."""
         title = tag.get('title')
         author_string = tag.get('author')
         authors = cls.parse_author_string(author_string)
-        # TODO: convert ISO-639-2 to ISO-639-1
-        languages = []
         if 'language' in tag.keys():
-            languages.append(tag.get('language'))
+            languages = [tag.get('language')]
+        else:
+            languages = None
+
+        # Apply restrictions. If they're not met, return None.
+        if languages and 'languages' in restrictions:
+            restrict_to_languages = set(restrictions['languages'])
+            if not restrict_to_languages.intersection(languages):
+                # This record is for a book in a different language.
+                return None
+
+        if 'authors' in restrictions:
+            restrict_to_authors = restrictions['authors']
+            authors_per_se = [
+                x for x in authors if Author.AUTHOR_ROLE in x['roles']
+            ]
+            for restrict_to_author in restrict_to_authors:
+                if not MetadataSimilarity.author_found_in(
+                        restrict_to_author, authors_per_se):
+                    # The given author did not show up as one of the
+                    # per se 'authors' of this book. They may have had
+                    # some other role in it, or the book may be about
+                    # them, but this book is not *by* them.
+                    return None
+
         return title, authors, languages
 
     @classmethod
-    def extract_work_record(cls, _db, work_tag, restrict_to_author=None):
+    def extract_work_record(cls, _db, work_tag, **restrictions):
         """Create a new WorkRecord object with information about a
         work (identified by OCLC Work ID).
         """
@@ -276,23 +305,11 @@ class OCLCXMLParser(XMLParser):
         if not oclc_work_id:
             print " No OCLC Work ID (pswid) in %s" % etree.tostring(work_tag)
 
-        title, authors, languages = cls._extract_basic_info(work_tag)
-        if restrict_to_author:
-            # Find the 'authors' whose role in creating the book was,
-            # literally, authoring it. The given author must be one of
-            # those people.
-
-            authors_per_se = [
-                x for x in cls.parse_author_string(work_tag.get('author'))
-                if Author.AUTHOR_ROLE in x['roles']
-            ]
-            if not MetadataSimilarity.author_found_in(
-                    restrict_to_author, authors_per_se):
-                # The given author did not show up as one of the per se
-                # 'authors' of this work. They may have had some other role
-                # in it, or the book may be about them, but this book is
-                # not *by* them.
-                return None, False
+        result = cls._extract_basic_info(work_tag, **restrictions)
+        if not result:
+            # This record did not meet one of the restrictions.
+            return None, False
+        title, authors, languages = result
 
         # Get the most popular Dewey and LCC classification for this
         # work.
@@ -345,24 +362,20 @@ class OCLCXMLParser(XMLParser):
 
     @classmethod
     def extract_edition_record(cls, _db, edition_tag,
-                               restrict_to_languages=[],
-                               restrict_to_author=None):
+                               **restrictions):
         """Create a new WorkRecord object with information about an
         edition of a book (identified by OCLC Number).
         """
         oclc_number = unicode(edition_tag.get('oclc'))
 
         # Fill in some basic information about this new record.
-        title, authors, languages = cls._extract_basic_info(edition_tag)
-        if not set(restrict_to_languages).intersection(languages):
-            # This record is for a work in a different language.
+        result = cls._extract_basic_info(
+            edition_tag, **restrictions)
+        if not result:
+            # This record did not meet one of the restrictions.
             return None, False
 
-        if restrict_to_author and not MetadataSimilarity.author_found_in(
-                restrict_to_author, authors):
-            # The given author did not show up as one of the authors
-            # of this edition.
-            return None, False
+        title, authors, languages = result
 
         subjects = {}
         for subject_type, oclc_code in (

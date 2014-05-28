@@ -84,8 +84,6 @@ class MetadataSimilarity(object):
         a1 = [cls._wordbags_for_author(a) for a in authors1]
         a2 = [cls._wordbags_for_author(a) for a in authors2]
 
-        print "Comparing %r and %r" % (a1, a2)
-
         attempts = 0
         successes = 0
         matches_found = []
