@@ -55,7 +55,7 @@ class TestMetadataSimilarity(object):
             "Herman Melville", [dict(name="Someone else")]))
 
         eq_(False, MetadataSimilarity.author_found_in(
-            "No Such Person", {'roles': ['Author'], 'deathDate': '1891', 'name': 'Melville, Herman', 'birthDate': '1819'}, {'name': 'Tanner, Tony', 'roles': ['Editor', 'Commentator for written text', 'Author of introduction', 'Author']}))
+            "No Such Person", [{'roles': ['Author'], 'deathDate': '1891', 'name': 'Melville, Herman', 'birthDate': '1819'}, {'name': 'Tanner, Tony', 'roles': ['Editor', 'Commentator for written text', 'Author of introduction', 'Author']}]))
 
         eq_(True, MetadataSimilarity.author_found_in(
             "Lewis Carroll", [dict(name="Someone else"),
