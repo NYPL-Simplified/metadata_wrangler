@@ -350,7 +350,7 @@ class OCLCMonitorForGutenberg(object):
 
             # Turn the raw XML into some number of bibliographic records.
             representation_type, records = OCLCXMLParser.parse(
-                _db, xml, languages)
+                _db, xml, languages, author)
 
             if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
                 # `records` contains a bunch of SWIDs, not
@@ -361,7 +361,7 @@ class OCLCMonitorForGutenberg(object):
                 for swid in swids:
                     xml = self.oclc.lookup_by(swid=swid)
                     representation_type, editions = OCLCXMLParser.parse(
-                        _db, xml, languages)
+                        _db, xml, languages, author)
 
                     if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                         records.extend(editions)

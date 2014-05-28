@@ -31,7 +31,38 @@ class TestParser(DatabaseTest):
         status, swids = OCLCXMLParser.parse(self._db, xml, ["eng"])
         eq_(OCLCXMLParser.MULTI_WORK_STATUS, status)
 
+        eq_(25, len(swids))
         eq_(['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'], sorted(swids))
+        
+        # For your convenience in verifying what I say in
+        # test_extract_multiple_works_with_author_restriction().
+        assert '13424036' in swids
+
+    def test_extract_multiple_works_with_author_restriction(self):
+        """We can choose to only accept works by a given author."""
+        xml = pkgutil.get_data(
+            "tests.integration",
+            "files/oclc_multi_work_response.xml")
+
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, ["eng"], "No Such Person")
+        # This person is not listed as an author of any work in the dataset,
+        # so none of those works were picked up.
+        eq_(0, len(swids))
+
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, ["eng"], "Herman Melville")
+        
+        # We picked up 20 of the 25 works in the dataset.
+        eq_(20, len(swids))
+
+        # The missing five (as you can verify by looking at
+        # oclc_multi_work_response.xml) either don't credit Herman
+        # Melville at all (the 1956 Gregory Peck movie "Moby Dick"),
+        # or credit him as "Associated name" rather than as an author
+        # (four books about "Moby Dick").
+        for missing in '10798812', '13424036', '22658644', '250604212', '474972877':
+            assert missing not in swids
 
     def test_extract_single_work(self):
         """We can turn a single-work response into a list of WorkRecords.

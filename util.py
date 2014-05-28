@@ -50,8 +50,9 @@ class MetadataSimilarity(object):
     @classmethod
     def _matching_author_in(cls, to_match, authors):
         for author in authors:
-            if author == to_match:
-                return to_match
+            for name in author:
+                if to_match == name:
+                    return name
         return None
 
     @classmethod
@@ -66,6 +67,12 @@ class MetadataSimilarity(object):
     @classmethod
     def title(cls, title1, title2):
         return cls._word_match_proportion(title1, title2)
+
+    @classmethod
+    def author_found_in(cls, author_name, find_among):
+        a_bag = cls._wordbag(author_name)
+        b_bags = [cls._wordbags_for_author(a) for a in find_among]
+        return cls._matching_author_in(a_bag, b_bags) is not None
 
     @classmethod
     def authors(cls, authors1, authors2):
