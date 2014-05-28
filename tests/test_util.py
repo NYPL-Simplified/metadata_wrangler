@@ -102,8 +102,8 @@ class TestMetadataSimilarity(object):
         )
 
         eq_(["Moby Dick", "Moby-Dick"], sorted(moby[1]))
-        eq_(["Moby Dick Selections", "Moby Dick; notes"], sorted(moby[0.5]))
-        eq_(['Moby Dick, or, The whale', 'Moby Dick; or, The whale', 'Moby-Dick : an authoritative text, reviews and letters'],
+        eq_(['Moby Dick Selections', 'Moby Dick, or, The whale', 'Moby Dick; notes', 'Moby Dick; or, The whale'], sorted(moby[0.5]))
+        eq_(['Moby-Dick : an authoritative text, reviews and letters'],
             sorted(moby[0.25]))
 
         # Similarly for an edition of Huckleberry Finn.
@@ -118,10 +118,8 @@ class TestMetadataSimilarity(object):
 
         eq_([], huck[1])
         eq_([], huck[0.8])
-        eq_(['Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 
-             'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
-        eq_(['Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
-        eq_([], huck[0])
+        eq_(['Adventures of Huckleberry Finn', 'Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
+        eq_(["The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2."], huck[0.25])
 
         # An edition of Huckleberry Finn with a different title.
         huck2 = self._arrange_by_confidence_level(
@@ -141,10 +139,11 @@ class TestMetadataSimilarity(object):
             "Tom Sawyer. Huckleberry Finn.",
         )
 
-        eq_(['The adventures of Huckleberry Finn'], huck2[0.8])
-        eq_(['Huckleberry Finn',
-             'The adventures of Tom Sawyer and the adventures of Huckleberry Finn',
-             'The annotated Huckleberry Finn : Adventures of Huckleberry Finn'],
+        eq_(['The annotated Huckleberry Finn : Adventures of Huckleberry Finn'],
+            huck2[0.8])
+
+        eq_(['Huckleberry Finn', 
+             'The adventures of Tom Sawyer and the adventures of Huckleberry Finn'],
             sorted(huck2[0.5]))
 
         eq_(['Adventures of Huckleberry Finn : a case study in critical controversy',

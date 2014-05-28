@@ -56,17 +56,17 @@ class MetadataSimilarity(object):
         return None
 
     @classmethod
-    def _word_match_proportion(cls, s1, s2):
+    def _word_match_proportion(cls, s1, s2, stopwords):
         """What proportion of words do s1 and s2 share, considered as wordbags?"""
-        b1 = cls._wordbag(s1)
-        b2 = cls._wordbag(s2)
+        b1 = cls._wordbag(s1) - stopwords
+        b2 = cls._wordbag(s2) - stopwords
         total_words = len(b1.union(b2))
         shared_words = len(b1.intersection(b2))
         return shared_words/float(total_words)
 
     @classmethod
     def title(cls, title1, title2):
-        return cls._word_match_proportion(title1, title2)
+        return cls._word_match_proportion(title1, title2, set(['a', 'the', 'an']))
 
     @classmethod
     def author_found_in(cls, author_name, find_among):
