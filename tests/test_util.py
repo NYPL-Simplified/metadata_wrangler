@@ -1,4 +1,6 @@
+from collections import defaultdict
 from nose.tools import eq_, set_trace
+
 from util import (
     LanguageCodes,
     MetadataSimilarity,
@@ -63,31 +65,124 @@ class TestMetadataSimilarity(object):
                                    alternateName=["Lewis Carroll"])]))
 
 
-    # def test_not_quite_identity(self):
-    #     main = "The Adventures of Huckleberry Finn (Tom Sawyer's Comrade)"
-    #     print MetadataSimilarity.title(
-    #         "The Adventures of Huckleberry Finn",
-    #         "The Adventures of Tom Sawyer")
-    #     for expect, i in [
-    #             (0.4444444444444445, "Adventures of Huckleberry Finn"),
-    #             (0.4, "The adventures of Huck Finn"),
-    #             (0.5555555555555556, "The adventures of Tom Sawyer"),
-    #           ]:
-    #         eq_(expect, MetadataSimilarity.title(main, i))
+    def _arrange_by_confidence_level(self, title, *other_titles):
+        matches = defaultdict(list)
+        for other_title in other_titles:
+            similarity = MetadataSimilarity.title(title, other_title)
+            for confidence_level in 1, 0.8, 0.5, 0.25, 0:
+                if similarity >= confidence_level:
+                    matches[confidence_level].append(other_title)
+                    break
+        return matches
 
-    #     [{"alternateName": ["Twain, Mark (Samuel Clemens)", "Clemens, Samuel Langhorne"], "name": "Twain, Mark"}]
+    def test_title_similarity(self):
+        """Demonstrate how the title similarity algorithm works in common
+        cases."""
 
-    #     "Alice in Wonderland"
-    #     "Alice's adventures in Wonderland"
-    #     "Alice's adventures in Wonderland; and, Through the looking-glass and what Alice found there"
-    #     "Through the looking-glass and what Alice found there"
-    #     "The annotated Alice : Alice's adventures in Wonderland &amp; Through the looking-glass"
-    #     'The nursery "Alice,"'
+        # These are some titles OCLC gave us when we asked for Moby
+        # Dick.  Some of them are Moby Dick, some are compilations
+        # that include Moby Dick, some are books about Moby Dick, some
+        # are abridged versions of Moby Dick.
+        moby = self._arrange_by_confidence_level(
+            "Moby Dick",
+
+            "Moby Dick",
+            "Moby-Dick",
+            "Moby Dick Selections",
+            "Moby Dick; notes",
+            "Moby Dick; or, The whale",
+            "Moby Dick, or, The whale",
+            "The best of Herman Melville : Moby Dick : Omoo : Typee : Israel Potter.",
+            "The best of Herman Melville",
+            "Redburn : his first voyage",
+            "Redburn, his first voyage : being the sailorboy confessions and reminiscences of the son-of-a-gentleman in the merchant service",
+            "Redburn, his first voyage ; White-jacket, or, The world in a man-of-war ; Moby-Dick, or, The whale",
+            "Ishmael's white world : a phenomenological reading of Moby Dick.",
+            "Moby-Dick : an authoritative text, reviews and letters",
+        )
+
+        eq_(["Moby Dick", "Moby-Dick"], sorted(moby[1]))
+        eq_(["Moby Dick Selections", "Moby Dick; notes"], sorted(moby[0.5]))
+        eq_(['Moby Dick, or, The whale', 'Moby Dick; or, The whale', 'Moby-Dick : an authoritative text, reviews and letters'],
+            sorted(moby[0.25]))
+
+        # Similarly for an edition of Huckleberry Finn.
+        huck = self._arrange_by_confidence_level(
+            "The Adventures of Huckleberry Finn (Tom Sawyer's Comrade)",
+
+            "Adventures of Huckleberry Finn",
+            "The Adventures of Huckleberry Finn",
+            'Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century',
+            "The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2."
+            )
+
+        eq_([], huck[1])
+        eq_([], huck[0.8])
+        eq_(['Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 
+             'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
+        eq_(['Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
+        eq_([], huck[0])
+
+        # An edition of Huckleberry Finn with a different title.
+        huck2 = self._arrange_by_confidence_level(
+            "Adventures of Huckleberry Finn",
+           
+            "The adventures of Huckleberry Finn",
+            "Huckleberry Finn",
+            "Mississippi writings",
+            "The adventures of Tom Sawyer",
+            "The adventures of Tom Sawyer and the adventures of Huckleberry Finn",
+            "Adventures of Huckleberry Finn : a case study in critical controversy",
+            "Adventures of Huckleberry Finn : an authoritative text, contexts and sources, criticism",
+            "Tom Sawyer and Huckleberry Finn",
+            "Mark Twain : four complete novels.",
+            "The annotated Huckleberry Finn : Adventures of Huckleberry Finn (Tom Sawyer's comrade)",
+            "The annotated Huckleberry Finn : Adventures of Huckleberry Finn",
+            "Tom Sawyer. Huckleberry Finn.",
+        )
+
+        eq_(['The adventures of Huckleberry Finn'], huck2[0.8])
+        eq_(['Huckleberry Finn',
+             'The adventures of Tom Sawyer and the adventures of Huckleberry Finn',
+             'The annotated Huckleberry Finn : Adventures of Huckleberry Finn'],
+            sorted(huck2[0.5]))
+
+        eq_(['Adventures of Huckleberry Finn : a case study in critical controversy',
+             'Adventures of Huckleberry Finn : an authoritative text, contexts and sources, criticism',
+             'The adventures of Tom Sawyer',
+             "The annotated Huckleberry Finn : Adventures of Huckleberry Finn (Tom Sawyer's comrade)", 
+             'Tom Sawyer and Huckleberry Finn',
+             'Tom Sawyer. Huckleberry Finn.'],
+            sorted(huck2[0.25]))
+
+        eq_(['Mark Twain : four complete novels.', 'Mississippi writings'],
+            sorted(huck2[0]))
 
 
-    #     "Alice in Zombieland"
-    #     [{"roles": ["Author"], "name": "Cook, Nickolas", "birthDate": "1969"}]
+        alice = self._arrange_by_confidence_level(
+            "Alice's Adventures in Wonderland",
 
-    #     "Moby-Dick, or, The whale"
-    #     "Moby Dick; notes"
-    #     "Moby Dick; or, The white whale."
+            'The nursery "Alice"',
+            'Alice in Wonderland',
+            'Alice in Zombieland',
+            'Through the looking-glass and what Alice found there',
+            "Alice's adventures under ground",
+            "Alice in Wonderland &amp; Through the looking glass",
+            "Michael Foreman's Alice's adventures in Wonderland",
+            "Alice in Wonderland : comprising the two books, Alice's adventures in Wonderland and Through the looking-glass",
+        )
+
+        eq_([], alice[0.8])
+        eq_(['Alice in Wonderland',
+             "Michael Foreman's Alice's adventures in Wonderland"],
+            sorted(alice[0.5])
+        )
+        eq_(['Alice in Wonderland &amp; Through the looking glass',
+             "Alice in Wonderland : comprising the two books, Alice's adventures in Wonderland and Through the looking-glass", 
+             "Alice in Zombieland",
+             "Alice's adventures under ground"],
+            sorted(alice[0.25]))
+
+        eq_(['The nursery "Alice"',
+             'Through the looking-glass and what Alice found there'],
+            sorted(alice[0]))
