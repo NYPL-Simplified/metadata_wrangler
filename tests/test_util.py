@@ -139,6 +139,8 @@ class TestMetadataSimilarity(object):
             "Tom Sawyer. Huckleberry Finn.",
         )
 
+        eq_(['Adventures of Huckleberry Finn'], huck2[1])
+
         eq_(['The annotated Huckleberry Finn : Adventures of Huckleberry Finn'],
             huck2[0.8])
 
