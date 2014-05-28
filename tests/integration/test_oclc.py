@@ -38,6 +38,44 @@ class TestParser(DatabaseTest):
         # test_extract_multiple_works_with_author_restriction().
         assert '13424036' in swids
 
+    def test_extract_multiple_works_with_title_restriction(self):
+        """We can choose to only accept works similar to a given title."""
+        xml = pkgutil.get_data(
+            "tests.integration",
+            "files/oclc_multi_work_response.xml")
+
+        # This will only accept titles that contain exactly the same
+        # words as "Dick Moby". Only four titles in the sample data
+        # meet that criterion.
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, title="Dick Moby", title_similarity=1)
+        eq_(4, len(swids))
+
+        # Stopwords "a", "an", and "the" are removed before
+        # consideration.
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, title="A an the Moby-Dick", title_similarity=1)
+        eq_(4, len(swids))
+
+        # This is significantly more lax, so it finds more results.
+        # The exact number isn't important.
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, title="Dick Moby", title_similarity=0.5)
+        assert len(swids) > 4
+
+        # This is so lax as to be meaningless. It accepts everything.
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, title="Dick Moby", title_similarity=0)
+        eq_(25, len(swids))
+
+        # This isn't particularly strict, but none of the books in
+        # this dataset have titles that resemble this title, so none
+        # of their SWIDs show up here.
+        status, swids = OCLCXMLParser.parse(
+            self._db, xml, title="None Of These Words Show Up Whatsoever")
+        eq_(0, len(swids))
+
+
     def test_extract_multiple_works_with_author_restriction(self):
         """We can choose to only accept works by a given author."""
         xml = pkgutil.get_data(

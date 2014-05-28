@@ -188,22 +188,12 @@ class OCLCXMLParser(XMLParser):
 
         swids = []
         for work_tag in cls._xpath(tree, "//oclc:work"):
-            good = True
-            # Can we use extract_basic_data
-            if 'authors' in restrictions:
-                restrict_to_authors = restrictions.get('authors')
-                # The given name had better be one of the authors,
-                # or we won't even bother.
-                authors_per_se = [
-                    x for x in cls.parse_author_string(work_tag.get('author'))
-                    if Author.AUTHOR_ROLE in x['roles']
-                ]
-                for author in restrict_to_authors:
-                    if not MetadataSimilarity.author_found_in(
-                        author, authors_per_se):
-                        good = False
-                        break
-            if good:
+            # We're not calling extract_basic_info because we care about
+            # the info, we're calling it to make sure this work meets
+            # the restriction. If this work meets the restriction,
+            # we'll store its info when we look up the SWID.
+            response = cls._extract_basic_info(work_tag, **restrictions)
+            if response:
                 swids.append(work_tag.get('swid'))
         return swids
 
@@ -272,6 +262,15 @@ class OCLCXMLParser(XMLParser):
             languages = [tag.get('language')]
         else:
             languages = None
+
+        if title and 'title' in restrictions:
+            must_resemble_title = restrictions['title']
+            threshold = restrictions.get('title_similarity', 0.25)
+            if MetadataSimilarity.title_similarity(
+                    must_resemble_title, title) < threshold:
+                # The title of the book under consideration is not
+                # similar enough to the given title.
+                return None
 
         # Apply restrictions. If they're not met, return None.
         if languages and 'languages' in restrictions:

@@ -65,7 +65,7 @@ class MetadataSimilarity(object):
         return shared_words/float(total_words)
 
     @classmethod
-    def title(cls, title1, title2):
+    def title_similarity(cls, title1, title2):
         return cls._word_match_proportion(title1, title2, set(['a', 'the', 'an']))
 
     @classmethod
