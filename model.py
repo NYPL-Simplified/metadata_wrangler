@@ -223,8 +223,8 @@ class WorkRecord(Base):
     data_source_id = Column(Integer, ForeignKey('datasources.id'))
     primary_identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
 
-    # A WorkRecord may be associated with an EText.
-    etext_id = Column(Integer, ForeignKey('etexts.id'))
+    # A WorkRecord may be associated with a Work
+    work_id = Column(Integer, ForeignKey('works.id'))
 
     # Many WorkRecords may be equivalent to the same WorkIdentifier,
     # and a single WorkRecord may be equivalent to many
@@ -298,6 +298,14 @@ class WorkRecord(Base):
             f = get_one
         return f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier)
+
+    def equivalent_work_records(self, _db):
+        """All WorkRecords whose primary ID is among this WorkRecord's
+        equivalent IDs.
+        """
+        return _db.query(WorkRecord).filter(
+            WorkRecord.primary_identifier_id.in_(
+                [x.id for x in self.equivalent_identifiers])).all()
 
     @classmethod
     def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
@@ -443,17 +451,30 @@ class WorkRecord(Base):
 
         return (title_quotient / 2) + (author_quotient/2)
 
-class EText(Base):
+class Work(Base):
 
-    __tablename__ = 'etexts'
+    __tablename__ = 'works'
     id = Column(Integer, primary_key=True)
 
-    # One EText may have copies scattered across many LicensePools.
-    license_pools = relationship("LicensePool", backref="etext")
+    # One Work may have copies scattered across many LicensePools.
+    license_pools = relationship("LicensePool", backref="work")
+
+    # A single Work may claim many WorkRecords.
+    work_records = relationship("WorkRecord", backref="work")
     
     title = Column(Unicode)
     authors = Column(Unicode)
 
+    def calculate_presentation(self):
+        """Figure out the 'best' title/author/subjects for this Work.
+
+        For the time being, 'best' means the most common among this
+        Work's WorkRecords.
+        """
+        titles = Counter()
+        for r in work_records:
+            titles[r.title] += 1
+        self.title = work_records
 
 class LicensePool(Base):
 
@@ -462,13 +483,15 @@ class LicensePool(Base):
 
     __tablename__ = 'licensepools'
     id = Column(Integer, primary_key=True)
-    etext_id = Column('etext_id', Integer, ForeignKey('etext.id')),
 
-    # Each LicensePool is associated with one DataSource, one
-    # WorkIdentifier, and at most one EText.
+    # A LicensePool may be associated with a Work. (If it's not, no one
+    # can check it out.)
+    work_id = Column(Integer, ForeignKey('works.id'))
+
+    # Each LicensePool is associated with one DataSource and one
+    # WorkIdentifier, and therefore with one original WorkRecord.
     data_source_id = Column(Integer, ForeignKey('datasources.id'))
     identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
-    etext_id = Column(Integer, ForeignKey('etexts.id'))
 
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
@@ -518,11 +541,21 @@ class LicensePool(Base):
             _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
 
+    def work_record(self, _db):
+        """The LicencePool's primary WorkRecord.
+
+        This is (our view of) the book's entry on whatever website
+        hosts the licenses.
+        """
+        return _db.query(WorkRecord).filter_by(
+            data_source=self.data_source,
+            primary_identifier=self.identifier).one()
+
     @classmethod
-    def with_no_etext(self, _db):
-        """Find LicensePools that have no corresponding EText."""
-        return _db.query(LicensePool).outerjoin(EText).filter(
-            EText.id==None).all()
+    def with_no_work(self, _db):
+        """Find LicensePools that have no corresponding Work."""
+        return _db.query(LicensePool).outerjoin(Work).filter(
+            Work.id==None).all()
 
     def needs_update(self):
         """Is it time to update the circulation info for this license pool?"""
@@ -573,7 +606,7 @@ class LicensePool(Base):
             d[Event.OLD_VALUE] = estimated_value
             d[Event.NEW_VALUE] = actual_value
             d[Event.DELTA] = actual_value-estimated_value
-            d[Event.SOURCE] = self.work_record.source
+            d[Event.SOURCE] = self.work_record().source
             d[Event.SOURCE_BOOK_ID] = self.work_record.source_id
             d[Event.START_TIME] = datetime.datetime.strptime(
                 reality[LicensedWork.LAST_CHECKED], Event.TIME_FORMAT)
@@ -601,23 +634,84 @@ class LicensePool(Base):
             self.patrons_in_hold_queue = event.new_value
 
     @classmethod
-    def consolidate_etexts(cls, _db):
-        """Assign a (possibly new) EText to every unassigned LicensePool."""
-        for unassigned in cls.with_no_etext(_db):
-            etext, new = unassigned.calculate_etext(_db)
+    def consolidate_works(cls, _db):
+        """Assign a (possibly new) Work to every unassigned LicensePool."""
+        for unassigned in cls.with_no_work(_db):
+            etext, new = unassigned.calculate_work(_db)
 
-    def calculate_etext(self, _db):
-        """Find or create an EText for this LicensePool."""
-        primary_work_record = self.work_record
-        if primary_work_record.etext is not None:
+    def calculate_work(self, _db):
+        """Find or create a Work for this LicensePool."""
+        primary_work_record = self.work_record(_db)
+        if primary_work_record.work is not None:
             # That was a freebie.
-            return primary_work_record.etext, False
+            return primary_work_record.work, False
 
-        # Find all work records that are similar to this one and
-        # see if the preponderance of them have an associated EText.
-        other_work_records = self.work_record.recursive_equivalents()
-        
-        return None, False
+        # Find all work records connected to this LicensePool's
+        # primary work record.
+        equivalent_work_records = primary_work_record.equivalent_work_records(
+            _db)
+
+        # Find all existing Works that have claimed one or more of
+        # those work records.
+        claimed_records_by_works = defaultdict(list)
+
+        my_unclaimed_work_records = []
+
+        most_likely_existing_work = None
+        for r in equivalent_work_records:
+            if not r.work:
+                # This work record has not been claimed by anyone. We'll
+                # be claiming it for whichever Work this LicensePool ends
+                # up associated with.
+                #
+                # TODO: only do this if there's a 50% match or higher,
+                # or the match is based on ISBN or other unique
+                # identifier.
+                my_unclaimed_work_records.append(r)
+
+            # This work record has been claimed by a Work. This
+            # strengthens the tie between this LicensePool and that
+            # Work.
+            records_for_this_work = works_and_their_records[r.work]
+            records_for_this_work.append(r)
+
+        # Find all existing Works that claimed more WorkRecords than
+        # this Licensepool claimed on its own. These are all better
+        # choices than creating a new Work. In fact, there's a good
+        # chance they are all the same work.
+        better_choices = [
+            work for work, records in works_and_their_records.items()
+            if len(records) > len(my_unclaimed_work_records)
+        ]
+
+        if better_choices:
+            # One or more Works are better choices than creating a new
+            # Work for this LicensePool. Merge them into a single Work
+            # and associate the LicencePool with the new Work.
+   
+            # Actually, for now we'll just pick the most popular Work
+            # and associate this LicensePool with it.
+            work = sorted(better_choices, key=lambda x: len(x[1]), reverse=True)[0]
+            work.license_pools.append(self)
+            created = False
+        else:
+            # There is no better choice than creating a new Work for this
+            # LicensePool.
+            work = Work(license_pools=[self])
+            db.add(work)
+            db.flush()
+            created = True
+
+        # Associate the unclaimed WorkRecords with the Work we decided
+        # on/created.
+        work.work_records.extend(my_unclaimed_work_records)
+
+        # Recalculate the display information for the Work, since the
+        # associated WorkRecords have changed.
+        work.calculate_presentation()
+
+        # All done!
+        return work, created
 
 
 class CirculationEvent(Base):

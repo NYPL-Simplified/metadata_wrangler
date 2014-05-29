@@ -1,4 +1,4 @@
-"""Gather up LicensePool objects into EText objects."""
+"""Gather up LicensePool objects into Work objects."""
 
 import os
 import site
@@ -11,4 +11,4 @@ from database_credentials import SERVER, MAIN_DB
 
 if __name__ == '__main__':
     session = SessionManager.session(SERVER, MAIN_DB)
-    LicensePool.assign_missing_to_etexts(session)
+    LicensePool.consolidate_works(session)
