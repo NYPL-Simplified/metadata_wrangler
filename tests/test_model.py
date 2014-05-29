@@ -14,7 +14,7 @@ from model import (
     CirculationEvent,
     DataSource,
     get_one_or_create,
-    EText,
+    Work,
     LicensePool,
     WorkIdentifier,
     WorkRecord,
@@ -158,19 +158,19 @@ class TestLicensePool(DatabaseTest):
             LicensePool.for_foreign_id,
             self._db, DataSource.OVERDRIVE, WorkIdentifier.ISBN, "{1-2-3}")
 
-    def test_with_no_etext(self):
+    def test_with_no_work(self):
         p1, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
 
         p2, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.OVERDRIVE, WorkIdentifier.OVERDRIVE_ID, "2")
 
-        etext, ignore = get_one_or_create(self._db, EText, title="Foo")
-        p1.etext = etext
+        work, ignore = get_one_or_create(self._db, Work, title="Foo")
+        p1.work = work
         
-        assert p1 in etext.license_pools
+        assert p1 in work.license_pools
 
-        eq_([p2], LicensePool.with_no_etext(self._db))
+        eq_([p2], LicensePool.with_no_work(self._db))
 
 class TestCirculationEvent(DatabaseTest):
 

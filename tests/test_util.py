@@ -36,9 +36,9 @@ class TestMetadataSimilarity(object):
         """Verify that we ignore the order of words in titles/authors,
         as well as non-alphanumeric characters."""
 
-        eq_(1, MetadataSimilarity.title("foo bar", "foo bar"))
-        eq_(1, MetadataSimilarity.title("foo bar", "bar, foo"))
-        eq_(1, MetadataSimilarity.title("foo bar.", "FOO BAR"))
+        eq_(1, MetadataSimilarity.title_similarity("foo bar", "foo bar"))
+        eq_(1, MetadataSimilarity.title_similarity("foo bar", "bar, foo"))
+        eq_(1, MetadataSimilarity.title_similarity("foo bar.", "FOO BAR"))
 
         a1 = dict(name="Foo Bar", alternateName=["baz Quux"])
         a2 = dict(name="Bar Foo", alternateName=["QUUX, baz"])
@@ -68,7 +68,7 @@ class TestMetadataSimilarity(object):
     def _arrange_by_confidence_level(self, title, *other_titles):
         matches = defaultdict(list)
         for other_title in other_titles:
-            similarity = MetadataSimilarity.title(title, other_title)
+            similarity = MetadataSimilarity.title_similarity(title, other_title)
             for confidence_level in 1, 0.8, 0.5, 0.25, 0:
                 if similarity >= confidence_level:
                     matches[confidence_level].append(other_title)
