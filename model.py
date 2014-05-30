@@ -1,6 +1,7 @@
 from collections import Counter
 import datetime
 from nose.tools import set_trace
+import random
 
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.declarative import declarative_base
@@ -465,6 +466,10 @@ class Work(Base):
     
     title = Column(Unicode)
     authors = Column(Unicode)
+    languages = Column(Unicode)
+    thumbnail_cover_link = Column(Unicode)
+    full_cover_link = Column(Unicode)
+    lane = Column(Unicode)
 
     def calculate_presentation(self):
         """Figure out the 'best' title/author/subjects for this Work.
@@ -472,10 +477,35 @@ class Work(Base):
         For the time being, 'best' means the most common among this
         Work's WorkRecords.
         """
+        isbn = random.randint(1,1000000)
+        self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
+        self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
+
         titles = Counter()
+        lcc = Counter()
+        authors = Counter()
         for r in self.work_records:
             titles[r.title] += 1
+
+            if 'LCC' in r.subjects:
+                for s in r.subjects['LCC']:
+                    lcc[s['id']] += 1
+            for a in r.authors:
+                authors[a['name']] += 1
+
         self.title = titles.most_common(1)[0][0]
+        if authors:
+            self.authors = authors.most_common(1)[0][0]
+        if lcc:
+            lcc = lcc.most_common(1)[0][0]
+            if lcc == 'PR':
+                self.lane = "Fiction"
+            elif lcc == 'PZ':
+                self.lane = "Children's Fiction"
+            else:
+                self.lane = "Nonfiction"
+        else:
+            self.lane = "Unknown"
 
 class LicensePool(Base):
 

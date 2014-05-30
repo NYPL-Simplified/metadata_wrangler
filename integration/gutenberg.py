@@ -94,12 +94,14 @@ class GutenbergAPI(object):
         Yields (WorkRecord, LicensePool) 2-tuples.
         """
         # TODO: We are temporarily using a very limited dataset
-        only_import = set(map(str, [11, 19033, 28885, 928, 19778, 19597, 28371, 17482, 23716, 114, 19002, 10643, 36308, 19551, 35688, 35990, 2701, 15, 2489, 28794, 9147, 76, 32325, 19640, 9007, 7100, 7101, 7102, 7103, 7104, 7105, 7106, 7107]))
+        #only_import = set(map(str, [11, 19033, 28885, 928, 19778, 19597, 28371, 17482, 23716, 114, 19002, 10643, 36308, 19551, 35688, 35990, 2701, 15, 2489, 28794, 9147, 76, 32325, 19640, 9007, 7100, 7101, 7102, 7103, 7104, 7105, 7106, 7107]))
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
-            if pg_id not in only_import:
+            if int(pg_id) > 1000:
                 continue
+            #if pg_id not in only_import:
+            #    continue
             print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
