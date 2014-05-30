@@ -172,6 +172,30 @@ class TestLicensePool(DatabaseTest):
 
         eq_([p2], LicensePool.with_no_work(self._db))
 
+class TestWork(DatabaseTest):
+
+    def test_calculate_presentation(self):
+
+        authors1 = []
+        WorkRecord.add_author(authors1, "Bob")
+
+        authors2 = []
+        WorkRecord.add_author(authors2, "Bob")
+        WorkRecord.add_author(authors2, "Alice")
+
+        wr1, ignore = get_one_or_create(self._db, WorkRecord, title="Title 1")
+        wr2, ignore = get_one_or_create(self._db, WorkRecord, title="Title 2")
+        wr3, ignore = get_one_or_create(self._db, WorkRecord, title="Title 2")
+
+        work = Work()
+        work.work_records.extend([wr1, wr2, wr3])
+
+        # The title of the Work is the most common title among
+        # its associated WorkRecords.
+        eq_(None, work.title)
+        work.calculate_presentation()
+        eq_("Title 2", work.title)
+
 class TestCirculationEvent(DatabaseTest):
 
     def _event_data(self, **kwargs):

@@ -1,3 +1,4 @@
+from collections import Counter
 import datetime
 from nose.tools import set_trace
 
@@ -472,9 +473,9 @@ class Work(Base):
         Work's WorkRecords.
         """
         titles = Counter()
-        for r in work_records:
+        for r in self.work_records:
             titles[r.title] += 1
-        self.title = work_records
+        self.title = titles.most_common(1)[0][0]
 
 class LicensePool(Base):
 
