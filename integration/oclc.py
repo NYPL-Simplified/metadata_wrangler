@@ -272,8 +272,21 @@ class OCLCXMLParser(XMLParser):
                 # similar enough to the given title.
                 return None
 
+            # The semicolon is frequently used to separate multiple
+            # works in an anthology. If there is no semicolon in the
+            # original title, do not consider titles that contain
+            # semicolons.
+            if not ';' in must_resemble_title and ';' in title:
+                return None
+
         # Apply restrictions. If they're not met, return None.
-        if languages and 'languages' in restrictions:
+        if not languages:
+            # We don't know what language this record is for.
+            # Assume it's English, since OCLC records are
+            # English-centric.
+            languages = ["eng"]
+
+        if 'languages' in restrictions:
             restrict_to_languages = set(restrictions['languages'])
             if not restrict_to_languages.intersection(languages):
                 # This record is for a book in a different language.

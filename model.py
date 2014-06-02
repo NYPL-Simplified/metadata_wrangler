@@ -1,4 +1,7 @@
-from collections import Counter
+from collections import (
+    Counter,
+    defaultdict,
+)
 import datetime
 from nose.tools import set_trace
 import random
@@ -446,12 +449,12 @@ class WorkRecord(Base):
         * Titles that include subtitles.
         """
         title_quotient = MetadataSimilarity.title_similarity(
-            self.title, self.other_title)
+            self.title, other_record.title)
 
         author_quotient = MetadataSimilarity.author_similarity(
-            self.authors, other.authors)
+            self.authors, other_record.authors)
 
-        return (title_quotient / 2) + (author_quotient/2)
+        return (title_quotient * 0.80) + (author_quotient * 0.20)
 
 class Work(Base):
 
@@ -471,29 +474,94 @@ class Work(Base):
     full_cover_link = Column(Unicode)
     lane = Column(Unicode)
 
+    def __repr__(self):
+        return "%s/%s/%s/%s (%s work records, %s license pools)" % (
+            self.id, self.title, self.authors, self.languages,
+            len(self.work_records), len(self.license_pools))
+
+    def similarity_to(self, other_record):
+        """How likely is it that this record describes the same book as the
+        given record?
+
+        1 indicates very strong similarity, 0 indicates no similarity
+        at all.
+
+        For now we just compare the sets of words used in the titles
+        and the authors' names. This should be good enough for most
+        cases given that there is usually some preexisting reason to
+        suppose that the two records are related (e.g. OCLC said
+        they were).
+
+        Confounding factors include:
+
+        * Abbreviated names.
+        * Titles that include subtitles.
+        """
+        title_quotient = MetadataSimilarity.title_similarity(
+            self.title, other_record.title)
+
+        author_quotient = MetadataSimilarity.title_similarity(
+            self.authors, other_record.authors)
+
+        return (title_quotient * 0.80) + (author_quotient * 0.20)
+
+    def merge_into(self, _db, target_work):
+        """This Work ceases to exist and is replaced by target_work."""
+        print "Merging %r\n into %r" % (self, target_work)
+        if self.title == "Tom Sawyer abroad":
+            set_trace()
+
+        target_work.license_pools.extend(self.license_pools)
+        target_work.work_records.extend(self.work_records)
+        target_work.calculate_presentation()
+        print "The resulting work: %r" % target_work
+        _db.delete(self)
+
     def calculate_presentation(self):
         """Figure out the 'best' title/author/subjects for this Work.
 
         For the time being, 'best' means the most common among this
         Work's WorkRecords.
         """
-        isbn = random.randint(1,1000000)
-        self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
-        self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
+        #isbn = random.randint(1,1000000)
+        #self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
+        #self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
 
         titles = Counter()
         lcc = Counter()
         authors = Counter()
+        languages = Counter()
+
+        shortest_title = None
+
         for r in self.work_records:
             titles[r.title] += 1
+            if not shortest_title or len(r.title) < len(shortest_title):
+                shortest_title = r.title
 
             if 'LCC' in r.subjects:
                 for s in r.subjects['LCC']:
                     lcc[s['id']] += 1
             for a in r.authors:
                 authors[a['name']] += 1
+            if r.languages:
+                languages[tuple(r.languages)] += 1
 
-        self.title = titles.most_common(1)[0][0]
+        # Do not consider titles that are more than 3x longer than the
+        # shortest title.
+        short_enough_titles = Counter()
+        for t, i in titles.items():
+            if len(t) < len(shortest_title) * 3:
+                short_enough_titles[t] = i
+
+        self.title = short_enough_titles.most_common(1)[0][0]
+
+        if len(languages) > 1:
+            print "%s includes work records from several different languages: %r" % (self.title, languages)
+                
+            set_trace()
+        self.languages = languages.most_common(1)[0][0]
+
         if authors:
             self.authors = authors.most_common(1)[0][0]
         if lcc:
@@ -673,6 +741,7 @@ class LicensePool(Base):
     def calculate_work(self, _db):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record(_db)
+        self.languages = primary_work_record.languages
         if primary_work_record.work is not None:
             # That was a freebie.
             return primary_work_record.work, False
@@ -680,57 +749,78 @@ class LicensePool(Base):
         # Find all work records connected to this LicensePool's
         # primary work record.
         equivalent_work_records = primary_work_record.equivalent_work_records(
-            _db)
+            _db) + [primary_work_record]
 
         # Find all existing Works that have claimed one or more of
         # those work records.
-        claimed_records_by_works = defaultdict(list)
+        claimed_records_by_work = defaultdict(list)
 
         my_unclaimed_work_records = []
 
         most_likely_existing_work = None
+
+        shortest_title = None
         for r in equivalent_work_records:
             if not r.work:
-                # This work record has not been claimed by anyone. We'll
-                # be claiming it for whichever Work this LicensePool ends
-                # up associated with.
-                #
-                # TODO: only do this if there's a 50% match or higher,
-                # or the match is based on ISBN or other unique
-                # identifier.
-                my_unclaimed_work_records.append(r)
+                if not shortest_title or r.title < shortest_title:
+                    shortest_title = r.title
 
-            # This work record has been claimed by a Work. This
-            # strengthens the tie between this LicensePool and that
-            # Work.
-            records_for_this_work = works_and_their_records[r.work]
-            records_for_this_work.append(r)
+        for r in equivalent_work_records:
+            if not r.work:
+                # This work record has not been claimed by anyone. 
+                #
+                # TODO: apply much more lenient terms if the match is
+                # based on ISBN or other unique identifier.
+                similarity = primary_work_record.similarity_to(r)
+                if similarity >= 0.5 and len(r.title) < (len(shortest_title) * 3):
+                    # It's similar enough to this LicensePool's
+                    # primary WorkRecord that we'll be claiming it for
+                    # whichever Work this LicensePool ends up associated
+                    # with.
+                    my_unclaimed_work_records.append(r)
+                else:
+                    # It's not all that similar to this LicensePool's
+                    # primary WorkRecord. Leave it alone.
+                    pass
+            else:
+                # This work record has been claimed by a Work. This
+                # strengthens the tie between this LicensePool and that
+                # Work.
+                records_for_this_work = claimed_records_by_work[r.work]
+                records_for_this_work.append(r)
 
         # Find all existing Works that claimed more WorkRecords than
         # this Licensepool claimed on its own. These are all better
         # choices than creating a new Work. In fact, there's a good
         # chance they are all the same work.
         better_choices = [
-            work for work, records in works_and_their_records.items()
+            (work, len(records)) for work, records in claimed_records_by_work.items()
             if len(records) > len(my_unclaimed_work_records)
         ]
 
         if better_choices:
             # One or more Works are better choices than creating a new
-            # Work for this LicensePool. Merge them into a single Work
-            # and associate the LicencePool with the new Work.
+            # Work for this LicensePool. Merge them all into the most
+            # popular Work and associate the LicencePool with that
+            # Work.
    
-            # Actually, for now we'll just pick the most popular Work
-            # and associate this LicensePool with it.
-            work = sorted(better_choices, key=lambda x: len(x[1]), reverse=True)[0]
+            by_popularity = sorted(better_choices, key=lambda x: x[1], reverse=True)
+
+            work = by_popularity[0][0]
+            for less_popular, popularity in by_popularity[1:]:
+                similarity = less_popular.similarity_to(work)
+                if similarity < 0.5:
+                    print "NOT MERGING %r into %r, the works are too different." % (less_popular, work)
+                else:
+                    less_popular.merge_into(_db, work)
             work.license_pools.append(self)
             created = False
         else:
             # There is no better choice than creating a new Work for this
             # LicensePool.
             work = Work(license_pools=[self])
-            db.add(work)
-            db.flush()
+            _db.add(work)
+            _db.flush()
             created = True
 
         # Associate the unclaimed WorkRecords with the Work we decided
@@ -740,7 +830,6 @@ class LicensePool(Base):
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
         work.calculate_presentation()
-
         # All done!
         return work, created
 

@@ -75,10 +75,14 @@ class MetadataSimilarity(object):
         return cls._matching_author_in(a_bags, b_bags) is not None
 
     @classmethod
-    def authors(cls, authors1, authors2):
+    def author_similarity(cls, authors1, authors2):
         """For each author in authors1, find a matching author in
         authors2, and vice versa. Quotient is the % of authors
         that match."""
+
+        if not authors1 and not authors2:
+            # Both sets are empty. A perfect match!
+            return 1
 
         # First, convert the author dicts to lists of wordbags.
         a1 = [cls._wordbags_for_author(a) for a in authors1]
