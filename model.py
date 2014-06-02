@@ -475,9 +475,9 @@ class Work(Base):
     lane = Column(Unicode)
 
     def __repr__(self):
-        return "%s/%s/%s/%s (%s work records, %s license pools)" % (
+        return ("%s/%s/%s/%s (%s work records, %s license pools)" % (
             self.id, self.title, self.authors, self.languages,
-            len(self.work_records), len(self.license_pools))
+            len(self.work_records), len(self.license_pools))).encode("utf8")
 
     def title_histogram(self):
         histogram = Counter()
@@ -524,16 +524,15 @@ class Work(Base):
 
     def merge_into(self, _db, target_work):
         """This Work ceases to exist and is replaced by target_work."""
-        #print "Merging %r\n into %r" % (self, target_work)
+        set_trace()
+        print "MERGING %r into %r" % (self, target_work)
         my_histogram = self.title_histogram()
         target_histogram = target_work.title_histogram()
-        if 'abroad' in self.title:
-            set_trace()
 
         target_work.license_pools.extend(self.license_pools)
         target_work.work_records.extend(self.work_records)
         target_work.calculate_presentation()
-        # print "The resulting work: %r" % target_work
+        print "The resulting work: %r" % target_work
         _db.delete(self)
 
     def calculate_presentation(self):
@@ -542,9 +541,9 @@ class Work(Base):
         For the time being, 'best' means the most common among this
         Work's WorkRecords.
         """
-        #isbn = random.randint(1,1000000)
-        #self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
-        #self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
+        isbn = random.randint(1,1000000)
+        self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
+        self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
 
         titles = Counter()
         lcc = Counter()
@@ -573,6 +572,8 @@ class Work(Base):
             if len(t) < len(shortest_title) * 3:
                 short_enough_titles[t] = i
 
+        if not short_enough_titles:
+            set_trace()
         self.title = short_enough_titles.most_common(1)[0][0]
 
         if len(languages) > 1:
@@ -774,7 +775,7 @@ class LicensePool(Base):
         # those work records.
         claimed_records_by_work = defaultdict(list)
 
-        my_unclaimed_work_records = []
+        my_unclaimed_work_records = [primary_work_record]
 
         most_likely_existing_work = None
 
@@ -828,9 +829,9 @@ class LicensePool(Base):
             work = by_popularity[0][0]
             for less_popular, popularity in by_popularity[1:]:
                 similarity = less_popular.similarity_to(work)
+                print similarity
                 if similarity < 0.5:
-                    # print "NOT MERGING %r into %r, the works are too different." % (less_popular, work)
-                    pass
+                    print "NOT MERGING %r into %r, similarity is only %.3f." % (less_popular, work, similarity)
                 else:
                     less_popular.merge_into(_db, work)
             work.license_pools.append(self)
@@ -850,6 +851,8 @@ class LicensePool(Base):
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
         work.calculate_presentation()
+        #if created:
+        #    print "Created %r" % work
         # All done!
         return work, created
 
