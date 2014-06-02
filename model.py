@@ -479,42 +479,61 @@ class Work(Base):
             self.id, self.title, self.authors, self.languages,
             len(self.work_records), len(self.license_pools))
 
-    def similarity_to(self, other_record):
-        """How likely is it that this record describes the same book as the
-        given record?
+    def title_histogram(self):
+        histogram = Counter()
+        words = 0.0
+        for record in self.work_records:
+            for word in MetadataSimilarity.SEPARATOR.split(record.title):
+                if word:
+                    histogram[word.lower()] += 1
+                    words += 1
+        for k, v in histogram.items():
+            histogram[k] = v/words
+        return histogram
 
-        1 indicates very strong similarity, 0 indicates no similarity
-        at all.
+    def title_histogram_difference(self, other_work):
+        my_histogram = self.title_histogram()
+        other_histogram = other_work.title_histogram()
+        differences = []
+        # For every word that appears in this work's titles, compare
+        # its frequency against the frequency of that word in the
+        # other work's histogram.
+        for k, v in my_histogram.items():
+            difference = abs(v - other_histogram.get(k, 0))
+            differences.append(difference)
 
-        For now we just compare the sets of words used in the titles
-        and the authors' names. This should be good enough for most
-        cases given that there is usually some preexisting reason to
-        suppose that the two records are related (e.g. OCLC said
-        they were).
+        # Add the frequency of every word that appears in the other work's
+        # titles but not in this work's titles.
+        for k, v in other_histogram.items():
+            if k not in my_histogram:
+                differences.append(abs(v))
+        return sum(differences)
 
-        Confounding factors include:
+    def similarity_to(self, other_work):
+        """How likely is it that this work describes the same book as the
+        given work?
 
-        * Abbreviated names.
-        * Titles that include subtitles.
+        A high number indicates very strong similarity; a low or
+        negative number indicates low similarity.
         """
-        title_quotient = MetadataSimilarity.title_similarity(
-            self.title, other_record.title)
-
+        title_quotient = (1-self.title_histogram_difference(other_work))
         author_quotient = MetadataSimilarity.title_similarity(
-            self.authors, other_record.authors)
+            self.authors, other_work.authors)
 
         return (title_quotient * 0.80) + (author_quotient * 0.20)
 
     def merge_into(self, _db, target_work):
         """This Work ceases to exist and is replaced by target_work."""
-        print "Merging %r\n into %r" % (self, target_work)
-        if self.title == "Tom Sawyer abroad":
+        #print "Merging %r\n into %r" % (self, target_work)
+        my_histogram = self.title_histogram()
+        target_histogram = target_work.title_histogram()
+        if 'abroad' in self.title:
             set_trace()
 
         target_work.license_pools.extend(self.license_pools)
         target_work.work_records.extend(self.work_records)
         target_work.calculate_presentation()
-        print "The resulting work: %r" % target_work
+        # print "The resulting work: %r" % target_work
         _db.delete(self)
 
     def calculate_presentation(self):
@@ -810,7 +829,8 @@ class LicensePool(Base):
             for less_popular, popularity in by_popularity[1:]:
                 similarity = less_popular.similarity_to(work)
                 if similarity < 0.5:
-                    print "NOT MERGING %r into %r, the works are too different." % (less_popular, work)
+                    # print "NOT MERGING %r into %r, the works are too different." % (less_popular, work)
+                    pass
                 else:
                     less_popular.merge_into(_db, work)
             work.license_pools.append(self)
