@@ -344,14 +344,22 @@ class TestWorkConsolidation(DatabaseTest):
 
     def test_calculate_work_for_licensepool_where_primary_work_record_has_work(self):
 
-        license, ignore = LicensePool.for_foreign_id(
-            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
-        work_record = pool.work_record(self._db)
+        args = [self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID,
+                "1"]
+        # Here's a LicensePool for a book from Gutenberg.
+        license, ignore = LicensePool.for_foreign_id(*args)
+
+        # Here's a WorkRecord for the same Gutenberg book.
+        work_record, ignore = WorkRecord.for_foreign_id(*args)
+
+        # The WorkRecord has a Work associated with it.
         work = Work()
         work_record.work = work
 
         eq_(None, license.work)
         license.calculate_work(self._db)
+
+        # Now, the LicensePool has the same Work associated with it.
         eq_(work, license.work)
         
         
