@@ -57,10 +57,10 @@ class TestMetadataSimilarity(object):
         eq_(0, MetadataSimilarity.histogram_distance(a1, a2))
 
         # These two sets of titles are as far apart as it's
-        # possible to be. Their distance is 2.
+        # possible to be. Their distance is 1.
         a1 = ["These Words Have Absolutely"]
         a2 = ["Nothing In Common, Really"]
-        eq_(2, MetadataSimilarity.histogram_distance(a1, a2))
+        eq_(1, MetadataSimilarity.histogram_distance(a1, a2))
 
         # Now we test a difficult real-world case.
 
@@ -75,9 +75,10 @@ class TestMetadataSimilarity(object):
                   "Tom Sawyer abroad",
                   "Tom Sawyer abroad",
                   "Tom Sawyer Abroad",
+                  "Tom Sawyer Abroad",
+                  "Tom Sawyer Abroad",
                   "Tom Sawyer abroad : and other stories",
                   "Tom Sawyer abroad Tom Sawyer, detective : and other stories, etc. etc.",
-                  "Tom Sawyer abroad",
                   "Tom Sawyer abroad",
                   "Tom Sawyer abroad",
                   "Tom Sawyer abroad",
@@ -85,6 +86,7 @@ class TestMetadataSimilarity(object):
                   "Tom Sawyer abroad and other stories",
                   "Tom Sawyer abroad and the American claimant,",
                   "Tom Sawyer abroad and the American claimant",
+                  "Tom Sawyer abroad : and The American claimant: novels.",
                   "Tom Sawyer abroad : and The American claimant: novels.",
                   "Tom Sawyer Abroad - Tom Sawyer, Detective",
               ]
@@ -108,7 +110,9 @@ class TestMetadataSimilarity(object):
                      "Tom Sawyer, detective",
                      "Tom Sawyer abroad Tom Sawyer detective",
                      "Tom Sawyer, detective : as told by Huck Finn",
-                     "Tom Sawyer : detective",]
+                     "Tom Sawyer : detective",
+                 ]
+
 
         # The histogram distance of the two sets of titles is not
         # huge, but it is significant.
@@ -128,8 +132,8 @@ class TestMetadataSimilarity(object):
         de_de = MetadataSimilarity.histogram_distance(
             ["Tom Sawyer, Detective"], detective)
 
-        assert ab_ab < 1
-        assert de_de < 1
+        assert ab_ab < 0.5
+        assert de_de < 0.5
 
         # The histogram distance between the Gutenberg title of a book
         # and the set of all OCLC Classify titles for that book tends
@@ -139,8 +143,9 @@ class TestMetadataSimilarity(object):
         de_ab = MetadataSimilarity.histogram_distance(
             ["Tom Sawyer, Detective"], abroad)
 
-        assert ab_de > 1
-        assert de_ab > 1
+        assert ab_de > 0.5
+        print de_ab
+        assert de_ab > 0.5
 
         # n.b. in real usage the likes of "Tom Sawyer Abroad" will be
         # much more common than the likes of "Tom Sawyer Abroad - Tom
@@ -166,8 +171,11 @@ class TestMetadataSimilarity(object):
 
     def _arrange_by_confidence_level(self, title, *other_titles):
         matches = defaultdict(list)
+        stopwords = set(["the", "a", "an"])
         for other_title in other_titles:
-            similarity = MetadataSimilarity.title_similarity(title, other_title)
+            distance = MetadataSimilarity.histogram_distance(
+                [title], [other_title], stopwords)
+            similarity = 1-distance
             for confidence_level in 1, 0.8, 0.5, 0.25, 0:
                 if similarity >= confidence_level:
                     matches[confidence_level].append(other_title)
@@ -200,25 +208,48 @@ class TestMetadataSimilarity(object):
             "Moby-Dick : an authoritative text, reviews and letters",
         )
 
+        # These are all the titles that are even remotely similar to
+        # "Moby Dick" according to the histogram distance algorithm.
         eq_(["Moby Dick", "Moby-Dick"], sorted(moby[1]))
-        eq_(['Moby Dick Selections', 'Moby Dick, or, The whale', 'Moby Dick; notes', 'Moby Dick; or, The whale'], sorted(moby[0.5]))
+        eq_([], sorted(moby[0.8]))
+        eq_(['Moby Dick Selections',
+             'Moby Dick, or, The whale',
+             'Moby Dick; notes',
+             'Moby Dick; or, The whale',
+             ],
+            sorted(moby[0.5]))
         eq_(['Moby-Dick : an authoritative text, reviews and letters'],
             sorted(moby[0.25]))
 
-        # Similarly for an edition of Huckleberry Finn.
+        # Similarly for an edition of Huckleberry Finn with an
+        # unusually long name.
         huck = self._arrange_by_confidence_level(
             "The Adventures of Huckleberry Finn (Tom Sawyer's Comrade)",
 
             "Adventures of Huckleberry Finn",
             "The Adventures of Huckleberry Finn",
             'Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century',
-            "The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2."
+            "The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2.",
+            "The adventures of Tom Sawyer",
             )
 
+        # Note that from a word frequency perspective, "The adventures
+        # of Tom Sawyer" is just as likely as "The adventures of
+        # Huckleberry Finn". This is the sort of mistake that has to
+        # be cleaned up later.
         eq_([], huck[1])
         eq_([], huck[0.8])
-        eq_(['Adventures of Huckleberry Finn', 'Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century', 'The Adventures of Huckleberry Finn'], sorted(huck[0.5]))
-        eq_(["The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2."], huck[0.25])
+        eq_([
+            'Adventures of Huckleberry Finn',
+            'Adventures of Huckleberry Finn : "Tom Sawyer\'s comrade", scene: the Mississippi Valley, time: early nineteenth century',
+            'The Adventures of Huckleberry Finn',
+            'The adventures of Tom Sawyer'
+        ],
+            sorted(huck[0.5]))
+        eq_([
+            "The adventures of Huckleberry Finn : (Tom Sawyer's Comrade) : Scene: The Mississippi Valley, Time: Firty to Fifty Years Ago : In 2 Volumes : Vol. 1-2."
+        ],
+            huck[0.25])
 
         # An edition of Huckleberry Finn with a different title.
         huck2 = self._arrange_by_confidence_level(
@@ -240,19 +271,22 @@ class TestMetadataSimilarity(object):
 
         eq_(['The adventures of Huckleberry Finn'], huck2[1])
 
-        eq_(['The annotated Huckleberry Finn : Adventures of Huckleberry Finn'],
-            huck2[0.8])
+        eq_([], huck2[0.8])
 
-        eq_(['Huckleberry Finn', 
-             'The adventures of Tom Sawyer and the adventures of Huckleberry Finn'],
+        eq_([
+            'Huckleberry Finn',
+            'The adventures of Tom Sawyer',
+            'The adventures of Tom Sawyer and the adventures of Huckleberry Finn', 
+            'The annotated Huckleberry Finn : Adventures of Huckleberry Finn',
+            "The annotated Huckleberry Finn : Adventures of Huckleberry Finn (Tom Sawyer's comrade)",
+            'Tom Sawyer. Huckleberry Finn.',
+        ],
             sorted(huck2[0.5]))
 
-        eq_(['Adventures of Huckleberry Finn : a case study in critical controversy',
-             'Adventures of Huckleberry Finn : an authoritative text, contexts and sources, criticism',
-             'The adventures of Tom Sawyer',
-             "The annotated Huckleberry Finn : Adventures of Huckleberry Finn (Tom Sawyer's comrade)", 
-             'Tom Sawyer and Huckleberry Finn',
-             'Tom Sawyer. Huckleberry Finn.'],
+        eq_([
+            'Adventures of Huckleberry Finn : a case study in critical controversy', 
+            'Adventures of Huckleberry Finn : an authoritative text, contexts and sources, criticism', 'Tom Sawyer and Huckleberry Finn'
+        ],
             sorted(huck2[0.25]))
 
         eq_(['Mark Twain : four complete novels.', 'Mississippi writings'],
@@ -273,14 +307,14 @@ class TestMetadataSimilarity(object):
         )
 
         eq_([], alice[0.8])
-        eq_(['Alice in Wonderland',
-             "Michael Foreman's Alice's adventures in Wonderland"],
-            sorted(alice[0.5])
-        )
-        eq_(['Alice in Wonderland &amp; Through the looking glass',
+        eq_(['Alice in Wonderland', 
              "Alice in Wonderland : comprising the two books, Alice's adventures in Wonderland and Through the looking-glass", 
-             "Alice in Zombieland",
-             "Alice's adventures under ground"],
+             "Alice's adventures under ground",
+             "Michael Foreman's Alice's adventures in Wonderland"],
+            sorted(alice[0.5]))
+
+        eq_(['Alice in Wonderland &amp; Through the looking glass',
+             "Alice in Zombieland"],
             sorted(alice[0.25]))
 
         eq_(['The nursery "Alice"',

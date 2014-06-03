@@ -46,7 +46,7 @@ class MetadataSimilarity(object):
         return [x.strip().lower() for x in cls.SEPARATOR.split(s) if x.strip()]
 
     @classmethod
-    def histogram(cls, *strings):
+    def histogram(cls, strings, stopwords=None):
         """Create a histogram of word frequencies across the given list of 
         strings.
         """
@@ -54,14 +54,15 @@ class MetadataSimilarity(object):
         words = 0.0
         for string in strings:
             for word in cls._wordlist(string):
-                histogram[word] += 1
-                words += 1
+                if not stopwords or word not in stopwords:
+                    histogram[word] += 1
+                    words += 1
         for k, v in histogram.items():
             histogram[k] = v/words
         return histogram
 
     @classmethod
-    def histogram_distance(cls, strings_1, strings_2):
+    def histogram_distance(cls, strings_1, strings_2, stopwords=None):
         """Calculate the histogram distance between two sets of strings.
 
         The histogram distance is the sum of the word distance for
@@ -75,11 +76,14 @@ class MetadataSimilarity(object):
 
         If the strings use the same words at exactly the same
         frequency, the difference will be 0. If the strings use
-        completely different words, the difference will be 2.
+        completely different words, the difference will be 1.
 
         """
-        histogram_1 = cls.histogram(*strings_1)
-        histogram_2 = cls.histogram(*strings_2)
+        if not stopwords:
+            stopwords = set(["the", "a", "an"])
+
+        histogram_1 = cls.histogram(strings_1, stopwords=stopwords)
+        histogram_2 = cls.histogram(strings_2, stopwords=stopwords)
         differences = []
         # For every word that appears in histogram 1, compare its
         # frequency against the frequency of that word in histogram 2.
@@ -92,7 +96,8 @@ class MetadataSimilarity(object):
         for k, v in histogram_2.items():
             if k not in histogram_1:
                 differences.append(abs(v))
-        return sum(differences)
+
+        return sum(differences) / 2
 
     @classmethod
     def most_common(cls, maximum_size, *items):
