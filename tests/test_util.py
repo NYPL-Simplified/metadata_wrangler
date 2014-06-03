@@ -144,7 +144,6 @@ class TestMetadataSimilarity(object):
             ["Tom Sawyer, Detective"], abroad)
 
         assert ab_de > 0.5
-        print de_ab
         assert de_ab > 0.5
 
         # n.b. in real usage the likes of "Tom Sawyer Abroad" will be

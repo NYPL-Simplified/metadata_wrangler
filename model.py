@@ -552,12 +552,13 @@ class Work(Base):
         authors = Counter()
         languages = Counter()
 
-        shortest_title = None
+        shortest_title = ''
         titles = []
 
         for r in self.work_records:
             titles.append(r.title)
-            if not shortest_title or len(r.title) < len(shortest_title):
+            if r.title and (
+                    not shortest_title or len(r.title) < len(shortest_title)):
                 shortest_title = r.title
 
             if 'LCC' in r.subjects:
@@ -575,7 +576,8 @@ class Work(Base):
             print "%s includes work records from several different languages: %r" % (self.title, languages)
                 
             set_trace()
-        self.languages = languages.most_common(1)[0][0]
+        if languages:
+            self.languages = languages.most_common(1)[0][0]
 
         if authors:
             self.authors = authors.most_common(1)[0][0]
@@ -772,14 +774,6 @@ class LicensePool(Base):
 
         my_unclaimed_work_records = [primary_work_record]
 
-        most_likely_existing_work = None
-
-        shortest_title = None
-        for r in equivalent_work_records:
-            if not r.work:
-                if not shortest_title or r.title < shortest_title:
-                    shortest_title = r.title
-
         for r in equivalent_work_records:
             if not r.work:
                 # This work record has not been claimed by anyone. 
@@ -806,26 +800,40 @@ class LicensePool(Base):
         # this Licensepool claimed on its own. These are all better
         # choices than creating a new Work. In fact, there's a good
         # chance they are all the same work.
-        better_choices = [
-            (work, len(records)) for work, records in claimed_records_by_work.items()
+        more_popular_choices = [
+            (work, self.similarity_to(work), len(records)) 
+            for work, records in claimed_records_by_work.items()
             if len(records) > len(my_unclaimed_work_records)
         ]
 
+        # Restrict to Works with a better than 50% similarity to this
+        # work.
+        better_choices = [
+            (work, similarity, records) 
+            for (work, similarity, records) in more_popular_choices
+            if similarity > 0.5
+        ]
+
         if better_choices:
-            # One or more Works are better choices than creating a new
-            # Work for this LicensePool. Merge them all into the most
-            # popular Work and associate the LicencePool with that
-            # Work.
+            # One or more Works seem to be better choices than
+            # creating a new Work for this LicensePool. Merge them all
+            # into the most popular Work.
    
-            by_popularity = sorted(better_choices, key=lambda x: x[1], reverse=True)
+            by_popularity = sorted(
+                better_choices, key=lambda x: x[1], reverse=True)
 
             work = by_popularity[0][0]
             for less_popular, popularity in by_popularity[1:]:
                 similarity = less_popular.similarity_to(work)
+                # The work must also have a better than 50% similarity
+                # with the work it's being merged into.
                 print similarity
                 if similarity < 0.5:
-                    print "NOT MERGING %r into %r, similarity is only %.3f." % (less_popular, work, similarity)
+                    print "NOT MERGING %r into %r, similarity is only %.3f." % (
+                        work, work, similarity)
                 else:
+                    print "MERGING %r into %r, similarity is %.3f." % (
+                        less_popular, work, similarity)
                     less_popular.merge_into(_db, work)
             work.license_pools.append(self)
             created = False

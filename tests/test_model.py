@@ -321,3 +321,54 @@ class TestCirculationEvent(DatabaseTest):
         # internal patron ID, we don't know whether a checkout is
         # caused by someone who has a reserved copy or someone who is
         # checking out from the general pool.
+
+
+class TestWorkConsolidation(DatabaseTest):
+
+    def test_merge_into(self):
+
+        # Here's a work with a license pool and two work records.
+        pool_1a, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+        work_record_1a, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W1")
+        work_record_1b, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W2")
+
+        work1 = Work()
+        work1.license_pools = [pool_1a]
+        work1.work_records = [work_record_1a, work_record_1b]
+
+        # Here's a work with two license pools and one work record.
+        pool_2a, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "2")
+        pool_2b, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "2")
+
+        work_record_2a, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W3")
+        work_record_2a.title = "The only title in this whole test."
+
+        work2 = Work()
+        work2.license_pools = [pool_2a]
+        work2.work_records = [work_record_2a]
+
+        self._db.commit()
+
+        # Merge the two work records.
+        work2.merge_into(self._db, work1)
+
+        # The merged Work has been deleted.
+        assert work2 in self._db.deleted
+
+        # The remaining Work has all three license pools.
+        for p in pool_1a, pool_2a, pool_2b:
+            assert p in work1.license_pools
+
+        # It has all three work records.
+        for w in work_record_1a, work_record_1b, work_record_2a:
+            assert w in work1.work_records
+
+        # Its presentation has been updated and its title now comes from
+        # one of the now-deleted Work's WorkRecords.
+        eq_("The only title in this whole test.", work1.title)

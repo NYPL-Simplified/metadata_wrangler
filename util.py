@@ -104,10 +104,13 @@ class MetadataSimilarity(object):
         """Return the most common item that's not longer than the max."""
         c = Counter()
         for i in items:
-            if len(i) <= maximum_size:
-                c += 1
+            if i and len(i) <= maximum_size:
+                c[i] += 1
 
-        return c.most_common(1)[0][0]
+        common = c.most_common(1)
+        if not common:
+            return None
+        return common[0][0]
 
     @classmethod
     def _wordbags_for_author(cls, author):
