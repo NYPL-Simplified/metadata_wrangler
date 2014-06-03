@@ -443,10 +443,18 @@ class WorkRecord(Base):
         suppose that the two records are related (e.g. OCLC said
         they were).
 
-        Confounding factors include:
+        Most of the WorkRecords are from OCLC Classify, and we expect
+        to get some of them wrong (e.g. when a single OCLC work is a
+        compilation of several novels by the same author). That's okay
+        because those WorkRecords aren't backed by
+        LicensePools. They're purely informative. We will have some
+        bad information in our database, but the clear-cut cases
+        should outnumber the fuzzy cases, so we we should still group
+        the WorkRecords that really matter--the ones backed by
+        LicensePools--together correctly.
 
-        * Abbreviated names.
-        * Titles that include subtitles.
+        TODO: apply much more lenient terms if the two WorkRecords are
+        identified by the same ISBN or other unique identifier.
         """
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
@@ -454,7 +462,11 @@ class WorkRecord(Base):
         author_quotient = MetadataSimilarity.author_similarity(
             self.authors, other_record.authors)
 
+        # We weight title more heavily because it's much more likely
+        # that one author wrote two different books than that two
+        # books with the same title have different authors.
         return (title_quotient * 0.80) + (author_quotient * 0.20)
+
 
 class Work(Base):
 
@@ -479,6 +491,7 @@ class Work(Base):
             self.id, self.title, self.authors, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
+
     def title_histogram(self):
         histogram = Counter()
         words = 0.0
@@ -491,43 +504,33 @@ class Work(Base):
             histogram[k] = v/words
         return histogram
 
-    def title_histogram_difference(self, other_work):
-        my_histogram = self.title_histogram()
-        other_histogram = other_work.title_histogram()
-        differences = []
-        # For every word that appears in this work's titles, compare
-        # its frequency against the frequency of that word in the
-        # other work's histogram.
-        for k, v in my_histogram.items():
-            difference = abs(v - other_histogram.get(k, 0))
-            differences.append(difference)
-
-        # Add the frequency of every word that appears in the other work's
-        # titles but not in this work's titles.
-        for k, v in other_histogram.items():
-            if k not in my_histogram:
-                differences.append(abs(v))
-        return sum(differences)
-
     def similarity_to(self, other_work):
-        """How likely is it that this work describes the same book as the
-        given work?
+        """How likely is it that this Work describes the same book as the
+        given Work?
 
-        A high number indicates very strong similarity; a low or
-        negative number indicates low similarity.
+        This is more accurate than WorkRecord.similarity_to because we
+        (hopefully) have a lot of WorkRecords associated with each
+        Work. If their metadata has a lot of overlap, the two Works
+        are probably the same.
         """
-        title_quotient = (1-self.title_histogram_difference(other_work))
-        author_quotient = MetadataSimilarity.title_similarity(
+        my_titles = [record.title for record in self.work_records]
+        other_titles = [record.title for record in other_work.work_records]
+        title_distance = MetadataSimilarity.histogram_difference(
+            my_titles, other_titles)
+
+        author_distance = MetadataSimilarity.histogram_difference(
             self.authors, other_work.authors)
+
+        # Histogram distance goes from 0-2, so divide in half and
+        # subtract from 1 to get a quotient that goes from 0 to 1.
+        title_quotient = (1-title_distance/2)
+        author_quotient = (1-author_distance/2)
 
         return (title_quotient * 0.80) + (author_quotient * 0.20)
 
     def merge_into(self, _db, target_work):
         """This Work ceases to exist and is replaced by target_work."""
         print "MERGING %r into %r" % (self, target_work)
-        my_histogram = self.title_histogram()
-        target_histogram = target_work.title_histogram()
-
         target_work.license_pools.extend(self.license_pools)
         target_work.work_records.extend(self.work_records)
         target_work.calculate_presentation()
@@ -544,15 +547,16 @@ class Work(Base):
         self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
         self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
 
-        titles = Counter()
+        titles = []
         lcc = Counter()
         authors = Counter()
         languages = Counter()
 
         shortest_title = None
+        titles = []
 
         for r in self.work_records:
-            titles[r.title] += 1
+            titles.append(r.title)
             if not shortest_title or len(r.title) < len(shortest_title):
                 shortest_title = r.title
 
@@ -564,16 +568,8 @@ class Work(Base):
             if r.languages:
                 languages[tuple(r.languages)] += 1
 
-        # Do not consider titles that are more than 3x longer than the
-        # shortest title.
-        short_enough_titles = Counter()
-        for t, i in titles.items():
-            if len(t) < len(shortest_title) * 3:
-                short_enough_titles[t] = i
-
-        if not short_enough_titles:
-            set_trace()
-        self.title = short_enough_titles.most_common(1)[0][0]
+        self.title = MetadataSimilarity.most_common(
+            len(shortest_title) * 3, *titles)
 
         if len(languages) > 1:
             print "%s includes work records from several different languages: %r" % (self.title, languages)
@@ -788,17 +784,15 @@ class LicensePool(Base):
             if not r.work:
                 # This work record has not been claimed by anyone. 
                 #
-                # TODO: apply much more lenient terms if the match is
-                # based on ISBN or other unique identifier.
                 similarity = primary_work_record.similarity_to(r)
-                if similarity >= 0.5 and len(r.title) < (len(shortest_title) * 3):
+                if similarity > 0.5:
                     # It's similar enough to this LicensePool's
                     # primary WorkRecord that we'll be claiming it for
                     # whichever Work this LicensePool ends up associated
                     # with.
                     my_unclaimed_work_records.append(r)
                 else:
-                    # It's not all that similar to this LicensePool's
+                    # It's not similar enough to this LicensePool's
                     # primary WorkRecord. Leave it alone.
                     pass
             else:

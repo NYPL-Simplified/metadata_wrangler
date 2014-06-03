@@ -174,14 +174,6 @@ class TestMetadataSimilarity(object):
                     break
         return matches
 
-    def test_similar_titles(self):
-        tom = self._arrange_by_confidence_level(
-            "Tom Sawyer, Detective",
-            "Tom Sawyer Abroad",
-            "The Adventures of Tom Sawyer",
-            "Tom Sawyer")
-        set_trace()
-
     def test_title_similarity(self):
         """Demonstrate how the title similarity algorithm works in common
         cases."""

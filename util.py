@@ -64,8 +64,8 @@ class MetadataSimilarity(object):
     def histogram_distance(cls, strings_1, strings_2):
         """Calculate the histogram distance between two sets of strings.
 
-        The histogram difference is the sum of the word difference for
-        every word in either histogram.
+        The histogram distance is the sum of the word distance for
+        every word that occurs in either histogram.
 
         If a word appears in one histogram but not the other, its word
         distance is its frequency of appearance. If a word appears in
@@ -93,6 +93,16 @@ class MetadataSimilarity(object):
             if k not in histogram_1:
                 differences.append(abs(v))
         return sum(differences)
+
+    @classmethod
+    def most_common(cls, maximum_size, *items):
+        """Return the most common item that's not longer than the max."""
+        c = Counter()
+        for i in items:
+            if len(i) <= maximum_size:
+                c += 1
+
+        return c.most_common(1)[0][0]
 
     @classmethod
     def _wordbags_for_author(cls, author):
