@@ -348,7 +348,7 @@ class TestWorkConsolidation(DatabaseTest):
         super(TestWorkConsolidation, self).teardown()
 
     def test_calculate_work_for_licensepool_where_primary_work_record_has_work(self):
-
+        # This is the easy case.
         args = [self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID,
                 "1"]
         # Here's a LicensePool for a book from Gutenberg.
@@ -367,7 +367,35 @@ class TestWorkConsolidation(DatabaseTest):
         # Now, the LicensePool has the same Work associated with it.
         eq_(work, license.work)
 
+    def test_calculate_work_for_licensepool_creates_new_work(self):
+
+        # This work record is unique to the existing work.
+        wr1, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+        preexisting_work = Work()
+        preexisting_work.work_records = [wr1]
+
+        # This work record is unique to the new LicensePool
+        wr2, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "3")
+        pool, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "3")
+
+        work, created = pool.calculate_work(self._db)
+        eq_(True, created)
+        assert work != preexisting_work
+
+    def test_calculate_work_for_licensepool_uses_existing_work(self):
+        pass
+
+    def test_calculate_work_for_licensepool_merges_works_as_side_effect(self):
+        pass
+
+
     def test_calculate_work_for_new_work(self):
+        # TODO: This test doesn't actually test
+        # anything. calculate_work() is too complicated and needs to
+        # be refactored.
 
         # This work record is unique to the existing work.
         wr1, ignore = WorkRecord.for_foreign_id(

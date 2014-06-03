@@ -237,7 +237,7 @@ class WorkRecord(Base):
     equivalent_identifiers = relationship(
         "WorkIdentifier",
         secondary=workrecord_workidentifier,
-        backref="equivalent_works")
+        backref="equivalent_workrecords")
 
     title = Column(Unicode)
     subtitle = Column(Unicode)
@@ -467,6 +467,15 @@ class WorkRecord(Base):
         # books with the same title have different authors.
         return (title_quotient * 0.80) + (author_quotient * 0.20)
 
+    def apply_similarity_threshold(self, candidates, threshold=0.5):
+        """Yield the WorkRecords from the given list that are similar 
+        enough to this one.
+        """
+        for candidate in candidates:
+            similarity = self.similarity_to(candidate)
+            if similarity >= threshold:
+                yield candidate
+
 
 class Work(Base):
 
@@ -528,14 +537,24 @@ class Work(Base):
 
         return (title_quotient * 0.80) + (author_quotient * 0.20)
 
-    def merge_into(self, _db, target_work):
-        """This Work ceases to exist and is replaced by target_work."""
-        print "MERGING %r into %r" % (self, target_work)
-        target_work.license_pools.extend(self.license_pools)
-        target_work.work_records.extend(self.work_records)
-        target_work.calculate_presentation()
-        print "The resulting work: %r" % target_work
-        _db.delete(self)
+    def merge_into(self, _db, target_work, similarity_threshold=0.5):
+        """This Work ceases to exist and is replaced by target_work.
+
+        The two works must be similar to within similarity_threshold,
+        or nothing will happen.
+        """
+        similarity = self.similarity_to(target_work)
+        if similarity < similarity_threshold:
+            print "NOT MERGING %r into %r, similarity is only %.3f." % (
+                self, target_work, similarity)
+        else:
+            print "MERGING %r into %r, similarity is %.3f." % (
+                self, target_work, similarity)
+            target_work.license_pools.extend(self.license_pools)
+            target_work.work_records.extend(self.work_records)
+            target_work.calculate_presentation()
+            print "The resulting work: %r" % target_work
+            _db.delete(self)
 
     def calculate_presentation(self):
         """Figure out the 'best' title/author/subjects for this Work.
@@ -755,7 +774,37 @@ class LicensePool(Base):
         for unassigned in cls.with_no_work(_db):
             etext, new = unassigned.calculate_work(_db)
 
-    def calculate_work(self, _db):
+    def potential_works(self, _db):
+        """Find all existing works that have claimed this pool's 
+        work records.
+
+        :return: A 3-tuple ({Work: [WorkRecord]}, [WorkRecord])
+        Element 0 is a mapping of Works to the WorkRecords they've claimed.
+        Element 1 is a list of WorkRecords that are unclaimed by any Work.
+        """
+        primary_work_record = self.work_record(_db)
+
+        claimed_records_by_work = defaultdict(list)
+        unclaimed_records = []
+
+        # Find all work records connected to this LicensePool's
+        # primary work record.
+        equivalent_work_records = primary_work_record.equivalent_work_records(
+            _db) + [primary_work_record]
+
+        for r in equivalent_work_records:
+            if r.work:
+                # This work record has been claimed by a Work. This
+                # strengthens the tie between this LicensePool and that
+                # Work.
+                l = claimed_records_by_work[r.work]
+            else:
+                # This work record has not been claimed by anyone. 
+                l = unclaimed_records
+            l.append(r)
+        return claimed_records_by_work, unclaimed_records
+
+    def calculate_work(self, _db, similarity_threshold=0.5):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record(_db)
         self.languages = primary_work_record.languages
@@ -764,91 +813,56 @@ class LicensePool(Base):
             self.work = primary_work_record.work
             return primary_work_record.work, False
 
-        # Find all work records connected to this LicensePool's
-        # primary work record.
-        equivalent_work_records = primary_work_record.equivalent_work_records(
-            _db) + [primary_work_record]
+        # Figure out what existing works have claimed this
+        # LicensePool's WorkRecords, and which WorkRecords are still
+        # unclaimed.
+        claimed, unclaimed = self.potential_works(_db)
 
-        set_trace()
-        # Find all existing Works that have claimed one or more of
-        # those work records.
-        claimed_records_by_work = defaultdict(list)
+        # We're only going to consider records that meet a similarity
+        # threshold vis-a-vis this LicensePool's primary work.
+        unclaimed = list(
+            primary_work_record.apply_similarity_threshold(
+                unclaimed, similarity_threshold))
 
-        my_unclaimed_work_records = [primary_work_record]
-
-        for r in equivalent_work_records:
-            if not r.work:
-                # This work record has not been claimed by anyone. 
-                #
-                similarity = primary_work_record.similarity_to(r)
-                if similarity > 0.5:
-                    # It's similar enough to this LicensePool's
-                    # primary WorkRecord that we'll be claiming it for
-                    # whichever Work this LicensePool ends up associated
-                    # with.
-                    my_unclaimed_work_records.append(r)
-                else:
-                    # It's not similar enough to this LicensePool's
-                    # primary WorkRecord. Leave it alone.
-                    pass
-            else:
-                # This work record has been claimed by a Work. This
-                # strengthens the tie between this LicensePool and that
-                # Work.
-                records_for_this_work = claimed_records_by_work[r.work]
-                records_for_this_work.append(r)
-
-        # Find all existing Works that claimed more WorkRecords than
-        # this Licensepool claimed on its own. These are all better
-        # choices than creating a new Work. In fact, there's a good
-        # chance they are all the same work.
+        # Now we know how many unclaimed WorkRecords this LicensePool
+        # will claim if it becomes a new Work. Find all existing Works
+        # that claimed *more* WorkRecords than that. These are all
+        # better choices for this LicensePool than creating a new
+        # Work. In fact, there's a good chance they are all the same
+        # Work, and should be merged.
         more_popular_choices = [
-            (work, self.similarity_to(work), len(records)) 
+            (work, len(records))
             for work, records in claimed_records_by_work.items()
-            if len(records) > len(my_unclaimed_work_records)
-        ]
-
-        # Restrict to Works with a better than 50% similarity to this
-        # work.
-        better_choices = [
-            (work, similarity, records) 
-            for (work, similarity, records) in more_popular_choices
-            if similarity > 0.5
+            if len(records) > len(unclaimed)
         ]
 
         if better_choices:
             # One or more Works seem to be better choices than
             # creating a new Work for this LicensePool. Merge them all
             # into the most popular Work.
-   
             by_popularity = sorted(
                 better_choices, key=lambda x: x[1], reverse=True)
 
+            # This is the work with the most claimed WorkRecords, so
+            # it's the one we'll merge the others into. We chose
+            # the most popular because we have the most data for it, so 
+            # it's the most accurate choice when calculating similarity.
             work = by_popularity[0][0]
-            for less_popular, popularity in by_popularity[1:]:
-                similarity = less_popular.similarity_to(work)
-                # The work must also have a better than 50% similarity
-                # with the work it's being merged into.
-                print similarity
-                if similarity < 0.5:
-                    print "NOT MERGING %r into %r, similarity is only %.3f." % (
-                        work, work, similarity)
-                else:
-                    print "MERGING %r into %r, similarity is %.3f." % (
-                        less_popular, work, similarity)
-                    less_popular.merge_into(_db, work)
-            work.license_pools.append(self)
+            for less_popular, claimed_records in by_popularity[1:]:
+                less_popular.merge_into(_db, work, similarity_threshold)
             created = False
         else:
-            # There is no better choice than creating a new Work for this
-            # LicensePool.
-            work = Work(license_pools=[self])
+            # There is no better choice than creating a brand new Work.
+            work = Work()
             _db.add(work)
             _db.flush()
             created = True
 
-        # Associate the unclaimed WorkRecords with the Work we decided
-        # on/created.
+        # Associate this LicensePool with the work we chose or
+        # created.
+        work.license_pools.append(self)
+
+        # Associate the unclaimed WorkRecords with the Work.
         work.work_records.extend(my_unclaimed_work_records)
 
         # Recalculate the display information for the Work, since the
