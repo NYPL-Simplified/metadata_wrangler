@@ -98,7 +98,7 @@ class GutenbergAPI(object):
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
-            if int(pg_id) > 1000:
+            if int(pg_id) > 10000:
                 continue
             #if pg_id not in only_import:
             #    continue

@@ -48,6 +48,105 @@ class TestMetadataSimilarity(object):
         eq_(1, MetadataSimilarity.authors([a1], [a3]))
         eq_(1, MetadataSimilarity.authors([a2], [a3]))
 
+    def test_histogram_distance(self):
+
+        # These two sets of titles generate exactly the same histogram.
+        # Their distance is 0.
+        a1 = ["The First Title", "The Second Title"]
+        a2 = ["title the second", "FIRST, THE TITLE"]
+        eq_(0, MetadataSimilarity.histogram_distance(a1, a2))
+
+        # These two sets of titles are as far apart as it's
+        # possible to be. Their distance is 2.
+        a1 = ["These Words Have Absolutely"]
+        a2 = ["Nothing In Common, Really"]
+        eq_(2, MetadataSimilarity.histogram_distance(a1, a2))
+
+        # Now we test a difficult real-world case.
+
+        # "Tom Sawyer Abroad" and "Tom Sawyer, Detective" are
+        # completely different books by the same author. Their titles
+        # differ only by one word. They are frequently anthologized
+        # together, so OCLC maps them to plenty of the same
+        # titles. They are also frequently included with other stories,
+        # which adds random junk to the titles.
+        abroad = ["Tom Sawyer abroad",
+                  "The adventures of Tom Sawyer, Tom Sawyer abroad [and] Tom Sawyer, detective",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer Abroad",
+                  "Tom Sawyer abroad : and other stories",
+                  "Tom Sawyer abroad Tom Sawyer, detective : and other stories, etc. etc.",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer abroad",
+                  "Tom Sawyer abroad and other stories",
+                  "Tom Sawyer abroad and other stories",
+                  "Tom Sawyer abroad and the American claimant,",
+                  "Tom Sawyer abroad and the American claimant",
+                  "Tom Sawyer abroad : and The American claimant: novels.",
+                  "Tom Sawyer Abroad - Tom Sawyer, Detective",
+              ]
+
+        detective = ["Tom Sawyer, Detective",
+                     "Tom Sawyer Abroad - Tom Sawyer, Detective",
+                     "Tom Sawyer Detective : As Told by Huck Finn : And Other Tales.",
+                     "Tom Sawyer, Detective",
+                     "Tom Sawyer, Detective.",
+                     "The adventures of Tom Sawyer, Tom Sawyer abroad [and] Tom Sawyer, detective",
+                     "Tom Sawyer detective : and other stories every child should know",
+                     "Tom Sawyer, detective : as told by Huck Finn and other tales",
+                     "Tom Sawyer, detective, as told by Huck Finn and other tales...",
+                     "The adventures of Tom Sawyer, Tom Sawyer abroad [and] Tom Sawyer, detective,",
+                     "Tom Sawyer abroad, Tom Sawyer, detective, and other stories",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer, detective",
+                     "Tom Sawyer abroad Tom Sawyer detective",
+                     "Tom Sawyer, detective : as told by Huck Finn",
+                     "Tom Sawyer : detective",]
+
+        # The histogram distance of the two sets of titles is not
+        # huge, but it is significant.
+        d = MetadataSimilarity.histogram_distance(abroad, detective)
+
+        # The histogram distance between two lists is symmetrical, within
+        # a small range of error for floating-point rounding.
+        difference = d - MetadataSimilarity.histogram_distance(
+            detective, abroad)
+        assert abs(difference) < 0.000001
+
+        # The histogram distance between the Gutenberg title of a book
+        # and the set of all OCLC Classify titles for that book tends
+        # to be fairly small.
+        ab_ab = MetadataSimilarity.histogram_distance(
+            ["Tom Sawyer Abroad"], abroad)
+        de_de = MetadataSimilarity.histogram_distance(
+            ["Tom Sawyer, Detective"], detective)
+
+        assert ab_ab < 1
+        assert de_de < 1
+
+        # The histogram distance between the Gutenberg title of a book
+        # and the set of all OCLC Classify titles for that book tends
+        # to be larger.
+        ab_de = MetadataSimilarity.histogram_distance(
+            ["Tom Sawyer Abroad"], detective)
+        de_ab = MetadataSimilarity.histogram_distance(
+            ["Tom Sawyer, Detective"], abroad)
+
+        assert ab_de > 1
+        assert de_ab > 1
+
+        # n.b. in real usage the likes of "Tom Sawyer Abroad" will be
+        # much more common than the likes of "Tom Sawyer Abroad - Tom
+        # Sawyer, Detective", so the difference in histogram
+        # difference will be even more stark.
+
     def test_author_found_in(self):
         eq_(True, MetadataSimilarity.author_found_in(
             "Herman Melville", [dict(name="Melville, Herman"),

@@ -1,6 +1,9 @@
 "Miscellaneous utilities"
 from nose.tools import set_trace
-import collections
+from collections import (
+    Counter,
+    defaultdict,
+)
 import pkgutil
 import re
 
@@ -11,9 +14,9 @@ class LanguageCodes(object):
     http://www.loc.gov/standards/iso639-2/ISO-639-2_utf-8.txt
     """
 
-    two_to_three = collections.defaultdict(lambda: None)
-    three_to_two = collections.defaultdict(lambda: None)
-    english_names = collections.defaultdict(list)
+    two_to_three = defaultdict(lambda: None)
+    three_to_two = defaultdict(lambda: None)
+    english_names = defaultdict(list)
 
     data = pkgutil.get_data(
         "resources", "ISO-639-2_utf-8.txt")
@@ -36,7 +39,60 @@ class MetadataSimilarity(object):
 
     @classmethod
     def _wordbag(cls, s):
-        return set([x.strip().lower() for x in cls.SEPARATOR.split(s) if x.strip()])
+        return set(cls._wordlist(s))
+
+    @classmethod
+    def _wordlist(cls, s):
+        return [x.strip().lower() for x in cls.SEPARATOR.split(s) if x.strip()]
+
+    @classmethod
+    def histogram(cls, *strings):
+        """Create a histogram of word frequencies across the given list of 
+        strings.
+        """
+        histogram = Counter()
+        words = 0.0
+        for string in strings:
+            for word in cls._wordlist(string):
+                histogram[word] += 1
+                words += 1
+        for k, v in histogram.items():
+            histogram[k] = v/words
+        return histogram
+
+    @classmethod
+    def histogram_distance(cls, strings_1, strings_2):
+        """Calculate the histogram distance between two sets of strings.
+
+        The histogram difference is the sum of the word difference for
+        every word in either histogram.
+
+        If a word appears in one histogram but not the other, its word
+        distance is its frequency of appearance. If a word appears in
+        both histograms, its word distance is the absolute value of
+        the difference between that word's frequency of appearance in
+        histogram A, and its frequency of appearance in histogram B.
+
+        If the strings use the same words at exactly the same
+        frequency, the difference will be 0. If the strings use
+        completely different words, the difference will be 2.
+
+        """
+        histogram_1 = cls.histogram(*strings_1)
+        histogram_2 = cls.histogram(*strings_2)
+        differences = []
+        # For every word that appears in histogram 1, compare its
+        # frequency against the frequency of that word in histogram 2.
+        for k, v in histogram_1.items():
+            difference = abs(v - histogram_2.get(k, 0))
+            differences.append(difference)
+
+        # Add the frequency of every word that appears in histogram 2
+        # titles but not in histogram 1.
+        for k, v in histogram_2.items():
+            if k not in histogram_1:
+                differences.append(abs(v))
+        return sum(differences)
 
     @classmethod
     def _wordbags_for_author(cls, author):

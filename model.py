@@ -524,7 +524,6 @@ class Work(Base):
 
     def merge_into(self, _db, target_work):
         """This Work ceases to exist and is replaced by target_work."""
-        set_trace()
         print "MERGING %r into %r" % (self, target_work)
         my_histogram = self.title_histogram()
         target_histogram = target_work.title_histogram()

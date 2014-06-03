@@ -62,6 +62,8 @@ class OCLCClassifyAPI(object):
         content = response.content
         if response.status_code != 200:
             raise IOError("OCLC API returned status code %s: %s" % (response.status_code, response.content))
+        if not content:
+            set_trace()
         return content
 
     def lookup_by(self, **kwargs):
@@ -70,12 +72,13 @@ class OCLCClassifyAPI(object):
         cache_key = self.cache_key(**kwargs)
         print " Query string: %s" % query_string
         print " Cache key: %s" % cache_key
+        raw = None
         if self.cache.exists(cache_key):
             # Don't go over the wire. Get the raw XML from cache
             # and process it fresh.
             raw = self.cache.open(cache_key).read()
             print " Retrieved from cache."
-        else:
+        if not raw:
             url = self.BASE_URL + query_string + self.NO_SUMMARY
             raw = self.request(url)
             print " Retrieved over the net."
