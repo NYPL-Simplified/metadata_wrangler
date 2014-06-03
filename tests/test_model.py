@@ -328,19 +328,24 @@ class TestWorkConsolidation(DatabaseTest):
     # Versions of Work and WorkRecord instrumented to bypass the
     # normal similarity comparison process.
 
-    class TWork(Work):
-
+    def setup(self):
+        super(TestWorkConsolidation, self).setup()
+        # Replace the complex implementations of similarity_to with 
+        # much simpler versions that let us simply say which objects 
+        # are to be considered similar.
         def similarity_to(self, other):
-            if other in self.similar:
+            if other in getattr(self, 'similar', []):
                 return 1
             return 0
+        self.old_w = Work.similarity_to
+        self.old_wr = WorkRecord.similarity_to
+        Work.similarity_to = similarity_to
+        WorkRecord.similarity_to = similarity_to
 
-    class TWorkRecord(Work):
-
-        def similarity_to(self, other):
-            if other in self.similar:
-                return 1
-            return 0
+    def teardown(self):
+        Work.similarity_to = self.old_w
+        WorkRecord.similarity_to = self.old_wr
+        super(TestWorkConsolidation, self).teardown()
 
     def test_calculate_work_for_licensepool_where_primary_work_record_has_work(self):
 
@@ -361,8 +366,35 @@ class TestWorkConsolidation(DatabaseTest):
 
         # Now, the LicensePool has the same Work associated with it.
         eq_(work, license.work)
-        
-        
+
+    def test_calculate_work_for_new_work(self):
+
+        # This work record is unique to the existing work.
+        wr1, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+
+        # This work record is shared by the existing work and the new
+        # LicensePool.
+        wr2, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "2")
+
+        # These work records are unique to the new LicensePool.
+
+        wr3, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "3")
+
+        wr4, ignore = WorkRecord.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
+
+        wr4.equivalent_identifiers = [wr3, wr1]
+        preexisting_work = Work()
+        preexisting_work.work_records = [wr1, wr2]
+
+        pool, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
+        self._db.commit()
+
+        pool.calculate_work(self._db)
 
     def test_merge_into(self):
 

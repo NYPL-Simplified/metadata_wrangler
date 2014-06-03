@@ -769,6 +769,7 @@ class LicensePool(Base):
         equivalent_work_records = primary_work_record.equivalent_work_records(
             _db) + [primary_work_record]
 
+        set_trace()
         # Find all existing Works that have claimed one or more of
         # those work records.
         claimed_records_by_work = defaultdict(list)
