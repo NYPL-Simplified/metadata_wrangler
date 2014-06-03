@@ -761,6 +761,7 @@ class LicensePool(Base):
         self.languages = primary_work_record.languages
         if primary_work_record.work is not None:
             # That was a freebie.
+            self.work = primary_work_record.work
             return primary_work_record.work, False
 
         # Find all work records connected to this LicensePool's

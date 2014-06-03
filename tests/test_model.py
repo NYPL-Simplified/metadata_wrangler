@@ -325,6 +325,37 @@ class TestCirculationEvent(DatabaseTest):
 
 class TestWorkConsolidation(DatabaseTest):
 
+    # Versions of Work and WorkRecord instrumented to bypass the
+    # normal similarity comparison process.
+
+    class TWork(Work):
+
+        def similarity_to(self, other):
+            if other in self.similar:
+                return 1
+            return 0
+
+    class TWorkRecord(Work):
+
+        def similarity_to(self, other):
+            if other in self.similar:
+                return 1
+            return 0
+
+    def test_calculate_work_for_licensepool_where_primary_work_record_has_work(self):
+
+        license, ignore = LicensePool.for_foreign_id(
+            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+        work_record = pool.work_record(self._db)
+        work = Work()
+        work_record.work = work
+
+        eq_(None, license.work)
+        license.calculate_work(self._db)
+        eq_(work, license.work)
+        
+        
+
     def test_merge_into(self):
 
         # Here's a work with a license pool and two work records.
