@@ -196,6 +196,9 @@ class WorkIdentifier(Base):
     type = Column(String(64), index=True)
     identifier = Column(String, index=True)
 
+    def __repr__(self):
+        return (u"%s: %s/%s" % (self.id, self.type, self.identifier))
+
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
     primarily_identifies = relationship(
@@ -272,6 +275,11 @@ class WorkRecord(Base):
     IMAGE = "http://opds-spec.org/image"
     THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
     SAMPLE = "http://opds-spec.org/acquisition/sample"
+
+    def __repr__(self):
+        return (u"WorkRecord %s (%s/%s/%s)" % (
+            self.id, self.title, ", ".join([x['name'] for x in self.authors]),
+            ", ".join(self.languages))).encode("utf8")
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
@@ -537,7 +545,7 @@ class Work(Base):
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
-        given Work?
+        given Work (or WorkRecord)?
 
         This is more accurate than WorkRecord.similarity_to because we
         (hopefully) have a lot of WorkRecords associated with each
@@ -545,28 +553,54 @@ class Work(Base):
         are probably the same.
         """
         my_languages = Counter()
+        my_authors = Counter()
         total_my_languages = 0
+        total_my_authors = 0
         my_titles = []
         other_languages = Counter()
         total_other_languages = 0
         other_titles = []
+        other_authors = Counter()
+        total_other_authors = 0
         for record in self.work_records:
             if record.languages:
                 my_languages[tuple(record.languages)] += 1
                 total_my_languages += 1
             my_titles.append(record.title)
+            for author in record.authors:
+                # TODO: this treats author names as strings that either match
+                # or don't. We need to handle author names in a more
+                # sophisticated way as per util.
+                my_authors[author['name']] += 1
+                total_my_authors += 1
 
-        for record in other_work.work_records:
+        if isinstance(other_work, Work):
+            other_work_records = other_work.work_records
+        else:
+            other_work_records = [other_work]
+
+        for record in other_work_records:
             if record.languages:
                 other_languages[tuple(record.languages)] += 1
                 total_other_languages += 1
             other_titles.append(record.title)
+            for author in record.authors:
+                # TODO: this treats author names as strings that either match
+                # or don't. We need to handle author names in a more
+                # sophisticated way as per util.
+                other_authors[author['name']] += 1
+                total_other_authors += 1
 
         title_distance = MetadataSimilarity.histogram_distance(
             my_titles, other_titles)
 
-        author_distance = MetadataSimilarity.histogram_distance(
-            self.authors, other_work.authors)
+        my_authors = MetadataSimilarity.normalize_histogram(
+            my_authors, total_my_authors)
+        other_authors = MetadataSimilarity.normalize_histogram(
+            other_authors, total_other_authors)
+
+        author_distance = MetadataSimilarity.counter_distance(
+            my_authors, other_authors)
 
         my_languages = MetadataSimilarity.normalize_histogram(
             my_languages, total_my_languages)
@@ -830,7 +864,7 @@ class LicensePool(Base):
             if a and not a % 100:
                 _db.commit()
 
-    def potential_works(self, _db):
+    def potential_works(self, _db, similarity_threshold=0.8):
         """Find all existing works that have claimed this pool's 
         work records.
 
@@ -854,13 +888,18 @@ class LicensePool(Base):
                 # strengthens the tie between this LicensePool and that
                 # Work.
                 l = claimed_records_by_work[r.work]
+                check_against = r.work
             else:
                 # This work record has not been claimed by anyone. 
                 l = unclaimed_records
-            l.append(r)
+                check_against = primary_work_record
+
+            # Apply the similarity threshold filter.
+            if check_against.similarity_to(r) > similarity_threshold:
+                l.append(r)
         return claimed_records_by_work, unclaimed_records
 
-    def calculate_work(self, _db, similarity_threshold=0.5):
+    def calculate_work(self, _db, similarity_threshold=0.8):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record(_db)
         self.languages = primary_work_record.languages
@@ -875,13 +914,17 @@ class LicensePool(Base):
         # Figure out what existing works have claimed this
         # LicensePool's WorkRecords, and which WorkRecords are still
         # unclaimed.
-        claimed, unclaimed = self.potential_works(_db)
+        claimed, unclaimed = self.potential_works(_db, similarity_threshold)
 
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
-        unclaimed = list(
-            primary_work_record.apply_similarity_threshold(
-                unclaimed, similarity_threshold))
+        print "Calculating work for %r" % primary_work_record
+        print " There were %s unclaimed" % len(unclaimed)
+        print " Now there are %s unclaimed" % len(unclaimed)
+        for i in unclaimed:
+            print "  %.3f %r" % (
+                primary_work_record.similarity_to(i), i)
+        print
 
         # Now we know how many unclaimed WorkRecords this LicensePool
         # will claim if it becomes a new Work. Find all existing Works
@@ -889,11 +932,13 @@ class LicensePool(Base):
         # better choices for this LicensePool than creating a new
         # Work. In fact, there's a good chance they are all the same
         # Work, and should be merged.
+        my_languages = set(self.languages)
         more_popular_choices = [
             (work, len(records))
             for work, records in claimed.items()
             if len(records) > len(unclaimed)
-            and work.languages == self.languages
+            and set(work.languages) == my_languages
+            and work.similarity_to(primary_work_record) > similarity_threshold
         ]
 
         if more_popular_choices:
