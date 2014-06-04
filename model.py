@@ -895,11 +895,12 @@ class LicensePool(Base):
                 check_against = primary_work_record
 
             # Apply the similarity threshold filter.
-            if check_against.similarity_to(r) > similarity_threshold:
+            if check_against.similarity_to(r) >= similarity_threshold:
                 l.append(r)
         return claimed_records_by_work, unclaimed_records
 
-    def calculate_work(self, _db, similarity_threshold=0.8):
+    def calculate_work(self, _db, record_similarity_threshold=0.8,
+                       work_similarity_threshold=0.8):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record(_db)
         self.languages = primary_work_record.languages
@@ -914,7 +915,8 @@ class LicensePool(Base):
         # Figure out what existing works have claimed this
         # LicensePool's WorkRecords, and which WorkRecords are still
         # unclaimed.
-        claimed, unclaimed = self.potential_works(_db, similarity_threshold)
+        claimed, unclaimed = self.potential_works(
+            _db, record_similarity_threshold)
 
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
@@ -938,8 +940,14 @@ class LicensePool(Base):
             for work, records in claimed.items()
             if len(records) > len(unclaimed)
             and set(work.languages) == my_languages
-            and work.similarity_to(primary_work_record) > similarity_threshold
+            and work.similarity_to(primary_work_record) >= work_similarity_threshold
         ]
+        for work, records in claimed.items():
+            sim = work.similarity_to(primary_work_record)
+            if sim < work_similarity_threshold:
+                print "REJECTED %r as more popular choice for\n %r (similarity: %.2f)" % (
+                    work, primary_work_record, sim
+                    )
 
         if more_popular_choices:
             # One or more Works seem to be better choices than
@@ -956,7 +964,7 @@ class LicensePool(Base):
             print "MORE POPULAR CHOICE for %s: %r" % (
                 primary_work_record.title.encode("utf8"), work)
             for less_popular, claimed_records in by_popularity[1:]:
-                less_popular.merge_into(_db, work, similarity_threshold)
+                less_popular.merge_into(_db, work, work_similarity_threshold)
             created = False
         else:
             # There is no better choice than creating a brand new Work.
