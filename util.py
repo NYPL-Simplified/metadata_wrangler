@@ -7,6 +7,10 @@ from collections import (
 import pkgutil
 import re
 
+data = pkgutil.get_data("resources", "random_isbns.txt")
+random_isbns = [x.strip() for x in data.split()]    
+    
+
 class LanguageCodes(object):
     """Convert between ISO-639-2 and ISO-693-1 language codes.
 
@@ -51,14 +55,20 @@ class MetadataSimilarity(object):
         strings.
         """
         histogram = Counter()
-        words = 0.0
+        words = 0
         for string in strings:
             for word in cls._wordlist(string):
                 if not stopwords or word not in stopwords:
                     histogram[word] += 1
                     words += 1
+
+        return cls.normalize_histogram(histogram, words)
+
+    @classmethod
+    def normalize_histogram(cls, histogram, total):
+        total = float(total)
         for k, v in histogram.items():
-            histogram[k] = v/words
+            histogram[k] = v/total
         return histogram
 
     @classmethod
@@ -84,20 +94,25 @@ class MetadataSimilarity(object):
 
         histogram_1 = cls.histogram(strings_1, stopwords=stopwords)
         histogram_2 = cls.histogram(strings_2, stopwords=stopwords)
+        return cls.counter_distance(histogram_1, histogram_2)
+
+    @classmethod
+    def counter_distance(cls, counter1, counter2):
         differences = []
-        # For every word that appears in histogram 1, compare its
-        # frequency against the frequency of that word in histogram 2.
-        for k, v in histogram_1.items():
-            difference = abs(v - histogram_2.get(k, 0))
+        # For every item that appears in histogram 1, compare its
+        # frequency against the frequency of that item in histogram 2.
+        for k, v in counter1.items():
+            difference = abs(v - counter2.get(k, 0))
             differences.append(difference)
 
-        # Add the frequency of every word that appears in histogram 2
+        # Add the frequency of every item that appears in histogram 2
         # titles but not in histogram 1.
-        for k, v in histogram_2.items():
-            if k not in histogram_1:
+        for k, v in counter2.items():
+            if k not in counter1:
                 differences.append(abs(v))
 
         return sum(differences) / 2
+
 
     @classmethod
     def most_common(cls, maximum_size, *items):
@@ -136,6 +151,8 @@ class MetadataSimilarity(object):
         b2 = cls._wordbag(s2) - stopwords
         total_words = len(b1.union(b2))
         shared_words = len(b1.intersection(b2))
+        if not total_words:
+            return 0
         return shared_words/float(total_words)
 
     @classmethod

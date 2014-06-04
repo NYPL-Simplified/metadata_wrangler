@@ -98,10 +98,10 @@ class GutenbergAPI(object):
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
-            #if int(pg_id) > 10000:
+            #if int(pg_id) > 20000:
             #    continue
-            #if pg_id not in only_import:
-            #    continue
+            if pg_id not in only_import:
+                continue
             print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
@@ -340,8 +340,9 @@ class OCLCMonitorForGutenberg(object):
 
         in_gutenberg_but_not_in_oclc = WorkRecord.missing_coverage_from(
             _db, WorkIdentifier.GUTENBERG_ID,
-            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
+            WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH)
 
+        print "Processing %s books." % len(in_gutenberg_but_not_in_oclc)
         for book in in_gutenberg_but_not_in_oclc:
             title, author = self.title_and_author(book)
             languages = book.languages
@@ -350,8 +351,14 @@ class OCLCMonitorForGutenberg(object):
             # Perform a title/author lookup
             xml = self.oclc.lookup_by(title=title, author=author)
 
+            # Register the fact that we did a title/author lookup
+            query_string = self.oclc.query_string(title=title, author=author)
+            search, ignore = WorkIdentifier.for_foreign_id(
+                _db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
+
             restrictions = dict(
                 title=title, languages=languages, authors=[author])
+            restrictions = dict()
 
             # Turn the raw XML into some number of bibliographic records.
             representation_type, records = OCLCXMLParser.parse(
@@ -364,18 +371,20 @@ class OCLCMonitorForGutenberg(object):
                 swids = records
                 records = []
                 for swid in swids:
-                    xml = self.oclc.lookup_by(swid=swid)
+                    swid_xml = self.oclc.lookup_by(swid=swid)
                     representation_type, editions = OCLCXMLParser.parse(
-                        _db, xml, **restrictions)
+                        _db, swid_xml, **restrictions)
 
                     if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                         records.extend(editions)
                     else:
+                        set_trace()
                         print " Got unexpected representation type from lookup: %s" % representation_type
             # Connect the Gutenberg book to the OCLC works looked up by
             # title/author.
             book.equivalent_identifiers.extend(
                 [r.primary_identifier for r in records])
+            book.equivalent_identifiers.append(search)
 
             print " Created %s records(s)." % len(records)
             _db.commit()

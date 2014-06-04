@@ -35,7 +35,10 @@ from sqlalchemy import (
     Unicode,
     UniqueConstraint,
 )
-from util import MetadataSimilarity
+from util import (
+    random_isbns,
+    MetadataSimilarity,
+)
 
 #import logging
 #logging.basicConfig()
@@ -46,7 +49,7 @@ from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import sessionmaker
 
-from database_credentials import SERVER, MAIN_DB
+from database_credentials import SERVER, MAIN_DB, CONTENT_CAFE
 
 DEBUG = False
 
@@ -115,9 +118,9 @@ class DataSource(Base):
 
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True)
+    name = Column(String, unique=True, index=True)
     offers_licenses = Column(Boolean, default=False)
-    primary_identifier_type = Column(String)
+    primary_identifier_type = Column(String, index=True)
     extra = Column(JSON, default={})
 
     # One DataSource can generate many WorkRecords.
@@ -164,8 +167,9 @@ class DataSource(Base):
 workrecord_workidentifier = Table(
     'workrecord_workidentifier',
     Base.metadata,
-    Column('workrecord_id', Integer, ForeignKey('workrecords.id')),
-    Column('workidentifier_id', Integer, ForeignKey('workidentifiers.id'))
+    Column('workrecord_id', Integer, ForeignKey('workrecords.id'), index=True),
+    Column('workidentifier_id', Integer,
+           ForeignKey('workidentifiers.id'), index=True)
 )
 
 class WorkIdentifier(Base):
@@ -180,6 +184,7 @@ class WorkIdentifier(Base):
     AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
     ISBN = "ISBN"
+    OCLC_TITLE_AUTHOR_SEARCH = "OCLC title/author search"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
     URI = "URI"
@@ -188,8 +193,8 @@ class WorkIdentifier(Base):
 
     __tablename__ = 'workidentifiers'
     id = Column(Integer, primary_key=True)
-    type = Column(String(64))
-    identifier = Column(String)
+    type = Column(String(64), index=True)
+    identifier = Column(String, index=True)
 
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
@@ -225,11 +230,12 @@ class WorkRecord(Base):
     __tablename__ = 'workrecords'
     id = Column(Integer, primary_key=True)
 
-    data_source_id = Column(Integer, ForeignKey('datasources.id'))
-    primary_identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+    primary_identifier_id = Column(
+        Integer, ForeignKey('workidentifiers.id'), index=True)
 
     # A WorkRecord may be associated with a Work
-    work_id = Column(Integer, ForeignKey('works.id'))
+    work_id = Column(Integer, ForeignKey('works.id'), index=True)
 
     # Many WorkRecords may be equivalent to the same WorkIdentifier,
     # and a single WorkRecord may be equivalent to many
@@ -350,6 +356,7 @@ class WorkRecord(Base):
             workrecord_workidentifier, WorkRecord.id==workrecord_workidentifier.columns['workrecord_id']).join(secondary_identifier).filter(
                 primary_identifier.type==primary_id_type,
                 secondary_identifier.type.in_(not_identified_by))
+        qu = qu.distinct()
 
         # Now build the main query. This will find all the WorkRecords whose primary identifiers qualify them for
         # the first list, but who just aren't in the first list.
@@ -456,6 +463,29 @@ class WorkRecord(Base):
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
+
+        if set(other_record.languages) == set(self.languages):
+            # The languages match perfectly.
+            language_factor = 1
+        elif self.languages and other_record.languages:
+            # Each record specifies a different set of languages. This
+            # is an immediate disqualification.
+            #
+            # TODO: edge case when one record's languages are a subset
+            # of the other's.
+            return 0
+        else:
+            # One record specifies a language and one does not. This
+            # is a little tricky. We're going to apply a penalty, but
+            # since the majority of records we're getting from OCLC are in
+            # English, the penalty will be less if one of the
+            # languages is English. It's more likely that an unlabeled
+            # record is in English than that it's in some other language.
+            if 'eng' in self.languages or 'eng' in other_record_languages:
+                language_factor = 0.80
+            else:
+                language_factor = 0.50
+
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
 
@@ -465,16 +495,20 @@ class WorkRecord(Base):
         # We weight title more heavily because it's much more likely
         # that one author wrote two different books than that two
         # books with the same title have different authors.
-        return (title_quotient * 0.80) + (author_quotient * 0.20)
+        return language_factor * (
+            (title_quotient * 0.80) + (author_quotient * 0.20))
 
     def apply_similarity_threshold(self, candidates, threshold=0.5):
         """Yield the WorkRecords from the given list that are similar 
         enough to this one.
         """
         for candidate in candidates:
-            similarity = self.similarity_to(candidate)
-            if similarity >= threshold:
+            if self == candidate:
                 yield candidate
+            else:
+                similarity = self.similarity_to(candidate)
+                if similarity >= threshold:
+                    yield candidate
 
 
 class Work(Base):
@@ -493,25 +527,13 @@ class Work(Base):
     languages = Column(Unicode)
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
-    lane = Column(Unicode)
+    lane = Column(Unicode, index=True)
 
     def __repr__(self):
         return ("%s/%s/%s/%s (%s work records, %s license pools)" % (
             self.id, self.title, self.authors, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
-
-    def title_histogram(self):
-        histogram = Counter()
-        words = 0.0
-        for record in self.work_records:
-            for word in MetadataSimilarity.SEPARATOR.split(record.title):
-                if word:
-                    histogram[word.lower()] += 1
-                    words += 1
-        for k, v in histogram.items():
-            histogram[k] = v/words
-        return histogram
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
@@ -522,20 +544,43 @@ class Work(Base):
         Work. If their metadata has a lot of overlap, the two Works
         are probably the same.
         """
-        my_titles = [record.title for record in self.work_records]
-        other_titles = [record.title for record in other_work.work_records]
-        title_distance = MetadataSimilarity.histogram_difference(
+        my_languages = Counter()
+        total_my_languages = 0
+        my_titles = []
+        other_languages = Counter()
+        total_other_languages = 0
+        other_titles = []
+        for record in self.work_records:
+            if record.languages:
+                my_languages[tuple(record.languages)] += 1
+                total_my_languages += 1
+            my_titles.append(record.title)
+
+        for record in other_work.work_records:
+            if record.languages:
+                other_languages[tuple(record.languages)] += 1
+                total_other_languages += 1
+            other_titles.append(record.title)
+
+        title_distance = MetadataSimilarity.histogram_distance(
             my_titles, other_titles)
 
-        author_distance = MetadataSimilarity.histogram_difference(
+        author_distance = MetadataSimilarity.histogram_distance(
             self.authors, other_work.authors)
 
-        # Histogram distance goes from 0-2, so divide in half and
-        # subtract from 1 to get a quotient that goes from 0 to 1.
-        title_quotient = (1-title_distance/2)
-        author_quotient = (1-author_distance/2)
+        my_languages = MetadataSimilarity.normalize_histogram(
+            my_languages, total_my_languages)
+        other_languages = MetadataSimilarity.normalize_histogram(
+            other_languages, total_other_languages)
 
-        return (title_quotient * 0.80) + (author_quotient * 0.20)
+        language_distance = MetadataSimilarity.counter_distance(
+            my_languages, other_languages)
+        language_factor = 1-language_distance
+        title_quotient = 1-title_distance
+        author_quotient = 1-author_distance
+
+        return language_factor * (
+            (title_quotient * 0.80) + (author_quotient * 0.20))
 
     def merge_into(self, _db, target_work, similarity_threshold=0.5):
         """This Work ceases to exist and is replaced by target_work.
@@ -562,9 +607,17 @@ class Work(Base):
         For the time being, 'best' means the most common among this
         Work's WorkRecords.
         """
-        isbn = random.randint(1,1000000)
-        self.thumbnail_cover_link = "http://covers.openlibrary.org/b/id/%s-S.jpg" % isbn
-        self.full_cover_link = "http://covers.openlibrary.org/b/id/%s-L.jpg" % isbn
+        isbn = random.choice(random_isbns)
+        data = dict(
+            username=CONTENT_CAFE['username'],
+            password=CONTENT_CAFE['password'],
+            isbn=isbn,
+            size="M",
+        )
+        template = "http://contentcafe2.btol.com/ContentCafe/Jacket.aspx?userID=%(username)s&password=%(password)s&content=%(size)s&Return=1&Type=%(size)s&Value=%(isbn)s"
+        self.thumbnail_cover_link = template % data
+        data['size'] = 'L'
+        self.full_cover_link = template % data
 
         titles = []
         lcc = Counter()
@@ -594,7 +647,6 @@ class Work(Base):
         if len(languages) > 1:
             print "%s includes work records from several different languages: %r" % (self.title, languages)
                 
-            set_trace()
         if languages:
             self.languages = languages.most_common(1)[0][0]
 
@@ -621,12 +673,12 @@ class LicensePool(Base):
 
     # A LicensePool may be associated with a Work. (If it's not, no one
     # can check it out.)
-    work_id = Column(Integer, ForeignKey('works.id'))
+    work_id = Column(Integer, ForeignKey('works.id'), index=True)
 
     # Each LicensePool is associated with one DataSource and one
     # WorkIdentifier, and therefore with one original WorkRecord.
-    data_source_id = Column(Integer, ForeignKey('datasources.id'))
-    identifier_id = Column(Integer, ForeignKey('workidentifiers.id'))
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+    identifier_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
 
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
@@ -771,8 +823,12 @@ class LicensePool(Base):
     @classmethod
     def consolidate_works(cls, _db):
         """Assign a (possibly new) Work to every unassigned LicensePool."""
+        a = 0
         for unassigned in cls.with_no_work(_db):
             etext, new = unassigned.calculate_work(_db)
+            a += 1
+            if a and not a % 100:
+                _db.commit()
 
     def potential_works(self, _db):
         """Find all existing works that have claimed this pool's 
@@ -810,6 +866,9 @@ class LicensePool(Base):
         self.languages = primary_work_record.languages
         if primary_work_record.work is not None:
             # That was a freebie.
+            print "ALREADY CLAIMED: %s by %s" % (
+                primary_work_record.title, self.work
+            )
             self.work = primary_work_record.work
             return primary_work_record.work, False
 
@@ -832,27 +891,31 @@ class LicensePool(Base):
         # Work, and should be merged.
         more_popular_choices = [
             (work, len(records))
-            for work, records in claimed_records_by_work.items()
+            for work, records in claimed.items()
             if len(records) > len(unclaimed)
+            and work.languages == self.languages
         ]
 
-        if better_choices:
+        if more_popular_choices:
             # One or more Works seem to be better choices than
             # creating a new Work for this LicensePool. Merge them all
             # into the most popular Work.
             by_popularity = sorted(
-                better_choices, key=lambda x: x[1], reverse=True)
+                more_popular_choices, key=lambda x: x[1], reverse=True)
 
             # This is the work with the most claimed WorkRecords, so
             # it's the one we'll merge the others into. We chose
             # the most popular because we have the most data for it, so 
             # it's the most accurate choice when calculating similarity.
             work = by_popularity[0][0]
+            print "MORE POPULAR CHOICE for %s: %r" % (
+                primary_work_record.title.encode("utf8"), work)
             for less_popular, claimed_records in by_popularity[1:]:
                 less_popular.merge_into(_db, work, similarity_threshold)
             created = False
         else:
             # There is no better choice than creating a brand new Work.
+            # print "NEW WORK for %r" % primary_work_record.title
             work = Work()
             _db.add(work)
             _db.flush()
@@ -863,7 +926,7 @@ class LicensePool(Base):
         work.license_pools.append(self)
 
         # Associate the unclaimed WorkRecords with the Work.
-        work.work_records.extend(my_unclaimed_work_records)
+        work.work_records.extend(unclaimed)
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
@@ -886,7 +949,8 @@ class CirculationEvent(Base):
     id = Column(Integer, primary_key=True)
 
     # One LicensePool can have many circulation events.
-    license_pool_id = Column(Integer, ForeignKey('licensepools.id'))
+    license_pool_id = Column(
+        Integer, ForeignKey('licensepools.id'), index=True)
 
     type = Column(String(32))
     start = Column(DateTime, index=True)
