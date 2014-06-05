@@ -110,21 +110,8 @@ class DeweyDecimalClassification(Classification):
 
 class LCCClassification(Classification):
 
-    # Some example classifications.
-    # PS2384.M6
-    # PZ8.G882
-    # PS2384 M68 2003
-    # PZ7.C234937
-    # PN1997
-    # W85-12
-    # PR4611.A73
-    # J821.8 CARRIKK
-    # DC235
-    # PR
-    # E176.8
-    # PZ
-
     TOP_LEVEL = re.compile("^([A-Z]{1,2})")
+    FICTION = set(["P", "PN", "PQ", "PR", "PS", "PT", "PZ"])
     LCC = None
 
     @classmethod
@@ -141,7 +128,7 @@ class LCCClassification(Classification):
 
     @classmethod
     def is_fiction(cls, key):
-        return key.upper() in "P", "PN", "PQ", "PR", "PS", "PT", "PZ"
+        return key.upper() in cls.FICTION
 
     @classmethod
     def names(cls, lcc):
@@ -153,7 +140,7 @@ class LCCClassification(Classification):
         # Just pick the first two alphabetic characters. We don't have
         # the information necessary to do a lookup in any more detail.
 
-        tl = cls.TO_LEVEL.search(lcc)
+        tl = cls.TOP_LEVEL.search(lcc)
         if not tl:
             return
         lcc = tl.groups()[0]
@@ -164,9 +151,11 @@ class LCCClassification(Classification):
         if len(lcc) > 1:
             code = lcc[0]
             value = cls.lookup(code)
-            yield (code, value, audience, 
-                   cls.is_fiction(code))
+            if value:
+                yield (code, value, audience, 
+                       cls.is_fiction(code))
         value = cls.lookup(lcc)
-        yield (lcc, value, audience, 
-               cls.is_fiction(lcc))
+        if value:
+            yield (lcc, value, audience, 
+                   cls.is_fiction(lcc))
 

@@ -189,12 +189,19 @@ class GutenbergRDFExtractor(object):
         book = None
         new = False
         if title_triples:
-            if len(title_triples) > 1:
-                # Each filehandle is associated with one Project Gutenberg ID 
-                # and should thus contain at most one title.
-                set_trace()
-                raise ValueError(
-                    "More than one title associated with Project Gutenberg ID %s" % pg_id)
+            if len(title_triples):
+                uris = [x[0] for x in title_triples]
+                if len(uris) > 1:
+                    # Each filehandle is associated with one Project
+                    # Gutenberg ID and should thus describe at most
+                    # one title.
+                    raise ValueError(
+                        "More than one book in file for Project Gutenberg ID %s" % pg_id)
+                else:
+                    print "WEIRD MULTI-TITLE: %s" % pg_id
+
+            # TODO: Some titles such as 44244 have titles in multiple
+            # languages. Not sure what to do about that.
             uri, ignore, title = title_triples[0]
             book, new = cls.parse_book(_db, g, uri, title)
         return book, new
