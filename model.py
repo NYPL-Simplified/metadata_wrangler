@@ -35,6 +35,8 @@ from sqlalchemy import (
     Unicode,
     UniqueConstraint,
 )
+from classification import Classification
+from lane import Lane
 from util import (
     random_isbns,
     MetadataSimilarity,
@@ -522,26 +524,6 @@ class WorkRecord(Base):
         if not self.subjects:
             return None
 
-        audience = Counter()
-        fiction = Counter()
-        names = defaultdict(Counter)
-        codes = defaultdict(Counter)
-        for type, classifier, key in (
-                ('DDC', classification.DeweyDecimalClassification, 'id'),
-                ('LCC', classification.LCCClassification, 'id'),
-                ('FAST', classification.FASTClassification, 'value'),
-                ('LCSH', classification.LCSHClassification, 'value'),):
-            raw_subjects = self.subjects.get(type, [])
-            for s in raw_subjects:
-                value = s[key]
-                weight = s.get('weight', 1)
-                for (code, name, audience, fiction) in classifier.names(value):
-                    fiction[fiction] += weight
-                    audience[audience] += weight
-                    names[type][name] += weight
-                    codes[type][name] += weight
-        return dict(audience=audience, fiction=fiction, codes=codes,
-                    names=names)
 
 class Work(Base):
 
@@ -557,6 +539,7 @@ class Work(Base):
     title = Column(Unicode)
     authors = Column(Unicode)
     languages = Column(Unicode)
+    subjects = Column(JSON, default={})
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
     lane = Column(Unicode, index=True)
@@ -659,6 +642,13 @@ class Work(Base):
             print "The resulting work: %r" % target_work
             _db.delete(self)
 
+    def calculate_subjects(self):
+        """Consolidate subject information from across WorkRecords."""
+        data = {}
+        for i in self.work_records:
+            data = Classification.classify(i.subjects, data)
+        return data
+
     def calculate_presentation(self):
         """Figure out the 'best' title/author/subjects for this Work.
 
@@ -678,7 +668,6 @@ class Work(Base):
         self.full_cover_link = template % data
 
         titles = []
-        lcc = Counter()
         authors = Counter()
         languages = Counter()
 
@@ -691,9 +680,6 @@ class Work(Base):
                     not shortest_title or len(r.title) < len(shortest_title)):
                 shortest_title = r.title
 
-            if 'LCC' in r.subjects:
-                for s in r.subjects['LCC']:
-                    lcc[s['id']] += 1
             for a in r.authors:
                 authors[a['name']] += 1
             if r.languages:
@@ -710,16 +696,12 @@ class Work(Base):
 
         if authors:
             self.authors = authors.most_common(1)[0][0]
-        if lcc:
-            lcc = lcc.most_common(1)[0][0]
-            if lcc == 'PR':
-                self.lane = "Fiction"
-            elif lcc == 'PZ':
-                self.lane = "Children's Fiction"
-            else:
-                self.lane = "Nonfiction"
-        else:
-            self.lane = "Unknown"
+
+        self.subjects = self.calculate_subjects()
+
+        self.audience = Lane.most_common(self.subjects['audience'])
+        self.fiction, self.lane = Lane.best_match(
+            self.subjects)
 
 class LicensePool(Base):
 

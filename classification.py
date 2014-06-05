@@ -107,10 +107,18 @@ class DeweyDecimalClassification(Classification):
 
         ddc = ddc.upper()
 
+        if ddc.startswith('[') and ddc.endswith(']'):
+            ddc = ddc[1:-1]
+
         audience = cls.AUDIENCE_ADULT
+        if ddc == 'J':
+            yield (ddc, cls.lookup(ddc), cls.AUDIENCE_CHILDREN, False)
+            return
         if ddc.startswith('J'):
             audience = cls.AUDIENCE_CHILDREN
             ddc = ddc[1:]
+            # TODO argh
+            is_fiction = False
 
         if ddc in ('E', 'FIC'):
             audience = cls.AUDIENCE_CHILDREN
@@ -127,7 +135,10 @@ class DeweyDecimalClassification(Classification):
         parts = ddc.split(".")
 
         # First get the top-level classification
-        first_part = int(parts[0])
+        try:
+            first_part = int(parts[0])
+        except Exception, e:
+            set_trace()
         top_level = str(first_part / 100 * 100)
         yield (top_level, cls.lookup(top_level), audience,
                cls.is_fiction(top_level))
