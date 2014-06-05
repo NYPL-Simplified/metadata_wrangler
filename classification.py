@@ -159,3 +159,39 @@ class LCCClassification(Classification):
             yield (lcc, value, audience, 
                    cls.is_fiction(lcc))
 
+
+class LCSHClassification(Classification):
+
+    FICTION_INDICATORS = set(["fiction", "stories", "tales", "literature"])
+    NONFICTION_INDICATORS = set(["history", "biography"])
+    JUVENILE_INDICATORS = set(["for children", "children's", "juvenile"])
+
+    @classmethod
+    def split(cls, lcshes):
+        for i in lcshes.split(" -- "):
+            yield i
+
+    @classmethod
+    def is_fiction(cls, name):
+        name = name.lower()
+        for i in cls.NONFICTION_INDICATORS:
+            if i in name:
+                return False
+        for i in cls.FICTION_INDICATORS:
+            if i in name:
+                return True
+        return None
+
+    @classmethod
+    def audience(cls, name):
+        name = name.lower()
+        for i in cls.JUVENILE_INDICATORS:
+            if i in name:
+                return cls.AUDIENCE_CHILDREN
+        return None
+        
+    @classmethod
+    def names(cls, lcsh):
+        for name in cls.split(lcsh):
+            yield (name, name, cls.audience(name), cls.is_fiction(name))
+            

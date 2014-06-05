@@ -100,7 +100,7 @@ class GutenbergAPI(object):
         for pg_id, archive, archive_item in books:
             #if pg_id not in only_import:
             #    continue
-            print "Considering %s" % pg_id
+            # print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
             book = WorkRecord.for_foreign_id(
@@ -189,12 +189,13 @@ class GutenbergRDFExtractor(object):
         book = None
         new = False
         if title_triples:
-            if len(title_triples):
-                uris = [x[0] for x in title_triples]
+            if len(title_triples) > 1:
+                uris = set([x[0] for x in title_triples])
                 if len(uris) > 1:
                     # Each filehandle is associated with one Project
                     # Gutenberg ID and should thus describe at most
                     # one title.
+                    set_trace()
                     raise ValueError(
                         "More than one book in file for Project Gutenberg ID %s" % pg_id)
                 else:

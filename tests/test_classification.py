@@ -6,6 +6,7 @@ from classification import (
     Classification,
     DeweyDecimalClassification as DDC,
     LCCClassification as LCC,
+    LCSHClassification as LCSH,
     )
 
 class TestDewey(object):
@@ -66,7 +67,6 @@ class TestDewey(object):
         eq_(False, DDC.is_fiction(814))
 
 class TestLCC(object):
-
     def test_lookup(self):
         """Do a simple spot check lookup."""
         eq_("Local government.  Municipal government",
@@ -122,3 +122,31 @@ class TestLCC(object):
         eq_(True, LCC.is_fiction("PQ"))
         eq_(True, LCC.is_fiction("PT"))
         eq_(True, LCC.is_fiction("PZ"))
+
+
+
+class TestLCSH(object):
+
+    def test_is_fiction(self):
+        eq_(True, LCSH.is_fiction("Science fiction"))
+        eq_(True, LCSH.is_fiction("Science fiction, American"))
+        eq_(True, LCSH.is_fiction("Fiction"))
+        eq_(True, LCSH.is_fiction("Historical fiction"))
+        eq_(True, LCSH.is_fiction("Biographical fiction"))
+        eq_(True, LCSH.is_fiction("Detective and mystery stories"))
+        eq_(True, LCSH.is_fiction("Horror tales"))
+        eq_(True, LCSH.is_fiction("Classical literature"))
+        eq_(False, LCSH.is_fiction("History and criticism"))
+        eq_(False, LCSH.is_fiction("Biography"))
+        eq_(None, LCSH.is_fiction("Kentucky"))
+        eq_(None, LCSH.is_fiction("Social life and customs"))
+
+
+    def test_audience(self):
+        child = Classification.AUDIENCE_CHILDREN
+        eq_(child, LCSH.audience("Children's stories"))
+        eq_(child, LCSH.audience("Picture books for children"))
+        eq_(child, LCSH.audience("Juvenile fiction"))
+        eq_(child, LCSH.audience("Juvenile poetry"))
+        eq_(None, LCSH.audience("Runaway children"))
+        eq_(None, LCSH.audience("Humor"))
