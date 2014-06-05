@@ -1,13 +1,50 @@
 import json
 import pkgutil
+from collections import (
+    Counter,
+    defaultdict,
+)
 from nose.tools import set_trace
 import re
+
+from util import MetadataSimilarity
 
 class Classification(object):
 
     AUDIENCE_CHILDREN = "Children"
     AUDIENCE_YA = "Young Adult"
     AUDIENCE_ADULT = "Adult"
+
+    @classmethod
+    def classify(self, subjects, normalize=False, counters={}):
+        audience = counters.get('audience', Counter())
+        fiction = counters.get('fiction', Counter())
+        names = counters.get('names', defaultdict(Counter))
+        codes = counters.get('codes', defaultdict(Counter))
+        for type, classifier, key in (
+                ('DDC', DeweyDecimalClassification, 'id'),
+                ('LCC', LCCClassification, 'id'),
+                ('FAST', FASTClassification, 'value'),
+                ('LCSH', LCSHClassification, 'id'),):
+            raw_subjects = subjects.get(type, [])
+            for s in raw_subjects:
+                value = s[key]
+                weight = s.get('weight', 1)
+                for (code, name, o_audience, o_fiction) in classifier.names(value):
+                    fiction[o_fiction] += weight
+                    audience[o_audience] += weight
+                    names[type][name] += weight
+                    codes[type][name] += weight
+        n = MetadataSimilarity.normalize_histogram
+        if normalize:
+            audience = n(audience)
+            fiction = n(fiction)
+            for k, v in codes.items():
+                codes[k] = n(v)
+            for k, v in names.items():
+                names[k] = n(v)
+        return dict(audience=audience, fiction=fiction, codes=codes,
+                    names=names)
 
 class DeweyDecimalClassification(Classification):
 
@@ -168,8 +205,8 @@ class LCSHClassification(Classification):
 
     @classmethod
     def split(cls, lcshes):
-        for i in lcshes.split(" -- "):
-            yield i
+        for i in lcshes.split("--"):
+            yield i.strip()
 
     @classmethod
     def is_fiction(cls, name):
@@ -194,4 +231,6 @@ class LCSHClassification(Classification):
     def names(cls, lcsh):
         for name in cls.split(lcsh):
             yield (name, name, cls.audience(name), cls.is_fiction(name))
-            
+
+class FASTClassification(LCSHClassification):
+    """By and large, LCSH rules also apply to FAST."""

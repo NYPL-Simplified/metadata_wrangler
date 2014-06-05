@@ -65,7 +65,9 @@ class MetadataSimilarity(object):
         return cls.normalize_histogram(histogram, words)
 
     @classmethod
-    def normalize_histogram(cls, histogram, total):
+    def normalize_histogram(cls, histogram, total=None):
+        if not total:
+            total = sum(histogram.values())
         total = float(total)
         for k, v in histogram.items():
             histogram[k] = v/total

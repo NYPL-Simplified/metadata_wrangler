@@ -518,6 +518,30 @@ class WorkRecord(Base):
                 if similarity >= threshold:
                     yield candidate
 
+    def classifications(self):
+        if not self.subjects:
+            return None
+
+        audience = Counter()
+        fiction = Counter()
+        names = defaultdict(Counter)
+        codes = defaultdict(Counter)
+        for type, classifier, key in (
+                ('DDC', classification.DeweyDecimalClassification, 'id'),
+                ('LCC', classification.LCCClassification, 'id'),
+                ('FAST', classification.FASTClassification, 'value'),
+                ('LCSH', classification.LCSHClassification, 'value'),):
+            raw_subjects = self.subjects.get(type, [])
+            for s in raw_subjects:
+                value = s[key]
+                weight = s.get('weight', 1)
+                for (code, name, audience, fiction) in classifier.names(value):
+                    fiction[fiction] += weight
+                    audience[audience] += weight
+                    names[type][name] += weight
+                    codes[type][name] += weight
+        return dict(audience=audience, fiction=fiction, codes=codes,
+                    names=names)
 
 class Work(Base):
 

@@ -150,3 +150,62 @@ class TestLCSH(object):
         eq_(child, LCSH.audience("Juvenile poetry"))
         eq_(None, LCSH.audience("Runaway children"))
         eq_(None, LCSH.audience("Humor"))
+
+
+class TestClassifier(object):
+
+
+    def test_misc(self):
+        adult = Classification.AUDIENCE_ADULT
+        child = Classification.AUDIENCE_CHILDREN
+
+        data = {"DDC": [{"id": "813.4", "weight": 137}], "LCC": [{"id": "PR9199.2.B356", "weight": 48}], "FAST": [{"weight": 103, "id": "1719440", "value": "Mackenzie, Alexander, 1764-1820"}, {"weight": 25, "id": "969633", "value": "Indians of North America"}, {"weight": 22, "id": "1064447", "value": "Pioneers"}, {"weight": 17, "id": "918556", "value": "Explorers"}, {"weight": 17, "id": "936416", "value": "Fur traders"}, {"weight": 17, "id": "987694", "value": "Kings and rulers"}, {"weight": 7, "id": "797462", "value": "Adventure stories"}, {"weight": 5, "id": "1241420", "value": "Rocky Mountains"}]}
+        classified = Classification.classify(data, True)
+
+        # This is pretty clearly fiction intended for an adult
+        # audience.
+        assert classified['audience'][Classification.AUDIENCE_ADULT] > 0.6
+        assert classified['audience'][Classification.AUDIENCE_CHILDREN] == 0
+        assert classified['fiction'][True] > 0.6
+        assert classified['fiction'][False] == 0
+
+        # Its LCC classifications are heavy on the literature.
+        names = classified['names']
+        eq_(0.5, names['LCC']['LANGUAGE AND LITERATURE'])
+        eq_(0.5, names['LCC']['English literature'])
+
+        # Alexander Mackenzie is more closely associated with this work
+        # than the Rocky Mountains.
+        assert (names['FAST']['Mackenzie, Alexander, 1764-1820'] > 
+                names['FAST']['Rocky Mountains'])
+
+        # But the Rocky Mountains ain't chopped liver.
+        assert names['FAST']['Rocky Mountains'] > 0
+
+    def test_lcsh(self):
+
+        adult = Classification.AUDIENCE_ADULT
+        child = Classification.AUDIENCE_CHILDREN
+
+        data = {"LCC": [{"id": "NC"}], "LCSH": [{"id": "World War, 1914-1918"}, {"id": "World War, 1914-1918 -- Pictorial works"}, {"id": "Illustrated books"}]}
+
+        classified = Classification.classify(data, True)
+
+        # We're not sure it's nonfiction, but we have no indication
+        # whatsoever that it's fiction.
+        assert classified['fiction'][True] == 0
+        assert classified['fiction'][False] > 0.3
+
+        # We're not sure its for adults, but we have no indication
+        # whatsoever that it's for children.
+        assert classified['audience'][child] == 0
+        assert classified['audience'][adult] > 0.3
+
+        # It's more closely associated with "World War, 1914-1918"
+        # than with any other LCSH classification.
+        champ = None
+        for k, v in classified['codes']['LCSH'].items():
+            if not champ or v > champ[1]:
+                champ = (k,v)
+        eq_(champ, ("World War, 1914-1918", 0.5))
+
