@@ -98,10 +98,8 @@ class GutenbergAPI(object):
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
-            #if int(pg_id) > 20000:
+            #if pg_id not in only_import:
             #    continue
-            if pg_id not in only_import:
-                continue
             print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
@@ -194,6 +192,7 @@ class GutenbergRDFExtractor(object):
             if len(title_triples) > 1:
                 # Each filehandle is associated with one Project Gutenberg ID 
                 # and should thus contain at most one title.
+                set_trace()
                 raise ValueError(
                     "More than one title associated with Project Gutenberg ID %s" % pg_id)
             uri, ignore, title = title_triples[0]
