@@ -699,7 +699,7 @@ class Work(Base):
             self.authors = authors.most_common(1)[0][0]
 
     def calculate_lane(self):
-        print self.title.encode("utf8")
+        print (self.title or "").encode("utf8")
         self.subjects = self.calculate_subjects()
         if 'audience' in self.subjects:
             self.audience = Lane.most_common(self.subjects['audience'])

@@ -15,7 +15,7 @@ class Lane(object):
     KEYWORDS = []
 
     @classmethod
-    def self_and_sublanes(cls, nemesis):
+    def self_and_sublanes(cls, nemesis=None):
         yield cls
         for sl in cls.sublanes:
             if sl is nemesis:
@@ -190,7 +190,7 @@ class Science(Nonfiction):
     name = "Science"
     sublanes = set([])
     LCC = [re.compile("Q.*"), re.compile("R.*"), 
-           re.compile("S.*"), re.compile("T.*"),
+           re.compile("S.*"), re.compile("T[A-P].*"),
     ]
     KEYWORDS = make_kw("science", "aeronautics", "medicine", "evolution",
                         "mathematics", 'natural history')
@@ -198,7 +198,9 @@ Nonfiction.sublanes.add(Science)
 
 class Cooking(Nonfiction):
     name = "Cooking"
-    KEYWORDS = make_kw("cooking", "food", "home economics")
+    LCC = ["TX"]
+    KEYWORDS = make_kw("cooking", "baking", "food", "home economics",
+                       "cookbook")
     sublanes = set([])
 Nonfiction.sublanes.add(Cooking)
 
