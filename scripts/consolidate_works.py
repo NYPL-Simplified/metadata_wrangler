@@ -17,8 +17,8 @@ if __name__ == '__main__':
     session = SessionManager.session(SERVER, MAIN_DB)
 
     print "Deleting all works."
-    for work in session.query(Work).all():
-        session.delete(work)
+    #for work in session.query(Work).all():
+    #    session.delete(work)
 
     print "Creating new works."
     LicensePool.consolidate_works(session)

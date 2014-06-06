@@ -491,7 +491,7 @@ class WorkRecord(Base):
             # English, the penalty will be less if one of the
             # languages is English. It's more likely that an unlabeled
             # record is in English than that it's in some other language.
-            if 'eng' in self.languages or 'eng' in other_record_languages:
+            if 'eng' in self.languages or 'eng' in other_record.languages:
                 language_factor = 0.80
             else:
                 language_factor = 0.50
@@ -538,7 +538,8 @@ class Work(Base):
     
     title = Column(Unicode)
     authors = Column(Unicode)
-    languages = Column(Unicode)
+    languages = Column(Unicode, index=True)
+    audience = Column(Unicode, index=True)
     subjects = Column(JSON, default={})
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
@@ -698,10 +699,15 @@ class Work(Base):
             self.authors = authors.most_common(1)[0][0]
 
         self.subjects = self.calculate_subjects()
+        if 'audience' in self.subjects:
+            self.audience = Lane.most_common(self.subjects['audience'])
+        else:
+            self.audience = Classification.AUDIENCE_ADULT
 
-        self.audience = Lane.most_common(self.subjects['audience'])
         self.fiction, self.lane = Lane.best_match(
             self.subjects)
+        print "%s: %s, %s, %s, %r" % (self.title, self.audience, self.fiction, self.lane, self.subjects.get('names',{}))
+        print
 
 class LicensePool(Base):
 
@@ -927,12 +933,11 @@ class LicensePool(Base):
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
-        print " There were %s unclaimed" % len(unclaimed)
-        print " Now there are %s unclaimed" % len(unclaimed)
-        for i in unclaimed:
-            print "  %.3f %r" % (
-                primary_work_record.similarity_to(i), i)
-        print
+        print " There are %s unclaimed works" % len(unclaimed)
+        #for i in unclaimed:
+        #    print "  %.3f %r" % (
+        #        primary_work_record.similarity_to(i), i)
+        #print
 
         # Now we know how many unclaimed WorkRecords this LicensePool
         # will claim if it becomes a new Work. Find all existing Works

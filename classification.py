@@ -34,7 +34,7 @@ class Classification(object):
                     fiction[o_fiction] += weight
                     audience[o_audience] += weight
                     names[type][name] += weight
-                    codes[type][name] += weight
+                    codes[type][code] += weight
         n = MetadataSimilarity.normalize_histogram
         if normalize:
             audience = n(audience)
@@ -77,6 +77,10 @@ class DeweyDecimalClassification(Classification):
         if key.startswith('J'):
             key = key[1:]
 
+        if key.startswith('F'):
+            # Adult fiction
+            return True
+
         if '.' in key:
             key = key.split('.')[0]
 
@@ -110,6 +114,14 @@ class DeweyDecimalClassification(Classification):
         if ddc.startswith('[') and ddc.endswith(']'):
             ddc = ddc[1:-1]
 
+        if ddc.startswith('C') or ddc.startswith('A'):
+            # Indicates a Canadian or Australian work. It doesnt'
+            # matter to us.
+            ddc = ddc[1:]
+        elif ddc.startswith("NZ"):
+            # New Zealand.
+            ddc = ddc[2:]
+
         audience = cls.AUDIENCE_ADULT
         if ddc == 'J':
             yield (ddc, cls.lookup(ddc), cls.AUDIENCE_CHILDREN, False)
@@ -120,13 +132,20 @@ class DeweyDecimalClassification(Classification):
             # TODO argh
             is_fiction = False
 
-        if ddc in ('E', 'FIC'):
+        elif ddc in ('E', 'FIC'):
             audience = cls.AUDIENCE_CHILDREN
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
             return
-
         elif ddc == 'B':
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
+            return
+        elif ddc.startswith("F"):
+            audience = cls.AUDIENCE_ADULT
+            is_fiction = True
+            ddc = ddc[1:]
+
+        if not ddc:
+            yield (None, None, audience, is_fiction)
             return
 
         # At this point we should only have dotted-number

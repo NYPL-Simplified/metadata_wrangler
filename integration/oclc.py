@@ -123,7 +123,6 @@ class OCLCXMLParser(XMLParser):
         (for a multi-work response) or a list of WorkRecord
         objects (for a single-work response).
         """
-
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         response = cls._xpath1(tree, "oclc:response")
         representation_type = int(response.get('code'))
