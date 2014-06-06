@@ -16,11 +16,12 @@ from database_credentials import SERVER, MAIN_DB
 if __name__ == '__main__':
     session = SessionManager.session(SERVER, MAIN_DB)
 
-    if len(sys.argv) > 1 and sys.argv[1] == 'delete':
-        print "Deleting all works."
-        for work in session.query(Work).all():
-            session.delete(work)
-
-    print "Creating new works."
-    LicensePool.consolidate_works(session)
+    print "Recalculating lanes for all works."
+    i = 0
+    for work in session.query(Work):
+        work.calculate_lane()
+        # print repr(work)
+        i += 1
+        if not i % 10:
+            session.commit()
     session.commit()

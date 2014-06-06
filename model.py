@@ -546,8 +546,8 @@ class Work(Base):
     lane = Column(Unicode, index=True)
 
     def __repr__(self):
-        return ("%s/%s/%s/%s (%s work records, %s license pools)" % (
-            self.id, self.title, self.authors, self.languages,
+        return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
+            self.id, self.title, self.authors, self.lane, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
 
@@ -698,6 +698,8 @@ class Work(Base):
         if authors:
             self.authors = authors.most_common(1)[0][0]
 
+    def calculate_lane(self):
+        print self.title.encode("utf8")
         self.subjects = self.calculate_subjects()
         if 'audience' in self.subjects:
             self.audience = Lane.most_common(self.subjects['audience'])
@@ -706,7 +708,9 @@ class Work(Base):
 
         self.fiction, self.lane = Lane.best_match(
             self.subjects)
-        print "%s: %s, %s, %s, %r" % (self.title, self.audience, self.fiction, self.lane, self.subjects.get('names',{}))
+        print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
+            dict(lane=self.lane, fiction=self.fiction,
+                 audience=self.audience, subjects=self.subjects.get('names',{})))
         print
 
 class LicensePool(Base):
@@ -994,7 +998,7 @@ class LicensePool(Base):
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
-        work.calculate_presentation()
+        # work.calculate_presentation()
         #if created:
         #    print "Created %r" % work
         # All done!

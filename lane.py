@@ -181,7 +181,8 @@ class Religion(Nonfiction):
     ]
     DDC = [range(200,300)]
     KEYWORDS = make_kw("sermons", "bible", "christianity", "islam",
-                       "judaism", "religious", "religion", "church")
+                       "judaism", "religious", "religion", "church",
+                       "theology", "theological", 'biblical')
     sublanes = set([])
 Nonfiction.sublanes.add(Religion)
 
