@@ -70,21 +70,33 @@ for language in ["eng", "fre"]:
     for lane in Lane.self_and_sublanes():
         if lane is Lane:
             continue
-        url = "http://localhost/lanes/%s/%s" % (urllib.quote(language),
-                                                urllib.quote(lane.name))
-        navigation_feed.add(
-            title=lane.name,
-            id=url,
-            links=[
+
+        rec_url = "file://%s.%s.recommended.html" % (urllib.quote(language),
+                                                     urllib.quote(lane.name))
+
+        title_url = "file://%s.%s.title.html" % (urllib.quote(language),
+                                                    urllib.quote(lane.name))
+
+        links=[]
+        for url, rel in ((rec_url, "http://opds-spec.org/recommended"),
+                         (title_url, "subsection")):
+
+            links.append(
                 dict(
                     type="application/atom+xml;profile=opds-catalog;kind=acquisition",
                     href=url,
-                    rel="subsection",
-                    
-                )
-            ],
+                    rel=rel,
+                ))
+
+        navigation_feed.add(
+            title=lane.name,
+            id=url,
+            links=links,
             updated=datetime.datetime.utcnow(),
         )
+
+
+        # Build a recommended collection
         lane_link = dict(rel="collection", href=url)
         title = "%s (%s)" % (lane.name, language)
         feed = AtomFeed(title, [], url=url)
@@ -95,13 +107,30 @@ for language in ["eng", "fre"]:
             if work_o:
                 feed.add(**work_o)
 
-        if not feed.entries:
-            continue
-        print "Creating %s/%s" % (language, lane.name)
-        path = os.path.join(dest, "%s.%s.xml" % (language, lane.name))
-        out = open(path, "w")
-        out.write(unicode(feed).encode("utf-8"))
-        out.close()
+        if feed.entries:
+            print "Creating %s/%s" % (language, lane.name)
+            path = os.path.join(dest, "%s.%s.recommended.xml" % (language, lane.name))
+            out = open(path, "w")
+            out.write(unicode(feed).encode("utf-8"))
+            out.close()
+
+        # Build a collection by title
+        lane_link = dict(rel="collection", href=title_url)
+        title = "%s (%s, by title)" % (lane.name, language)
+        feed = AtomFeed(title, [], url=url)
+        for work in db.query(Work).filter(
+                Work.languages==language,
+                Work.lane==lane.name).order_by(Work.title).limit(50):
+            work_o = make_entry(work, lane_link)
+            if work_o:
+                feed.add(**work_o)
+
+        if feed.entries:
+            print "Creating %s/%s by title" % (language, lane.name)
+            path = os.path.join(dest, "%s.%s.title.xml" % (language, lane.name))
+            out = open(path, "w")
+            out.write(unicode(feed).encode("utf-8"))
+            out.close()
             
     path = os.path.join(dest, "Navigation.%s.xml" % language)
     out = open(path, "w")
