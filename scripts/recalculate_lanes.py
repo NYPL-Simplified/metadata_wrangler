@@ -20,6 +20,7 @@ if __name__ == '__main__':
     i = 0
     for work in session.query(Work):
         work.calculate_lane()
+        work.calculate_presentation(session)
         # print repr(work)
         i += 1
         if not i % 10:

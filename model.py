@@ -216,7 +216,7 @@ class WorkIdentifier(Base):
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
     primarily_identifies = relationship(
-        "WorkRecord", backref="primary_identifier"
+        "WorkRecord", backref="primary_identifier",
     )
 
     # One WorkIdentifier may serve as the identifier for
@@ -368,17 +368,6 @@ class WorkRecord(Base):
         """
         q, me = self.equivalent_to_equivalent_identifiers_query(_db)
         return q.filter(me.id==self.id).all()
-
-    def open_library_cover_id(self):
-        """Find the Open Library cover ID for this book, if any.
-
-        We find all WorkRecords equivalent to a WorkIdentifier to which
-        this work record is also equivalent. Then we add the requirement that 
-        the WorkRecord be equivalent to an Open Library Cover ID.    
-        
-        select a.title as title, b.type as "equivalent to", b.identifier as "identifier", d.type as "equivalent to", d.identifier as "identifier" from workrecords a join workrecord_workidentifier a_b on (a.id=a_b.workrecord_id) join workidentifiers b on (a_b.workidentifier_id=b.id) join workrecord_workidentifier b_c on (b.id=b_c.workidentifier_id) join workrecords c on (b_c.workrecord_id=c.id) join workrecord_workidentifier c_d on (c.id=c_d.workrecord_id) join workidentifiers d on (c_d.workidentifier_id=d.id) where a.primary_identifier_id = 1063141 and d.type='Open Library Cover ID';
-
-        """
 
     @classmethod
     def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
@@ -754,7 +743,16 @@ class Work(Base):
             self.authors = authors.most_common(1)[0][0]
 
         if image_links:
-            self.thumbnail_cover_link, self.thumbnail_link = image_links.most_common(1)[0][0]
+            # Without local copies we have no way of determining which
+            # image is the best. But in general, the Open Library ones
+            # tend to be higher-quality
+            best_index = 0
+            items = image_links.most_common()
+            for i, link in enumerate(items):
+                if 'openlibrary' in link[0][0]:
+                    best_index = i
+                    break
+            self.thumbnail_cover_link, self.full_cover_link = items[best_index][0]
 
     def calculate_lane(self):
         print (self.title or "").encode("utf8")
@@ -1013,6 +1011,7 @@ class LicensePool(Base):
             (work, len(records))
             for work, records in claimed.items()
             if len(records) > len(unclaimed)
+            and work.languages
             and set(work.languages) == my_languages
             and work.similarity_to(primary_work_record) >= work_similarity_threshold
         ]
@@ -1057,7 +1056,7 @@ class LicensePool(Base):
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
-        work.calculate_presentation(_db)
+        # work.calculate_presentation(_db)
         #if created:
         #    print "Created %r" % work
         # All done!
