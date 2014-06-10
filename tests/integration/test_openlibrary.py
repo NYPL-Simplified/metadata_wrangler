@@ -1,12 +1,21 @@
 
 from nose.tools import set_trace, eq_
+
 from tests.db import (
     setup_module,
     teardown_module,
     DatabaseTest,
 )
 
-from integration.openlibrary import OpenLibraryIDMapping
+from integration.openlibrary import (
+    OpenLibraryIDMapping,
+    OpenLibraryMonitor,
+)
+
+from model import (
+    WorkIdentifier,
+    WorkRecord,
+)
 
 class TestOpenLibraryIDMapping(object):
 
@@ -48,4 +57,45 @@ class TestOpenLibraryIDMapping(object):
         # Each Open Library ID is mapped to a unique cover ID.
         eq_('6636377', mapping.ol_to_cover_id['OL24385118M'])
 
-    def test_
+
+class TestOpenLibraryMonitor(DatabaseTest):
+
+    def test_monitor(self):
+        data = [
+            "oclc	001185458	/books/OL24334671M	6568609",
+            "oclc	001274531	/books/OL24359594M	6587057",
+            "oclc	001275038	/books/OL24358766M	6585908",
+            "oclc	001287012	/books/OL24349933M	6534668",
+            "oclc	001287012	/books/OL24391247M	6644880",
+            "oclc	001299040	/books/OL24341407M	6523875",
+            "oclc	001299047	/books/OL24385118M	6636377", # 1
+            "oclc	001299047	/books/OL24390638M	6643742", # 2
+        ]
+
+        mapping = OpenLibraryIDMapping(data)
+
+        # One, and only one, of these OCLC Numbers is in use.
+        identifier, ignore = WorkIdentifier.for_foreign_id(
+            self._db, WorkIdentifier.OCLC_NUMBER, "001299047")
+        self._db.commit()
+
+        OpenLibraryMonitor().handle(self._db, mapping)
+
+        # That one OCLC Number has been turned into two
+        # WorkRecords. No other WorkRecords have been created.
+        wr1, wr2 = self._db.query(WorkRecord).all()
+
+        # Each corresponds to one of the lines in the original data
+        # mapping. Each has been given a link to a thumbnail image and
+        # full image.
+        eq_("OL24385118M", wr1.primary_identifier.identifier)
+        eq_('http://covers.openlibrary.org/b/id/6636377-M.jpg',
+            wr1.links[WorkRecord.THUMBNAIL_IMAGE][0]['href'])
+        eq_('http://covers.openlibrary.org/b/id/6636377-L.jpg',
+            wr1.links[WorkRecord.IMAGE][0]['href'])
+
+        eq_("OL24390638M", wr2.primary_identifier.identifier)
+        eq_('http://covers.openlibrary.org/b/id/6643742-M.jpg',
+            wr2.links[WorkRecord.THUMBNAIL_IMAGE][0]['href'])
+        eq_('http://covers.openlibrary.org/b/id/6643742-L.jpg',
+            wr2.links[WorkRecord.IMAGE][0]['href'])
