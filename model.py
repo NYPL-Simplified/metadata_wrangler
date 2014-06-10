@@ -117,6 +117,7 @@ class DataSource(Base):
     OCLC = "OCLC Classify"
     AXIS_360 = "Axis 360"
     WEB = "Web"
+    OPEN_LIBRARY = "Open Library"
 
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True)
@@ -146,6 +147,7 @@ class DataSource(Base):
                  (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
                  (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
                  (cls.OCLC, False, WorkIdentifier.OCLC_WORK, None),
+                 (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
                  (cls.WEB, True, WorkIdentifier.URI, None)
         ):
 
@@ -192,6 +194,9 @@ class WorkIdentifier(Base):
     URI = "URI"
     DOI = "DOI"
     UPC = "UPC"
+
+    OPEN_LIBRARY_ID = "OLID"
+    OPEN_LIBRARY_COVER_ID = "Open Library Cover ID"
 
     __tablename__ = 'workidentifiers'
     id = Column(Integer, primary_key=True)
@@ -327,6 +332,22 @@ class WorkRecord(Base):
         return _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(
                 [x.id for x in self.equivalent_identifiers])).all()
+
+    def equivalent_to_same_work_identifier(self, _db):
+        """Find all WorkRecords that share a WorkIdentifier with this
+        WorkRecord."""
+
+
+    def open_library_cover_id(self):
+        """Find the Open Library cover ID for this book, if any.
+
+        We find all WorkRecords equivalent to a WorkIdentifier to which
+        this work record is also equivalent. Then we add the requirement that 
+        the WorkRecord be equivalent to an Open Library Cover ID.    
+        
+        select a.title as title, b.type as "equivalent to", b.identifier as "identifier", d.type as "equivalent to", d.identifier as "identifier" from workrecords a join workrecord_workidentifier a_b on (a.id=a_b.workrecord_id) join workidentifiers b on (a_b.workidentifier_id=b.id) join workrecord_workidentifier b_c on (b.id=b_c.workidentifier_id) join workrecords c on (b_c.workrecord_id=c.id) join workrecord_workidentifier c_d on (c.id=c_d.workrecord_id) join workidentifiers d on (c_d.workidentifier_id=d.id) where a.primary_identifier_id = 1063141 and d.type='Open Library Cover ID';
+
+        """
 
     @classmethod
     def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
@@ -656,17 +677,6 @@ class Work(Base):
         For the time being, 'best' means the most common among this
         Work's WorkRecords.
         """
-        isbn = random.choice(random_isbns)
-        data = dict(
-            username=CONTENT_CAFE['username'],
-            password=CONTENT_CAFE['password'],
-            isbn=isbn,
-            size="M",
-        )
-        template = "http://contentcafe2.btol.com/ContentCafe/Jacket.aspx?userID=%(username)s&password=%(password)s&content=%(size)s&Return=1&Type=%(size)s&Value=%(isbn)s"
-        self.thumbnail_cover_link = template % data
-        data['size'] = 'L'
-        self.full_cover_link = template % data
 
         titles = []
         authors = Counter()
@@ -675,7 +685,13 @@ class Work(Base):
         shortest_title = ''
         titles = []
 
+        # Find all Open Library WorkRecords that are equivalent to the
+        # same OCLC WorkIdentifier as one of this work's WorkRecords.
+
+        
+
         for r in self.work_records:
+
             titles.append(r.title)
             if r.title and (
                     not shortest_title or len(r.title) < len(shortest_title)):

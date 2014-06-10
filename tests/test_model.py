@@ -38,6 +38,7 @@ class TestDataSource(DatabaseTest):
             (DataSource.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID),
             (DataSource.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID),
             (DataSource.THREEM, True, WorkIdentifier.THREEM_ID),
+            (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.AXIS_360, True, WorkIdentifier.AXIS_360_ID),
             (DataSource.OCLC, False, WorkIdentifier.OCLC_WORK),
             (DataSource.WEB, True, WorkIdentifier.URI)
@@ -120,6 +121,55 @@ class TestWorkRecord(DatabaseTest):
         [in_web_but_not_in_oclc] = WorkRecord.missing_coverage_from(
             self._db, WorkIdentifier.URI, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
         eq_(w, in_web_but_not_in_oclc)
+
+    def test_equivalent_to_equivalent_identifiers(self):
+
+        gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        open_library_source = DataSource.lookup(self._db, DataSource.OPEN_LIBRARY)
+        web_source = DataSource.lookup(self._db, DataSource.WEB)
+
+        # Here's a WorkRecord for a Project Gutenberg text.
+        gutenberg, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+
+        # Here's a WorkRecord for an Open Library text.
+        open_library, ignore = WorkRecord.for_foreign_id(
+            self._db, open_library_source, WorkIdentifier.OPEN_LIBRARY_ID,
+            "W1111")
+
+        # We've   learned  through   various  machinations   that  the
+        # Gutenberg text and  the Open Library text  are equivalent to
+        # the same OCLC Number.
+        oclc_number, ignore = WorkIdentifier.for_foreign_id(
+            self._db, WorkIdentifier.OCLC_NUMBER, "22")
+        gutenberg.equivalent_identifiers.append(oclc_number)
+        open_library.equivalent_identifiers.append(oclc_number)
+       
+        # Here's a WorkRecord for a Recovering the Classics cover.
+        recovering, ignore = WorkRecord.for_foreign_id(
+            self._db, web_source, WorkIdentifier.URI, 
+            "http://recoveringtheclassics.com/pride-and-prejudice.jpg")
+
+        # We've associated that WorkRecord's URI directly with the
+        # Project Gutenberg text.
+        gutenberg.equivalent_identifiers.append(recovering.primary_identifier)
+
+        # Finally, here's a completely unrelated WorkRecord.
+        gutenberg2, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
+
+        # When we call equivalent_to_equivalent_identifiers on the
+        # Project Gutenberg WorkRecord, we get three work IDs: the
+        # Project Gutenberg ID, the Open Library ID (because they're
+        # associated with the same OCLC Number), and the Recovering
+        # the Classics ID (because they're associated with the same
+        # Gutenberg ID).
+
+        # When we call works_equivalent_to_equivalent_identifiers on the
+        # Project Gutenberg WorkRecord, we get three WorkRecords: the
+        # Gutenberg record itself, the Open Library record, and the
+        # Recovering the Classics record.
+
 
 
 class TestLicensePool(DatabaseTest):
