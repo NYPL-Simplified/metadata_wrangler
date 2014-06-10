@@ -18,6 +18,9 @@ from sqlalchemy.orm import (
 from sqlalchemy.orm.exc import (
     NoResultFound
 )
+from sqlalchemy.ext.mutable import (
+    MutableDict,
+)
 from sqlalchemy.exc import (
     IntegrityError
 )
@@ -35,6 +38,7 @@ from sqlalchemy import (
     Unicode,
     UniqueConstraint,
 )
+
 from classification import Classification
 from lane import Lane
 from util import (
@@ -48,7 +52,11 @@ from util import (
 
 from sqlalchemy.orm.session import Session
 
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import (
+    ARRAY,
+    HSTORE,
+    JSON,
+)
 from sqlalchemy.orm import sessionmaker
 
 from database_credentials import SERVER, MAIN_DB, CONTENT_CAFE
@@ -124,7 +132,7 @@ class DataSource(Base):
     name = Column(String, unique=True, index=True)
     offers_licenses = Column(Boolean, default=False)
     primary_identifier_type = Column(String, index=True)
-    extra = Column(JSON, default={})
+    extra = Column(MutableDict.as_mutable(JSON), default={})
 
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
@@ -196,7 +204,6 @@ class WorkIdentifier(Base):
     UPC = "UPC"
 
     OPEN_LIBRARY_ID = "OLID"
-    OPEN_LIBRARY_COVER_ID = "Open Library Cover ID"
 
     __tablename__ = 'workidentifiers'
     id = Column(Integer, primary_key=True)
@@ -260,7 +267,7 @@ class WorkRecord(Base):
     series = Column(Unicode)
     authors = Column(JSON, default=[])
     subjects = Column(JSON, default=[])
-    summary = Column(JSON, default=None)
+    summary = Column(MutableDict.as_mutable(JSON), default={})
 
     languages = Column(JSON, default=[])
     publisher = Column(Unicode)
@@ -273,9 +280,9 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
-    links = Column(JSON, default={})
+    links = Column(MutableDict.as_mutable(JSON), default={})
 
-    extra = Column(JSON, default={})
+    extra = Column(MutableDict.as_mutable(JSON), default={})
     
     # Common link relation URIs for the links.
     OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
@@ -585,7 +592,7 @@ class Work(Base):
     authors = Column(Unicode)
     languages = Column(Unicode, index=True)
     audience = Column(Unicode, index=True)
-    subjects = Column(JSON, default={})
+    subjects = Column(MutableDict.as_mutable(JSON), default={})
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
     lane = Column(Unicode, index=True)
@@ -715,6 +722,11 @@ class Work(Base):
         # Find all Open Library WorkRecords that are equivalent to the
         # same OCLC WorkIdentifier as one of this work's WorkRecords.
         equivalent_records = self.all_workrecords(_db)
+        if len(equivalent_records) > 1:
+            sources = set([x.primary_identifier.type for x in equivalent_records])
+            print sources
+            if 'OLID' in sources:
+                set_trace()
 
         for r in equivalent_records:
             titles.append(r.title)
