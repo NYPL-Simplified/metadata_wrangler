@@ -9,6 +9,13 @@ import re
 
 data = pkgutil.get_data("resources", "random_isbns.txt")
 random_isbns = [x.strip() for x in data.split()]    
+
+def batch(iterable, size=1):
+    """Split up `iterable` into batches of size `size`."""
+
+    l = len(iterable)
+    for start in range(0, l, size):
+        yield iterable[start:min(start+size, l)]
     
 
 class LanguageCodes(object):
