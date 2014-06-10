@@ -222,7 +222,6 @@ class GutenbergRDFExtractor(object):
                 title = parts[0]
                 subtitle = "\n".join(parts[1:])
                 break
-        print " %s" % title
 
         issued = cls._value(g, (uri, cls.dcterms.issued, None))
         issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT).date()
@@ -246,8 +245,15 @@ class GutenbergRDFExtractor(object):
             for format_uri in cls._values(
                     g, (href, cls.dcterms['format'], None)):
                 media_type = cls._value(g, (format_uri, cls.rdf.value, None))
-                WorkRecord._add_link(
-                    links, WorkRecord.OPEN_ACCESS_DOWNLOAD, href, media_type)
+                rel = WorkRecord.OPEN_ACCESS_DOWNLOAD
+                if media_type.startswith('image/'):
+                    if '.small.' in href:
+                        rel = WorkRecord.THUMBNAIL_IMAGE
+                    elif '.medium.' in href:
+                        rel = WorkRecord.IMAGE
+                    else:
+                        set_trace()                    
+                WorkRecord._add_link(links, rel, href, media_type)
         
         subjects = dict()
         subject_links = cls._values(g, (uri, cls.dcterms.subject, None))

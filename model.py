@@ -723,10 +723,6 @@ class Work(Base):
         # Find all Open Library WorkRecords that are equivalent to the
         # same OCLC WorkIdentifier as one of this work's WorkRecords.
         equivalent_records = self.all_workrecords(_db)
-        if len(equivalent_records) > 1:
-            sources = set([x.primary_identifier.type for x in equivalent_records])
-            print sources
-
         for r in equivalent_records:
             titles.append(r.title)
             if r.title and (

@@ -10,6 +10,7 @@ from model import (
     LicensePool,
     SessionManager,
     Work,
+    WorkRecord,
 )
 from database_credentials import SERVER, MAIN_DB
 
@@ -18,10 +19,11 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1 and sys.argv[1] == 'delete':
         print "Deleting all works."
-        for work in session.query(Work).all():
-            session.delete(work)
+        update = dict(work_id=None)
+        session.query(WorkRecord).filter(WorkRecord.work_id!=None).update(update)
+        session.query(LicensePool).filter(LicensePool.work_id!=None).update(update)
+        session.query(Work).delete()
         session.commit()
-        sys.exit()
 
     print "Creating new works."
     LicensePool.consolidate_works(session)

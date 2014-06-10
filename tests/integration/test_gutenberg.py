@@ -96,6 +96,22 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         eq_(u"The Works of Charles and Mary Lamb — Volume 3", book.title)
         eq_("Books for Children", book.subtitle)
 
+    def test_includes_cover_image(self):
+        fh = StringIO.StringIO(pkgutil.get_data(
+            "tests.integration",
+            "files/gutenberg-40993.rdf"))
+        book, new = GutenbergRDFExtractor.book_in(self._db, "40993", fh)
+
+        [thumbnail] = book.links[WorkRecord.THUMBNAIL_IMAGE]
+        eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.small.jpg",
+            str(thumbnail['href']))
+        eq_("image/jpeg", str(thumbnail['type']))
+
+        [image] = book.links[WorkRecord.IMAGE]
+        eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.medium.jpg",
+            str(image['href']))
+        eq_("image/jpeg", str(image['type']))
+
     def test_rdf_file_describing_no_books(self):
         """GutenbergRDFExtractor can handle an RDF document that doesn't
         describe any books."""
