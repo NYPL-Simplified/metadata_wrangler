@@ -132,11 +132,11 @@ class DeweyDecimalClassification(Classification):
             # TODO argh
             is_fiction = False
 
-        elif ddc in ('E', 'FIC'):
+        if ddc in ('E', 'FIC'):
             audience = cls.AUDIENCE_CHILDREN
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
             return
-        elif ddc == 'B':
+        if ddc == 'B':
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
             return
         elif ddc.startswith("F"):

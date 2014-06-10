@@ -158,7 +158,8 @@ class TestWorkRecord(DatabaseTest):
         # Project Gutenberg text.
         gutenberg.equivalent_identifiers.append(recovering.primary_identifier)
 
-        # Finally, here's a completely unrelated WorkRecord.
+        # Finally, here's a completely unrelated WorkRecord, which
+        # will not be showing up.
         gutenberg2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
         gutenberg2.title = "Unrelated Gutenberg record."
@@ -234,11 +235,11 @@ class TestWork(DatabaseTest):
     def test_calculate_presentation(self):
 
         authors1 = []
-        WorkRecord.add_author(authors1, "Bob")
+        WorkRecord._add_author(authors1, "Bob")
 
         authors2 = []
-        WorkRecord.add_author(authors2, "Bob")
-        WorkRecord.add_author(authors2, "Alice")
+        WorkRecord._add_author(authors2, "Bob")
+        WorkRecord._add_author(authors2, "Alice")
 
         wr1, ignore = get_one_or_create(self._db, WorkRecord, title="Title 1")
         wr2, ignore = get_one_or_create(self._db, WorkRecord, title="Title 2")

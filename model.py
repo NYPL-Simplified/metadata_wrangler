@@ -320,12 +320,14 @@ class WorkRecord(Base):
         # Combine the two to get/create a WorkRecord.
         if create_if_not_exists:
             f = get_one_or_create
+            kwargs = dict(create_method_kwargs=dict(
+                equivalent_identifiers=[work_identifier]))
         else:
             f = get_one
+            kwargs = dict()
         return f(_db, WorkRecord, data_source=data_source,
-              primary_identifier=work_identifier,
-              create_method_kwargs=dict(
-                  equivalent_identifiers=[work_identifier]))
+                 primary_identifier=work_identifier,
+                 **kwargs)
 
     def equivalent_work_records(self, _db):
         """All WorkRecords whose primary ID is among this WorkRecord's
