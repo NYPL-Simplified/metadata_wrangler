@@ -20,6 +20,8 @@ if __name__ == '__main__':
         print "Deleting all works."
         for work in session.query(Work).all():
             session.delete(work)
+        session.commit()
+        sys.exit()
 
     print "Creating new works."
     LicensePool.consolidate_works(session)

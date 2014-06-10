@@ -715,6 +715,7 @@ class Work(Base):
         titles = []
         authors = Counter()
         languages = Counter()
+        image_links = Counter()
 
         shortest_title = ''
         titles = []
@@ -725,8 +726,6 @@ class Work(Base):
         if len(equivalent_records) > 1:
             sources = set([x.primary_identifier.type for x in equivalent_records])
             print sources
-            if 'OLID' in sources:
-                set_trace()
 
         for r in equivalent_records:
             titles.append(r.title)
@@ -739,6 +738,13 @@ class Work(Base):
             if r.languages:
                 languages[tuple(r.languages)] += 1
 
+            if (WorkRecord.THUMBNAIL_IMAGE in r.links and
+                WorkRecord.IMAGE in r.links):
+                thumb = r.links[WorkRecord.THUMBNAIL_IMAGE][0]['href']
+                full = r.links[WorkRecord.IMAGE][0]['href']
+                key = (thumb, full)
+                image_links[key] += 1
+
         self.title = MetadataSimilarity.most_common(
             len(shortest_title) * 3, *titles)
 
@@ -750,6 +756,9 @@ class Work(Base):
 
         if authors:
             self.authors = authors.most_common(1)[0][0]
+
+        if image_links:
+            self.thumbnail_cover_link, self.thumbnail_link = image_links.most_common(1)[0][0]
 
     def calculate_lane(self):
         print (self.title or "").encode("utf8")
@@ -930,6 +939,7 @@ class LicensePool(Base):
         for unassigned in cls.with_no_work(_db):
             etext, new = unassigned.calculate_work(_db)
             a += 1
+            print "Created %r" % etext
             if a and not a % 100:
                 _db.commit()
 
@@ -990,7 +1000,7 @@ class LicensePool(Base):
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
-        print " There are %s unclaimed works" % len(unclaimed)
+        print " There are %s unclaimed work records" % len(unclaimed)
         #for i in unclaimed:
         #    print "  %.3f %r" % (
         #        primary_work_record.similarity_to(i), i)
