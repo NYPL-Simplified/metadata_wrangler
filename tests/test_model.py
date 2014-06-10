@@ -179,6 +179,18 @@ class TestWorkRecord(DatabaseTest):
         assert open_library in results
         assert recovering in results
 
+        # Here's a Work that incorporates one of the Gutenberg records.
+        work = Work()
+        work.work_records.extend([gutenberg2])
+
+        # Its set-of-all-workrecords contains only one record.
+        eq_(1, len(work.all_workrecords(self._db)))
+
+        # If we add the other Gutenberg record to it, then its
+        # set-of-all-workrecords is extended by that record, *plus*
+        # all the WorkRecords equivalent to that record.
+        work.work_records.extend([gutenberg])
+        eq_(4, len(work.all_workrecords(self._db)))
 
 class TestLicensePool(DatabaseTest):
 
@@ -234,6 +246,8 @@ class TestWork(DatabaseTest):
 
     def test_calculate_presentation(self):
 
+        gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+
         authors1 = []
         WorkRecord._add_author(authors1, "Bob")
 
@@ -241,9 +255,17 @@ class TestWork(DatabaseTest):
         WorkRecord._add_author(authors2, "Bob")
         WorkRecord._add_author(authors2, "Alice")
 
-        wr1, ignore = get_one_or_create(self._db, WorkRecord, title="Title 1")
-        wr2, ignore = get_one_or_create(self._db, WorkRecord, title="Title 2")
-        wr3, ignore = get_one_or_create(self._db, WorkRecord, title="Title 2")
+        wr1, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+        wr1.title = "Title 1"
+
+        wr2, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
+        wr2.title = "Title 2"
+
+        wr3, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "3")
+        wr3.title = "Title 2"
 
         work = Work()
         work.work_records.extend([wr1, wr2, wr3])
@@ -251,7 +273,7 @@ class TestWork(DatabaseTest):
         # The title of the Work is the most common title among
         # its associated WorkRecords.
         eq_(None, work.title)
-        work.calculate_presentation()
+        work.calculate_presentation(self._db)
         eq_("Title 2", work.title)
 
 class TestCirculationEvent(DatabaseTest):

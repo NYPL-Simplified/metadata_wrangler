@@ -337,10 +337,8 @@ class WorkRecord(Base):
             WorkRecord.primary_identifier_id.in_(
                 [x.id for x in self.equivalent_identifiers])).all()
 
-    def equivalent_to_equivalent_identifiers(self, _db):
-        """Find all WorkRecords that are equivalent to one of this
-        WorkRecord's equivalent identifiers.
-        """
+    @classmethod 
+    def equivalent_to_equivalent_identifiers_query(self, _db):
         targets = aliased(WorkRecord)
         equivalent_identifiers = aliased(workrecord_workidentifier)
         equivalent_identifiers_2 = aliased(workrecord_workidentifier)
@@ -354,8 +352,15 @@ class WorkRecord(Base):
         ).join(
             me, 
             (me.id==equivalent_identifiers_2.columns['workrecord_id'])
-        ).filter(me.id==self.id)
-        return q.all()
+        )
+        return q, me
+
+    def equivalent_to_equivalent_identifiers(self, _db):
+        """Find all WorkRecords that are equivalent to one of this
+        WorkRecord's equivalent identifiers.
+        """
+        q, me = self.equivalent_to_equivalent_identifiers_query(_db)
+        return q.filter(me.id==self.id).all()
 
     def open_library_cover_id(self):
         """Find the Open Library cover ID for this book, if any.
@@ -590,6 +595,9 @@ class Work(Base):
             self.id, self.title, self.authors, self.lane, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
+    def all_workrecords(self, _db):
+        q, workrecord = WorkRecord.equivalent_to_equivalent_identifiers_query(_db)
+        return q.filter(workrecord.work==self).all()
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
@@ -679,7 +687,7 @@ class Work(Base):
                 self, target_work, similarity)
             target_work.license_pools.extend(self.license_pools)
             target_work.work_records.extend(self.work_records)
-            target_work.calculate_presentation()
+            target_work.calculate_presentation(_db)
             print "The resulting work: %r" % target_work
             _db.delete(self)
 
@@ -690,7 +698,7 @@ class Work(Base):
             data = Classification.classify(i.subjects, data)
         return data
 
-    def calculate_presentation(self):
+    def calculate_presentation(self, _db):
         """Figure out the 'best' title/author/subjects for this Work.
 
         For the time being, 'best' means the most common among this
@@ -706,11 +714,9 @@ class Work(Base):
 
         # Find all Open Library WorkRecords that are equivalent to the
         # same OCLC WorkIdentifier as one of this work's WorkRecords.
+        equivalent_records = self.all_workrecords(_db)
 
-        
-
-        for r in self.work_records:
-
+        for r in equivalent_records:
             titles.append(r.title)
             if r.title and (
                     not shortest_title or len(r.title) < len(shortest_title)):
@@ -1033,7 +1039,7 @@ class LicensePool(Base):
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
-        # work.calculate_presentation()
+        work.calculate_presentation(_db)
         #if created:
         #    print "Created %r" % work
         # All done!
