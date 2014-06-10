@@ -323,7 +323,9 @@ class WorkRecord(Base):
         else:
             f = get_one
         return f(_db, WorkRecord, data_source=data_source,
-                 primary_identifier=work_identifier)
+              primary_identifier=work_identifier,
+              create_method_kwargs=dict(
+                  equivalent_identifiers=[work_identifier]))
 
     def equivalent_work_records(self, _db):
         """All WorkRecords whose primary ID is among this WorkRecord's
@@ -333,10 +335,25 @@ class WorkRecord(Base):
             WorkRecord.primary_identifier_id.in_(
                 [x.id for x in self.equivalent_identifiers])).all()
 
-    def equivalent_to_same_work_identifier(self, _db):
-        """Find all WorkRecords that share a WorkIdentifier with this
-        WorkRecord."""
-
+    def equivalent_to_equivalent_identifiers(self, _db):
+        """Find all WorkRecords that are equivalent to one of this
+        WorkRecord's equivalent identifiers.
+        """
+        targets = aliased(WorkRecord)
+        equivalent_identifiers = aliased(workrecord_workidentifier)
+        equivalent_identifiers_2 = aliased(workrecord_workidentifier)
+        me = aliased(WorkRecord)
+        q = _db.query(targets).join(
+            equivalent_identifiers,
+            targets.id==equivalent_identifiers.columns['workrecord_id']
+        ).join(
+            equivalent_identifiers_2,
+            equivalent_identifiers.columns['workidentifier_id']==equivalent_identifiers_2.columns['workidentifier_id']
+        ).join(
+            me, 
+            (me.id==equivalent_identifiers_2.columns['workrecord_id'])
+        ).filter(me.id==self.id)
+        return q.all()
 
     def open_library_cover_id(self):
         """Find the Open Library cover ID for this book, if any.

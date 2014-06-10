@@ -79,6 +79,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(id, identifier.identifier)
         eq_(type, identifier.type)
         eq_(True, was_new)
+        eq_([identifier], record.equivalent_identifiers)
 
         # We can get the same work record by providing only the name
         # of the data source.
@@ -131,11 +132,13 @@ class TestWorkRecord(DatabaseTest):
         # Here's a WorkRecord for a Project Gutenberg text.
         gutenberg, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+        gutenberg.title = "Original Gutenberg text"
 
         # Here's a WorkRecord for an Open Library text.
         open_library, ignore = WorkRecord.for_foreign_id(
             self._db, open_library_source, WorkIdentifier.OPEN_LIBRARY_ID,
             "W1111")
+        open_library.title = "Open Library record"
 
         # We've   learned  through   various  machinations   that  the
         # Gutenberg text and  the Open Library text  are equivalent to
@@ -149,6 +152,7 @@ class TestWorkRecord(DatabaseTest):
         recovering, ignore = WorkRecord.for_foreign_id(
             self._db, web_source, WorkIdentifier.URI, 
             "http://recoveringtheclassics.com/pride-and-prejudice.jpg")
+        recovering.title = "Recovering the Classics cover"
 
         # We've associated that WorkRecord's URI directly with the
         # Project Gutenberg text.
@@ -157,19 +161,22 @@ class TestWorkRecord(DatabaseTest):
         # Finally, here's a completely unrelated WorkRecord.
         gutenberg2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
+        gutenberg2.title = "Unrelated Gutenberg record."
 
         # When we call equivalent_to_equivalent_identifiers on the
-        # Project Gutenberg WorkRecord, we get three work IDs: the
-        # Project Gutenberg ID, the Open Library ID (because they're
-        # associated with the same OCLC Number), and the Recovering
-        # the Classics ID (because they're associated with the same
-        # Gutenberg ID).
-
-        # When we call works_equivalent_to_equivalent_identifiers on the
         # Project Gutenberg WorkRecord, we get three WorkRecords: the
         # Gutenberg record itself, the Open Library record, and the
         # Recovering the Classics record.
-
+        #
+        # We get the Open Library record because it's associated with
+        # the same OCLC Number as the Gutenberg record. We get the
+        # Recovering the Classics record because it's associated
+        # directly with the Gutenberg record.
+        results = gutenberg.equivalent_to_equivalent_identifiers(self._db)
+        eq_(3, len(results))
+        assert gutenberg in results
+        assert open_library in results
+        assert recovering in results
 
 
 class TestLicensePool(DatabaseTest):
