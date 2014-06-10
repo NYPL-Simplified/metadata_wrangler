@@ -40,7 +40,12 @@ class TestOpenLibraryIDMapping(object):
         eq_(6, len(mapping.oclc_to_ol))
 
         eq_(['OL24359594M'], mapping.oclc_to_ol['001274531'])
+
+        # This OCLC Number is mapped to two Open Library IDs.
         eq_(['OL24385118M', 'OL24390638M'], sorted(
             mapping.oclc_to_ol['001299047']))
 
+        # Each Open Library ID is mapped to a unique cover ID.
         eq_('6636377', mapping.ol_to_cover_id['OL24385118M'])
+
+    def test_

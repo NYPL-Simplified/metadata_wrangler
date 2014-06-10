@@ -25,10 +25,6 @@ from collections import defaultdict
 thumbnail_image = "http://opds-spec.org/image/thumbnail" 
 full_image = "http://opds-spec.org/image" 
 
-def hack_link(url):
-    return url.replace("content=L", "content=M").replace(
-        "Type=L", "Type=M")
-
 def make_entry(work, lane_link):
 
     # Find the .epub link
@@ -48,16 +44,22 @@ def make_entry(work, lane_link):
         return None
     #work_id = md5.md5(epub_href).hexdigest()
     url = "http://localhost/works/%s" % r.id
+
+    links=[dict(rel=open_access,
+                href=epub_href, type=epub_type),
+           lane_link,
+    ]
+
+    if work.thumbnail_cover_link:
+        links.append(dict(rel=thumbnail_image,
+                       href=work.thumbnail_cover_link))
+    if work.full_cover_link:
+        links.append(dict(rel=full_image, href=work.full_cover_link))
+
     return dict(title=work.title, url=url, id=url,
                 author=work.authors or "", 
-                links=[dict(rel=open_access,
-                            href=epub_href, type=epub_type),
-                       dict(rel=thumbnail_image,
-                            href=hack_link(work.thumbnail_cover_link)),
-                       dict(rel=full_image,
-                            href=hack_link(work.full_cover_link)),
-                       lane_link,
-                   ],
+
+                links=links,
                 updated=datetime.datetime.utcnow())
 
 dest = "opds"
