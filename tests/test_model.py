@@ -472,9 +472,10 @@ class TestWorkConsolidation(DatabaseTest):
         wr4, ignore = WorkRecord.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
 
-        wr4.equivalent_identifiers = [wr3, wr1]
+        wr4.equivalent_identifiers.extend(
+            [wr3.primary_identifier, wr1.primary_identifier])
         preexisting_work = Work()
-        preexisting_work.work_records = [wr1, wr2]
+        preexisting_work.work_records.extend([wr1, wr2])
 
         pool, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
