@@ -44,9 +44,9 @@ class TestMetadataSimilarity(object):
         a2 = dict(name="Bar Foo", alternateName=["QUUX, baz"])
         a3 = dict(name="BAR FOO", alternateName=["baz (QuuX)"])
 
-        eq_(1, MetadataSimilarity.authors([a1], [a2]))
-        eq_(1, MetadataSimilarity.authors([a1], [a3]))
-        eq_(1, MetadataSimilarity.authors([a2], [a3]))
+        eq_(1, MetadataSimilarity.author_similarity([a1], [a2]))
+        eq_(1, MetadataSimilarity.author_similarity([a1], [a3]))
+        eq_(1, MetadataSimilarity.author_similarity([a2], [a3]))
 
     def test_histogram_distance(self):
 

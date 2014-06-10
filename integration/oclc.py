@@ -278,7 +278,8 @@ class OCLCXMLParser(XMLParser):
             # works in an anthology. If there is no semicolon in the
             # original title, do not consider titles that contain
             # semicolons.
-            if not ';' in must_resemble_title and ';' in title:
+            if (not ';' in must_resemble_title
+                and ';' in title and threshold > 0):
                 return None
 
         # Apply restrictions. If they're not met, return None.
@@ -290,6 +291,8 @@ class OCLCXMLParser(XMLParser):
 
         if 'languages' in restrictions:
             restrict_to_languages = set(restrictions['languages'])
+            if 'spa' in restrict_to_languages:
+                set_trace()
             if not restrict_to_languages.intersection(languages):
                 # This record is for a book in a different language.
                 return None

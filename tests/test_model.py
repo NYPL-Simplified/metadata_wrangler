@@ -512,8 +512,15 @@ class TestWorkConsolidation(DatabaseTest):
 
         self._db.commit()
 
-        # Merge the two work records.
-        work2.merge_into(self._db, work1)
+        # This attempt to merge the two work records will fail because
+        # they don't meet the similarity threshold.
+        work2.merge_into(self._db, work1, similarity_threshold=1)
+
+        assert work2 not in self._db.deleted
+
+        # This attempt will succeed because we lower the similarity
+        # threshold.
+        work2.merge_into(self._db, work1, similarity_threshold=0)
 
         # The merged Work has been deleted.
         assert work2 in self._db.deleted
