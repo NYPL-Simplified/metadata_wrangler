@@ -73,10 +73,10 @@ for language in ["eng", "fre"]:
         if lane is Lane:
             continue
 
-        rec_url = "file://%s.%s.recommended.html" % (urllib.quote(language),
+        rec_url = "file://%s.%s.recommended.xml" % (urllib.quote(language),
                                                      urllib.quote(lane.name))
 
-        title_url = "file://%s.%s.title.html" % (urllib.quote(language),
+        title_url = "file://%s.%s.title.xml" % (urllib.quote(language),
                                                     urllib.quote(lane.name))
 
         links=[]
