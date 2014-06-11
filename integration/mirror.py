@@ -1,3 +1,6 @@
+from nose.tools import set_trace
+import os
+import random
 import requests
 import urlparse
 import md5
@@ -6,35 +9,54 @@ class Mirror(object):
 
     FOR_HOSTNAME = dict()
 
+    DIRECTORY_NAME = "mirror"
+
     def __init__(self, data_directory):
-        self.data_directory = data_directory
+        self.data_directory = os.path.join(data_directory, self.DIRECTORY_NAME)
+        if not os.path.exists(self.data_directory):
+            raise ValueError("Data directory %s does not exist." % 
+                             self.data_directory)
 
-    @classmethod
-    def hostname_key(cls, netloc):
-        return ".".join(netloc.split(".")[-2:]) 
-
-    @classmethod
-    def ensure_mirrored(cls, url):
+    def local_path(self, url):
         parsed = urlparse.urlparse(url)
         netloc = parsed.netloc
-        key = cls.hostname_key(netloc)
-
-        handler = cls.FOR_HOSTNAME.get(key, None)
-
-        if not handler:
-            raise ValueError("No handler registered for %s" % url)
-
-
-
         path = parsed.path
+        if path.startswith("/"):
+            path = path[1:]
+        if '/.' in path:
+            return None
+        return os.path.join(self.data_directory, netloc, path)
 
-    def save(response, path)
+    def ensure_mirrored(self, url, request_headers={}):
+        sleep_time = 0
+        path = self.local_path(url)
+        if not path:
+            raise ValueError("Cannot mirror URL due to its structure: %s" % url)
+        if not os.path.exists(path):
+            d, f = os.path.split(path)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            sleep_time = self.download(url, path, request_headers)
+        return path, sleep_time
+
+    def download(self, url, local_path, request_headers):
+        response = requests.get(url, headers=request_headers)
+        if response.status_code != 200:
+            raise Exception(
+                "Request to %s got response code %s: %s" % (
+                    url, response.status, response.content))
+        out = open(local_path, "w")
+        out.write(response.content)
+        out.close()
+
+        actually_local = local_path.replace("/mirror/", "/local-mirror/")
+        d, f = os.path.split(actually_local)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        print actually_local
+        out = open(actually_local, "w")
+        out.write(response.content)
+        out.close()
 
 
-class MirrorHandler(object):
-
-    def ensure_mirrored(cls, mirror, url, key, parsed):
-        mirror.save(url, key, path)
-
-    def path(mirror, url, key, parsed):
-        return parsed.path
+        return random.random()
