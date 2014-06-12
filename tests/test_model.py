@@ -402,6 +402,31 @@ class TestCirculationEvent(DatabaseTest):
         # caused by someone who has a reserved copy or someone who is
         # checking out from the general pool.
 
+class TestWorkQuality(DatabaseTest):
+
+    def test_better_known_work_gets_higher_rating(self):
+
+        gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+
+        wr1_1, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+
+        wr1_2, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
+
+        wr2_1, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "3")
+
+        work1 = Work()
+        work1.work_records.extend([wr1_1, wr1_2])
+
+        work2 = Work()
+        work2.work_records.extend([wr2_1])
+
+        work1.calculate_quality(self._db)
+        work2.calculate_quality(self._db)
+
+        assert work1.quality > work2.quality
 
 class TestWorkConsolidation(DatabaseTest):
 

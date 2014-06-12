@@ -30,6 +30,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Index,
@@ -585,6 +586,7 @@ class Work(Base):
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
     lane = Column(Unicode, index=True)
+    quality = Column(Float, index=True)
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
@@ -754,7 +756,24 @@ class Work(Base):
                     break
             self.thumbnail_cover_link, self.full_cover_link = items[best_index][0]
 
+    def calculate_quality(self, _db):
+        """Calculate some measure of the quality of a work.
+
+        Higher numbers are better.
+
+        The quality of this quality measure is currently very poor,
+        but we will be improving it over time as we have more data.
+        """
+        # For public domain books, the quality is the number of
+        # records we have for it.
+        self.quality = len(self.all_workrecords(_db))
+
     def calculate_lane(self):
+        """Calculate audience, fiction status, and best lane for this book.
+
+        This estimate will go 
+        """
+
         print (self.title or "").encode("utf8")
         self.subjects = self.calculate_subjects()
         if 'audience' in self.subjects:
