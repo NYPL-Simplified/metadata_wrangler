@@ -62,8 +62,6 @@ class OCLCClassifyAPI(object):
         content = response.content
         if response.status_code != 200:
             raise IOError("OCLC API returned status code %s: %s" % (response.status_code, response.content))
-        if not content:
-            set_trace()
         return content
 
     def lookup_by(self, **kwargs):
@@ -291,8 +289,6 @@ class OCLCXMLParser(XMLParser):
 
         if 'languages' in restrictions:
             restrict_to_languages = set(restrictions['languages'])
-            if 'spa' in restrict_to_languages:
-                set_trace()
             if not restrict_to_languages.intersection(languages):
                 # This record is for a book in a different language.
                 return None
@@ -321,6 +317,12 @@ class OCLCXMLParser(XMLParser):
         oclc_work_id = unicode(work_tag.get('pswid'))
         if not oclc_work_id:
             print " No OCLC Work ID (pswid) in %s" % etree.tostring(work_tag)
+
+        try:
+            int(oclc_work_id)
+        except ValueError, e:
+            # This record does not have a valid OCLC Work ID.
+            return None, False
 
         result = cls._extract_basic_info(work_tag, **restrictions)
         if not result:
@@ -384,6 +386,11 @@ class OCLCXMLParser(XMLParser):
         edition of a book (identified by OCLC Number).
         """
         oclc_number = unicode(edition_tag.get('oclc'))
+        try:
+            int(oclc_number)
+        except ValueError, e:
+            # This record does not have a valid OCLC number.
+            return None, False
 
         # Fill in some basic information about this new record.
         result = cls._extract_basic_info(

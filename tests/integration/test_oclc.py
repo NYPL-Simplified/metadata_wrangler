@@ -218,6 +218,21 @@ class TestParser(DatabaseTest):
         # eq_(2, len(records))
         # eq_(["spa"], records[1].languages)
 
+    def test_missing_work_id(self):
+
+        # This document contains a work that has a number of editions,
+        # but there's no work ID, so everything in the document is 
+        # thrown away.
+        xml = pkgutil.get_data(
+            "tests.integration",
+            "files/oclc_missing_pswid.xml")
+
+        status, records = OCLCXMLParser.parse(
+            self._db, xml, languages=["eng"])
+        eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        eq_([], records)
+
+
 class TestAuthorParser(object):
 
     MISSING = object()
