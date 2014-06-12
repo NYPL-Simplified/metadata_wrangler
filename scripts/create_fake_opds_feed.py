@@ -16,7 +16,7 @@ from model import (
     WorkRecord,
     Work,
     )
-from lane import Lane
+from lane import Lane, Unclassified
 from database_credentials import SERVER, MAIN_DB
 
 db = SessionManager.session(SERVER, MAIN_DB)
@@ -41,6 +41,7 @@ def make_entry(work, lane_link):
                     break
 
     if not epub_href:
+        # print "No epub link for %s, probably an audiobook." % work.title
         return None
     #work_id = md5.md5(epub_href).hexdigest()
     url = "http://localhost/works/%s" % r.id
@@ -84,23 +85,32 @@ def save_feed(feed, filename):
 
 def make_feeds(navigation_feed, language, lane):
 
-    rec_url = "file://%s.%s.recommended.xml" % (urllib.quote(language),
+    rec_url = "http//johnnowak.com/nypl/%s.%s.recommended.xml" % (urllib.quote(language),
                                                 urllib.quote(lane.name))
-    title_url = "file://%s.%s.title.xml" % (urllib.quote(language),
+    title_url = "http//johnnowak.com/nypl/%s.%s.title.xml" % (urllib.quote(language),
                                             urllib.quote(lane.name))
 
     links = []
     # Build a recommended collection
 
+    feed_size = 20
     query = db.query(Work).filter(
         Work.languages==language,
         Work.lane==lane.name,
-        Work.quality > 0).order_by(Work.quality).limit(1000)
+        Work.quality > 5,
+        Work.quality < 1000).order_by(Work.quality).limit(1000)
+    c = query.count()
     results = query.all()
-    if len(results) < 20:
+    if len(results) < feed_size:
         sample = results
+        we_need = feed_size - len(results)
+        query = db.query(Work).filter(
+            Work.languages==language,
+            Work.lane==lane.name,
+            Work.quality > 1, Work.quality < 5).order_by(Work.quality).limit(we_need)
+        sample += query.all()
     else:
-        sample = random.sample(query.all(), 20)
+        sample = random.sample(results, feed_size)
 
     rec = make_feed(rec_url, "%s (%s, recommended)" % (lane.name, language),
                     sample)
@@ -146,7 +156,7 @@ for language in ["eng", "fre"]:
     navigation_feed = AtomFeed("Navigation feed (%s)" % language, [],
                                url="http://localhost/lanes/" + language)
     for lane in Lane.self_and_sublanes():
-        if lane is Lane:
+        if lane is Lane or lane is Unclassified:
             continue
 
         make_feeds(navigation_feed, language, lane)
