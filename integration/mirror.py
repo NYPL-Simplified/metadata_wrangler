@@ -44,17 +44,12 @@ class Mirror(object):
         if response.status_code != 200:
             raise Exception(
                 "Request to %s got response code %s: %s" % (
-                    url, response.status, response.content))
-        out = open(local_path, "w")
-        out.write(response.content)
-        out.close()
+                    url, response.status_code, response.content))
 
-        actually_local = local_path.replace("/mirror/", "/local-mirror/")
-        d, f = os.path.split(actually_local)
+        d, f = os.path.split(local_path)
         if not os.path.exists(d):
             os.makedirs(d)
-        print actually_local
-        out = open(actually_local, "w")
+        out = open(local_path, "w")
         out.write(response.content)
         out.close()
 
