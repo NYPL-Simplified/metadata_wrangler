@@ -767,11 +767,14 @@ class Work(Base):
         # For public domain books, the quality is the number of
         # records we have for it.
         self.quality = len(self.all_workrecords(_db))
+        if self.title:
+            print "%s %s" % (self.quality, self.title.encode("utf8"))
 
     def calculate_lane(self):
         """Calculate audience, fiction status, and best lane for this book.
 
-        This estimate will go 
+        The quality of this quality measure is currently fairly poor,
+        but we will be improving it over time as we have more data.
         """
 
         print (self.title or "").encode("utf8")

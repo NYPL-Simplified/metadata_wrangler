@@ -19,10 +19,12 @@ if __name__ == '__main__':
     print "Recalculating lanes for all works."
     i = 0
     for work in session.query(Work):
-        work.calculate_lane()
-        work.calculate_presentation(session)
+        #work.calculate_lane()
+        work.calculate_quality(session)
+        #work.calculate_presentation(session)
         # print repr(work)
         i += 1
         if not i % 10:
             session.commit()
     session.commit()
+

@@ -48,7 +48,7 @@ class Mirror(object):
         return path, sleep_time
 
     def make_request(self, url, headers):
-        return requests.get(url, headers=request_headers)
+        return requests.get(url, headers=headers)
 
     def download(self, url, local_path, request_headers={}):
         response = self.make_request(url, request_headers)

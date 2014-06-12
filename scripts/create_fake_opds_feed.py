@@ -58,7 +58,7 @@ def make_entry(work, lane_link):
 
     return dict(title=work.title, url=url, id=url,
                 author=work.authors or "", 
-
+                summary="Quality: %s" % work.quality,
                 links=links,
                 updated=datetime.datetime.utcnow())
 
@@ -75,7 +75,7 @@ def make_feed(url, title, works):
 def save_feed(feed, filename):
     if not feed.entries:
         return
-    print "Creating %s" % filename
+    print "Creating %s with %s entries" % (filename, len(feed.entries))
     path = os.path.join(dest, filename)
     out = open(path, "w")
     out.write(unicode(feed).encode("utf-8"))
@@ -91,10 +91,19 @@ def make_feeds(navigation_feed, language, lane):
 
     links = []
     # Build a recommended collection
+
+    query = db.query(Work).filter(
+        Work.languages==language,
+        Work.lane==lane.name,
+        Work.quality > 0).order_by(Work.quality).limit(1000)
+    results = query.all()
+    if len(results) < 20:
+        sample = results
+    else:
+        sample = random.sample(query.all(), 20)
+
     rec = make_feed(rec_url, "%s (%s, recommended)" % (lane.name, language),
-              db.query(Work).filter(
-                  Work.languages==language,
-                  Work.lane==lane.name).order_by(func.random()).limit(20))
+                    sample)
 
     if rec.entries:
         links.append(
