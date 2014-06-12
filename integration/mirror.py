@@ -11,19 +11,27 @@ class Mirror(object):
 
     DIRECTORY_NAME = "mirror"
 
-    def __init__(self, data_directory):
+    def __init__(self, data_directory, sleep_time=None):
+        self.sleep_time = sleep_time or self.default_sleep_time
+        if not os.path.exists(data_directory):
+            raise ValueError("Base data directory %s does not exist." % 
+                             data_directory)
+
         self.data_directory = os.path.join(data_directory, self.DIRECTORY_NAME)
         if not os.path.exists(self.data_directory):
-            raise ValueError("Data directory %s does not exist." % 
-                             self.data_directory)
+            os.makedirs(self.data_directory)
 
     def local_path(self, url):
         parsed = urlparse.urlparse(url)
         netloc = parsed.netloc
+        if not netloc:
+            return None
         path = parsed.path
         if path.startswith("/"):
             path = path[1:]
-        if '/.' in path:
+        if not path:
+            return None
+        if '/.' in path or path.startswith("./") or path.startswith("../"):
             return None
         return os.path.join(self.data_directory, netloc, path)
 
@@ -39,8 +47,11 @@ class Mirror(object):
             sleep_time = self.download(url, path, request_headers)
         return path, sleep_time
 
-    def download(self, url, local_path, request_headers):
-        response = requests.get(url, headers=request_headers)
+    def make_request(self, url, headers):
+        return requests.get(url, headers=request_headers)
+
+    def download(self, url, local_path, request_headers={}):
+        response = self.make_request(url, request_headers)
         if response.status_code != 200:
             raise Exception(
                 "Request to %s got response code %s: %s" % (
@@ -53,5 +64,8 @@ class Mirror(object):
         out.write(response.content)
         out.close()
 
+        return self.sleep_time(url)
 
-        return random.random()
+    def default_sleep_time(self, url):
+        """How long to sleep after making a request to the given URL."""
+        random.random()
