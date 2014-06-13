@@ -266,7 +266,9 @@ class WorkRecord(Base):
     title = Column(Unicode)
     subtitle = Column(Unicode)
     series = Column(Unicode)
-    authors = Column(JSON, default=[])
+
+    creators = TK
+
     subjects = Column(JSON, default=[])
     summary = Column(MutableDict.as_mutable(JSON), default={})
 
@@ -293,8 +295,12 @@ class WorkRecord(Base):
 
     def __repr__(self):
         return (u"WorkRecord %s (%s/%s/%s)" % (
-            self.id, self.title, ", ".join([x['name'] for x in self.authors]),
+            self.id, self.title, ", ".join([x.name for x in self.contributors]),
             ", ".join(self.languages))).encode("utf8")
+
+    @property
+    def contributors(cls):
+        return [x.contributor for x in self.contributions]
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
@@ -476,11 +482,12 @@ class WorkRecord(Base):
             d['weight'] = weight
         subjects[type].append(d)
 
-    @classmethod
-    def _add_author(self, authors, name, roles=None, aliases=None, **kwargs):
-        """Represent an entity who had some role in creating a book."""
+    def add_contributor(self, _db, name, roles=None, aliases=None, **kwargs):
+        """Add a contributor to this WorkRecord."""
         if roles and not isinstance(roles, list) and not isinstance(roles, tuple):
             roles = [roles]            
+        get_one_or_create(_db, contributor
+
         a = { Author.NAME : name }
         a.update(kwargs)
         if roles:
@@ -565,6 +572,29 @@ class WorkRecord(Base):
     def classifications(self):
         if not self.subjects:
             return None
+
+class Contributor(Base):
+    """Someone (usually human) who contributes to books."""
+    __tablename__ = 'contributors'
+    id = Column(Integer, primary_key=True)
+
+    # Standard identifiers for this contributor.
+    lcnaf = Column(Unicode, index=True)
+    viaf = Column(Unicode, index=True)
+
+    # This is the name we choose to display for this contributor, of
+    # all the names we know for them. It may change over time.
+    name = Column(Unicode, index=True)
+
+    extra = Column(MutableDict.as_mutable(JSON), default={})
+
+
+class Contribution(Base):
+    """A contribution made by a Contributor to a WorkRecord."""
+    id = Column(Integer, primary_key=True)
+    workrecord = relationship("WorkRecord", backref="contributions")
+    contributor = relationship("Contributor", backref="contributions")
+    role = Column(Unicode, index=True)
 
 
 class Work(Base):
