@@ -78,9 +78,18 @@ class TestEquivalency(DatabaseTest):
             self._db, WorkIdentifier.ISBN, "900100434X")
         oclc_id.equivalent_to(self._db, linked_data, isbn_id)
 
+        # As it turns out, we have an Overdrive work record...
+        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        overdrive_record, ignore = WorkRecord.for_foreign_id(
+            self._db, overdrive, WorkIdentifier.OVERDRIVE_ID, "{111-222}")
+        overdrive_id = overdrive_record.primary_identifier
+
+        # ...which is tied (by Overdrive) to the same ISBN.
+        overdrive_id.equivalent_to(self._db, overdrive, isbn_id)
+
         levels = [
             record.recursively_equivalent_identifiers(self._db, i) 
-            for i in range(0,4)]
+            for i in range(0,5)]
 
         # At level 0, the only identifier found is the Gutenberg ID.
         eq_(set([gutenberg_id]), set(levels[0]))
@@ -94,3 +103,8 @@ class TestEquivalency(DatabaseTest):
 
         # At level 3, we also pick up the ISBN.
         eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id]), set(levels[3]))
+
+        # At level 4, the recursion starts to go in the other
+        # direction: we pick up the Overdrive ID that's equivalent to
+        # the same ISBN as the OCLC Number.
+        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id, overdrive_id]), set(levels[4]))
