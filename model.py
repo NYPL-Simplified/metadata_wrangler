@@ -12,6 +12,7 @@ from sqlalchemy.orm import (
     backref,
     relationship,
 )
+from sqlalchemy import or_
 from sqlalchemy.orm import (
     aliased
 )
@@ -205,8 +206,13 @@ class Equivalency(Base):
     @classmethod
     def for_identifiers(self, _db, workidentifiers):
         """Find all Equivalencies for the given WorkIdentifiers."""
-        return _db.query(Equivalency).filter(
-            Equivalency.input_id.in_([x.id for x in workidentifiers]))
+        if workidentifiers and isinstance(workidentifiers[0], WorkIdentifier):
+            workidentifiers = [x.id for x in workidentifiers]
+        return _db.query(Equivalency).distinct().filter(
+            or_(Equivalency.input_id.in_(workidentifiers),
+                Equivalency.output_id.in_(workidentifiers))
+
+)
 
 
 class WorkIdentifier(Base):
@@ -285,8 +291,14 @@ class WorkIdentifier(Base):
         for i in range(levels):
             this_round = []
             equivalencies = Equivalency.for_identifiers(_db, last_round)
-            this_round = [x.output for x in equivalencies if x not in already_seen]
-            already_seen.update(this_round)
+            this_round = []
+            for x in equivalencies:
+                if x.output not in already_seen:
+                    this_round.append(x.output)
+                    already_seen.add(x.output)
+                if x.input not in already_seen:
+                    this_round.append(x.input)
+                    already_seen.add(x.input)
             total_set += this_round
             last_round = this_round
         return total_set

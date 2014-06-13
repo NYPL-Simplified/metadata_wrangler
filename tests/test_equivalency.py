@@ -83,14 +83,14 @@ class TestEquivalency(DatabaseTest):
             for i in range(0,4)]
 
         # At level 0, the only identifier found is the Gutenberg ID.
-        eq_([gutenberg_id], levels[0])
+        eq_(set([gutenberg_id]), set(levels[0]))
 
         # At level 1, we pick up the title/author lookup.
-        eq_([gutenberg_id, search_id], levels[1])
+        eq_(set([gutenberg_id, search_id]), set(levels[1]))
 
         # At level 2, we pick up the title/author lookup and the two
         # OCLC Numbers.
-        eq_([gutenberg_id, search_id, oclc_id, oclc_id_2], levels[2])
+        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2]), set(levels[2]))
 
         # At level 3, we also pick up the ISBN.
-        eq_([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id], levels[3])
+        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id]), set(levels[3]))
