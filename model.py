@@ -425,8 +425,8 @@ class WorkRecord(Base):
     @classmethod
     def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
         """Find WorkRecords with primary identifier of the given type
-        `primary_id_type` and with no alternative identifiers of the types
-        `not_identified_by`.
+        `primary_id_type` which have no *direct* equivalency to an
+        identifier of the types `not_identified_by`.
 
         e.g.
 
@@ -435,39 +435,36 @@ class WorkRecord(Base):
                                    WorkIdentifier.OCLC_NUMBER)
 
         will find WorkRecords primarily associated with a Project
-        Gutenberg ID and not also identified with any OCLC Work ID or
-        OCLC Number. These are Gutenberg books that need to have an
-        OCLC lookup done.
+        Gutenberg ID which is not directly equivalent to any OCLC Work
+        ID or OCLC Number. These are Gutenberg books that need to have
+        an OCLC lookup done.
 
-        Equivalent SQL:
+        We restrict to direct equivalency rather than recursive lookup
+        because otherwise this query will take forever.
 
-        select wr.* from workrecords wr join workidentifiers prim2 on wr.primary_identifier_id=prim2.id
-         where prim2.type='Gutenberg ID'
-         and wr.id not in (
-          select workrecords.id from
-            workrecords join workidentifiers prim on workrecords.primary_identifier_id=prim.id
-            join workrecord_workidentifier wr_wi on workrecords.id=wr_wi.workrecord_id
-            join workidentifiers secondary on wr_wi.workidentifier_id=secondary.id
-            where prim.type='Gutenberg ID' and secondary.type in ('OCLC Work ID', 'OCLC Number')
-        );
         """
-
-        # First build the subquery. This will find all the WorkRecords whose primary identifiers are
-        # of the correct type and who are *also* identified by one of the other types.
+        # First build the subquery. This will find all the WorkIdentifiers
+        # which are of the correct type and are *also* equivalent to a
+        # WorkIdentifier of the other type.
         primary_identifier = aliased(WorkIdentifier)
         secondary_identifier = aliased(WorkIdentifier)
-        qu = _db.query(WorkRecord.id).join(primary_identifier, WorkRecord.primary_identifier).join(
-            workrecord_workidentifier, WorkRecord.id==workrecord_workidentifier.columns['workrecord_id']).join(secondary_identifier).filter(
-                primary_identifier.type==primary_id_type,
-                secondary_identifier.type.in_(not_identified_by))
+
+        qu = _db.query(primary_identifier.id).join(
+            primary_identifier.equivalencies).join(
+                secondary_identifier,
+                secondary_identifier.id==Equivalency.output_id).filter(
+                    primary_identifier.type==primary_id_type,
+                    secondary_identifier.type.in_(not_identified_by))
         qu = qu.distinct()
 
-        # Now build the main query. This will find all the WorkRecords whose primary identifiers qualify them for
-        # the first list, but who just aren't in the first list.
+        # Now build the main query. This will find all WorkRecords
+        # whose primary identifiers are of the correct type but were
+        # not in the first list.
         primary_identifier = aliased(WorkIdentifier)
-        main_query = _db.query(WorkRecord).join(primary_identifier, WorkRecord.primary_identifier).filter(
+        main_query = _db.query(WorkRecord).join(
+            primary_identifier, WorkRecord.primary_identifier).filter(
             primary_identifier.type==primary_id_type,
-            ~WorkRecord.id.in_(qu.subquery()))
+            ~primary_identifier.id.in_(qu.subquery()))
         return main_query.all()
 
     @classmethod
@@ -1027,7 +1024,7 @@ class LicensePool(Base):
         # Find all work records connected to this LicensePool's
         # primary work record.
         equivalent_work_records = primary_work_record.equivalent_work_records(
-            _db) + [primary_work_record]
+            _db)
 
         for r in equivalent_work_records:
             if r.work:
