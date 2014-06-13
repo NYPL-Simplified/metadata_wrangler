@@ -160,7 +160,8 @@ class DataSource(Base):
                  (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
                  (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
                  (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                 (cls.OCLC, False, WorkIdentifier.OCLC_WORK, None),
+                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
                  (cls.WEB, True, WorkIdentifier.URI, None)
         ):
@@ -200,6 +201,12 @@ class Equivalency(Base):
     output_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
     output = relationship("WorkIdentifier", foreign_keys=output_id)
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    @classmethod
+    def for_identifiers(self, _db, workidentifiers):
+        """Find all Equivalencies for the given WorkIdentifiers."""
+        return _db.query(Equivalency).filter(
+            Equivalency.input_id.in_([x.id for x in workidentifiers]))
 
 
 class WorkIdentifier(Base):
@@ -268,6 +275,22 @@ class WorkIdentifier(Base):
                                     input=self,
                                     output=work_identifier)
         return eq
+
+    def recursively_equivalent_identifiers(self, _db, levels=3):
+        # TODO: An inefficient but simple implementation, performing
+        # one SQL query for each level of recursion.
+        total_set = [self]
+        last_round = total_set
+        already_seen = set(total_set)
+        for i in range(levels):
+            this_round = []
+            equivalencies = Equivalency.for_identifiers(_db, last_round)
+            this_round = [x.output for x in equivalencies if x not in already_seen]
+            already_seen.update(this_round)
+            total_set += this_round
+            last_round = this_round
+        return total_set
+
 
 class WorkRecord(Base):
 
@@ -365,15 +388,21 @@ class WorkRecord(Base):
                  **kwargs)
         
     def equivalencies(self, _db):
-        return _db.query(Equivalency).filter(
-            Equivalency.input==self.primary_identifier)
+        return self.primary_identifier.equivalencies
+
+    def recursively_equivalent_identifiers(self, _db, levels=3):
+        return self.primary_identifier.recursively_equivalent_identifiers(
+            _db, levels)
 
     def equivalent_work_records(self, _db):
         """All WorkRecords whose primary ID is among this WorkRecord's
         equivalent IDs.
         """
-        return _db.query(WorkRecord).join(Equivalency, "output").filter(
-            Equivalency.input==self.primary_identifier)
+        a = _db.query(WorkRecord).join(WorkRecord.primary_identifier)
+        a = a.join(Equivalency, WorkIdentifier.id==Equivalency.output_id)
+        a = a.filter(
+            Equivalency.input_id==self.primary_identifier.id)
+        return a
 
     @classmethod 
     def equivalent_to_equivalent_identifiers_query(self, _db):
