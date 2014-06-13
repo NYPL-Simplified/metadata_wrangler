@@ -104,7 +104,8 @@ class TestWorkRecord(DatabaseTest):
         # One of them is equivalent to an OCLC record.
         o, ignore = WorkRecord.for_foreign_id(
             self._db, oclc, WorkIdentifier.OCLC_WORK, "10034")
-        g1.equivalent_identifiers.append(o.primary_identifier)
+        g1.primary_identifier.equivalent_to(
+            self._db, oclc, o.primary_identifier)
 
         # Here's a web record, just sitting there.
         w, ignore = WorkRecord.for_foreign_id(

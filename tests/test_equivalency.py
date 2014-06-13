@@ -44,7 +44,7 @@ class TestEquivalency(DatabaseTest):
 
         eq_([eq], record.primary_identifier.equivalencies)
 
-        eq_([record2], record.equivalent_work_records(self._db).all())
+        eq_([record, record2], record.equivalent_work_records(self._db).all())
 
     def test_recursively_equivalent_identifiers(self):
 
@@ -86,6 +86,12 @@ class TestEquivalency(DatabaseTest):
 
         # ...which is tied (by Overdrive) to the same ISBN.
         overdrive_id.equivalent_to(self._db, overdrive, isbn_id)
+
+        # Finally, here's a completely unrelated WorkRecord, which
+        # will not be showing up.
+        gutenberg2, ignore = WorkRecord.for_foreign_id(
+            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "200")
+        gutenberg2.title = "Unrelated Gutenberg record."
 
         levels = [
             record.recursively_equivalent_identifiers(self._db, i) 

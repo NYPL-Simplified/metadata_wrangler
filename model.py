@@ -206,7 +206,9 @@ class Equivalency(Base):
     @classmethod
     def for_identifiers(self, _db, workidentifiers):
         """Find all Equivalencies for the given WorkIdentifiers."""
-        if workidentifiers and isinstance(workidentifiers[0], WorkIdentifier):
+        if not workidentifiers:
+            return []
+        if isinstance(workidentifiers[0], WorkIdentifier):
             workidentifiers = [x.id for x in workidentifiers]
         return _db.query(Equivalency).distinct().filter(
             or_(Equivalency.input_id.in_(workidentifiers),
@@ -301,6 +303,9 @@ class WorkIdentifier(Base):
                     already_seen.add(x.input)
             total_set += this_round
             last_round = this_round
+            if not this_round:
+                # We have achieved transitive closure.
+                break
         return total_set
 
 
@@ -406,40 +411,16 @@ class WorkRecord(Base):
         return self.primary_identifier.recursively_equivalent_identifiers(
             _db, levels)
 
-    def equivalent_work_records(self, _db):
-        """All WorkRecords whose primary ID is among this WorkRecord's
-        equivalent IDs.
+    def equivalent_work_records(self, _db, levels=3):
+        """All WorkRecords whose primary ID is equivalent to this WorkRecord's
+        primary ID, at the given level of recursion.
         """
-        a = _db.query(WorkRecord).join(WorkRecord.primary_identifier)
-        a = a.join(Equivalency, WorkIdentifier.id==Equivalency.output_id)
-        a = a.filter(
-            Equivalency.input_id==self.primary_identifier.id)
-        return a
+        identifier_ids = [
+            x.id for x in self.recursively_equivalent_identifiers(_db, levels)
+        ]
 
-    @classmethod 
-    def equivalent_to_equivalent_identifiers_query(self, _db):
-        targets = aliased(WorkRecord)
-        equivalent_identifiers = aliased(workrecord_workidentifier)
-        equivalent_identifiers_2 = aliased(workrecord_workidentifier)
-        me = aliased(WorkRecord)
-        q = _db.query(targets).join(
-            equivalent_identifiers,
-            targets.id==equivalent_identifiers.columns['workrecord_id']
-        ).join(
-            equivalent_identifiers_2,
-            equivalent_identifiers.columns['workidentifier_id']==equivalent_identifiers_2.columns['workidentifier_id']
-        ).join(
-            me, 
-            (me.id==equivalent_identifiers_2.columns['workrecord_id'])
-        )
-        return q, me
-
-    def equivalent_to_equivalent_identifiers(self, _db):
-        """Find all WorkRecords that are equivalent to one of this
-        WorkRecord's equivalent identifiers.
-        """
-        q, me = self.equivalent_to_equivalent_identifiers_query(_db)
-        return q.filter(me.id==self.id).all()
+        return _db.query(WorkRecord).filter(
+            WorkRecord.primary_identifier_id.in_(identifier_ids))
 
     @classmethod
     def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
