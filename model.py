@@ -124,6 +124,7 @@ class DataSource(Base):
     OVERDRIVE = "Overdrive"
     THREEM = "3M"
     OCLC = "OCLC Classify"
+    OCLC_LINKED_DATA = "OCLC Linked Data"
     XID = "WorldCat xID"
     AXIS_360 = "Axis 360"
     WEB = "Web"
