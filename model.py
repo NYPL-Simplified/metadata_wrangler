@@ -262,6 +262,7 @@ class WorkIdentifier(Base):
         return work_identifier, was_new
 
     def equivalent_to(self, _db, data_source, work_identifier):
+        """Make one WorkIdentifier equivalent to another."""
         eq, new = get_one_or_create(_db, Equivalency,
                                     data_source=data_source,
                                     input=self,
