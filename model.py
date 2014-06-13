@@ -140,6 +140,9 @@ class DataSource(Base):
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
 
+    # One DataSource can generate many IDEquivalencies.
+    id_equivalencies = relationship("Equivalency", backref="data_source")
+
     # One DataSource can grant access to many LicensePools.
     license_pools = relationship("LicensePool", backref="data_source")
 
@@ -177,15 +180,27 @@ class DataSource(Base):
             )
             yield obj
 
-# A join table for the many-to-many relationship between WorkRecord
-# and WorkIdentifier.
-workrecord_workidentifier = Table(
-    'workrecord_workidentifier',
-    Base.metadata,
-    Column('workrecord_id', Integer, ForeignKey('workrecords.id'), index=True),
-    Column('workidentifier_id', Integer,
-           ForeignKey('workidentifiers.id'), index=True)
-)
+# Equivalency = Table(
+#     "equivalents", Base.metadata,
+#     Column("id", Integer, primary_key
+
+
+class Equivalency(Base):
+    """An assertion that two WorkIdentifiers identify the same work.
+
+    We do not necessarily trust this assertion.
+    """
+    __tablename__ = 'equivalents'
+
+    # 'input' is the ID that was used as input to the datasource.
+    # 'output' is the output
+    id = Column(Integer, primary_key=True)
+    input_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
+    input = relationship("WorkIdentifier", foreign_keys=input_id)
+    output_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
+    output = relationship("WorkIdentifier", foreign_keys=output_id)
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
 
 class WorkIdentifier(Base):
     """A way of uniquely referring to a particular text.
@@ -212,6 +227,12 @@ class WorkIdentifier(Base):
     id = Column(Integer, primary_key=True)
     type = Column(String(64), index=True)
     identifier = Column(String, index=True)
+
+    equivalencies = relationship(
+        "Equivalency",
+        primaryjoin=("WorkIdentifier.id==Equivalency.input_id"),
+        backref="input_identifiers",
+    )
 
     def __repr__(self):
         return (u"%s: %s/%s" % (self.id, self.type, self.identifier))
@@ -240,6 +261,13 @@ class WorkIdentifier(Base):
             identifier=foreign_id)
         return work_identifier, was_new
 
+    def equivalent_to(self, _db, data_source, work_identifier):
+        eq, new = get_one_or_create(_db, Equivalency,
+                                    data_source=data_source,
+                                    input=self,
+                                    output=work_identifier)
+        return eq
+
 class WorkRecord(Base):
 
     """A lightly schematized collection of metadata for a work, or an
@@ -251,19 +279,16 @@ class WorkRecord(Base):
     id = Column(Integer, primary_key=True)
 
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    # This WorkRecord is associated with one particular
+    # identifier--the one used by its data source to identify
+    # it. Through the Equivalency class, it is associated with a
+    # (probably huge) number of other identifiers.
     primary_identifier_id = Column(
         Integer, ForeignKey('workidentifiers.id'), index=True)
 
     # A WorkRecord may be associated with a Work
     work_id = Column(Integer, ForeignKey('works.id'), index=True)
-
-    # Many WorkRecords may be equivalent to the same WorkIdentifier,
-    # and a single WorkRecord may be equivalent to many
-    # WorkIdentifiers.
-    equivalent_identifiers = relationship(
-        "WorkIdentifier",
-        secondary=workrecord_workidentifier,
-        backref="equivalent_workrecords")
 
     title = Column(Unicode)
     subtitle = Column(Unicode)
@@ -330,22 +355,24 @@ class WorkRecord(Base):
         # Combine the two to get/create a WorkRecord.
         if create_if_not_exists:
             f = get_one_or_create
-            kwargs = dict(create_method_kwargs=dict(
-                equivalent_identifiers=[work_identifier]))
+            kwargs = dict()
         else:
             f = get_one
             kwargs = dict()
         return f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier,
                  **kwargs)
+        
+    def equivalencies(self, _db):
+        return _db.query(Equivalency).filter(
+            Equivalency.input==self.primary_identifier)
 
     def equivalent_work_records(self, _db):
         """All WorkRecords whose primary ID is among this WorkRecord's
         equivalent IDs.
         """
-        return _db.query(WorkRecord).filter(
-            WorkRecord.primary_identifier_id.in_(
-                [x.id for x in self.equivalent_identifiers])).all()
+        return _db.query(WorkRecord).join(Equivalency, "output").filter(
+            Equivalency.input==self.primary_identifier)
 
     @classmethod 
     def equivalent_to_equivalent_identifiers_query(self, _db):
