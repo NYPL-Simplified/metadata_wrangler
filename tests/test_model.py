@@ -40,8 +40,10 @@ class TestDataSource(DatabaseTest):
             (DataSource.THREEM, True, WorkIdentifier.THREEM_ID),
             (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.AXIS_360, True, WorkIdentifier.AXIS_360_ID),
-            (DataSource.OCLC, False, WorkIdentifier.OCLC_WORK),
-            (DataSource.WEB, True, WorkIdentifier.URI)
+            (DataSource.OCLC, False, WorkIdentifier.OCLC_NUMBER),
+            (DataSource.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER),
+            (DataSource.WEB, True, WorkIdentifier.URI),
+            (DataSource.MANUAL, False, None)
         ]
         eq_(set(sources), set(expect))
 
@@ -79,7 +81,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(id, identifier.identifier)
         eq_(type, identifier.type)
         eq_(True, was_new)
-        eq_([identifier], record.equivalent_identifiers)
+        eq_([identifier.id], record.equivalent_identifier_ids(self._db))
 
         # We can get the same work record by providing only the name
         # of the data source.
@@ -104,8 +106,7 @@ class TestWorkRecord(DatabaseTest):
         # One of them is equivalent to an OCLC record.
         o, ignore = WorkRecord.for_foreign_id(
             self._db, oclc, WorkIdentifier.OCLC_WORK, "10034")
-        g1.primary_identifier.equivalent_to(
-            self._db, oclc, o.primary_identifier)
+        g1.primary_identifier.equivalent_to(oclc, o.primary_identifier)
 
         # Here's a web record, just sitting there.
         w, ignore = WorkRecord.for_foreign_id(
@@ -124,7 +125,7 @@ class TestWorkRecord(DatabaseTest):
             self._db, WorkIdentifier.URI, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
         eq_(w, in_web_but_not_in_oclc)
 
-    def test_equivalent_to_equivalent_identifiers(self):
+    def test_recursive_workrecord_equivalence(self):
 
         gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
         open_library_source = DataSource.lookup(self._db, DataSource.OPEN_LIBRARY)
@@ -141,13 +142,18 @@ class TestWorkRecord(DatabaseTest):
             "W1111")
         open_library.title = "Open Library record"
 
-        # We've   learned  through   various  machinations   that  the
-        # Gutenberg text and  the Open Library text  are equivalent to
-        # the same OCLC Number.
+        # We've learned from OCLC Classify that the Gutenberg text is
+        # equivalent to a certain OCLC Number. We've learned from OCLC
+        # Linked Data that the Open Library text is equivalent to the
+        # same OCLC Number.
+        oclc_classify = DataSource.lookup(self._db, DataSource.OCLC)
+        oclc_linked_data = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+
         oclc_number, ignore = WorkIdentifier.for_foreign_id(
             self._db, WorkIdentifier.OCLC_NUMBER, "22")
-        gutenberg.equivalent_identifiers.append(oclc_number)
-        open_library.equivalent_identifiers.append(oclc_number)
+        gutenberg.primary_identifier.equivalent_to(oclc_classify, oclc_number)
+        open_library.primary_identifier.equivalent_to(
+            oclc_linked_data, oclc_number)
        
         # Here's a WorkRecord for a Recovering the Classics cover.
         recovering, ignore = WorkRecord.for_foreign_id(
@@ -155,9 +161,11 @@ class TestWorkRecord(DatabaseTest):
             "http://recoveringtheclassics.com/pride-and-prejudice.jpg")
         recovering.title = "Recovering the Classics cover"
 
-        # We've associated that WorkRecord's URI directly with the
-        # Project Gutenberg text.
-        gutenberg.equivalent_identifiers.append(recovering.primary_identifier)
+        # We've manually associated that WorkRecord's URI directly
+        # with the Project Gutenberg text.
+        manual = DataSource.lookup(self._db, DataSource.MANUAL)
+        gutenberg.primary_identifier.equivalent_to(
+            manual, recovering.primary_identifier)
 
         # Finally, here's a completely unrelated WorkRecord, which
         # will not be showing up.
@@ -165,16 +173,16 @@ class TestWorkRecord(DatabaseTest):
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
         gutenberg2.title = "Unrelated Gutenberg record."
 
-        # When we call equivalent_to_equivalent_identifiers on the
-        # Project Gutenberg WorkRecord, we get three WorkRecords: the
-        # Gutenberg record itself, the Open Library record, and the
-        # Recovering the Classics record.
+        # When we call equivalent_workrecords on the Project Gutenberg
+        # WorkRecord, we get three WorkRecords: the Gutenberg record
+        # itself, the Open Library record, and the Recovering the
+        # Classics record.
         #
         # We get the Open Library record because it's associated with
         # the same OCLC Number as the Gutenberg record. We get the
         # Recovering the Classics record because it's associated
         # directly with the Gutenberg record.
-        results = gutenberg.equivalent_to_equivalent_identifiers(self._db)
+        results = list(gutenberg.equivalent_work_records(self._db))
         eq_(3, len(results))
         assert gutenberg in results
         assert open_library in results
@@ -185,13 +193,13 @@ class TestWorkRecord(DatabaseTest):
         work.work_records.extend([gutenberg2])
 
         # Its set-of-all-workrecords contains only one record.
-        eq_(1, len(work.all_workrecords(self._db)))
+        eq_(1, work.all_workrecords(self._db).count())
 
         # If we add the other Gutenberg record to it, then its
         # set-of-all-workrecords is extended by that record, *plus*
         # all the WorkRecords equivalent to that record.
         work.work_records.extend([gutenberg])
-        eq_(4, len(work.all_workrecords(self._db)))
+        eq_(4, work.all_workrecords(self._db).count())
 
 class TestLicensePool(DatabaseTest):
 
@@ -520,8 +528,12 @@ class TestWorkConsolidation(DatabaseTest):
         wr4, ignore = WorkRecord.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
 
-        wr4.equivalent_identifiers.extend(
-            [wr3.primary_identifier, wr1.primary_identifier])
+        # Make wr4's primary identifier equivalent to wr3's and wr1's
+        # primaries.
+        data_source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+        for make_equivalent in wr3, wr1:
+            wr4.primary_identifier.equivalent_to(
+                data_source, make_equivalent.primary_identifier)
         preexisting_work = Work()
         preexisting_work.work_records.extend([wr1, wr2])
 

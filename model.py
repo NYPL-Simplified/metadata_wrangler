@@ -130,6 +130,7 @@ class DataSource(Base):
     AXIS_360 = "Axis 360"
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
+    MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True)
@@ -139,13 +140,13 @@ class DataSource(Base):
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     # One DataSource can generate many WorkRecords.
-    work_records = relationship("WorkRecord", backref="data_source")
+    work_records = relationship("WorkRecord", backref="data_source", lazy='joined',)
 
     # One DataSource can generate many IDEquivalencies.
-    id_equivalencies = relationship("Equivalency", backref="data_source")
+    id_equivalencies = relationship("Equivalency", backref="data_source", lazy='joined',)
 
     # One DataSource can grant access to many LicensePools.
-    license_pools = relationship("LicensePool", backref="data_source")
+    license_pools = relationship("LicensePool", backref="data_source", lazy='joined',)
 
     @classmethod
     def lookup(cls, _db, name):
@@ -164,7 +165,8 @@ class DataSource(Base):
                  (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
-                 (cls.WEB, True, WorkIdentifier.URI, None)
+                 (cls.WEB, True, WorkIdentifier.URI, None),
+                 (cls.MANUAL, False, None, None),
         ):
 
             extra = dict()
@@ -255,13 +257,13 @@ class WorkIdentifier(Base):
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
     primarily_identifies = relationship(
-        "WorkRecord", backref="primary_identifier",
+        "WorkRecord", backref="primary_identifier", lazy='joined',
     )
 
     # One WorkIdentifier may serve as the identifier for
     # a single LicensePool.
     licensed_through = relationship(
-        "LicensePool", backref="identifier", uselist=False
+        "LicensePool", backref="identifier", uselist=False, lazy='joined',
     )
 
     # Type + identifier is unique.
@@ -276,18 +278,27 @@ class WorkIdentifier(Base):
             identifier=foreign_id)
         return work_identifier, was_new
 
-    def equivalent_to(self, _db, data_source, work_identifier):
-        """Make one WorkIdentifier equivalent to another."""
+    def equivalent_to(self, data_source, work_identifier):
+        """Make one WorkIdentifier equivalent to another.
+        
+        `data_source` is the DataSource that believes the two 
+        identifiers are equivalent.
+        """
+        _db = Session.object_session(self)
         eq, new = get_one_or_create(_db, Equivalency,
                                     data_source=data_source,
                                     input=self,
                                     output=work_identifier)
         return eq
 
-    def recursively_equivalent_identifiers(self, _db, levels=3):
+    @classmethod
+    def recursively_equivalent_identifier_ids(self, _db, identifiers, levels=3):
+        """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
+        IDs.
+        """
         # TODO: An inefficient but simple implementation, performing
         # one SQL query for each level of recursion.
-        total_set = [self]
+        total_set = identifiers
         last_round = total_set
         already_seen = set(total_set)
         for i in range(levels):
@@ -295,12 +306,12 @@ class WorkIdentifier(Base):
             equivalencies = Equivalency.for_identifiers(_db, last_round)
             this_round = []
             for x in equivalencies:
-                if x.output not in already_seen:
-                    this_round.append(x.output)
-                    already_seen.add(x.output)
-                if x.input not in already_seen:
-                    this_round.append(x.input)
-                    already_seen.add(x.input)
+                if x.output_id not in already_seen:
+                    this_round.append(x.output_id)
+                    already_seen.add(x.output_id)
+                if x.input_id not in already_seen:
+                    this_round.append(x.input_id)
+                    already_seen.add(x.input_id)
             total_set += this_round
             last_round = this_round
             if not this_round:
@@ -308,6 +319,9 @@ class WorkIdentifier(Base):
                 break
         return total_set
 
+    def equivalent_identifier_ids(self, _db, levels=3):
+        return self.recursively_equivalent_identifier_ids(
+            _db, [self.id], levels)
 
 class WorkRecord(Base):
 
@@ -405,20 +419,22 @@ class WorkRecord(Base):
                  **kwargs)
         
     def equivalencies(self, _db):
+        """All the direct equivalencies between this record's primary
+        identifier and other WorkIdentifiers.
+        """
         return self.primary_identifier.equivalencies
 
-    def recursively_equivalent_identifiers(self, _db, levels=3):
-        return self.primary_identifier.recursively_equivalent_identifiers(
+    def equivalent_identifier_ids(self, _db, levels=3):
+        """All WorkIdentifiers equivalent to this record's primary identifier,
+        at the given level of recursion."""
+        return self.primary_identifier.equivalent_identifier_ids(
             _db, levels)
 
     def equivalent_work_records(self, _db, levels=3):
         """All WorkRecords whose primary ID is equivalent to this WorkRecord's
         primary ID, at the given level of recursion.
         """
-        identifier_ids = [
-            x.id for x in self.recursively_equivalent_identifiers(_db, levels)
-        ]
-
+        identifier_ids = self.equivalent_identifier_ids(_db, levels)
         return _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(identifier_ids))
 
@@ -622,10 +638,10 @@ class Work(Base):
     id = Column(Integer, primary_key=True)
 
     # One Work may have copies scattered across many LicensePools.
-    license_pools = relationship("LicensePool", backref="work")
+    license_pools = relationship("LicensePool", backref="work", lazy='joined',)
 
     # A single Work may claim many WorkRecords.
-    work_records = relationship("WorkRecord", backref="work")
+    work_records = relationship("WorkRecord", backref="work", lazy='joined',)
     
     title = Column(Unicode)
     authors = Column(Unicode)
@@ -642,9 +658,20 @@ class Work(Base):
             self.id, self.title, self.authors, self.lane, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
-    def all_workrecords(self, _db):
-        q, workrecord = WorkRecord.equivalent_to_equivalent_identifiers_query(_db)
-        return q.filter(workrecord.work==self).all()
+    def all_workrecords(self, _db, recursion_level=3):
+        """All WorkRecords identified by a WorkIdentifier equivalent to 
+        any of the primary identifiers of this Work's WorkRecords.
+
+        `recursion_level` controls how far to go when looking for equivalent
+        WorkIdentifiers.
+        """
+        primary_identifier_ids = [
+            x.primary_identifier.id for x in self.work_records]
+        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids(
+            _db, primary_identifier_ids, recursion_level)
+        q = _db.query(WorkRecord).filter(
+            WorkRecord.primary_identifier_id.in_(identifier_ids))
+        return q
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
@@ -815,7 +842,7 @@ class Work(Base):
         """
         # For public domain books, the quality is the number of
         # records we have for it.
-        self.quality = len(self.all_workrecords(_db))
+        self.quality = self.all_workrecords(_db).count()
         if self.title:
             print "%s %s" % (self.quality, self.title.encode("utf8"))
 
