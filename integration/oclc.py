@@ -29,6 +29,92 @@ class OCLC(object):
     HOLDING_COUNT = "OCLC.holdings"
     FORMAT = "OCLC.format"
 
+class OCLCLinkedData(object):
+
+    BASE_URL = 'http://experiment.worldcat.org/%(type)s/%(id)s.jsonld'
+
+    def __init__(self, data_directory):
+        self.cache_directory = os.path.join(
+            data_directory, DataSource.OCLC_LINKED_DATA, "cache")
+        self.cache = FilesystemCache(self.cache_directory)
+
+    def cache_key(self, id, type):
+        return "%s-%s" % (type, id) + ".jsonld"
+
+    def request(self, url):
+        """Make a request to OCLC Linked Data."""
+        response = requests.get(url)
+        content = response.content
+        if response.status_code != 200:
+            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
+        return content
+
+    def lookup(self, id, type=None):
+        """Perform an OCLC Open Data lookup."""
+        type = type or "oclc"
+        cache_key = self.cache_key(id, type)
+        raw = None
+        cached = False
+        if self.cache.exists(cache_key):
+            # Don't go over the wire. Get the raw XML from cache
+            # and process it fresh.
+            raw = self.cache.open(cache_key).read()
+            cached = True
+            print " Retrieved from cache."
+        if not raw:
+            url = self.BASE_URL % dict(id=id, type=type)
+            print "Requesting %s" % url
+            raw = self.request(url)
+            print " Retrieved over the net."
+            self.cache.store(cache_key, raw)
+        return raw, cached
+
+
+class XIDAPI(object):
+
+    OCLC_ID_TYPE = "oclcnum"
+    ISBN_ID_TYPE = "isbn"
+
+    BASE_URL = 'http://xisbn.worldcat.org/webservices/xid/%(type)s/%(id)s'
+
+    ARGUMENTS = '?method=getEditions&format=json&fl=*'
+
+    def __init__(self, data_directory):
+        self.cache_directory = os.path.join(
+            data_directory, DataSource.XID, "cache")
+        self.cache = FilesystemCache(self.cache_directory)
+
+    def cache_key(self, id, type):
+        return "%s-%s" % (type, id)
+
+    def request(self, url):
+        """Make a request to the xID API."""
+        response = requests.get(url)
+        content = response.content
+        if response.status_code != 200:
+            raise IOError("xID API returned status code %s: %s" % (response.status_code, response.content))
+        return content
+
+    def get_editions(self, id, type=None):
+        """Perform an OCLC lookup."""
+        type = type or self.OCLC_ID_TYPE
+        cache_key = self.cache_key(id, type)
+        raw = None
+        cached = False
+        if self.cache.exists(cache_key):
+            # Don't go over the wire. Get the raw XML from cache
+            # and process it fresh.
+            raw = self.cache.open(cache_key).read()
+            cached = True
+            print " Retrieved from cache."
+        if not raw:
+            url = self.BASE_URL % dict(id=id, type=type)
+            url += self.ARGUMENTS
+            print "Requesting %s" % url
+            raw = self.request(url)
+            print " Retrieved over the net."
+            self.cache.store(cache_key, raw)
+        return raw, cached
 
 class OCLCClassifyAPI(object):
 
@@ -153,7 +239,8 @@ class OCLCXMLParser(XMLParser):
                 # restrictions. None of its editions are likely to
                 # succeed either.
                 return representation_type, records
-            
+
+            data_source = DataSource.lookup(_db, DataSource.OCLC)
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
                 edition_record, ignore = cls.extract_edition_record(
                     _db, edition_tag, **restrictions)
@@ -164,10 +251,10 @@ class OCLCXMLParser(XMLParser):
                 records.append(edition_record)
                 # Identify the edition with the work based on its
                 # primary identifier.
-                work_record.equivalent_identifiers.append(
-                    edition_record.primary_identifier)
-                edition_record.equivalent_identifiers.append(
-                    work_record.primary_identifier)
+                work_record.primary_identifier.equivalent_to(
+                    data_source, edition_record.primary_identifier)
+                edition_record.primary_identifier.equivalent_to(
+                    data_source, work_record.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
@@ -281,16 +368,13 @@ class OCLCXMLParser(XMLParser):
                 return None
 
         # Apply restrictions. If they're not met, return None.
-        if not languages:
-            # We don't know what language this record is for.
-            # Assume it's English, since OCLC records are
-            # English-centric.
-            languages = ["eng"]
-
-        if 'languages' in restrictions:
+        if 'languages' in restrictions and languages:
+            # We know which language this record is for. Match it
+            # against the language used in the WorkRecord we're
+            # matching against.
             restrict_to_languages = set(restrictions['languages'])
             if not restrict_to_languages.intersection(languages):
-                # This record is for a book in a different language.
+                # This record is for a book in a different language
                 return None
 
         if 'authors' in restrictions:

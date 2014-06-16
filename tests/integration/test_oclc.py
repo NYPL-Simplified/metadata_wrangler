@@ -147,8 +147,8 @@ class TestParser(DatabaseTest):
         eq_('47010459', edition_id.identifier)
 
         # The edition is identified with the work, and vice versa.
-        assert edition_id in work.equivalent_identifiers
-        assert work_id in edition.equivalent_identifiers
+        assert edition_id.id in work.equivalent_identifier_ids()
+        assert work_id.id in edition.equivalent_identifier_ids()
 
         eq_("Moby Dick", work.title)
         eq_("Moby Dick", edition.title)
@@ -173,9 +173,10 @@ class TestParser(DatabaseTest):
         edition_authors = sorted([x['name'] for x in edition.authors])
         eq_(['Melville, Herman'], edition_authors)
 
-        # The work has a language set copied from the edition.
-        eq_(["eng"], work.languages)
-        eq_(["eng"], edition.languages)
+        # The work has no language specified. The edition does have
+        # a language specified.
+        eq_([], work.languages)
+        eq_(['eng'], edition.languages)
 
         [ws] = work.subjects[SubjectType.DDC]
         eq_("813.3", ws['id'])
