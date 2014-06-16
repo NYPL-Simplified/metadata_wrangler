@@ -164,6 +164,7 @@ class TestParser(DatabaseTest):
              'Tanner, Tony',
              ]), set(work_contributors))
 
+        set_trace()
         # But only some of them are considered 'authors' by OCLC.
         work_authors = sorted(
             [x.contributor.name for x in work.contributions

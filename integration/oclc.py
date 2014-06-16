@@ -224,12 +224,17 @@ class OCLCXMLParser(XMLParser):
 
         # The real action happens here.
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
-            print "Extracting work and editions."
-            # The representation lists a single work, its editions,
+            print "Extracting work, authors and editions."
+
+            authors_tag = cls._xpath1(tree, "//oclc:authors")
+            authors_and_roles = cls.extract_authors_and_roles(
+                _db, authors_tag)
+
+            # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
             work_tag = cls._xpath1(tree, "//oclc:work")
             work_record, ignore = cls.extract_work_record(
-                _db, work_tag, **restrictions)
+                _db, work_tag, authors_and_roles, **restrictions)
             records = []
             if work_record:
                 records.append(work_record)
@@ -242,7 +247,7 @@ class OCLCXMLParser(XMLParser):
             data_source = DataSource.lookup(_db, DataSource.OCLC)
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
                 edition_record, ignore = cls.extract_edition_record(
-                    _db, edition_tag, **restrictions)
+                    _db, edition_tag, authors_and_roles, **restrictions)
                 if not edition_record:
                     # This edition did not become a WorkRecord because it
                     # didn't meet one of the restrictions.
@@ -287,10 +292,26 @@ class OCLCXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def _parse_single_author(cls, _db, authors, author, 
+    def extract_authors_and_roles(cls, _db, authors_tag):
+        results = []
+        for author_tag in cls._xpath(authors_tag, "//oclc:author"):
+            lc = author_tag.get('lc', None)
+            viaf = author_tag.get('viaf', None)
+            if not author_tag.text:
+                set_trace()
+            contributor, roles = cls._parse_single_author(
+                _db, author_tag.text, lc=lc, viaf=viaf)
+            results.append((contributor, roles))
+        return results
+
+    @classmethod
+    def _parse_single_author(cls, _db, author, 
+                             lc=None, viaf=None,
                              default_role=Contributor.AUTHOR):
         # First find roles if present
         # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
+        if not isinstance(author, basestring):
+            set_trace()
         m = cls.ROLES.search(author)
         if m:
             author = author[:m.start()].strip()
@@ -316,7 +337,8 @@ class OCLCXMLParser(XMLParser):
         if author.endswith(","):
             author = author[:-1]
 
-        contributor, was_new = Contributor.lookup(_db, author, extra=kwargs)
+        contributor, was_new = Contributor.lookup(
+            _db, author, viaf, lc, extra=kwargs)
         return contributor, roles
 
     @classmethod
@@ -327,7 +349,7 @@ class OCLCXMLParser(XMLParser):
             return authors
         for author in author_string.split("|"):            
             author, roles = cls._parse_single_author(
-                _db, authors, author.strip(), default_role)
+                _db, author, author.strip(), default_role)
             if roles:
                 # If we see someone with no explicit role after this
                 # point, it's probably because their role is so minor
@@ -393,7 +415,7 @@ class OCLCXMLParser(XMLParser):
         return title, authors, languages
 
     @classmethod
-    def extract_work_record(cls, _db, work_tag, **restrictions):
+    def extract_work_record(cls, _db, work_tag, authors_and_roles, **restrictions):
         """Create a new WorkRecord object with information about a
         work (identified by OCLC Work ID).
         """
@@ -411,7 +433,13 @@ class OCLCXMLParser(XMLParser):
         if not result:
             # This record did not meet one of the restrictions.
             return None, False
+
+        set_trace()
+
         title, authors, languages = result
+
+        if not authors_and_roles:
+            authors_and_roles = authors
 
         # Get the most popular Dewey and LCC classification for this
         # work.
@@ -462,12 +490,13 @@ class OCLCXMLParser(XMLParser):
         )
 
         # Associate the authors with the WorkRecord.
-        for contributor, roles in authors:
+        for contributor, roles in authors_and_roles:
             work_record.add_contributor(contributor, roles)
         return work_record, new
 
     @classmethod
     def extract_edition_record(cls, _db, edition_tag,
+                               authors_and_roles,
                                **restrictions):
         """Create a new WorkRecord object with information about an
         edition of a book (identified by OCLC Number).
@@ -487,6 +516,8 @@ class OCLCXMLParser(XMLParser):
             return None, False
 
         title, authors, languages = result
+        if not authors_and_roles:
+            authors_and_roles = authors
 
         subjects = {}
         for subject_type, oclc_code in (
@@ -523,6 +554,6 @@ class OCLCXMLParser(XMLParser):
         )
 
         # Associated each contributor with the new record.
-        for author, roles in authors:
+        for author, roles in authors_and_roles:
             edition_record.add_contributor(author, roles)
         return edition_record, new

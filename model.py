@@ -327,7 +327,7 @@ class Contributor(Base):
     id = Column(Integer, primary_key=True)
 
     # Standard identifiers for this contributor.
-    lcnaf = Column(Unicode, index=True)
+    lc = Column(Unicode, index=True)
     viaf = Column(Unicode, index=True)
 
     # This is the name we choose to display for this contributor, of
@@ -348,16 +348,19 @@ class Contributor(Base):
     DEATH_DATE = 'deathDate'
 
     @classmethod
-    def lookup(cls, _db, name, viaf=None, lcnaf=None, aliases=None, extra=None):
+    def lookup(cls, _db, name, viaf=None, lc=None, aliases=None, extra=None):
         """Find or create a record for the given Contributor."""
         extra = extra or dict()
         query = dict()
-        if lcnaf:
-            query[Contributor.lcnaf.name] = lcnaf
+
+        # Prefer to look up by LC and/or VIAF.
+        if lc:
+            query[Contributor.lc.name] = lc
         if viaf:
             query[Contributor.viaf.name] = viaf
 
-        if not lcnaf and not viaf:
+        # If neither is provided, do a lookup by name.
+        if not lc and not viaf:
             query[Contributor.name.name] = name
 
         create_method_kwargs = {
@@ -605,7 +608,7 @@ class WorkRecord(Base):
             d['weight'] = weight
         subjects[type].append(d)
         
-    def add_contributor(self, name, roles, aliases=None, lcnaf=None, viaf=None,
+    def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
                         **kwargs):
         """Assign a contributor to this WorkRecord."""
         _db = Session.object_session(self)
@@ -617,7 +620,7 @@ class WorkRecord(Base):
             contributor = name
         else:
             contributor, was_new = Contributor.lookup(
-                _db, name, lcnaf, viaf, aliases)
+                _db, name, lc, viaf, aliases)
 
         # Then add their Contributions.
         for role in roles:
