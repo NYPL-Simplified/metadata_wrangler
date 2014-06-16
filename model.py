@@ -346,7 +346,7 @@ class WorkRecord(Base):
     subtitle = Column(Unicode)
     series = Column(Unicode)
 
-    creators = TK
+    contributions = relationship("Contribution")
 
     subjects = Column(JSON, default=[])
     summary = Column(MutableDict.as_mutable(JSON), default={})
@@ -378,7 +378,7 @@ class WorkRecord(Base):
             ", ".join(self.languages))).encode("utf8")
 
     @property
-    def contributors(cls):
+    def contributors(self):
         return [x.contributor for x in self.contributions]
 
     @classmethod
@@ -429,7 +429,7 @@ class WorkRecord(Base):
         identifier and other WorkIdentifiers.
         """
         return self.primary_identifier.equivalencies
-
+        
     def equivalent_identifier_ids(self, levels=3):
         """All WorkIdentifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
@@ -470,7 +470,7 @@ class WorkRecord(Base):
         # WorkIdentifier of the other type.
         primary_identifier = aliased(WorkIdentifier)
         secondary_identifier = aliased(WorkIdentifier)
-
+        
         qu = _db.query(primary_identifier.id).join(
             primary_identifier.equivalencies).join(
                 secondary_identifier,
@@ -522,7 +522,7 @@ class WorkRecord(Base):
         if description:
             d['description'] = type
         links[rel].append(d)
-
+        
     @classmethod
     def _add_subject(cls, subjects, type, id, value=None, weight=None):
         """Add a new entry to a dictionary of bibliographic subjects.
@@ -546,16 +546,40 @@ class WorkRecord(Base):
         if weight:
             d['weight'] = weight
         subjects[type].append(d)
-
-    def add_contributor(self, _db, name, roles=None, aliases=None, **kwargs):
-        """Add a contributor to this WorkRecord."""
-        if roles and not isinstance(roles, list) and not isinstance(roles, tuple):
+        
+    def add_contributor(self, name, roles, aliases=None, lcnaf=None, viaf=None,
+                        **kwargs):
+        """Assign a contributor to this WorkRecord."""
+        _db = Session.object_session(self)
+        if isinstance(roles, basestring):
             roles = [roles]            
-        get_one_or_create(_db, contributor
 
-        a = { Author.NAME : name }
-        a.update(kwargs)
-        if roles:
+        # First find or create the Contributor.
+        query = dict()
+        if lcnaf:
+            query[Contributor.lcnaf] = lcnaf
+        if viaf:
+            query[Contributor.viaf] = viaf
+
+        if not lcnaf and not viaf:
+            query[Contributor.name] =name
+
+        create_method_kwargs = {
+            Contributor.name : name,
+            Contributor.lcnaf : lcnaf,
+            Contributor.viaf : viaf,
+            Contributor.aliases : aliases,
+        }
+        create_method_kwargs.update(kwargs)
+        contributor = get_one_or_create(
+            db, Contributor, create_method_kwargs=create_method_kwargs)
+
+        # Then add their Contributions.
+        for role in roles:
+            get_one_or_create(
+                db, Contribution, workrecord=self, contributor=contributor,
+                role=role)
+
             a.setdefault(Author.ROLES, []).extend(roles)
         if aliases:
             a[Author.ALTERNATE_NAME] = aliases
@@ -583,7 +607,7 @@ class WorkRecord(Base):
         should outnumber the fuzzy cases, so we we should still group
         the WorkRecords that really matter--the ones backed by
         LicensePools--together correctly.
-
+        
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
@@ -609,7 +633,7 @@ class WorkRecord(Base):
                 language_factor = 0.80
             else:
                 language_factor = 0.50
-
+                          
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
 
@@ -653,12 +677,14 @@ class Contributor(Base):
 
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
+    contributions = relationship("Contribution")
 
 class Contribution(Base):
     """A contribution made by a Contributor to a WorkRecord."""
+    __tablename__ = 'contributions'
     id = Column(Integer, primary_key=True)
-    workrecord = relationship("WorkRecord", backref="contributions")
-    contributor = relationship("Contributor", backref="contributions")
+    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True)
+    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True)
     role = Column(Unicode, index=True)
 
 
