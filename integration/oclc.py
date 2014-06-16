@@ -13,7 +13,7 @@ from nose.tools import set_trace
 from integration import XMLParser
 from integration import FilesystemCache
 from model import (
-    Author,
+    Contributor,
     get_one_or_create,
     WorkIdentifier,
     WorkRecord,
@@ -182,7 +182,6 @@ class OCLCXMLParser(XMLParser):
     UNEXPECTED_ERROR_STATUS = 200
 
     INTS = set([OCLC.HOLDING_COUNT, OCLC.EDITION_COUNT])
-    LISTS = set([WorkRecord.languages, WorkRecord.authors])
 
     NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
 
@@ -259,7 +258,7 @@ class OCLCXMLParser(XMLParser):
             # The representation lists a set of works that match the
             # search query.
             print "Extracting SWIDs from search results."
-            records = cls.extract_swids(tree, **restrictions)
+            records = cls.extract_swids(_db, tree, **restrictions)
         elif representation_type == cls.NOT_FOUND_STATUS:
             # No problem; OCLC just doesn't have any data.
             records = []
@@ -270,7 +269,7 @@ class OCLCXMLParser(XMLParser):
         return representation_type, records
 
     @classmethod
-    def extract_swids(cls, tree, **restrictions):
+    def extract_swids(cls, _db, tree, **restrictions):
         """Turn a multi-work response into a list of SWIDs."""
 
         swids = []
@@ -279,7 +278,7 @@ class OCLCXMLParser(XMLParser):
             # the info, we're calling it to make sure this work meets
             # the restriction. If this work meets the restriction,
             # we'll store its info when we look up the SWID.
-            response = cls._extract_basic_info(work_tag, **restrictions)
+            response = cls._extract_basic_info(_db, work_tag, **restrictions)
             if response:
                 swids.append(work_tag.get('swid'))
         return swids
@@ -288,19 +287,17 @@ class OCLCXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def _parse_single_author(cls, authors, author, 
-                             default_role=Author.AUTHOR_ROLE):
+    def _parse_single_author(cls, _db, authors, author, 
+                             default_role=Contributor.AUTHOR):
         # First find roles if present
         # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
-        default_role_used = False
         m = cls.ROLES.search(author)
         if m:
             author = author[:m.start()].strip()
             role_string = m.groups()[0]
             roles = [x.strip() for x in role_string.split(";")]
         else:
-            roles = [default_role]
-            default_role_used = True
+            roles = []
 
         # Author string now looks like 
         # "Giles, Lionel, 1875-1958"
@@ -310,41 +307,43 @@ class OCLCXMLParser(XMLParser):
             author = author[:m.start()].strip()
             birth, death = m.groups()
             if birth:
-                kwargs[Author.BIRTH_DATE] = birth
+                kwargs[Contributor.BIRTH_DATE] = birth
             if death:
-                kwargs[Author.DEATH_DATE] = death
+                kwargs[Contributor.DEATH_DATE] = death
 
         # Author string now looks like
         # "Giles, Lionel,"
         if author.endswith(","):
             author = author[:-1]
 
-        WorkRecord._add_author(authors, author, roles, **kwargs)
-        return authors[-1], default_role_used
+        contributor, was_new = Contributor.lookup(_db, author, extra=kwargs)
+        return contributor, roles
 
     @classmethod
-    def parse_author_string(cls, author_string):
-        default_role = Author.AUTHOR_ROLE
+    def parse_author_string(cls, _db, author_string):
+        default_role = Contributor.AUTHOR
         authors = []
         if not author_string:
             return authors
         for author in author_string.split("|"):            
-            author, default_role_used = cls._parse_single_author(
-                authors, author.strip(), default_role)
-            if not default_role_used:
+            author, roles = cls._parse_single_author(
+                _db, authors, author.strip(), default_role)
+            if roles:
                 # If we see someone with no explicit role after this
                 # point, it's probably because their role is so minor
                 # as to not be worth mentioning, not because it's so
                 # major that we can assume they're an author.
-                default_role = Author.UNKNOWN_ROLE
+                default_role = Contributor.UNKNOWN_ROLE
+            roles = roles or [default_role]
+            authors.append((author, roles))
         return authors
 
     @classmethod
-    def _extract_basic_info(cls, tag, **restrictions):
+    def _extract_basic_info(cls, _db, tag, **restrictions):
         """Extract information common to work tag and edition tag."""
         title = tag.get('title')
         author_string = tag.get('author')
-        authors = cls.parse_author_string(author_string)
+        authors = cls.parse_author_string(_db, author_string)
         if 'language' in tag.keys():
             languages = [tag.get('language')]
         else:
@@ -380,7 +379,7 @@ class OCLCXMLParser(XMLParser):
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
             authors_per_se = [
-                x for x in authors if Author.AUTHOR_ROLE in x['roles']
+                c for c, roles in authors if Contributor.AUTHOR in roles
             ]
             for restrict_to_author in restrict_to_authors:
                 if not MetadataSimilarity.author_found_in(
@@ -408,7 +407,7 @@ class OCLCXMLParser(XMLParser):
             # This record does not have a valid OCLC Work ID.
             return None, False
 
-        result = cls._extract_basic_info(work_tag, **restrictions)
+        result = cls._extract_basic_info(_db, work_tag, **restrictions)
         if not result:
             # This record did not meet one of the restrictions.
             return None, False
@@ -478,7 +477,7 @@ class OCLCXMLParser(XMLParser):
 
         # Fill in some basic information about this new record.
         result = cls._extract_basic_info(
-            edition_tag, **restrictions)
+            _db, edition_tag, **restrictions)
         if not result:
             # This record did not meet one of the restrictions.
             return None, False

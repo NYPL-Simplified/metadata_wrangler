@@ -346,7 +346,7 @@ class WorkRecord(Base):
     subtitle = Column(Unicode)
     series = Column(Unicode)
 
-    contributions = relationship("Contribution")
+    contributions = relationship("Contribution", backref="workrecord")
 
     subjects = Column(JSON, default=[])
     summary = Column(MutableDict.as_mutable(JSON), default={})
@@ -555,35 +555,14 @@ class WorkRecord(Base):
             roles = [roles]            
 
         # First find or create the Contributor.
-        query = dict()
-        if lcnaf:
-            query[Contributor.lcnaf] = lcnaf
-        if viaf:
-            query[Contributor.viaf] = viaf
-
-        if not lcnaf and not viaf:
-            query[Contributor.name] =name
-
-        create_method_kwargs = {
-            Contributor.name : name,
-            Contributor.lcnaf : lcnaf,
-            Contributor.viaf : viaf,
-            Contributor.aliases : aliases,
-        }
-        create_method_kwargs.update(kwargs)
-        contributor = get_one_or_create(
-            db, Contributor, create_method_kwargs=create_method_kwargs)
+        contributor, was_new = Contributor.lookup(
+            _db, name, lcnaf, viaf, aliases)
 
         # Then add their Contributions.
         for role in roles:
             get_one_or_create(
-                db, Contribution, workrecord=self, contributor=contributor,
+                _db, Contribution, workrecord=self, contributor=contributor,
                 role=role)
-
-            a.setdefault(Author.ROLES, []).extend(roles)
-        if aliases:
-            a[Author.ALTERNATE_NAME] = aliases
-        authors.append(a)
    
     def similarity_to(self, other_record):
         """How likely is it that this record describes the same book as the
@@ -674,10 +653,41 @@ class Contributor(Base):
     # This is the name we choose to display for this contributor, of
     # all the names we know for them. It may change over time.
     name = Column(Unicode, index=True)
+    aliases = Column(ARRAY(Unicode), default=[])
 
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
-    contributions = relationship("Contribution")
+    contributions = relationship("Contribution", backref="contributor")
+
+    # Types of roles
+    AUTHOR = "Author"
+    UNKNOWN_ROLE = 'Unknown'
+
+    # Extra fields
+    BIRTH_DATE = 'birthDate'
+    DEATH_DATE = 'deathDate'
+
+    @classmethod
+    def lookup(cls, _db, name, viaf=None, lcnaf=None, aliases=None, extra=None):
+        """Find or create a record for the given Contributor."""
+        extra = extra or dict()
+        query = dict()
+        if lcnaf:
+            query[Contributor.lcnaf.name] = lcnaf
+        if viaf:
+            query[Contributor.viaf.name] = viaf
+
+        if not lcnaf and not viaf:
+            query[Contributor.name.name] = name
+
+        create_method_kwargs = {
+            Contributor.aliases.name : aliases,
+            Contributor.extra.name : extra
+        }
+        return get_one_or_create(
+            _db, Contributor, create_method_kwargs=create_method_kwargs,
+            **query)
+
 
 class Contribution(Base):
     """A contribution made by a Contributor to a WorkRecord."""
@@ -854,8 +864,8 @@ class Work(Base):
                     not shortest_title or len(r.title) < len(shortest_title)):
                 shortest_title = r.title
 
-            for a in r.authors:
-                authors[a['name']] += 1
+            for a in r.contributors:
+                authors[a.name] += 1
             if r.languages:
                 languages[tuple(r.languages)] += 1
 
@@ -1368,18 +1378,3 @@ class SubjectType(object):
         "http://purl.org/dc/terms/LCC" : LCC,
         "http://purl.org/dc/terms/LCSH" : LCSH,
     }
-
-
-class Author(object):
-    """Constants for common author fields."""
-    NAME = 'name'
-    ALTERNATE_NAME = 'alternateName'
-    ROLES = 'roles'
-    BIRTH_DATE = 'birthDate'
-    DEATH_DATE = 'deathDate'
-
-    # Specific common roles
-    AUTHOR_ROLE = 'Author'
-    ILLUSTRATOR_ROLE = 'Illustrator'
-    EDITOR_ROLE = 'Editor'
-    UNKNOWN_ROLE = 'Unknown'
