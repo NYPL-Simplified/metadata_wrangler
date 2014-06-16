@@ -184,10 +184,6 @@ class DataSource(Base):
             )
             yield obj
 
-# Equivalency = Table(
-#     "equivalents", Base.metadata,
-#     Column("id", Integer, primary_key
-
 
 class Equivalency(Base):
     """An assertion that two WorkIdentifiers identify the same work.
