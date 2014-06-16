@@ -257,9 +257,6 @@ class GutenbergRDFExtractor(object):
                         rel = WorkRecord.THUMBNAIL_IMAGE
                     elif '.medium.' in href:
                         rel = WorkRecord.IMAGE
-                    else:
-                        # This is (always?) an error in the data.
-                        set_trace()
                 WorkRecord._add_link(links, rel, href, media_type)
         
         subjects = dict()
