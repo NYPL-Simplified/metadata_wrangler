@@ -96,14 +96,17 @@ class GutenbergAPI(object):
 
         Yields (WorkRecord, LicensePool) 2-tuples.
         """
-        # TODO: We are temporarily using a very limited dataset
-        only_import = set(map(str, [11, 19033, 28885, 928, 19778, 19597, 28371, 17482, 23716, 114, 19002, 10643, 36308, 19551, 35688, 35990, 2701, 15, 2489, 28794, 9147, 76, 32325, 19640, 9007, 7100, 7101, 7102, 7103, 7104, 7105, 7106, 7107, 74, 30165, 26203, 93, 7193, 91, 7194, 7198, 9038, 7195, 30890, 7196, 7197, 45333, 7199, 7200, 9037, 9036, 12, 23718]))
+        # NOTE: This is a minimal set of test data that focuses on the
+        # many Gutenberg editions of three works: "Moby-Dick", "Alice
+        # in Wonderland", and "The Adventures of Huckleberry Finn".
+        #
+        # only_import = set(map(str, [11, 19033, 28885, 928, 19778, 19597, 28371, 17482, 23716, 114, 19002, 10643, 36308, 19551, 35688, 35990, 2701, 15, 2489, 28794, 9147, 76, 32325, 19640, 9007, 7100, 7101, 7102, 7103, 7104, 7105, 7106, 7107, 74, 30165, 26203, 93, 7193, 91, 7194, 7198, 9038, 7195, 30890, 7196, 7197, 45333, 7199, 7200, 9037, 9036, 12, 23718]))
         books = self.all_books()
         source = DataSource.GUTENBERG
         for pg_id, archive, archive_item in books:
             #if pg_id not in only_import:
             #    continue
-            # print "Considering %s" % pg_id
+            #print "Considering %s" % pg_id
 
             # Find an existing WorkRecord for the book.
             book = WorkRecord.for_foreign_id(
@@ -255,7 +258,8 @@ class GutenbergRDFExtractor(object):
                     elif '.medium.' in href:
                         rel = WorkRecord.IMAGE
                     else:
-                        set_trace()                    
+                        # This is (always?) an error in the data.
+                        set_trace()
                 WorkRecord._add_link(links, rel, href, media_type)
         
         subjects = dict()
@@ -358,6 +362,7 @@ class OCLCMonitorForGutenberg(object):
             _db, WorkIdentifier.GUTENBERG_ID,
             WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH)
 
+        data_source = DataSource.lookup(_db, DataSource.OCLC)
         print "Processing %s books." % len(in_gutenberg_but_not_in_oclc)
         for book in in_gutenberg_but_not_in_oclc:
             title, author = self.title_and_author(book)
@@ -377,7 +382,9 @@ class OCLCMonitorForGutenberg(object):
             # TODO: For now, the only restriction we apply is the
             # language restriction. If we know that a given OCLC
             # record is in a different language from this record,
-            # there's no need to even import that record.
+            # there's no need to even import that record. Restrictions
+            # on title and author will be applied statistically,
+            # when we calculate works.
             restrictions = dict(languages=languages)
 
             # Turn the raw XML into some number of bibliographic records.
@@ -402,9 +409,12 @@ class OCLCMonitorForGutenberg(object):
                         print " Got unexpected representation type from lookup: %s" % representation_type
             # Connect the Gutenberg book to the OCLC works looked up by
             # title/author.
-            book.equivalent_identifiers.extend(
-                [r.primary_identifier for r in records])
-            book.equivalent_identifiers.append(search)
+
+            for r in records:
+                book.primary_identifier.equivalent_to(
+                    data_source, r.primary_identifier)
+            book.primary_identifier.equivalent_to(
+                data_source, search)
 
             print " Created %s records(s)." % len(records)
             _db.commit()

@@ -140,13 +140,13 @@ class DataSource(Base):
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     # One DataSource can generate many WorkRecords.
-    work_records = relationship("WorkRecord", backref="data_source", lazy='joined',)
+    work_records = relationship("WorkRecord", backref="data_source")
 
     # One DataSource can generate many IDEquivalencies.
-    id_equivalencies = relationship("Equivalency", backref="data_source", lazy='joined',)
+    id_equivalencies = relationship("Equivalency", backref="data_source")
 
     # One DataSource can grant access to many LicensePools.
-    license_pools = relationship("LicensePool", backref="data_source", lazy='joined',)
+    license_pools = relationship("LicensePool", backref="data_source")
 
     @classmethod
     def lookup(cls, _db, name):
@@ -257,13 +257,13 @@ class WorkIdentifier(Base):
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
     primarily_identifies = relationship(
-        "WorkRecord", backref="primary_identifier", lazy='joined',
+        "WorkRecord", backref="primary_identifier"
     )
 
     # One WorkIdentifier may serve as the identifier for
     # a single LicensePool.
     licensed_through = relationship(
-        "LicensePool", backref="identifier", uselist=False, lazy='joined',
+        "LicensePool", backref="identifier", uselist=False,
     )
 
     # Type + identifier is unique.
@@ -401,9 +401,11 @@ class WorkRecord(Base):
         identifier.
         """
         # Look up the data source if necessary.
+        print "Looking up data source."
         if isinstance(data_source, basestring):
             data_source = DataSource.lookup(_db, data_source)
 
+        print "Looking up identifier."
         # Then look up the identifier.
         work_identifier, ignore = WorkIdentifier.for_foreign_id(
             _db, foreign_id_type, foreign_id)
@@ -415,6 +417,7 @@ class WorkRecord(Base):
         else:
             f = get_one
             kwargs = dict()
+        print "Looking up/creating WorkRecord."
         return f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier,
                  **kwargs)
@@ -639,10 +642,10 @@ class Work(Base):
     id = Column(Integer, primary_key=True)
 
     # One Work may have copies scattered across many LicensePools.
-    license_pools = relationship("LicensePool", backref="work", lazy='joined',)
+    license_pools = relationship("LicensePool", backref="work")
 
     # A single Work may claim many WorkRecords.
-    work_records = relationship("WorkRecord", backref="work", lazy='joined',)
+    work_records = relationship("WorkRecord", backref="work")
     
     title = Column(Unicode)
     authors = Column(Unicode)
