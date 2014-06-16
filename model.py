@@ -320,6 +320,64 @@ class WorkIdentifier(Base):
         return WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, [self.id], levels)
 
+
+class Contributor(Base):
+    """Someone (usually human) who contributes to books."""
+    __tablename__ = 'contributors'
+    id = Column(Integer, primary_key=True)
+
+    # Standard identifiers for this contributor.
+    lcnaf = Column(Unicode, index=True)
+    viaf = Column(Unicode, index=True)
+
+    # This is the name we choose to display for this contributor, of
+    # all the names we know for them. It may change over time.
+    name = Column(Unicode, index=True)
+    aliases = Column(ARRAY(Unicode), default=[])
+
+    extra = Column(MutableDict.as_mutable(JSON), default={})
+
+    contributions = relationship("Contribution", backref="contributor")
+
+    # Types of roles
+    AUTHOR = "Author"
+    UNKNOWN_ROLE = 'Unknown'
+
+    # Extra fields
+    BIRTH_DATE = 'birthDate'
+    DEATH_DATE = 'deathDate'
+
+    @classmethod
+    def lookup(cls, _db, name, viaf=None, lcnaf=None, aliases=None, extra=None):
+        """Find or create a record for the given Contributor."""
+        extra = extra or dict()
+        query = dict()
+        if lcnaf:
+            query[Contributor.lcnaf.name] = lcnaf
+        if viaf:
+            query[Contributor.viaf.name] = viaf
+
+        if not lcnaf and not viaf:
+            query[Contributor.name.name] = name
+
+        create_method_kwargs = {
+            Contributor.aliases.name : aliases,
+            Contributor.extra.name : extra
+        }
+        return get_one_or_create(
+            _db, Contributor, create_method_kwargs=create_method_kwargs,
+            **query)
+
+
+class Contribution(Base):
+    """A contribution made by a Contributor to a WorkRecord."""
+    __tablename__ = 'contributions'
+    id = Column(Integer, primary_key=True)
+    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True)
+    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True)
+    role = Column(Unicode, index=True)
+
+
 class WorkRecord(Base):
 
     """A lightly schematized collection of metadata for a work, or an
@@ -555,8 +613,11 @@ class WorkRecord(Base):
             roles = [roles]            
 
         # First find or create the Contributor.
-        contributor, was_new = Contributor.lookup(
-            _db, name, lcnaf, viaf, aliases)
+        if isinstance(name, Contributor):
+            contributor = name
+        else:
+            contributor, was_new = Contributor.lookup(
+                _db, name, lcnaf, viaf, aliases)
 
         # Then add their Contributions.
         for role in roles:
@@ -640,62 +701,6 @@ class WorkRecord(Base):
     def classifications(self):
         if not self.subjects:
             return None
-
-class Contributor(Base):
-    """Someone (usually human) who contributes to books."""
-    __tablename__ = 'contributors'
-    id = Column(Integer, primary_key=True)
-
-    # Standard identifiers for this contributor.
-    lcnaf = Column(Unicode, index=True)
-    viaf = Column(Unicode, index=True)
-
-    # This is the name we choose to display for this contributor, of
-    # all the names we know for them. It may change over time.
-    name = Column(Unicode, index=True)
-    aliases = Column(ARRAY(Unicode), default=[])
-
-    extra = Column(MutableDict.as_mutable(JSON), default={})
-
-    contributions = relationship("Contribution", backref="contributor")
-
-    # Types of roles
-    AUTHOR = "Author"
-    UNKNOWN_ROLE = 'Unknown'
-
-    # Extra fields
-    BIRTH_DATE = 'birthDate'
-    DEATH_DATE = 'deathDate'
-
-    @classmethod
-    def lookup(cls, _db, name, viaf=None, lcnaf=None, aliases=None, extra=None):
-        """Find or create a record for the given Contributor."""
-        extra = extra or dict()
-        query = dict()
-        if lcnaf:
-            query[Contributor.lcnaf.name] = lcnaf
-        if viaf:
-            query[Contributor.viaf.name] = viaf
-
-        if not lcnaf and not viaf:
-            query[Contributor.name.name] = name
-
-        create_method_kwargs = {
-            Contributor.aliases.name : aliases,
-            Contributor.extra.name : extra
-        }
-        return get_one_or_create(
-            _db, Contributor, create_method_kwargs=create_method_kwargs,
-            **query)
-
-
-class Contribution(Base):
-    """A contribution made by a Contributor to a WorkRecord."""
-    __tablename__ = 'contributions'
-    id = Column(Integer, primary_key=True)
-    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True)
-    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True)
-    role = Column(Unicode, index=True)
 
 
 class Work(Base):

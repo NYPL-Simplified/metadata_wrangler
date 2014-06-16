@@ -448,18 +448,22 @@ class OCLCXMLParser(XMLParser):
         )
 
         # Create a WorkRecord for source + identifier
+        data_source=DataSource.lookup(_db, DataSource.OCLC)
         work_record, new = get_one_or_create(
             _db, WorkRecord,
-            data_source=DataSource.lookup(_db, DataSource.OCLC),
+            data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
                 title=title,
-                authors=authors,
                 languages=languages,
                 subjects=subjects,
                 extra=extra,
             )
         )
+
+        # Associate the authors with the WorkRecord.
+        for contributor, roles in authors:
+            work_record.add_contributor(contributor, roles)
         return work_record, new
 
     @classmethod
@@ -512,10 +516,13 @@ class OCLCXMLParser(XMLParser):
             primary_identifier=identifier,
             create_method_kwargs=dict(
                 title=title,
-                authors=authors,
                 languages=languages,
                 subjects=subjects,
                 extra=extra,
             )
         )
+
+        # Associated each contributor with the new record.
+        for author, roles in authors:
+            edition_record.add_contributor(author, roles)
         return edition_record, new

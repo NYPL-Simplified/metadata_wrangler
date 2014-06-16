@@ -155,22 +155,23 @@ class TestParser(DatabaseTest):
 
         # The work has a ton of contributors, collated from all the
         # editions.
-        work_contributors = sorted([x['name'] for x in work.authors])
-        eq_(['Cliffs Notes, Inc.', 
+        work_contributors = sorted([x.name for x in work.contributors])
+        eq_(set(['Cliffs Notes, Inc.', 
              'Hayford, Harrison', 
              'Kent, Rockwell', 
              'Melville, Herman',
              'Parker, Hershel', 
              'Tanner, Tony',
-             ], work_contributors)
+             ]), set(work_contributors))
 
         # But only some of them are considered 'authors' by OCLC.
-        work_authors = sorted([x['name'] for x in work.authors
-                               if Contributor.AUTHOR in x['roles']])
+        work_authors = sorted(
+            [x.contributor.name for x in work.contributions
+             if x.role==Contributor.AUTHOR])
         eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
 
         # The edition only has one contributor.
-        edition_authors = sorted([x['name'] for x in edition.authors])
+        edition_authors = sorted([x.name for x in edition.contributors])
         eq_(['Melville, Herman'], edition_authors)
 
         # The work has no language specified. The edition does have
@@ -290,7 +291,7 @@ class TestAuthorParser(DatabaseTest):
         # Check out this mess.
         s = "Sunzi, active 6th century B.C. | Giles, Lionel, 1875-1958 [Writer of added commentary; Translator] | Griffith, Samuel B. [Editor; Author of introduction; Translator] | Cleary, Thomas F., 1949- [Editor; Translator] | Sawyer, Ralph D. [Editor; Author of introduction; Translator] | Clavell, James"
         sunzi, giles, griffith, cleary, sawyer, clavell = (
-            OCLCXMLParser.parse_author_string(s))
+            OCLCXMLParser.parse_author_string(self._db, s))
 
         # This one could be better.
         self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
@@ -314,7 +315,7 @@ class TestAuthorParser(DatabaseTest):
         # contributor with no explicit role is treated as 'unknown'
         # rather than 'author.'
         self.assert_author(
-            clavell, "Clavell, James", [Contributor.UNKNOWN],
+            clavell, "Clavell, James", [Contributor.UNKNOWN_ROLE],
             self.MISSING, self.MISSING)
 
         # These are titles we don't parse as well as we ought, but
