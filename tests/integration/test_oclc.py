@@ -277,6 +277,7 @@ class TestAuthorParser(DatabaseTest):
             deathdate="1898")
 
         kerry, melville = OCLCXMLParser.parse_author_string(
+            self._db,
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
         self.assert_author(kerry, "McSweeney, Kerry", Contributor.AUTHOR,
                            birthdate="1941", deathdate=self.MISSING)
