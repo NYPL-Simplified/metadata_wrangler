@@ -368,16 +368,13 @@ class OCLCXMLParser(XMLParser):
                 return None
 
         # Apply restrictions. If they're not met, return None.
-        if not languages:
-            # We don't know what language this record is for.
-            # Assume it's English, since OCLC records are
-            # English-centric.
-            languages = ["eng"]
-
-        if 'languages' in restrictions:
+        if 'languages' in restrictions and languages:
+            # We know which language this record is for. Match it
+            # against the language used in the WorkRecord we're
+            # matching against.
             restrict_to_languages = set(restrictions['languages'])
             if not restrict_to_languages.intersection(languages):
-                # This record is for a book in a different language.
+                # This record is for a book in a different language
                 return None
 
         if 'authors' in restrictions:

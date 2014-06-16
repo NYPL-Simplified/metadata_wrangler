@@ -173,9 +173,10 @@ class TestParser(DatabaseTest):
         edition_authors = sorted([x['name'] for x in edition.authors])
         eq_(['Melville, Herman'], edition_authors)
 
-        # The work has a language set copied from the edition.
-        eq_(["eng"], work.languages)
-        eq_(["eng"], edition.languages)
+        # The work has no language specified. The edition does have
+        # a language specified.
+        eq_([], work.languages)
+        eq_(['eng'], edition.languages)
 
         [ws] = work.subjects[SubjectType.DDC]
         eq_("813.3", ws['id'])

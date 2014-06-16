@@ -374,10 +374,11 @@ class OCLCMonitorForGutenberg(object):
 
             restrictions = dict(
                 title=title, languages=languages, authors=[author])
-            # TODO: For now, don't apply any restrictions at all.
-            # We'll handle relevance restrictions when we take
-            # fingerprints and consolidate WorkRecords into Works.
-            restrictions = dict()
+            # TODO: For now, the only restriction we apply is the
+            # language restriction. If we know that a given OCLC
+            # record is in a different language from this record,
+            # there's no need to even import that record.
+            restrictions = dict(languages=languages)
 
             # Turn the raw XML into some number of bibliographic records.
             representation_type, records = OCLCXMLParser.parse(
