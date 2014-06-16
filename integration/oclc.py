@@ -239,7 +239,8 @@ class OCLCXMLParser(XMLParser):
                 # restrictions. None of its editions are likely to
                 # succeed either.
                 return representation_type, records
-            
+
+            data_source = DataSource.lookup(_db, DataSource.OCLC)
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
                 edition_record, ignore = cls.extract_edition_record(
                     _db, edition_tag, **restrictions)
@@ -250,10 +251,10 @@ class OCLCXMLParser(XMLParser):
                 records.append(edition_record)
                 # Identify the edition with the work based on its
                 # primary identifier.
-                work_record.equivalent_identifiers.append(
-                    edition_record.primary_identifier)
-                edition_record.equivalent_identifiers.append(
-                    work_record.primary_identifier)
+                work_record.primary_identifier.equivalent_to(
+                    data_source, edition_record.primary_identifier)
+                edition_record.primary_identifier.equivalent_to(
+                    data_source, work_record.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.

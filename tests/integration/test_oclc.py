@@ -147,8 +147,8 @@ class TestParser(DatabaseTest):
         eq_('47010459', edition_id.identifier)
 
         # The edition is identified with the work, and vice versa.
-        assert edition_id in work.equivalent_identifiers
-        assert work_id in edition.equivalent_identifiers
+        assert edition_id.id in work.equivalent_identifier_ids()
+        assert work_id.id in edition.equivalent_identifier_ids()
 
         eq_("Moby Dick", work.title)
         eq_("Moby Dick", edition.title)

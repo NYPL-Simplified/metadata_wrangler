@@ -36,7 +36,7 @@ class TestEquivalency(DatabaseTest):
             self._db, data_source_2, WorkIdentifier.OCLC_NUMBER, "22")
 
         eq = record.primary_identifier.equivalent_to(
-            self._db, data_source_2, record2.primary_identifier)
+            data_source_2, record2.primary_identifier)
 
         eq_(eq.input, record.primary_identifier)
         eq_(eq.output, record2.primary_identifier)
@@ -44,7 +44,7 @@ class TestEquivalency(DatabaseTest):
 
         eq_([eq], record.primary_identifier.equivalencies)
 
-        eq_([record, record2], record.equivalent_work_records(self._db).all())
+        eq_([record, record2], record.equivalent_work_records().all())
 
     def test_recursively_equivalent_identifiers(self):
 
@@ -59,7 +59,7 @@ class TestEquivalency(DatabaseTest):
         search_id, ignore = WorkIdentifier.for_foreign_id(
             self._db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH,
             "Moby Dick/Herman Melville")
-        gutenberg_id.equivalent_to(self._db, oclc, search_id)
+        gutenberg_id.equivalent_to(oclc, search_id)
 
         # The title/author lookup associates the search term with two
         # different OCLC Numbers.
@@ -68,15 +68,15 @@ class TestEquivalency(DatabaseTest):
         oclc_id_2, ignore = WorkIdentifier.for_foreign_id(
             self._db, WorkIdentifier.OCLC_NUMBER, "1000")
 
-        search_id.equivalent_to(self._db, oclc, oclc_id)
-        search_id.equivalent_to(self._db, oclc, oclc_id_2)
+        search_id.equivalent_to(oclc, oclc_id)
+        search_id.equivalent_to(oclc, oclc_id_2)
 
         # We then use OCLC Linked Data to connect one of the OCLC
         # Numbers with an ISBN.
         linked_data = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         isbn_id, ignore = WorkIdentifier.for_foreign_id(
             self._db, WorkIdentifier.ISBN, "900100434X")
-        oclc_id.equivalent_to(self._db, linked_data, isbn_id)
+        oclc_id.equivalent_to(linked_data, isbn_id)
 
         # As it turns out, we have an Overdrive work record...
         overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
@@ -85,7 +85,7 @@ class TestEquivalency(DatabaseTest):
         overdrive_id = overdrive_record.primary_identifier
 
         # ...which is tied (by Overdrive) to the same ISBN.
-        overdrive_id.equivalent_to(self._db, overdrive, isbn_id)
+        overdrive_id.equivalent_to(overdrive, isbn_id)
 
         # Finally, here's a completely unrelated WorkRecord, which
         # will not be showing up.
@@ -94,23 +94,23 @@ class TestEquivalency(DatabaseTest):
         gutenberg2.title = "Unrelated Gutenberg record."
 
         levels = [
-            record.recursively_equivalent_identifiers(self._db, i) 
+            record.equivalent_identifier_ids(i) 
             for i in range(0,5)]
 
         # At level 0, the only identifier found is the Gutenberg ID.
-        eq_(set([gutenberg_id]), set(levels[0]))
+        eq_(set([gutenberg_id.id]), set(levels[0]))
 
         # At level 1, we pick up the title/author lookup.
-        eq_(set([gutenberg_id, search_id]), set(levels[1]))
+        eq_(set([gutenberg_id.id, search_id.id]), set(levels[1]))
 
         # At level 2, we pick up the title/author lookup and the two
         # OCLC Numbers.
-        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2]), set(levels[2]))
+        eq_(set([gutenberg_id.id, search_id.id, oclc_id.id, oclc_id_2.id]), set(levels[2]))
 
         # At level 3, we also pick up the ISBN.
-        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id]), set(levels[3]))
+        eq_(set([gutenberg_id.id, search_id.id, oclc_id.id, oclc_id_2.id, isbn_id.id]), set(levels[3]))
 
         # At level 4, the recursion starts to go in the other
         # direction: we pick up the Overdrive ID that's equivalent to
         # the same ISBN as the OCLC Number.
-        eq_(set([gutenberg_id, search_id, oclc_id, oclc_id_2, isbn_id, overdrive_id]), set(levels[4]))
+        eq_(set([gutenberg_id.id, search_id.id, oclc_id.id, oclc_id_2.id, isbn_id.id, overdrive_id.id]), set(levels[4]))

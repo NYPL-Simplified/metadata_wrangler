@@ -81,7 +81,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(id, identifier.identifier)
         eq_(type, identifier.type)
         eq_(True, was_new)
-        eq_([identifier.id], record.equivalent_identifier_ids(self._db))
+        eq_([identifier.id], record.equivalent_identifier_ids())
 
         # We can get the same work record by providing only the name
         # of the data source.
@@ -182,7 +182,7 @@ class TestWorkRecord(DatabaseTest):
         # the same OCLC Number as the Gutenberg record. We get the
         # Recovering the Classics record because it's associated
         # directly with the Gutenberg record.
-        results = list(gutenberg.equivalent_work_records(self._db))
+        results = list(gutenberg.equivalent_work_records())
         eq_(3, len(results))
         assert gutenberg in results
         assert open_library in results
@@ -193,13 +193,13 @@ class TestWorkRecord(DatabaseTest):
         work.work_records.extend([gutenberg2])
 
         # Its set-of-all-workrecords contains only one record.
-        eq_(1, work.all_workrecords(self._db).count())
+        eq_(1, work.all_workrecords().count())
 
         # If we add the other Gutenberg record to it, then its
         # set-of-all-workrecords is extended by that record, *plus*
         # all the WorkRecords equivalent to that record.
         work.work_records.extend([gutenberg])
-        eq_(4, work.all_workrecords(self._db).count())
+        eq_(4, work.all_workrecords().count())
 
 class TestLicensePool(DatabaseTest):
 
@@ -282,7 +282,7 @@ class TestWork(DatabaseTest):
         # The title of the Work is the most common title among
         # its associated WorkRecords.
         eq_(None, work.title)
-        work.calculate_presentation(self._db)
+        work.calculate_presentation()
         eq_("Title 2", work.title)
 
 class TestCirculationEvent(DatabaseTest):
@@ -432,8 +432,8 @@ class TestWorkQuality(DatabaseTest):
         work2 = Work()
         work2.work_records.extend([wr2_1])
 
-        work1.calculate_quality(self._db)
-        work2.calculate_quality(self._db)
+        work1.calculate_quality()
+        work2.calculate_quality()
 
         assert work1.quality > work2.quality
 
@@ -476,7 +476,7 @@ class TestWorkConsolidation(DatabaseTest):
         work_record.work = work
 
         eq_(None, license.work)
-        license.calculate_work(self._db)
+        license.calculate_work()
 
         # Now, the LicensePool has the same Work associated with it.
         eq_(work, license.work)
@@ -495,7 +495,7 @@ class TestWorkConsolidation(DatabaseTest):
         pool, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "3")
 
-        work, created = pool.calculate_work(self._db)
+        work, created = pool.calculate_work()
         eq_(True, created)
         assert work != preexisting_work
 
@@ -541,7 +541,7 @@ class TestWorkConsolidation(DatabaseTest):
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
         self._db.commit()
 
-        pool.calculate_work(self._db)
+        pool.calculate_work()
 
     def test_merge_into(self):
 
@@ -575,13 +575,13 @@ class TestWorkConsolidation(DatabaseTest):
 
         # This attempt to merge the two work records will fail because
         # they don't meet the similarity threshold.
-        work2.merge_into(self._db, work1, similarity_threshold=1)
+        work2.merge_into(work1, similarity_threshold=1)
 
         assert work2 not in self._db.deleted
 
         # This attempt will succeed because we lower the similarity
         # threshold.
-        work2.merge_into(self._db, work1, similarity_threshold=0)
+        work2.merge_into(work1, similarity_threshold=0)
 
         # The merged Work has been deleted.
         assert work2 in self._db.deleted

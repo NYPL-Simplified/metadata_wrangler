@@ -319,8 +319,9 @@ class WorkIdentifier(Base):
                 break
         return total_set
 
-    def equivalent_identifier_ids(self, _db, levels=3):
-        return self.recursively_equivalent_identifier_ids(
+    def equivalent_identifier_ids(self, levels=3):
+        _db = Session.object_session(self)
+        return WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, [self.id], levels)
 
 class WorkRecord(Base):
@@ -424,17 +425,17 @@ class WorkRecord(Base):
         """
         return self.primary_identifier.equivalencies
 
-    def equivalent_identifier_ids(self, _db, levels=3):
+    def equivalent_identifier_ids(self, levels=3):
         """All WorkIdentifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
-        return self.primary_identifier.equivalent_identifier_ids(
-            _db, levels)
+        return self.primary_identifier.equivalent_identifier_ids(levels)
 
-    def equivalent_work_records(self, _db, levels=3):
+    def equivalent_work_records(self, levels=3):
         """All WorkRecords whose primary ID is equivalent to this WorkRecord's
         primary ID, at the given level of recursion.
         """
-        identifier_ids = self.equivalent_identifier_ids(_db, levels)
+        _db = Session.object_session(self)
+        identifier_ids = self.equivalent_identifier_ids(levels)
         return _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(identifier_ids))
 
@@ -658,13 +659,14 @@ class Work(Base):
             self.id, self.title, self.authors, self.lane, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
-    def all_workrecords(self, _db, recursion_level=3):
+    def all_workrecords(self, recursion_level=3):
         """All WorkRecords identified by a WorkIdentifier equivalent to 
         any of the primary identifiers of this Work's WorkRecords.
 
         `recursion_level` controls how far to go when looking for equivalent
         WorkIdentifiers.
         """
+        _db = Session.object_session(self)
         primary_identifier_ids = [
             x.primary_identifier.id for x in self.work_records]
         identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids(
@@ -746,12 +748,13 @@ class Work(Base):
         return language_factor * (
             (title_quotient * 0.80) + (author_quotient * 0.20))
 
-    def merge_into(self, _db, target_work, similarity_threshold=0.5):
+    def merge_into(self, target_work, similarity_threshold=0.5):
         """This Work ceases to exist and is replaced by target_work.
 
         The two works must be similar to within similarity_threshold,
         or nothing will happen.
         """
+        _db = Session.object_session(self)
         similarity = self.similarity_to(target_work)
         if similarity < similarity_threshold:
             print "NOT MERGING %r into %r, similarity is only %.3f." % (
@@ -761,7 +764,7 @@ class Work(Base):
                 self, target_work, similarity)
             target_work.license_pools.extend(self.license_pools)
             target_work.work_records.extend(self.work_records)
-            target_work.calculate_presentation(_db)
+            target_work.calculate_presentation()
             print "The resulting work: %r" % target_work
             _db.delete(self)
 
@@ -772,7 +775,7 @@ class Work(Base):
             data = Classification.classify(i.subjects, data)
         return data
 
-    def calculate_presentation(self, _db):
+    def calculate_presentation(self):
         """Figure out the 'best' title/author/subjects for this Work.
 
         For the time being, 'best' means the most common among this
@@ -789,7 +792,7 @@ class Work(Base):
 
         # Find all Open Library WorkRecords that are equivalent to the
         # same OCLC WorkIdentifier as one of this work's WorkRecords.
-        equivalent_records = self.all_workrecords(_db)
+        equivalent_records = self.all_workrecords()
         for r in equivalent_records:
             titles.append(r.title)
             if r.title and (
@@ -832,7 +835,7 @@ class Work(Base):
                     break
             self.thumbnail_cover_link, self.full_cover_link = items[best_index][0]
 
-    def calculate_quality(self, _db):
+    def calculate_quality(self):
         """Calculate some measure of the quality of a work.
 
         Higher numbers are better.
@@ -842,7 +845,7 @@ class Work(Base):
         """
         # For public domain books, the quality is the number of
         # records we have for it.
-        self.quality = self.all_workrecords(_db).count()
+        self.quality = self.all_workrecords().count()
         if self.title:
             print "%s %s" % (self.quality, self.title.encode("utf8"))
 
@@ -932,18 +935,19 @@ class LicensePool(Base):
             _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
 
-    def work_record(self, _db):
+    def work_record(self):
         """The LicencePool's primary WorkRecord.
 
         This is (our view of) the book's entry on whatever website
         hosts the licenses.
         """
+        _db = Session.object_session(self)
         return _db.query(WorkRecord).filter_by(
             data_source=self.data_source,
             primary_identifier=self.identifier).one()
 
     @classmethod
-    def with_no_work(self, _db):
+    def with_no_work(cls, _db):
         """Find LicensePools that have no corresponding Work."""
         return _db.query(LicensePool).outerjoin(Work).filter(
             Work.id==None).all()
@@ -1029,13 +1033,13 @@ class LicensePool(Base):
         """Assign a (possibly new) Work to every unassigned LicensePool."""
         a = 0
         for unassigned in cls.with_no_work(_db):
-            etext, new = unassigned.calculate_work(_db)
+            etext, new = unassigned.calculate_work()
             a += 1
             print "Created %r" % etext
             if a and not a % 100:
                 _db.commit()
 
-    def potential_works(self, _db, similarity_threshold=0.8):
+    def potential_works(self, similarity_threshold=0.8):
         """Find all existing works that have claimed this pool's 
         work records.
 
@@ -1043,15 +1047,15 @@ class LicensePool(Base):
         Element 0 is a mapping of Works to the WorkRecords they've claimed.
         Element 1 is a list of WorkRecords that are unclaimed by any Work.
         """
-        primary_work_record = self.work_record(_db)
+        _db = Session.object_session(self)
+        primary_work_record = self.work_record()
 
         claimed_records_by_work = defaultdict(list)
         unclaimed_records = []
 
         # Find all work records connected to this LicensePool's
         # primary work record.
-        equivalent_work_records = primary_work_record.equivalent_work_records(
-            _db)
+        equivalent_work_records = primary_work_record.equivalent_work_records()
 
         for r in equivalent_work_records:
             if r.work:
@@ -1070,10 +1074,10 @@ class LicensePool(Base):
                 l.append(r)
         return claimed_records_by_work, unclaimed_records
 
-    def calculate_work(self, _db, record_similarity_threshold=0.8,
+    def calculate_work(self, record_similarity_threshold=0.8,
                        work_similarity_threshold=0.8):
         """Find or create a Work for this LicensePool."""
-        primary_work_record = self.work_record(_db)
+        primary_work_record = self.work_record()
         self.languages = primary_work_record.languages
         if primary_work_record.work is not None:
             # That was a freebie.
@@ -1087,7 +1091,7 @@ class LicensePool(Base):
         # LicensePool's WorkRecords, and which WorkRecords are still
         # unclaimed.
         claimed, unclaimed = self.potential_works(
-            _db, record_similarity_threshold)
+            record_similarity_threshold)
 
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
@@ -1135,12 +1139,13 @@ class LicensePool(Base):
             print "MORE POPULAR CHOICE for %s: %r" % (
                 primary_work_record.title.encode("utf8"), work)
             for less_popular, claimed_records in by_popularity[1:]:
-                less_popular.merge_into(_db, work, work_similarity_threshold)
+                less_popular.merge_into(work, work_similarity_threshold)
             created = False
         else:
             # There is no better choice than creating a brand new Work.
             # print "NEW WORK for %r" % primary_work_record.title
             work = Work()
+            _db = Session.object_session(self)
             _db.add(work)
             _db.flush()
             created = True
@@ -1154,7 +1159,7 @@ class LicensePool(Base):
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.
-        # work.calculate_presentation(_db)
+        # work.calculate_presentation()
         #if created:
         #    print "Created %r" % work
         # All done!
