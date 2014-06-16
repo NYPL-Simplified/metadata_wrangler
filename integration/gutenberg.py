@@ -22,6 +22,7 @@ from rdflib import Namespace
 from model import (
     get_one_or_create,
     CirculationEvent,
+    Contributor,
     WorkRecord,
     DataSource,
     WorkIdentifier,
@@ -267,11 +268,12 @@ class GutenbergRDFExtractor(object):
             vocabulary=SubjectType.by_uri[str(vocabulary)]
             WorkRecord._add_subject(subjects, vocabulary, value)
 
-        authors = []
+        contributors = []
         for ignore, ignore, author_uri in g.triples((uri, cls.dcterms.creator, None)):
             name = cls._value(g, (author_uri, cls.gutenberg.name, None))
             aliases = cls._values(g, (author_uri, cls.gutenberg.alias, None))
-            WorkRecord._add_author(authors, name, aliases=aliases)
+            contributor, new = Contributor.lookup(_db, name, aliases=aliases)
+            contributors.append(contributor)
 
         # Create or fetch a WorkRecord for this book.
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
@@ -288,11 +290,14 @@ class GutenbergRDFExtractor(object):
                 languages=languages,
                 links=links,
                 subjects=subjects,
-                authors=authors),
+            ),
             data_source=source,
             primary_identifier=identifier,
         )
 
+        # Associate the appropriate contributors with the book.
+        for contributor in contributors:
+            book.add_contributor(contributor, Contributor.AUTHOR)
         return book, new
 
 
