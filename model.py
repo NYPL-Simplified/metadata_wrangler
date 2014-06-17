@@ -338,7 +338,8 @@ class Contributor(Base):
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     contributions = relationship("Contribution", backref="contributor")
-    work_contributions = relationship("WorkContribution", backref="contributor")
+    work_contributions = relationship("WorkContribution", backref="contributor",
+                                      )
 
     # Types of roles
     AUTHOR_ROLE = "Author"
@@ -354,7 +355,7 @@ class Contributor(Base):
             extra += " lc=%s" % self.lc
         if self.viaf:
             extra += " viaf=%s" % self.viaf
-        return "Contributor %d (%s)" % (self.id, self.name)
+        return (u"Contributor %d (%s)" % (self.id, self.name)).encode("utf8")
 
     @classmethod
     def lookup(cls, _db, name=None, viaf=None, lc=None, aliases=None,
@@ -429,7 +430,10 @@ class Contributor(Base):
         if self == destination:
             # They're already the same.
             return
-        print (u"MERGING %r into %r" % (self, destination)).encode("utf8")
+        msg = u"MERGING %s into %s" % (
+            repr(self).decode("utf8"), 
+            repr(destination).decode("utf8"))
+        print msg.encode("utf8")
         existing_aliases = set(destination.aliases)
         new_aliases = list(destination.aliases)
         for name in [self.name] + self.aliases:
