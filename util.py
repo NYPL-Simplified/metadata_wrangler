@@ -138,11 +138,9 @@ class MetadataSimilarity(object):
 
     @classmethod
     def _wordbags_for_author(cls, author):
-        from model import Author
-        bags = [cls._wordbag(author[Author.NAME])]
-        if Author.ALTERNATE_NAME in author:
-            for pseudonym in author[Author.ALTERNATE_NAME]:
-                bags.append(cls._wordbag(pseudonym))
+        bags = [cls._wordbag(author.name)]
+        for alias in author.aliases:
+            bags.append(cls._wordbag(alias))
         return bags
 
     @classmethod

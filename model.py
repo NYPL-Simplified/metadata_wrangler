@@ -184,10 +184,6 @@ class DataSource(Base):
             )
             yield obj
 
-# Equivalency = Table(
-#     "equivalents", Base.metadata,
-#     Column("id", Integer, primary_key
-
 
 class Equivalency(Base):
     """An assertion that two WorkIdentifiers identify the same work.
@@ -324,6 +320,93 @@ class WorkIdentifier(Base):
         return WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, [self.id], levels)
 
+
+class Contributor(Base):
+    """Someone (usually human) who contributes to books."""
+    __tablename__ = 'contributors'
+    id = Column(Integer, primary_key=True)
+
+    # Standard identifiers for this contributor.
+    lc = Column(Unicode, index=True)
+    viaf = Column(Unicode, index=True)
+
+    # This is the name we choose to display for this contributor, of
+    # all the names we know for them. It may change over time.
+    name = Column(Unicode, index=True)
+    aliases = Column(ARRAY(Unicode), default=[])
+
+    extra = Column(MutableDict.as_mutable(JSON), default={})
+
+    contributions = relationship("Contribution", backref="contributor")
+
+    # Types of roles
+    AUTHOR_ROLE = "Author"
+    UNKNOWN_ROLE = 'Unknown'
+
+    # Extra fields
+    BIRTH_DATE = 'birthDate'
+    DEATH_DATE = 'deathDate'
+
+    @classmethod
+    def lookup(cls, _db, name=None, viaf=None, lc=None, aliases=None,
+               extra=None):
+        """Find or create a record for the given Contributor."""
+        extra = extra or dict()
+
+        create_method_kwargs = {
+            Contributor.name.name : name,
+            Contributor.aliases.name : aliases,
+            Contributor.extra.name : extra
+        }
+
+        if name and not lc and not viaf:
+            # We will not create a Contributor based solely on a name
+            # unless there is no existing Contributor with that name.
+            #
+            # If there *are* contributors with that name, we will
+            # return all of them.
+            #
+            # We currently do not check aliases when doing name lookups.
+            q = _db.query(Contributor).filter(Contributor.name==name)
+            contributors = q.all()
+            if contributors:
+                return contributors, False
+            else:
+                try:
+                    contributor = Contributor(**create_method_kwargs)
+                    _db.add(contributor)
+                    _db.flush()
+                    contributors = [contributor]
+                    new = True
+                except IntegrityError:
+                    _db.rollback()
+                    contributors = q.all()
+                    new = False
+        else:
+            # We are perfecly happy to create a Contributor based solely
+            # on lc or viaf.
+            query = dict()
+            if lc:
+                query[Contributor.lc.name] = lc
+            if viaf:
+                query[Contributor.viaf.name] = viaf
+
+            contributors, new = get_one_or_create(
+                _db, Contributor, create_method_kwargs=create_method_kwargs,
+                **query)
+
+        return contributors, new
+
+
+class Contribution(Base):
+    """A contribution made by a Contributor to a WorkRecord."""
+    __tablename__ = 'contributions'
+    id = Column(Integer, primary_key=True)
+    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True)
+    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True)
+    role = Column(Unicode, index=True)
+
+
 class WorkRecord(Base):
 
     """A lightly schematized collection of metadata for a work, or an
@@ -349,7 +432,9 @@ class WorkRecord(Base):
     title = Column(Unicode)
     subtitle = Column(Unicode)
     series = Column(Unicode)
-    authors = Column(JSON, default=[])
+
+    contributions = relationship("Contribution", backref="workrecord")
+
     subjects = Column(JSON, default=[])
     summary = Column(MutableDict.as_mutable(JSON), default={})
 
@@ -376,8 +461,12 @@ class WorkRecord(Base):
 
     def __repr__(self):
         return (u"WorkRecord %s (%s/%s/%s)" % (
-            self.id, self.title, ", ".join([x['name'] for x in self.authors]),
+            self.id, self.title, ", ".join([x.name for x in self.contributors]),
             ", ".join(self.languages))).encode("utf8")
+
+    @property
+    def contributors(self):
+        return [x.contributor for x in self.contributions]
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
@@ -427,7 +516,7 @@ class WorkRecord(Base):
         identifier and other WorkIdentifiers.
         """
         return self.primary_identifier.equivalencies
-
+        
     def equivalent_identifier_ids(self, levels=3):
         """All WorkIdentifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
@@ -468,7 +557,7 @@ class WorkRecord(Base):
         # WorkIdentifier of the other type.
         primary_identifier = aliased(WorkIdentifier)
         secondary_identifier = aliased(WorkIdentifier)
-
+        
         qu = _db.query(primary_identifier.id).join(
             primary_identifier.equivalencies).join(
                 secondary_identifier,
@@ -520,7 +609,7 @@ class WorkRecord(Base):
         if description:
             d['description'] = type
         links[rel].append(d)
-
+        
     @classmethod
     def _add_subject(cls, subjects, type, id, value=None, weight=None):
         """Add a new entry to a dictionary of bibliographic subjects.
@@ -544,19 +633,30 @@ class WorkRecord(Base):
         if weight:
             d['weight'] = weight
         subjects[type].append(d)
-
-    @classmethod
-    def _add_author(self, authors, name, roles=None, aliases=None, **kwargs):
-        """Represent an entity who had some role in creating a book."""
-        if roles and not isinstance(roles, list) and not isinstance(roles, tuple):
+        
+    def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
+                        **kwargs):
+        """Assign a contributor to this WorkRecord."""
+        _db = Session.object_session(self)
+        if isinstance(roles, basestring):
             roles = [roles]            
-        a = { Author.NAME : name }
-        a.update(kwargs)
-        if roles:
-            a.setdefault(Author.ROLES, []).extend(roles)
-        if aliases:
-            a[Author.ALTERNATE_NAME] = aliases
-        authors.append(a)
+
+        # First find or create the Contributor.
+        if isinstance(name, Contributor):
+            contributor = name
+        else:
+            contributor, was_new = Contributor.lookup(
+                _db, name, lc, viaf, aliases)
+            if isinstance(contributor, list):
+                # Contributor was looked up/created by name,
+                # which returns a list.
+                contributor = contributor[0]
+
+        # Then add their Contributions.
+        for role in roles:
+            get_one_or_create(
+                _db, Contribution, workrecord=self, contributor=contributor,
+                role=role)
    
     def similarity_to(self, other_record):
         """How likely is it that this record describes the same book as the
@@ -580,7 +680,7 @@ class WorkRecord(Base):
         should outnumber the fuzzy cases, so we we should still group
         the WorkRecords that really matter--the ones backed by
         LicensePools--together correctly.
-
+        
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
@@ -606,7 +706,7 @@ class WorkRecord(Base):
                 language_factor = 0.80
             else:
                 language_factor = 0.50
-
+                          
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
 
@@ -802,8 +902,8 @@ class Work(Base):
                     not shortest_title or len(r.title) < len(shortest_title)):
                 shortest_title = r.title
 
-            for a in r.authors:
-                authors[a['name']] += 1
+            for a in r.contributors:
+                authors[a.name] += 1
             if r.languages:
                 languages[tuple(r.languages)] += 1
 
@@ -1316,18 +1416,3 @@ class SubjectType(object):
         "http://purl.org/dc/terms/LCC" : LCC,
         "http://purl.org/dc/terms/LCSH" : LCSH,
     }
-
-
-class Author(object):
-    """Constants for common author fields."""
-    NAME = 'name'
-    ALTERNATE_NAME = 'alternateName'
-    ROLES = 'roles'
-    BIRTH_DATE = 'birthDate'
-    DEATH_DATE = 'deathDate'
-
-    # Specific common roles
-    AUTHOR_ROLE = 'Author'
-    ILLUSTRATOR_ROLE = 'Illustrator'
-    EDITOR_ROLE = 'Editor'
-    UNKNOWN_ROLE = 'Unknown'

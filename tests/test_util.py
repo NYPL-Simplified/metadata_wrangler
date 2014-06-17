@@ -30,6 +30,13 @@ class TestLanguageCodes(object):
         eq_([], c.english_names['nosuchlanguage'])
 
 
+class DummyAuthor(object):
+
+    def __init__(self, name, aliases=[]):
+        self.name = name
+        self.aliases = aliases
+
+
 class TestMetadataSimilarity(object):
 
     def test_identity(self):
@@ -40,9 +47,9 @@ class TestMetadataSimilarity(object):
         eq_(1, MetadataSimilarity.title_similarity("foo bar", "bar, foo"))
         eq_(1, MetadataSimilarity.title_similarity("foo bar.", "FOO BAR"))
 
-        a1 = dict(name="Foo Bar", alternateName=["baz Quux"])
-        a2 = dict(name="Bar Foo", alternateName=["QUUX, baz"])
-        a3 = dict(name="BAR FOO", alternateName=["baz (QuuX)"])
+        a1 = DummyAuthor("Foo Bar", ["baz Quux"])
+        a2 = DummyAuthor("Bar Foo", ["QUUX, baz"])
+        a3 = DummyAuthor("BAR FOO", ["baz (QuuX)"])
 
         eq_(1, MetadataSimilarity.author_similarity([a1], [a2]))
         eq_(1, MetadataSimilarity.author_similarity([a1], [a3]))
@@ -153,19 +160,20 @@ class TestMetadataSimilarity(object):
 
     def test_author_found_in(self):
         eq_(True, MetadataSimilarity.author_found_in(
-            "Herman Melville", [dict(name="Melville, Herman"),
-                                dict(name="Someone else")]))
+            "Herman Melville", [DummyAuthor("Melville, Herman"),
+                                DummyAuthor("Someone else")]))
 
         eq_(False, MetadataSimilarity.author_found_in(
-            "Herman Melville", [dict(name="Someone else")]))
+            "Herman Melville", [DummyAuthor("Someone else")]))
 
         eq_(False, MetadataSimilarity.author_found_in(
-            "No Such Person", [{'roles': ['Author'], 'deathDate': '1891', 'name': 'Melville, Herman', 'birthDate': '1819'}, {'name': 'Tanner, Tony', 'roles': ['Editor', 'Commentator for written text', 'Author of introduction', 'Author']}]))
+            "No Such Person", [DummyAuthor("Melville, Herman"),
+                               DummyAuthor("Tanner, Tony")]))
 
         eq_(True, MetadataSimilarity.author_found_in(
-            "Lewis Carroll", [dict(name="Someone else"),
-                              dict(name="Charles Dodgson",
-                                   alternateName=["Lewis Carroll"])]))
+            "Lewis Carroll", [DummyAuthor("Someone else"),
+                              DummyAuthor(
+                                  "Charles Dodgson", ["Lewis Carroll"])]))
 
 
     def _arrange_by_confidence_level(self, title, *other_titles):

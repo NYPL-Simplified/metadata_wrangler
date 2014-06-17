@@ -5,7 +5,7 @@ import pkgutil
 import StringIO
 from nose.tools import set_trace, eq_ 
 from model import (
-    Author,
+    Contributor,
     DataSource,
     SubjectType,
     WorkIdentifier,
@@ -68,14 +68,17 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
 
         eq_(datetime.date(2008, 6, 25), book.issued)
 
-        a1, a2 = sorted(book.authors, key = lambda x: x[Author.NAME])
-        eq_("Church of Jesus Christ of Latter-day Saints", a1[Author.NAME])
-        assert Author.ALTERNATE_NAME not in a1
-        assert Author.ROLES not in a2
+        for x in book.contributions:
+            eq_("Author", x.role)
 
-        eq_("Smith, Joseph, Jr.", a2[Author.NAME])
-        eq_(["Smith, Joseph"], a2[Author.ALTERNATE_NAME])
-        assert Author.ROLES not in a2
+        a1, a2 = sorted(
+            [x.contributor for x in book.contributions],
+            key = lambda x: x.name)
+
+        eq_("Church of Jesus Christ of Latter-day Saints", a1.name)
+
+        eq_("Smith, Joseph, Jr.", a2.name)
+        eq_(["Smith, Joseph"], a2.aliases)
 
         # The book has a LCC classification...
         subjects = book.subjects

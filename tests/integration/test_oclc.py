@@ -8,7 +8,7 @@ from integration.oclc import (
 from nose.tools import set_trace, eq_
 
 from model import (
-    Author,
+    Contributor,
     SubjectType,
     WorkIdentifier,
     WorkRecord,
@@ -96,14 +96,16 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_multi_work_response.xml")
 
+        [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, languages=["eng"], authors=["No Such Person"])
+            self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
+        [melville], ignore = Contributor.lookup(self._db, name="Melville, Herman")
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, languages=["eng"], authors=["Herman Melville"])
+            self._db, xml, languages=["eng"], authors=[melville])
         
         # We picked up 20 of the 25 works in the dataset.
         eq_(20, len(swids))
@@ -153,24 +155,40 @@ class TestParser(DatabaseTest):
         eq_("Moby Dick", work.title)
         eq_("Moby Dick", edition.title)
 
+        work_contributors = [x.name for x in work.contributors]
+
         # The work has a ton of contributors, collated from all the
         # editions.
-        work_contributors = sorted([x['name'] for x in work.authors])
-        eq_(['Cliffs Notes, Inc.', 
-             'Hayford, Harrison', 
-             'Kent, Rockwell', 
-             'Melville, Herman',
-             'Parker, Hershel', 
-             'Tanner, Tony',
-             ], work_contributors)
+        eq_(set([
+            'Cliffs Notes, Inc.',
+            'Kent, Rockwell',
+            'Hayford, Harrison', 
+            'Melville, Herman',
+            'Parker, Hershel', 
+            'Tanner, Tony',
+             ]), set(work_contributors))
 
-        # But only some of them are considered 'authors' by OCLC.
-        work_authors = sorted([x['name'] for x in work.authors
-                               if Author.AUTHOR_ROLE in x['roles']])
+        # Most of the contributors have LC and VIAF numbers, but two
+        # (Cliffs Notes and Rockwell Kent) do not.
+        eq_(
+            [None, None, u'n50025038', u'n50025038', u'n50050335', 
+             u'n79006936', u'n79059764', u'n79059764', u'n79059764', 
+             u'n79059764'],
+            sorted([x.lc for x in work.contributors]))
+        eq_(
+            [None, None, u'27068555', u'34482742', u'34482742', u'4947338',
+             u'51716047', u'51716047', u'51716047', u'51716047'],
+            sorted([x.viaf for x in work.contributors]))
+
+        # Only two of the contributors are considered 'authors' by
+        # OCLC.
+        work_authors = sorted(
+            [x.contributor.name for x in work.contributions
+             if x.role==Contributor.AUTHOR_ROLE])
         eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
 
         # The edition only has one contributor.
-        edition_authors = sorted([x['name'] for x in edition.authors])
+        edition_authors = sorted([x.name for x in edition.contributors])
         eq_(['Melville, Herman'], edition_authors)
 
         # The work has no language specified. The edition does have
@@ -234,65 +252,67 @@ class TestParser(DatabaseTest):
         eq_([], records)
 
 
-class TestAuthorParser(object):
+class TestAuthorParser(DatabaseTest):
 
     MISSING = object()
 
-    def assert_author(self, author, name, role=Author.AUTHOR_ROLE, 
+    def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE, 
                       birthdate=None, deathdate=None):
-        eq_(author[Author.NAME], name)
+        contributor, roles = result
+        eq_(contributor.name, name)
         if role:
             if not isinstance(role, list) and not isinstance(role, tuple):
                 role = [role]
-            eq_(role, author[Author.ROLES])
+            eq_(role, roles)
         if birthdate is self.MISSING:
-            assert Author.BIRTH_DATE not in author
+            assert Contributor.BIRTH_DATE not in contributor.extra
         elif birthdate:
-            eq_(birthdate, author[Author.BIRTH_DATE])
+            eq_(birthdate, contributor.extra[Contributor.BIRTH_DATE])
         if deathdate is self.MISSING:
-            assert Author.DEATH_DATE not in author
+            assert Contributor.DEATH_DATE not in contributor.extra
         elif deathdate:
-            eq_(deathdate, author[Author.DEATH_DATE])
+            eq_(deathdate, contributor.extra[Contributor.DEATH_DATE])
 
-    def assert_parse(self, string, name, role=Author.AUTHOR_ROLE, 
+    def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE, 
                      birthdate=None, deathdate=None):
-        [author] = OCLCXMLParser.parse_author_string(string)
-        self.assert_author(author, name, role, birthdate, deathdate)
+        [res] = OCLCXMLParser.parse_author_string(self._db, string)
+        self.assert_author(res, name, role, birthdate, deathdate)
 
     def test_authors(self):
 
         self.assert_parse(
             "Carroll, Lewis, 1832-1898",
-            "Carroll, Lewis", Author.AUTHOR_ROLE, "1832", "1898")
+            "Carroll, Lewis", Contributor.AUTHOR_ROLE, "1832", "1898")
 
         self.assert_parse(
             "Kent, Rockwell, 1882-1971 [Illustrator]",
-            "Kent, Rockwell", Author.ILLUSTRATOR_ROLE,
+            "Kent, Rockwell", "Illustrator",
             "1882", "1971")
 
         self.assert_parse(
             u"Карролл, Лувис, 1832-1898.",
-            u"Карролл, Лувис", Author.AUTHOR_ROLE, birthdate="1832",
+            u"Карролл, Лувис", Contributor.AUTHOR_ROLE, birthdate="1832",
             deathdate="1898")
 
         kerry, melville = OCLCXMLParser.parse_author_string(
+            self._db,
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
-        self.assert_author(kerry, "McSweeney, Kerry", Author.AUTHOR_ROLE,
+        self.assert_author(kerry, "McSweeney, Kerry", Contributor.AUTHOR_ROLE,
                            birthdate="1941", deathdate=self.MISSING)
 
         self.assert_author(
-            melville, "Melville, Herman", Author.AUTHOR_ROLE,
+            melville, "Melville, Herman", Contributor.AUTHOR_ROLE,
             birthdate="1819", deathdate="1891")
 
 
         # Check out this mess.
         s = "Sunzi, active 6th century B.C. | Giles, Lionel, 1875-1958 [Writer of added commentary; Translator] | Griffith, Samuel B. [Editor; Author of introduction; Translator] | Cleary, Thomas F., 1949- [Editor; Translator] | Sawyer, Ralph D. [Editor; Author of introduction; Translator] | Clavell, James"
         sunzi, giles, griffith, cleary, sawyer, clavell = (
-            OCLCXMLParser.parse_author_string(s))
+            OCLCXMLParser.parse_author_string(self._db, s))
 
         # This one could be better.
         self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
-                           Author.AUTHOR_ROLE)
+                           Contributor.AUTHOR_ROLE)
         self.assert_author(giles, "Giles, Lionel",
                            ["Writer of added commentary", "Translator"],
                            "1875", "1958")
@@ -312,7 +332,7 @@ class TestAuthorParser(object):
         # contributor with no explicit role is treated as 'unknown'
         # rather than 'author.'
         self.assert_author(
-            clavell, "Clavell, James", [Author.UNKNOWN_ROLE],
+            clavell, "Clavell, James", [Contributor.UNKNOWN_ROLE],
             self.MISSING, self.MISSING)
 
         # These are titles we don't parse as well as we ought, but
