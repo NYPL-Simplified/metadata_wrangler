@@ -272,7 +272,8 @@ class GutenbergRDFExtractor(object):
         for ignore, ignore, author_uri in g.triples((uri, cls.dcterms.creator, None)):
             name = cls._value(g, (author_uri, cls.gutenberg.name, None))
             aliases = cls._values(g, (author_uri, cls.gutenberg.alias, None))
-            contributor, new = Contributor.lookup(_db, name, aliases=aliases)
+            matches, new = Contributor.lookup(_db, name, aliases=aliases)
+            contributor = matches[0]
             contributors.append(contributor)
 
         # Create or fetch a WorkRecord for this book.
@@ -297,7 +298,7 @@ class GutenbergRDFExtractor(object):
 
         # Associate the appropriate contributors with the book.
         for contributor in contributors:
-            book.add_contributor(contributor, Contributor.AUTHOR)
+            book.add_contributor(contributor, Contributor.AUTHOR_ROLE)
         return book, new
 
 
