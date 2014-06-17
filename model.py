@@ -761,7 +761,6 @@ class WorkRecord(Base):
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
-
         if set(other_record.languages) == set(self.languages):
             # The languages match perfectly.
             language_factor = 1
@@ -783,12 +782,16 @@ class WorkRecord(Base):
                 language_factor = 0.80
             else:
                 language_factor = 0.50
-                          
+       
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
 
         author_quotient = MetadataSimilarity.author_similarity(
             self.authors, other_record.authors)
+        if author_quotient == 0:
+            # The two works have no authors in common. Immediate
+            # disqualification.
+            return 0
 
         # We weight title more heavily because it's much more likely
         # that one author wrote two different books than that two
@@ -883,10 +886,7 @@ class Work(Base):
                 total_my_languages += 1
             my_titles.append(record.title)
             for author in record.authors:
-                # TODO: this treats author names as strings that either match
-                # or don't. We need to handle author names in a more
-                # sophisticated way as per util.
-                my_authors[author['name']] += 1
+                my_authors[author] += 1
                 total_my_authors += 1
 
         if isinstance(other_work, Work):
@@ -900,10 +900,7 @@ class Work(Base):
                 total_other_languages += 1
             other_titles.append(record.title)
             for author in record.authors:
-                # TODO: this treats author names as strings that either match
-                # or don't. We need to handle author names in a more
-                # sophisticated way as per util.
-                other_authors[author['name']] += 1
+                other_authors[author] += 1
                 total_other_authors += 1
 
         title_distance = MetadataSimilarity.histogram_distance(

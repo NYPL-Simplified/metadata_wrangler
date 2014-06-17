@@ -167,12 +167,6 @@ class MetadataSimilarity(object):
         return cls._word_match_proportion(title1, title2, set(['a', 'the', 'an']))
 
     @classmethod
-    def author_found_in(cls, author_name, find_among):
-        a_bags = [cls._wordbag(author_name)]
-        b_bags = [cls._wordbags_for_author(a) for a in find_among]
-        return cls._matching_author_in(a_bags, b_bags) is not None
-
-    @classmethod
     def author_similarity(cls, authors1, authors2):
         """For each author in authors1, find a matching author in
         authors2, and vice versa. Quotient is the % of authors
@@ -182,29 +176,8 @@ class MetadataSimilarity(object):
             # Both sets are empty. A perfect match!
             return 1
 
-        # First, convert the author dicts to lists of wordbags.
-        a1 = [cls._wordbags_for_author(a) for a in authors1]
-        a2 = [cls._wordbags_for_author(a) for a in authors2]
-
-        attempts = 0
-        successes = 0
-        matches_found = []
-        for author in a1:
-            attempts += 1
-            success = cls._matching_author_in(author, a2)
-            if success:
-                successes += 1
-                matches_found.append(success)
-
-        for author in a2:
-            if author in matches_found:
-                # We already matched this author from the other record
-                # with an author from the current record. Don't check
-                # it again.
-                continue
-            attempts += 1
-            success = cls._matching_author_in(author, a1)
-            if success:
-                successes += 1
-
-        return float(successes) / attempts
+        s1 = set(authors1)
+        s2 = set(authors2)
+        all_authors = s1.union(s2)
+        matching_authors = s1.intersection(s2)
+        return float(len(matching_authors)) / len(all_authors)
