@@ -67,6 +67,48 @@ class TestWorkIdentifier(DatabaseTest):
         eq_(identifier, identifier2)
         eq_(False, was_new)
 
+class TestContributor(DatabaseTest):
+
+    def test_lookup_by_viaf(self):
+
+        # Two contributors named Bob.
+        bob1, new = Contributor.lookup(self._db, name="Bob", viaf="foo")
+        bob2, new = Contributor.lookup(self._db, name="Bob", viaf="bar")
+
+        assert bob1 != bob2
+
+        eq_((bob1, False), Contributor.lookup(self._db, viaf="foo"))
+
+    def test_lookup_by_lc(self):
+
+        # Two contributors named Bob.
+        bob1, new = Contributor.lookup(self._db, name="Bob", lc="foo")
+        bob2, new = Contributor.lookup(self._db, name="Bob", lc="bar")
+
+        assert bob1 != bob2
+
+        eq_((bob1, False), Contributor.lookup(self._db, lc="foo"))
+
+    def test_lookup_by_name(self):
+
+        # Two contributors named Bob.
+        bob1, new = Contributor.lookup(self._db, name="Bob", lc="foo")
+        bob2, new = Contributor.lookup(self._db, name="Bob", lc="bar")
+
+        # Lookup by name finds both of them.
+        bobs, new = Contributor.lookup(self._db, name="Bob")
+        eq_(False, new)
+        eq_(["Bob", "Bob"], [x.name for x in bobs])
+
+    def test_create_by_lookup(self):
+        [bob1], new = Contributor.lookup(self._db, name="Bob")
+        eq_("Bob", bob1.name)
+        eq_(True, new)
+
+        [bob2], new = Contributor.lookup(self._db, name="Bob")
+        eq_(bob1, bob2)
+        eq_(False, new)
+
 class TestWorkRecord(DatabaseTest):
 
     def test_for_foreign_id(self):
@@ -261,19 +303,19 @@ class TestWork(DatabaseTest):
         wr1, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
         wr1.title = "Title 1"
-        wr1.add_contributor("Bob", Contributor.AUTHOR)
+        wr1.add_contributor("Bob", Contributor.AUTHOR_ROLE)
 
         wr2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
         wr2.title = "Title 2"
-        wr2.add_contributor("Bob", Contributor.AUTHOR)
-        wr2.add_contributor("Alice", Contributor.AUTHOR)
+        wr2.add_contributor("Bob", Contributor.AUTHOR_ROLE)
+        wr2.add_contributor("Alice", Contributor.AUTHOR_ROLE)
 
         wr3, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "3")
         wr3.title = "Title 2"
-        wr3.add_contributor("Bob", Contributor.AUTHOR)
-        wr3.add_contributor("Alice", Contributor.AUTHOR)
+        wr3.add_contributor("Bob", Contributor.AUTHOR_ROLE)
+        wr3.add_contributor("Alice", Contributor.AUTHOR_ROLE)
 
         work = Work()
         work.work_records.extend([wr1, wr2, wr3])

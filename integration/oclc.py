@@ -227,14 +227,13 @@ class OCLCXMLParser(XMLParser):
             print "Extracting work, authors and editions."
 
             authors_tag = cls._xpath1(tree, "//oclc:authors")
-            authors_and_roles = cls.extract_authors_and_roles(
-                _db, authors_tag)
+            existing_authors = cls.extract_authors(_db, authors_tag)
 
             # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
             work_tag = cls._xpath1(tree, "//oclc:work")
             work_record, ignore = cls.extract_work_record(
-                _db, work_tag, authors_and_roles, **restrictions)
+                _db, work_tag, existing_authors, **restrictions)
             records = []
             if work_record:
                 records.append(work_record)
@@ -247,7 +246,7 @@ class OCLCXMLParser(XMLParser):
             data_source = DataSource.lookup(_db, DataSource.OCLC)
             for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
                 edition_record, ignore = cls.extract_edition_record(
-                    _db, edition_tag, authors_and_roles, **restrictions)
+                    _db, edition_tag, existing_authors, **restrictions)
                 if not edition_record:
                     # This edition did not become a WorkRecord because it
                     # didn't meet one of the restrictions.
@@ -283,7 +282,8 @@ class OCLCXMLParser(XMLParser):
             # the info, we're calling it to make sure this work meets
             # the restriction. If this work meets the restriction,
             # we'll store its info when we look up the SWID.
-            response = cls._extract_basic_info(_db, work_tag, **restrictions)
+            response = cls._extract_basic_info(
+                _db, work_tag, **restrictions)
             if response:
                 swids.append(work_tag.get('swid'))
         return swids
@@ -292,26 +292,33 @@ class OCLCXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def extract_authors_and_roles(cls, _db, authors_tag):
+    def extract_authors(cls, _db, authors_tag):
         results = []
         for author_tag in cls._xpath(authors_tag, "//oclc:author"):
             lc = author_tag.get('lc', None)
             viaf = author_tag.get('viaf', None)
-            if not author_tag.text:
-                set_trace()
             contributor, roles = cls._parse_single_author(
                 _db, author_tag.text, lc=lc, viaf=viaf)
-            results.append((contributor, roles))
+            results.append(contributor)
+        
         return results
+
+    @classmethod
+    def _contributor_match(cls, contributor, name, lc, viaf):
+        return (
+            contributor.name == name
+            and (lc is None or contributor.lc == lc)
+            and (viaf is None or contributor.viaf == viaf)
+        )
 
     @classmethod
     def _parse_single_author(cls, _db, author, 
                              lc=None, viaf=None,
-                             default_role=Contributor.AUTHOR):
+                             existing_authors=[],
+                             default_role=Contributor.AUTHOR_ROLE):
         # First find roles if present
         # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
-        if not isinstance(author, basestring):
-            set_trace()
+        author = author.strip()
         m = cls.ROLES.search(author)
         if m:
             author = author[:m.start()].strip()
@@ -337,19 +344,60 @@ class OCLCXMLParser(XMLParser):
         if author.endswith(","):
             author = author[:-1]
 
-        contributor, was_new = Contributor.lookup(
-            _db, author, viaf, lc, extra=kwargs)
+        contributor = None
+        if existing_authors:
+            # Calling Contributor.lookup will result in a database
+            # hit, and looking up a contributor based on name may
+            # result in multiple results (see below). We'll have no
+            # way of distinguishing between those results. If
+            # possible, it's much more reliable to look through
+            # existing_authors (the authors derived from an entry's
+            # <authors> tag).
+            for x in existing_authors:
+                if cls._contributor_match(x, author, lc, viaf):
+                    contributor = x
+                    break
+            if contributor:
+                was_new = False
+
+        if not contributor:
+            contributor, was_new = Contributor.lookup(
+                _db, author, viaf, lc, extra=kwargs)
+        if isinstance(contributor, list):
+            # We asked for an author based solely on the name, which makes
+            # Contributor.lookup() return a list.
+            if len(contributor) == 1:
+                # Fortunately, either the database knows about only
+                # one author with that name, or it didn't know about
+                # any authors with that name and it just created one,
+                # so we can unambiguously use it.
+                contributor = contributor[0]
+            else:
+                # Uh-oh. The database knows about multiple authors
+                # with that name.  We have no basis for deciding which
+                # author we mean. But we would prefer to identify with
+                # an author who has a known LC or VIAF number.
+                #
+                # This should happen very rarely because of our 
+                # check against existing_authors above.
+                with_id = [x for x in contributors if x.lc is not None
+                           or x.viaf is not None]
+                if with_id:
+                    contributor = with_id[0]
+                else:
+                    contributor = contributor[0]
         return contributor, roles
 
     @classmethod
-    def parse_author_string(cls, _db, author_string):
-        default_role = Contributor.AUTHOR
+    def parse_author_string(cls, _db, author_string, existing_authors=[]):
+        default_role = Contributor.AUTHOR_ROLE
         authors = []
         if not author_string:
             return authors
         for author in author_string.split("|"):            
             author, roles = cls._parse_single_author(
-                _db, author, author.strip(), default_role)
+                _db, author, existing_authors=existing_authors,
+                default_role=default_role)
             if roles:
                 # If we see someone with no explicit role after this
                 # point, it's probably because their role is so minor
@@ -361,11 +409,13 @@ class OCLCXMLParser(XMLParser):
         return authors
 
     @classmethod
-    def _extract_basic_info(cls, _db, tag, **restrictions):
+    def _extract_basic_info(cls, _db, tag, existing_authors=None,
+                            **restrictions):
         """Extract information common to work tag and edition tag."""
         title = tag.get('title')
         author_string = tag.get('author')
-        authors = cls.parse_author_string(_db, author_string)
+        authors_and_roles = cls.parse_author_string(
+            _db, author_string, existing_authors)
         if 'language' in tag.keys():
             languages = [tag.get('language')]
         else:
@@ -401,21 +451,20 @@ class OCLCXMLParser(XMLParser):
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
             authors_per_se = [
-                c for c, roles in authors if Contributor.AUTHOR in roles
+                a for a, roles in authors_and_roles if Contributor.AUTHOR_ROLE in roles
             ]
             for restrict_to_author in restrict_to_authors:
-                if not MetadataSimilarity.author_found_in(
-                        restrict_to_author, authors_per_se):
+                if not restrict_to_author in authors_per_se:
                     # The given author did not show up as one of the
                     # per se 'authors' of this book. They may have had
                     # some other role in it, or the book may be about
                     # them, but this book is not *by* them.
                     return None
 
-        return title, authors, languages
+        return title, authors_and_roles, languages
 
     @classmethod
-    def extract_work_record(cls, _db, work_tag, authors_and_roles, **restrictions):
+    def extract_work_record(cls, _db, work_tag, existing_authors, **restrictions):
         """Create a new WorkRecord object with information about a
         work (identified by OCLC Work ID).
         """
@@ -429,17 +478,13 @@ class OCLCXMLParser(XMLParser):
             # This record does not have a valid OCLC Work ID.
             return None, False
 
-        result = cls._extract_basic_info(_db, work_tag, **restrictions)
+        result = cls._extract_basic_info(_db, work_tag, existing_authors, **restrictions)
         if not result:
             # This record did not meet one of the restrictions.
             return None, False
 
-        set_trace()
+        title, authors_and_roles, languages = result
 
-        title, authors, languages = result
-
-        if not authors_and_roles:
-            authors_and_roles = authors
 
         # Get the most popular Dewey and LCC classification for this
         # work.
@@ -496,7 +541,7 @@ class OCLCXMLParser(XMLParser):
 
     @classmethod
     def extract_edition_record(cls, _db, edition_tag,
-                               authors_and_roles,
+                               existing_authors,
                                **restrictions):
         """Create a new WorkRecord object with information about an
         edition of a book (identified by OCLC Number).
@@ -510,14 +555,12 @@ class OCLCXMLParser(XMLParser):
 
         # Fill in some basic information about this new record.
         result = cls._extract_basic_info(
-            _db, edition_tag, **restrictions)
+            _db, edition_tag, existing_authors, **restrictions)
         if not result:
             # This record did not meet one of the restrictions.
             return None, False
 
-        title, authors, languages = result
-        if not authors_and_roles:
-            authors_and_roles = authors
+        title, authors_and_roles, languages = result
 
         subjects = {}
         for subject_type, oclc_code in (

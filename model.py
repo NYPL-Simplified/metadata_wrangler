@@ -340,7 +340,7 @@ class Contributor(Base):
     contributions = relationship("Contribution", backref="contributor")
 
     # Types of roles
-    AUTHOR = "Author"
+    AUTHOR_ROLE = "Author"
     UNKNOWN_ROLE = 'Unknown'
 
     # Extra fields
@@ -348,28 +348,54 @@ class Contributor(Base):
     DEATH_DATE = 'deathDate'
 
     @classmethod
-    def lookup(cls, _db, name, viaf=None, lc=None, aliases=None, extra=None):
+    def lookup(cls, _db, name=None, viaf=None, lc=None, aliases=None,
+               extra=None):
         """Find or create a record for the given Contributor."""
         extra = extra or dict()
-        query = dict()
-
-        # Prefer to look up by LC and/or VIAF.
-        if lc:
-            query[Contributor.lc.name] = lc
-        if viaf:
-            query[Contributor.viaf.name] = viaf
-
-        # If neither is provided, do a lookup by name.
-        if not lc and not viaf:
-            query[Contributor.name.name] = name
 
         create_method_kwargs = {
+            Contributor.name.name : name,
             Contributor.aliases.name : aliases,
             Contributor.extra.name : extra
         }
-        return get_one_or_create(
-            _db, Contributor, create_method_kwargs=create_method_kwargs,
-            **query)
+
+        if name and not lc and not viaf:
+            # We will not create a Contributor based solely on a name
+            # unless there is no existing Contributor with that name.
+            #
+            # If there *are* contributors with that name, we will
+            # return all of them.
+            #
+            # We currently do not check aliases when doing name lookups.
+            q = _db.query(Contributor).filter(Contributor.name==name)
+            contributors = q.all()
+            if contributors:
+                return contributors, False
+            else:
+                try:
+                    contributor = Contributor(**create_method_kwargs)
+                    _db.add(contributor)
+                    _db.flush()
+                    contributors = [contributor]
+                    new = True
+                except IntegrityError:
+                    _db.rollback()
+                    contributors = q.all()
+                    new = False
+        else:
+            # We are perfecly happy to create a Contributor based solely
+            # on lc or viaf.
+            query = dict()
+            if lc:
+                query[Contributor.lc.name] = lc
+            if viaf:
+                query[Contributor.viaf.name] = viaf
+
+            contributors, new = get_one_or_create(
+                _db, Contributor, create_method_kwargs=create_method_kwargs,
+                **query)
+
+        return contributors, new
 
 
 class Contribution(Base):
@@ -621,6 +647,10 @@ class WorkRecord(Base):
         else:
             contributor, was_new = Contributor.lookup(
                 _db, name, lc, viaf, aliases)
+            if isinstance(contributor, list):
+                # Contributor was looked up/created by name,
+                # which returns a list.
+                contributor = contributor[0]
 
         # Then add their Contributions.
         for role in roles:

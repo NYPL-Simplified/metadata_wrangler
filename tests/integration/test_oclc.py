@@ -96,14 +96,16 @@ class TestParser(DatabaseTest):
             "tests.integration",
             "files/oclc_multi_work_response.xml")
 
+        [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, languages=["eng"], authors=["No Such Person"])
+            self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
+        [melville], ignore = Contributor.lookup(self._db, name="Melville, Herman")
         status, swids = OCLCXMLParser.parse(
-            self._db, xml, languages=["eng"], authors=["Herman Melville"])
+            self._db, xml, languages=["eng"], authors=[melville])
         
         # We picked up 20 of the 25 works in the dataset.
         eq_(20, len(swids))
@@ -153,22 +155,36 @@ class TestParser(DatabaseTest):
         eq_("Moby Dick", work.title)
         eq_("Moby Dick", edition.title)
 
+        work_contributors = [x.name for x in work.contributors]
+
         # The work has a ton of contributors, collated from all the
         # editions.
-        work_contributors = sorted([x.name for x in work.contributors])
-        eq_(set(['Cliffs Notes, Inc.', 
-             'Hayford, Harrison', 
-             'Kent, Rockwell', 
-             'Melville, Herman',
-             'Parker, Hershel', 
-             'Tanner, Tony',
+        eq_(set([
+            'Cliffs Notes, Inc.',
+            'Kent, Rockwell',
+            'Hayford, Harrison', 
+            'Melville, Herman',
+            'Parker, Hershel', 
+            'Tanner, Tony',
              ]), set(work_contributors))
 
-        set_trace()
-        # But only some of them are considered 'authors' by OCLC.
+        # Most of the contributors have LC and VIAF numbers, but two
+        # (Cliffs Notes and Rockwell Kent) do not.
+        eq_(
+            [None, None, u'n50025038', u'n50025038', u'n50050335', 
+             u'n79006936', u'n79059764', u'n79059764', u'n79059764', 
+             u'n79059764'],
+            sorted([x.lc for x in work.contributors]))
+        eq_(
+            [None, None, u'27068555', u'34482742', u'34482742', u'4947338',
+             u'51716047', u'51716047', u'51716047', u'51716047'],
+            sorted([x.viaf for x in work.contributors]))
+
+        # Only two of the contributors are considered 'authors' by
+        # OCLC.
         work_authors = sorted(
             [x.contributor.name for x in work.contributions
-             if x.role==Contributor.AUTHOR])
+             if x.role==Contributor.AUTHOR_ROLE])
         eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
 
         # The edition only has one contributor.
@@ -240,7 +256,7 @@ class TestAuthorParser(DatabaseTest):
 
     MISSING = object()
 
-    def assert_author(self, result, name, role=Contributor.AUTHOR, 
+    def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE, 
                       birthdate=None, deathdate=None):
         contributor, roles = result
         eq_(contributor.name, name)
@@ -257,7 +273,7 @@ class TestAuthorParser(DatabaseTest):
         elif deathdate:
             eq_(deathdate, contributor.extra[Contributor.DEATH_DATE])
 
-    def assert_parse(self, string, name, role=Contributor.AUTHOR, 
+    def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE, 
                      birthdate=None, deathdate=None):
         [res] = OCLCXMLParser.parse_author_string(self._db, string)
         self.assert_author(res, name, role, birthdate, deathdate)
@@ -266,7 +282,7 @@ class TestAuthorParser(DatabaseTest):
 
         self.assert_parse(
             "Carroll, Lewis, 1832-1898",
-            "Carroll, Lewis", Contributor.AUTHOR, "1832", "1898")
+            "Carroll, Lewis", Contributor.AUTHOR_ROLE, "1832", "1898")
 
         self.assert_parse(
             "Kent, Rockwell, 1882-1971 [Illustrator]",
@@ -275,17 +291,17 @@ class TestAuthorParser(DatabaseTest):
 
         self.assert_parse(
             u"Карролл, Лувис, 1832-1898.",
-            u"Карролл, Лувис", Contributor.AUTHOR, birthdate="1832",
+            u"Карролл, Лувис", Contributor.AUTHOR_ROLE, birthdate="1832",
             deathdate="1898")
 
         kerry, melville = OCLCXMLParser.parse_author_string(
             self._db,
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
-        self.assert_author(kerry, "McSweeney, Kerry", Contributor.AUTHOR,
+        self.assert_author(kerry, "McSweeney, Kerry", Contributor.AUTHOR_ROLE,
                            birthdate="1941", deathdate=self.MISSING)
 
         self.assert_author(
-            melville, "Melville, Herman", Contributor.AUTHOR,
+            melville, "Melville, Herman", Contributor.AUTHOR_ROLE,
             birthdate="1819", deathdate="1891")
 
 
@@ -296,7 +312,7 @@ class TestAuthorParser(DatabaseTest):
 
         # This one could be better.
         self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
-                           Contributor.AUTHOR)
+                           Contributor.AUTHOR_ROLE)
         self.assert_author(giles, "Giles, Lionel",
                            ["Writer of added commentary", "Translator"],
                            "1875", "1958")
