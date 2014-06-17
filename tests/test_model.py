@@ -109,6 +109,51 @@ class TestContributor(DatabaseTest):
         eq_(bob1, bob2)
         eq_(False, new)
 
+    def test_merge(self):
+
+        # Here's Robert.
+        [robert], ignore = Contributor.lookup(self._db, name="Robert")
+        
+        # Here's Bob.
+        [bob], ignore = Contributor.lookup(self._db, name="Bob")
+        bob.extra['foo'] = 'bar'
+        bob.aliases = ['Bobby']
+
+        # Each is a contributor to a WorkRecord.
+        data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+
+        roberts_book, ignore = WorkRecord.for_foreign_id(
+            self._db, data_source, WorkIdentifier.GUTENBERG_ID, "1")
+        roberts_book.add_contributor(robert, Contributor.AUTHOR_ROLE)
+
+        bobs_book, ignore = WorkRecord.for_foreign_id(
+            self._db, data_source, WorkIdentifier.GUTENBERG_ID, "10")
+        bobs_book.add_contributor(bob, Contributor.AUTHOR_ROLE)
+
+        # In a shocking turn of events, it transpires that "Bob" and
+        # "Robert" are the same person. We merge "Bob" into Roberg
+        # thusly:
+        bob.merge_into(robert)
+
+        # 'Bob' is now listed as an alias for Robert, as is Bob's
+        # alias.
+        eq_(['Bob', 'Bobby'], robert.aliases)
+
+        # The extra information associated with Bob is now associated
+        # with Robert.
+        eq_('bar', robert.extra['foo'])
+
+        # The standalone 'Bob' record has been removed from the database.
+        eq_(
+            [], 
+            self._db.query(Contributor).filter(Contributor.name=="Bob").all())
+
+        # Bob's book is now associated with 'Robert', not the standalone
+        # 'Bob' record.
+        eq_([robert], bobs_book.authors)
+
+
+
 class TestWorkRecord(DatabaseTest):
 
     def test_for_foreign_id(self):

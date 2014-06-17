@@ -294,12 +294,14 @@ class OCLCXMLParser(XMLParser):
     @classmethod
     def extract_authors(cls, _db, authors_tag):
         results = []
-        for author_tag in cls._xpath(authors_tag, "//oclc:author"):
-            lc = author_tag.get('lc', None)
-            viaf = author_tag.get('viaf', None)
-            contributor, roles = cls._parse_single_author(
-                _db, author_tag.text, lc=lc, viaf=viaf)
-            results.append(contributor)
+        if authors_tag is not None:
+            for author_tag in cls._xpath(authors_tag, "//oclc:author"):
+                lc = author_tag.get('lc', None)
+                viaf = author_tag.get('viaf', None)
+                contributor, roles = cls._parse_single_author(
+                    _db, author_tag.text, lc=lc, viaf=viaf)
+                if contributor:
+                    results.append(contributor)
         
         return results
 
@@ -345,6 +347,9 @@ class OCLCXMLParser(XMLParser):
             author = author[:-1]
 
         contributor = None
+        if not author:
+            # No name was given for the author.
+            return None, roles
         if existing_authors:
             # Calling Contributor.lookup will result in a database
             # hit, and looking up a contributor based on name may
@@ -378,9 +383,10 @@ class OCLCXMLParser(XMLParser):
                 # author we mean. But we would prefer to identify with
                 # an author who has a known LC or VIAF number.
                 #
-                # This should happen very rarely because of our 
-                # check against existing_authors above.
-                with_id = [x for x in contributors if x.lc is not None
+                # This should happen very rarely because of our check
+                # against existing_authors above. But it will happen
+                # for authors that have a work in Project Gutenberg.
+                with_id = [x for x in contributor if x.lc is not None
                            or x.viaf is not None]
                 if with_id:
                     contributor = with_id[0]
@@ -405,7 +411,8 @@ class OCLCXMLParser(XMLParser):
                 # major that we can assume they're an author.
                 default_role = Contributor.UNKNOWN_ROLE
             roles = roles or [default_role]
-            authors.append((author, roles))
+            if author:
+                authors.append((author, roles))
         return authors
 
     @classmethod

@@ -338,6 +338,7 @@ class Contributor(Base):
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     contributions = relationship("Contribution", backref="contributor")
+    work_contributions = relationship("WorkContribution", backref="contributor")
 
     # Types of roles
     AUTHOR_ROLE = "Author"
@@ -346,6 +347,14 @@ class Contributor(Base):
     # Extra fields
     BIRTH_DATE = 'birthDate'
     DEATH_DATE = 'deathDate'
+
+    def __repr__(self):
+        extra = ""
+        if self.lc:
+            extra += " lc=%s" % self.lc
+        if self.viaf:
+            extra += " viaf=%s" % self.viaf
+        return "Contributor %d (%s)" % (self.id, self.name)
 
     @classmethod
     def lookup(cls, _db, name=None, viaf=None, lc=None, aliases=None,
@@ -358,6 +367,11 @@ class Contributor(Base):
             Contributor.aliases.name : aliases,
             Contributor.extra.name : extra
         }
+
+        if not name and not lc and not viaf:
+            raise ValueError(
+                "Cannot look up a Contributor without any identifying "
+                "information whatsoever!")
 
         if name and not lc and not viaf:
             # We will not create a Contributor based solely on a name
@@ -391,20 +405,74 @@ class Contributor(Base):
             if viaf:
                 query[Contributor.viaf.name] = viaf
 
-            contributors, new = get_one_or_create(
-                _db, Contributor, create_method_kwargs=create_method_kwargs,
-                **query)
+            try:
+                contributors, new = get_one_or_create(
+                    _db, Contributor, create_method_kwargs=create_method_kwargs,
+                    **query)
+            except Exception, e:
+                set_trace()
 
         return contributors, new
+
+    def merge_into(self, destination):
+        """Two Contributor records should be the same.
+
+        Merge this one into the other one.
+
+        For now, this should only be used when the exact same record
+        comes in through two sources. It should not be used when two
+        Contributors turn out to represent different names for the
+        same human being, e.g. married names or (especially) pen
+        names. Just because we haven't thought that situation through
+        well enough.
+        """
+        if self == destination:
+            # They're already the same.
+            return
+        print (u"MERGING %r into %r" % (self, destination)).encode("utf8")
+        existing_aliases = set(destination.aliases)
+        new_aliases = list(destination.aliases)
+        for name in [self.name] + self.aliases:
+            if name != destination.name and name not in existing_aliases:
+                new_aliases.append(name)
+        if new_aliases != destination.aliases:
+            destination.aliases = new_aliases
+        for k, v in self.extra.items():
+            if not k in destination.extra:
+                destination.extra[k] = v
+        if not destination.lc:
+            destination.lc = self.lc
+        if not destination.viaf:
+            destination.viaf = self.viaf
+        for contribution in self.contributions:
+            contribution.contributor_id = destination.id
+        for contribution in self.work_contributions:
+            contribution.contributor_id = destination.id
+        _db = Session.object_session(self)
+        _db.query(Contributor).filter(Contributor.id==self.id).delete()
+        _db.commit()
 
 
 class Contribution(Base):
     """A contribution made by a Contributor to a WorkRecord."""
     __tablename__ = 'contributions'
     id = Column(Integer, primary_key=True)
-    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True)
-    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True)
-    role = Column(Unicode, index=True)
+    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True,
+                           nullable=False)
+    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True,
+                            nullable=False)
+    role = Column(Unicode, index=True, nullable=False)
+
+
+class WorkContribution(Base):
+    """A contribution made by a Contributor to a Work."""
+    __tablename__ = 'workcontributions'
+    id = Column(Integer, primary_key=True)
+    work_id = Column(Integer, ForeignKey('works.id'), index=True,
+                     nullable=False)
+    contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True,
+                            nullable=False)
+    role = Column(Unicode, index=True, nullable=False)
 
 
 class WorkRecord(Base):
@@ -467,6 +535,11 @@ class WorkRecord(Base):
     @property
     def contributors(self):
         return [x.contributor for x in self.contributions]
+
+    @property
+    def authors(self):
+        return [x.contributor for x in self.contributions
+                if x.role == Contributor.AUTHOR_ROLE]
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
@@ -747,6 +820,9 @@ class Work(Base):
     # A single Work may claim many WorkRecords.
     work_records = relationship("WorkRecord", backref="work")
     
+    # A single Work may be built of many Contributions
+    contributions = relationship("WorkContribution", backref="work")
+
     title = Column(Unicode)
     authors = Column(Unicode)
     languages = Column(Unicode, index=True)
