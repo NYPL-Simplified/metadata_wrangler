@@ -25,9 +25,10 @@ from collections import defaultdict
 thumbnail_image = "http://opds-spec.org/image/thumbnail" 
 full_image = "http://opds-spec.org/image" 
 
-class OPDSFeed(self):
-   
-    def make_entry(work, lane_link):
+class OPDSFeed(object):
+
+    @classmethod
+    def make_entry(cls, work, lane_link):
 
         # Find the .epub link
         open_access = "http://opds-spec.org/acquisition/open-access"
@@ -65,43 +66,63 @@ class OPDSFeed(self):
                     links=links,
                     updated=datetime.datetime.utcnow())
 
-    def make_feed(url, title, works): 
+    @classmethod
+    def make_feed(cls, url, title, works): 
         lane_link = dict(rel="collection", href=url)
         title = title
         feed = AtomFeed(title, [], url=url)
         for work in works:
-            work_o = make_entry(work, lane_link)
+            work_o = cls.make_entry(work, lane_link)
             if work_o:
                 feed.add(**work_o)
         return feed
 
-    def main_navigation_feed(self, _db, language):
+    @classmethod
+    def main_navigation_feed(cls, _db, language):
+        navigation_feed = AtomFeed("Navigation feed (%s)" % language, [],
+                                   url="http://localhost/lanes/" + language)
 
-        navigation_feed.add(
-            title=lane.name,
-            id="tag:%s:%s" % (language, lane.name),
-            links=links,
-            updated=datetime.datetime.utcnow(),
-        )
+        for lane in Lane.self_and_sublanes():
+            if lane == Lane:
+                continue
+            lane = lane.name
+            links = []
+            for order, rel in [
+                    ('title', 'subsection'),
+                    ('recommended', "http://opds-spec.org/recommended")]:
+                link = dict(
+                    type="application/atom+xml;profile=opds-catalog;kind=acquisition",
+                    href=cls.url(language, lane, order),
+                    rel=rel,
+                )
+                links.append(link)
 
-        for Lane in _db.query(Lane):
-            
-        pass
+            navigation_feed.add(
+                title=lane,
+                id="tag:%s:%s" % (language, lane),
+                links=links,
+                updated=datetime.datetime.utcnow(),
+            )
+        return navigation_feed
 
-    def url(self, language, lane, order):
+    @classmethod
+    def url(cls, language, lane, order):
         d = dict(
             language=urllib.quote(language),
-            name=urllib.quote(lane.name),
+            lane=urllib.quote(lane),
             order=urllib.quote(order))
-        return "/lanes/%(language)s/%(lange)s?order=%(order)s" % d
+        return "/lanes/%(language)s/%(lane)s?order=%(order)s" % d
 
-    def recommended_feed(self, language, lane):
-        url = self.url(language, lane, "recommended")
+    @classmethod
+    def recommended_feed(cls, db, language, lane):
+        if isinstance(lane, Lane):
+            lane = lane.name
+        url = cls.url(language, lane, "recommended")
         links = []
         feed_size = 20
         query = db.query(Work).filter(
             Work.languages==language,
-            Work.lane==lane.name,
+            Work.lane==lane,
             Work.quality > 5,
             Work.quality < 1000).order_by(Work.quality).limit(1000)
         c = query.count()
@@ -111,19 +132,22 @@ class OPDSFeed(self):
             we_need = feed_size - len(results)
             query = db.query(Work).filter(
                 Work.languages==language,
-                Work.lane==lane.name,
+                Work.lane==lane,
                 Work.quality > 1, Work.quality < 5).order_by(Work.quality).limit(we_need)
             sample += query.all()
         else:
             sample = random.sample(results, feed_size)
 
-        return self.make_feed(url, lane.name, sample)
+        return cls.make_feed(url, lane, sample)
 
-    def title_feed(self, language, lane):
-        url = self.url(language, lane, "title")
+    @classmethod
+    def title_feed(cls, db, language, lane):
+        if isinstance(lane, Lane):
+            lane = lane.name
+        url = cls.url(language, lane, "title")
         # Build a collection by title
         query = db.query(Work).filter(
             Work.languages==language,
-            Work.lane==lane.name).order_by(Work.title).limit(50)
+            Work.lane==lane).order_by(Work.title).limit(50)
 
-        return make_feed(title_url, lane.name, query)
+        return cls.make_feed(url, lane, query)

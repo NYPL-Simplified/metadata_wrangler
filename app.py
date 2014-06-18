@@ -1,4 +1,5 @@
 from flask import Flask
+import flask
 
 from model import (
     SessionManager,
@@ -7,13 +8,24 @@ from model import (
     )
 from lane import Lane, Unclassified
 from database_credentials import SERVER, MAIN_DB
+from opds import OPDSFeed
 
 db = SessionManager.session(SERVER, MAIN_DB)
 app = Flask(__name__)
 
-@app.route('/')
-def hello_world():
-    return 'Hello World!'
+@app.route('/lanes/<languages>')
+def navigation_feed(languages):
+    return unicode(OPDSFeed.main_navigation_feed(db, languages))
+
+@app.route('/lanes/<languages>/<lane>')
+def feed(languages, lane):
+    order = flask.request.args.get('order', 'recommended')
+    if order == 'recommended':
+        m = OPDSFeed.recommended_feed
+    elif order == 'title':
+        m = OPDSFeed.title_feed
+    return unicode(m(db, languages, lane))
+
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(host='10.128.36.26')
