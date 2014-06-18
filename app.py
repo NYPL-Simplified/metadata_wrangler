@@ -41,6 +41,6 @@ if __name__ == '__main__':
     else:
         host = "10.128.36.26"
 
-    CONFIG['base_url'] = "http://" + host
+    CONFIG['base_url'] = "http://" + host + ":5000"
 
     app.run(debug=debug, host=host)
