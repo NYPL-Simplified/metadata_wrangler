@@ -156,11 +156,15 @@ class MetadataSimilarity(object):
         """What proportion of words do s1 and s2 share, considered as wordbags?"""
         b1 = cls._wordbag(s1) - stopwords
         b2 = cls._wordbag(s2) - stopwords
-        total_words = len(b1.union(b2))
-        shared_words = len(b1.intersection(b2))
-        if not total_words:
+        return cls._proportion(b1, b2)
+
+    @classmethod
+    def _proportion(cls, s1, s2):
+        total = len(s1.union(s2))
+        shared = len(s1.intersection(s2))
+        if not total:
             return 0
-        return shared_words/float(total_words)
+        return shared/float(total)        
 
     @classmethod
     def title_similarity(cls, title1, title2):
@@ -168,16 +172,7 @@ class MetadataSimilarity(object):
 
     @classmethod
     def author_similarity(cls, authors1, authors2):
-        """For each author in authors1, find a matching author in
-        authors2, and vice versa. Quotient is the % of authors
-        that match."""
-
-        if not authors1 and not authors2:
-            # Both sets are empty. A perfect match!
-            return 1
-
-        s1 = set(authors1)
-        s2 = set(authors2)
-        all_authors = s1.union(s2)
-        matching_authors = s1.intersection(s2)
-        return float(len(matching_authors)) / len(all_authors)
+        """What percentage of the total number of authors in the two sets
+        are present in both sets?
+        """
+        return cls._proportion(set(authors1), set(authors2))
