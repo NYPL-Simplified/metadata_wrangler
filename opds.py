@@ -75,10 +75,17 @@ class OPDSFeed(self):
                 feed.add(**work_o)
         return feed
 
-    def lane_feed_url(self):
-        pass
-  
-    def main_navigation_feed(self, language):
+    def main_navigation_feed(self, _db, language):
+
+        navigation_feed.add(
+            title=lane.name,
+            id="tag:%s:%s" % (language, lane.name),
+            links=links,
+            updated=datetime.datetime.utcnow(),
+        )
+
+        for Lane in _db.query(Lane):
+            
         pass
 
     def url(self, language, lane, order):
