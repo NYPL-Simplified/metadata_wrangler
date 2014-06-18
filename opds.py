@@ -17,7 +17,7 @@ from model import (
     Work,
     )
 from lane import Lane, Unclassified
-from database_credentials import SERVER, MAIN_DB
+from database_credentials import SERVER, CONFIG, MAIN_DB
 
 db = SessionManager.session(SERVER, MAIN_DB)
 from collections import defaultdict
@@ -80,7 +80,7 @@ class OPDSFeed(object):
     @classmethod
     def main_navigation_feed(cls, _db, language):
         navigation_feed = AtomFeed("Navigation feed (%s)" % language, [],
-                                   url="http://localhost/lanes/" + language)
+                                   url=CONFIG['base_url'] + "/lanes/%s" % language)
 
         for lane in Lane.self_and_sublanes():
             if lane == Lane:
@@ -108,10 +108,11 @@ class OPDSFeed(object):
     @classmethod
     def url(cls, language, lane, order):
         d = dict(
+            base=CONFIG['base_url'],
             language=urllib.quote(language),
             lane=urllib.quote(lane),
             order=urllib.quote(order))
-        return "/lanes/%(language)s/%(lane)s?order=%(order)s" % d
+        return "%(base)s/lanes/%(language)s/%(lane)s?order=%(order)s" % (d)
 
     @classmethod
     def recommended_feed(cls, db, language, lane):

@@ -1,3 +1,5 @@
+import sys
+
 from flask import Flask
 import flask
 
@@ -7,8 +9,9 @@ from model import (
     Work,
     )
 from lane import Lane, Unclassified
-from database_credentials import SERVER, MAIN_DB
+from database_credentials import SERVER, MAIN_DB, CONFIG
 from opds import OPDSFeed
+
 
 db = SessionManager.session(SERVER, MAIN_DB)
 app = Flask(__name__)
@@ -28,4 +31,16 @@ def feed(languages, lane):
 
 
 if __name__ == '__main__':
-    app.run(host='10.128.36.26')
+
+    debug = True
+    if len(sys.argv) >= 2:
+        debug = not (sys.argv[1] == 'production')
+
+    if debug:
+        host = "0.0.0.0"
+    else:
+        host = "10.128.36.26"
+
+    CONFIG['base_url'] = "http://" + host
+
+    app.run(debug=debug, host=host)
