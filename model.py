@@ -448,6 +448,7 @@ class Contributor(Base):
             destination.lc = self.lc
         if not destination.viaf:
             destination.viaf = self.viaf
+        _db = Session.object_session(self)
         for contribution in self.contributions:
             # Is the new contributor already associated with this
             # WorkRecord in the given role (in which case we delete
@@ -455,7 +456,7 @@ class Contributor(Base):
             # contributor ID)?
             existing_record = _db.query(Contribution).filter(
                 Contribution.contributor_id==destination.id,
-                Contribution.workrecord_id==contribution.workrecord,
+                Contribution.workrecord_id==contribution.workrecord.id,
                 Contribution.role==contribution.role)
             if existing_record.count():
                 _db.delete(contribution)
@@ -464,14 +465,13 @@ class Contributor(Base):
         for contribution in self.work_contributions:
             existing_record = _db.query(WorkContribution).filter(
                 WorkContribution.contributor_id==destination.id,
-                WorkContribution.workrecord_id==contribution.workrecord,
+                WorkContribution.workrecord_id==contribution.workrecord.id,
                 WorkContribution.role==contribution.role)
             if existing_record.count():
                 _db.delete(contribution)
             else:
                 contribution.contributor_id = destination.id
             contribution.contributor_id = destination.id
-        _db = Session.object_session(self)
         _db.query(Contributor).filter(Contributor.id==self.id).delete()
         _db.commit()
 
