@@ -75,30 +75,6 @@ class AcquisitionFeed(OPDSFeed):
             Work.lane==lane).order_by(Work.authors).limit(50)
         return AcquisitionFeed(_db, "%s: by author" % lane, url, query)
 
-
-    @classmethod
-    def quality_sample(
-            cls, _db, languages, lane, quality_min_start,
-            quality_min_rock_bottom, target_size):
-        """Get randomly selected Works that meet minimum quality criteria.
-
-        Bring the quality criteria as low as necessary to fill a feed
-        of the given size, but not below `quality_min_rock_bottom`.
-        """
-        quality_min = start_at
-        results = []
-        while quality_min >= rock_bottom and len(results) < target_size:
-            remaining = target_size - len(results)
-            query = db.query(Work).filter(
-                Work.languages.in_(language),
-                Work.lane==lane,
-                Work.quality > quality_min).order_by(
-                    func.random()).limit(
-                        remaining)
-            results += query.all()
-            quality_min *= 0.5
-        return results
-
     @classmethod
     def recommendations(cls, _db, languages, lane):
         if isinstance(lane, Lane):

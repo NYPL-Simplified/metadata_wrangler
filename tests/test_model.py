@@ -379,6 +379,70 @@ class TestWork(DatabaseTest):
         # to be fixed.
         eq_("Bob", work.authors)
 
+    def test_quality_sample_quality_filter(self):
+
+        english = "eng"
+        lane = "Fiction"
+
+        # Here's a high-quality work.
+        w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=100, languages=english, lane=lane), id=1)
+
+        # Here's a medium-quality-work.
+        w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=10, languages=english, lane=lane), id=2)
+
+        # Here's a low-quality work.
+        w3, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=1, languages=english, lane=lane), id=3)
+
+        # Here's a work of abysmal quality.
+        w4, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=0, languages=english, lane=lane), id=4)
+
+        # We want two works of quality at least 200, but we'll settle
+        # for quality 50. Even that is too much to ask, and we end up with
+        # only one work that fits the criteria.
+        eq_([w1], Work.quality_sample(self._db, english, lane, 200, 50, 2))
+
+        # We want two works of quality at least 50, but we'll settle
+        # for quality 10. This gives us the 100 and the 10.
+        eq_([w1, w2], Work.quality_sample(self._db, english, lane, 50, 10, 2))
+
+        # We want ten works of quality at least one, but less than
+        # zero. This gives us everything except the zero.
+        eq_(set([w1, w2, w3]), set(Work.quality_sample(
+            self._db, english, lane, 1, 0.000001, 10)))
+
+        # We want ten works of quality of at least 50, nothing less.
+        # We only get one work.
+        eq_([w1], Work.quality_sample(self._db, english, lane, 50, 50, 10))
+
+
+    def test_quality_sample_language_filter(self):
+        w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=100, languages="eng", lane="Fiction"), id=1)
+
+        w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=100, languages="spa", lane="Fiction"), id=2)
+
+        eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
+        eq_([w2], Work.quality_sample(self._db, "spa", "Fiction", 0, 0, 2))
+        eq_([], Work.quality_sample(self._db, "fre", "Fiction", 0, 0, 2))
+        eq_(set([w1, w2]), set(Work.quality_sample(self._db, ["eng", "spa"], "Fiction", 0, 0, 2)))
+
+    def test_quality_sample_lane_filter(self):
+        w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=100, languages="eng", lane="Fiction"), id=1)
+
+        w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
+            quality=10, languages="eng", lane="Nonfiction"), id=2)
+
+        eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
+        eq_([w2], Work.quality_sample(self._db, "eng", "Nonfiction", 0, 0, 2))
+        eq_([], Work.quality_sample(self._db, "eng", "Drama", 0, 0, 2))
+
+
 class TestCirculationEvent(DatabaseTest):
 
     def _event_data(self, **kwargs):

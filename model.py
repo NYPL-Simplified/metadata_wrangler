@@ -22,6 +22,7 @@ from sqlalchemy.orm.exc import (
 from sqlalchemy.ext.mutable import (
     MutableDict,
 )
+from sqlalchemy.sql.functions import func
 from sqlalchemy.exc import (
     IntegrityError
 )
@@ -869,6 +870,49 @@ class Work(Base):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
             self.id, self.title, self.authors, self.lane, self.languages,
             len(self.work_records), len(self.license_pools))).encode("utf8")
+
+    @classmethod
+    def quality_sample(
+            cls, _db, languages, lane, quality_min_start,
+            quality_min_rock_bottom, target_size):
+        """Get randomly selected Works that meet minimum quality criteria.
+
+        Bring the quality criteria as low as necessary to fill a feed
+        of the given size, but not below `quality_min_rock_bottom`.
+        """
+        if isinstance(lane, Lane):
+            lane = lane.name
+        if not isinstance(languages, list):
+            languages = [languages]
+        quality_min = quality_min_start
+        previous_quality_min = None
+        results = []
+        while (quality_min >= quality_min_rock_bottom
+               and len(results) < target_size):
+            remaining = target_size - len(results)
+            # TODO: If the work has multiple languages, in_ will not work.
+            query = _db.query(Work).filter(
+                Work.languages.in_(languages),
+                Work.lane==lane,
+                Work.quality >= quality_min
+            )
+            if previous_quality_min is not None:
+                query = query.filter(
+                    Work.quality < previous_quality_min)
+            query = query.order_by(func.random()).limit(remaining)
+            results.extend(query.all())
+
+            if quality_min == quality_min_rock_bottom:
+                # We can't lower the bar any more.
+                break
+
+            # Lower the bar, in case we didn't get enough results.
+            previous_quality_min = quality_min
+            quality_min *= 0.5
+            if quality_min < quality_min_rock_bottom:
+                quality_min = quality_min_rock_bottom
+        return results
+
 
     def all_workrecords(self, recursion_level=3):
         """All WorkRecords identified by a WorkIdentifier equivalent to 
