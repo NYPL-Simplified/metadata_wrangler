@@ -449,8 +449,27 @@ class Contributor(Base):
         if not destination.viaf:
             destination.viaf = self.viaf
         for contribution in self.contributions:
-            contribution.contributor_id = destination.id
+            # Is the new contributor already associated with this
+            # WorkRecord in the given role (in which case we delete
+            # the old contribution) or not (in which case we switch the
+            # contributor ID)?
+            existing_record = _db.query(Contribution).filter(
+                Contribution.contributor_id==destination.id,
+                Contribution.workrecord_id==contribution.workrecord,
+                Contribution.role==contribution.role)
+            if existing_record.count():
+                _db.delete(contribution)
+            else:
+                contribution.contributor_id = destination.id
         for contribution in self.work_contributions:
+            existing_record = _db.query(WorkContribution).filter(
+                WorkContribution.contributor_id==destination.id,
+                WorkContribution.workrecord_id==contribution.workrecord,
+                WorkContribution.role==contribution.role)
+            if existing_record.count():
+                _db.delete(contribution)
+            else:
+                contribution.contributor_id = destination.id
             contribution.contributor_id = destination.id
         _db = Session.object_session(self)
         _db.query(Contributor).filter(Contributor.id==self.id).delete()
@@ -466,6 +485,9 @@ class Contribution(Base):
     contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True,
                             nullable=False)
     role = Column(Unicode, index=True, nullable=False)
+    __table_args__ = (
+        UniqueConstraint('workrecord_id', 'contributor_id', 'role'),
+    )
 
 
 class WorkContribution(Base):
@@ -477,6 +499,9 @@ class WorkContribution(Base):
     contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True,
                             nullable=False)
     role = Column(Unicode, index=True, nullable=False)
+    __table_args__ = (
+        UniqueConstraint('work_id', 'contributor_id', 'role'),
+    )
 
 
 class WorkRecord(Base):

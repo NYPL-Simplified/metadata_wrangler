@@ -109,7 +109,7 @@ class GutenbergAPI(object):
             #    continue
             #print "Considering %s" % pg_id
 
-            if int(pg_id) > 5000:
+            if int(pg_id) > 20000:
                 continue
             # Find an existing WorkRecord for the book.
             book = WorkRecord.for_foreign_id(

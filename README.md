@@ -16,3 +16,5 @@ pip install psycopg2
 pip install pyatom
 pip install lxml
 pip install beautifulsoup4
+pip install requests
+pip install rdflib
