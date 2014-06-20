@@ -407,6 +407,10 @@ class OCLCMonitorForGutenberg(object):
 
                     if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                         records.extend(editions)
+                    elif representation_type == OCLCXMLParser.NOT_FOUND_STATUS:
+                        # This shouldn't happen, but if it does,
+                        # it's not a big deal. Just do nothing.
+                        pass
                     else:
                         set_trace()
                         print " Got unexpected representation type from lookup: %s" % representation_type
