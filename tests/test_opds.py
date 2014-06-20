@@ -68,6 +68,10 @@ class TestOPDS(DatabaseTest):
         eq_("subsection", title['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, title['type'])
 
+    def test_navigation_feed_one_language(self):
+        feed = NavigationFeed.main_feed(TopLevel, "eng")
+        assert feed.url.endswith("/lanes/eng")
+
     def test_acquisition_feed_by_title(self):
         lane = "Foo"
         language="eng"
@@ -147,3 +151,14 @@ class TestOPDS(DatabaseTest):
         by_title = AcquisitionFeed.by_title(self._db, "eng", lane)
         eq_(1, len(by_title.entries))
         eq_([work.title], [x.title for x in by_title.entries])
+
+    def test_recommendation_feed_ignores_low_quality_works(self):
+        lane="Foo"
+        good = self._work(lane=lane, languages="eng", with_license_pool=True)
+        good.quality = 100
+        bad = self._work(lane=lane, languages="eng", with_license_pool=True)
+        bad.quality = 0
+
+        # We get the good one and omit the bad one.
+        feed = AcquisitionFeed.recommendations(self._db, "eng", lane)
+        ea([good.title], [x.title for x in feed.entries])

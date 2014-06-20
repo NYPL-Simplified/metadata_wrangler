@@ -857,7 +857,7 @@ class Work(Base):
     contributions = relationship("WorkContribution", backref="work")
 
     title = Column(Unicode)
-    authors = Column(Unicode)
+    authors = Column(Unicode, index=True)
     languages = Column(Unicode, index=True)
     audience = Column(Unicode, index=True)
     subjects = Column(MutableDict.as_mutable(JSON), default={})

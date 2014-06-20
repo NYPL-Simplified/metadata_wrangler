@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     print "Recalculating lanes for all works."
     i = 0
-    for work in session.query(Work):
+    for work in session.query(Work).filter(Work.lane==None):
         work.calculate_lane()
         work.calculate_quality()
         work.calculate_presentation()

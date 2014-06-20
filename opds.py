@@ -112,7 +112,7 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(languages, lane)
         links = []
         feed_size = 20
-        works = cls.quality_sample(_db, languages, lane, 75, 1, feed_size)
+        works = Work.quality_sample(_db, languages, lane, 75, 1, feed_size)
         return AcquisitionFeed(
             _db, "%s: recommendations" % lane, url, works)
 
@@ -121,18 +121,23 @@ class AcquisitionFeed(OPDSFeed):
         # Find the .epub link
         epub_href = None
         p = None
-        active_license_pool = False
+        active_license_pool = None
         for p in work.license_pools:
             if p.open_access:
-                active_license_pool = True
+                active_license_pool = p
                 break
 
         # There's no reason to present a book that has no active license pool.
         if not active_license_pool:
             return False
 
+        work_record = active_license_pool.work_record()
+        identifier = work_record.primary_identifier
+        key = "/".join(map(urllib.quote, [work_record.data_source.name, identifier.identifier]))
+        checkout_url = self._url("/works/%s/checkout" % key)
+
         links=[dict(rel=self.OPEN_ACCESS_REL, 
-                    href=self._url("/works/%s/checkout" % work.id))]
+                    href=checkout_url)]
 
         if work.thumbnail_cover_link:
             links.append(dict(rel=self.THUMBNAIL_IMAGE_REL,
@@ -141,8 +146,8 @@ class AcquisitionFeed(OPDSFeed):
             links.append(dict(rel=self.FULL_IMAGE_REL,
                               href=work.full_cover_link))
 
-        url = "tag:work:%s" % work.id
-        entry = dict(title=work.title, url=url, id=url,
+        tag = "tag:work:%s" % work.id
+        entry = dict(title=work.title, url=checkout_url, id=tag,
                     author=work.authors or "", 
                     summary="Quality: %s" % work.quality,
                     links=links,
@@ -159,13 +164,15 @@ class NavigationFeed(OPDSFeed):
 
     @classmethod
     def main_feed(self, parent_lane, languages):
+        if isinstance(languages, basestring):
+            languages = [languages]
         language_code = ",".join(sorted(languages))
         feed = NavigationFeed(
             "Navigation feed", [],
             url=urljoin(CONFIG['site']['root'], "/lanes/%s" % urllib.quote(language_code)))
 
-        for lane in parent_lane.self_and_sublanes():
-            if lane == Lane:
+        for lane in sorted(parent_lane.self_and_sublanes(), key=lambda x: x.name):
+            if not lane.name:
                 continue
             lane = lane.name
             links = []

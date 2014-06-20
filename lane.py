@@ -13,6 +13,7 @@ class Lane(object):
     LCC = []
     DDC = []
     KEYWORDS = []
+    name = None
 
     @classmethod
     def self_and_sublanes(cls, nemesis=None):
