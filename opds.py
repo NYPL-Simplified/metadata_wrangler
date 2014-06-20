@@ -32,6 +32,7 @@ class OPDSFeed(AtomFeed):
     OPEN_ACCESS_REL = "http://opds-spec.org/acquisition/open-access"
     THUMBNAIL_IMAGE_REL = "http://opds-spec.org/image/thumbnail" 
     FULL_IMAGE_REL = "http://opds-spec.org/image" 
+    EPUB_MEDIA_TYPE = "application/epub+zip"
 
     @classmethod
     def url(cls, languages, lane, order=None):
@@ -55,19 +56,17 @@ class AcquisitionFeed(OPDSFeed):
         super(AcquisitionFeed, self).__init__(title, [], url=url)
         lane_link = dict(rel="collection", href=url)
         for work in works:
-            work_o = cls.make_entry(work, lane_link)
-            if work_o:
-                self.add(**work_o)
-        return feed        
+            self.add_entry(work, lane_link)
 
     @classmethod
     def by_title(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
         url = cls.url(languages, lane, "title")
-        query = db.query(Work).filter(
+        query = _db.query(Work).filter(
             Work.languages.in_(languages),
             Work.lane==lane).order_by(Work.title).limit(50)
+        set_trace()
         return AcquisitionFeed(_db, "%s: by title" % lane, url, query)
 
     @classmethod
@@ -91,8 +90,8 @@ class AcquisitionFeed(OPDSFeed):
         return AcquisitionFeed(
             _db, "%s: recommendations" % lane, url, works)
 
-    def add_entry(self, work, lane_link):
-        """Turn a work into an entry in this acquisition feed."""
+    def create_entry(self, work, lane_link):
+        """Turn a work into an entry for an acquisition feed."""
         # Find the .epub link
         epub_href = None
         p = None
@@ -101,7 +100,7 @@ class AcquisitionFeed(OPDSFeed):
             if not self.OPEN_ACCESS_REL in r.links:
                 continue
             for l in r.links[open_access]:
-                if l['type'].startswith("application/epub+zip"):
+                if l['type'].startswith(self.EPUB_MEDIA_TYPE):
                     epub_href, epub_type = l['href'], l['type']
 
                     # If we find a 'noimages' epub, we'll keep
@@ -132,6 +131,10 @@ class AcquisitionFeed(OPDSFeed):
                     summary="Quality: %s" % work.quality,
                     links=links,
                     updated=datetime.datetime.utcnow())
+        return entry
+
+    def add_entry(self, work, lane_link):
+        entry = self.create_entry(work, lane_link)
         self.add(**entry)
 
 
