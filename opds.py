@@ -1,10 +1,11 @@
-from pdb import set_trace
+from nose.tools import set_trace
 import os
 import site
 import sys
 import datetime
 import random
 import urllib
+from urlparse import urljoin
 from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
@@ -33,20 +34,24 @@ class OPDSFeed(AtomFeed):
     FULL_IMAGE_REL = "http://opds-spec.org/image" 
 
     @classmethod
-    def url(cls, languages, lane, order):
+    def url(cls, languages, lane, order=None):
         if isinstance(lane, Lane):
             lane = lane.name
         d = dict(
-            base=CONFIG['base_url'],
             language=urllib.quote(",".join(languages)),
             lane=urllib.quote(lane),
-            order=urllib.quote(order))
-        return "%(base)s/lanes/%(language)s/%(lane)s?order=%(order)s" % (d)
+        )
+
+        base = "/lanes/%(language)s/%(lane)s" % d
+        if order:
+            base += "?order=%(order)s" % dict(order=urllib.quote(order))
+
+        return urljoin(CONFIG['site']['root'], base)
 
 
 class AcquisitionFeed(OPDSFeed):
 
-    def __init__(self, _db, title, url, works)
+    def __init__(self, _db, title, url, works):
         super(AcquisitionFeed, self).__init__(title, [], url=url)
         lane_link = dict(rel="collection", href=url)
         for work in works:
@@ -79,7 +84,7 @@ class AcquisitionFeed(OPDSFeed):
     def recommendations(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
-        url = cls.url(languages, lane, "recommended")
+        url = cls.url(languages, lane)
         links = []
         feed_size = 20
         works = cls.quality_sample(_db, languages, lane, 75, 1, feed_size)
@@ -132,36 +137,35 @@ class AcquisitionFeed(OPDSFeed):
 
 class NavigationFeed(OPDSFeed):
 
-    pass
-
-class MainNavigationFeed(NavigationFeed):
-
-    def __init__(self, _db, languages):
+    @classmethod
+    def main_feed(self, parent_lane, languages):
         language_code = ",".join(sorted(languages))
-        super(MainNavigationFeed, self).__init__(
+        feed = NavigationFeed(
             "Navigation feed", [],
-            url=CONFIG['base_url'] + "/lanes/%s" % language_code)
+            url=urljoin(CONFIG['site']['root'], "/lanes/%s" % urllib.quote(language_code)))
 
-        for lane in Lane.self_and_sublanes():
+        for lane in parent_lane.self_and_sublanes():
             if lane == Lane:
                 continue
             lane = lane.name
             links = []
-            for order, rel in [
-                    ('title', 'subsection'),
-                    ('author', 'subsection'),
-                    ('recommended', self.RECOMMENDED_REL)]:
+            for title, order, rel in [
+                    ('By title', 'title', 'subsection'),
+                    ('By author', 'author', 'subsection'),
+                    ('Recommended', None, self.RECOMMENDED_REL)]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
-                    href=cls.url(language_code, lane, order),
+                    href=self.url(languages, lane, order),
                     rel=rel,
+                    title=title,
                 )
                 links.append(link)
 
-            self.add(
+            feed.add(
                 title=lane,
                 id="tag:%s:%s" % (language_code, lane),
+                url=self.url(languages, lane),
                 links=links,
                 updated=datetime.datetime.utcnow(),
             )
-
+        return feed
