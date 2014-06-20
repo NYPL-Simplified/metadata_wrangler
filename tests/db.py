@@ -65,7 +65,7 @@ class DatabaseTest(object):
             return wr, pool
         return wr
 
-    def _work(self, title=None, lane=None, languages=None,
+    def _work(self, title=None, authors=None, lane=None, languages=None,
               with_license_pool=False):
         languages = languages or "eng"
         if isinstance(languages, list):
@@ -77,7 +77,8 @@ class DatabaseTest(object):
             wr, pool = wr
         work, ignore = get_one_or_create(
             self._db, Work, create_method_kwargs=dict(
-                title=title, languages=languages, lane=lane), id=self._str)
+                title=title, languages=languages, lane=lane,
+                authors=authors), id=self._str)
         if with_license_pool:
             work.license_pools.append(pool)
         work.primary_work_record = wr

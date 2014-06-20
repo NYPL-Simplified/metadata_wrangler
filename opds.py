@@ -1,3 +1,17 @@
+# Some code for the checkout manager.
+            # r = p.primary_work_record
+            # if not self.OPEN_ACCESS_REL in r.links:
+            #     continue
+            # for l in r.links[open_access]:
+            #     if l['type'].startswith(self.EPUB_MEDIA_TYPE):
+            #         epub_href, epub_type = l['href'], l['type']
+
+            #         # If we find a 'noimages' epub, we'll keep
+            #         # looking in hopes of finding a better one.
+            #         if not 'noimages' in epub_href:
+            #             break
+
+
 from nose.tools import set_trace
 import os
 import site
@@ -35,7 +49,11 @@ class OPDSFeed(AtomFeed):
     EPUB_MEDIA_TYPE = "application/epub+zip"
 
     @classmethod
-    def url(cls, languages, lane, order=None):
+    def _url(cls, base):
+        return urljoin(CONFIG['site']['root'], base)
+
+    @classmethod
+    def lane_url(cls, languages, lane, order=None):
         if isinstance(lane, Lane):
             lane = lane.name
         d = dict(
@@ -47,7 +65,7 @@ class OPDSFeed(AtomFeed):
         if order:
             base += "?order=%(order)s" % dict(order=urllib.quote(order))
 
-        return urljoin(CONFIG['site']['root'], base)
+        return cls._url(base)
 
 
 class AcquisitionFeed(OPDSFeed):
@@ -62,19 +80,24 @@ class AcquisitionFeed(OPDSFeed):
     def by_title(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
-        url = cls.url(languages, lane, "title")
+        if not isinstance(languages, list):
+            languages = [languages]
+
+        url = cls.lane_url(languages, lane, "title")
         query = _db.query(Work).filter(
             Work.languages.in_(languages),
             Work.lane==lane).order_by(Work.title).limit(50)
-        set_trace()
         return AcquisitionFeed(_db, "%s: by title" % lane, url, query)
 
     @classmethod
     def by_author(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
-        url = cls.url(languages, lane, "author")
-        query = db.query(Work).filter(
+        if not isinstance(languages, list):
+            languages = [languages]
+
+        url = cls.lane_url(languages, lane, "author")
+        query = _db.query(Work).filter(
             Work.languages.in_(languages),
             Work.lane==lane).order_by(Work.authors).limit(50)
         return AcquisitionFeed(_db, "%s: by author" % lane, url, query)
@@ -83,7 +106,10 @@ class AcquisitionFeed(OPDSFeed):
     def recommendations(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
-        url = cls.url(languages, lane)
+        if not isinstance(languages, list):
+            languages = [languages]
+
+        url = cls.lane_url(languages, lane)
         links = []
         feed_size = 20
         works = cls.quality_sample(_db, languages, lane, 75, 1, feed_size)
@@ -95,28 +121,18 @@ class AcquisitionFeed(OPDSFeed):
         # Find the .epub link
         epub_href = None
         p = None
+        active_license_pool = False
         for p in work.license_pools:
-            r = p.primary_work_record
-            if not self.OPEN_ACCESS_REL in r.links:
-                continue
-            for l in r.links[open_access]:
-                if l['type'].startswith(self.EPUB_MEDIA_TYPE):
-                    epub_href, epub_type = l['href'], l['type']
+            if p.open_access:
+                active_license_pool = True
+                break
 
-                    # If we find a 'noimages' epub, we'll keep
-                    # looking in hopes of finding a better one.
-                    if not 'noimages' in epub_href:
-                        break
+        # There's no reason to present a book that has no active license pool.
+        if not active_license_pool:
+            return False
 
-        if not epub_href:
-            # This work has no available epub links. Most likely situation
-            # is it's an audio book.
-            return None
-
-        links=[dict(rel=self.OPEN_ACCESS_REL,
-                    href=epub_href, type=epub_type),
-               lane_link,
-        ]
+        links=[dict(rel=self.OPEN_ACCESS_REL, 
+                    href=self._url("/works/%s/checkout" % work.id))]
 
         if work.thumbnail_cover_link:
             links.append(dict(rel=self.THUMBNAIL_IMAGE_REL,
@@ -125,7 +141,7 @@ class AcquisitionFeed(OPDSFeed):
             links.append(dict(rel=self.FULL_IMAGE_REL,
                               href=work.full_cover_link))
 
-        url = "tag:licensepool:%s" % p.id
+        url = "tag:work:%s" % work.id
         entry = dict(title=work.title, url=url, id=url,
                     author=work.authors or "", 
                     summary="Quality: %s" % work.quality,
@@ -135,7 +151,8 @@ class AcquisitionFeed(OPDSFeed):
 
     def add_entry(self, work, lane_link):
         entry = self.create_entry(work, lane_link)
-        self.add(**entry)
+        if entry:
+            self.add(**entry)
 
 
 class NavigationFeed(OPDSFeed):
@@ -158,7 +175,7 @@ class NavigationFeed(OPDSFeed):
                     ('Recommended', None, self.RECOMMENDED_REL)]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
-                    href=self.url(languages, lane, order),
+                    href=self.lane_url(languages, lane, order),
                     rel=rel,
                     title=title,
                 )
@@ -167,7 +184,7 @@ class NavigationFeed(OPDSFeed):
             feed.add(
                 title=lane,
                 id="tag:%s:%s" % (language_code, lane),
-                url=self.url(languages, lane),
+                url=self.lane_url(languages, lane),
                 links=links,
                 updated=datetime.datetime.utcnow(),
             )

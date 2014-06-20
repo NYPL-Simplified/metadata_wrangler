@@ -70,39 +70,80 @@ class TestOPDS(DatabaseTest):
 
     def test_acquisition_feed_by_title(self):
         lane = "Foo"
-        english = "eng"
-        spanish = "spa"
-        languages = [english, spanish]
+        language="eng"
 
-        w = self._work()
-
-        w_a = self._work(title="AAA", languages=english, lane=lane,
-                         with_license_pool=True)
-        w_z = self._work(title="ZZZ", languages=spanish, lane=lane,
-                         with_license_pool=True)
+        w_z = self._work(title="Z", authors="AAA", languages=language,
+                         lane=lane, with_license_pool=True)
+        w_a = self._work(title="A", authors="ZZZ", languages=language,
+                         lane=lane, with_license_pool=True)
         self._db.commit()
 
         # We get a feed...
-        by_title = AcquisitionFeed.by_title(self._db, languages, lane)
+        by_title = AcquisitionFeed.by_title(self._db, [language], lane)
         eq_("Foo: by title", by_title.title)
-        assert by_title.url.endswith("/lanes/eng%2Cspa/Foo?order=title")
-        
-        # ...but this feed has no entries because the works don't have
-        # any open-access links in epub format.
-        eq_(0, len(by_title.entries))
+        assert by_title.url.endswith("/lanes/eng/Foo?order=title")
 
-        # Let's add some links and try again.
-        w_a.primary_work_record.links = {
-            AcquisitionFeed.OPEN_ACCESS_REL : dict(
-                type=AcquitisionFeed.EPUB_MEDIA_TYPE,
-                href="http://w1/")
-        }
+        # ...with two entries.
+        eq_(2, len(by_title.entries))
 
-        w_b.primary_work_record.links = {
-            AcquisitionFeed.OPEN_ACCESS_REL : dict(
-                type="text/html",
-                href="http://w1/")
-        }
+        # The "A" title shows up first, even though it was created
+        # second.
+        eq_(["A", "Z"], [x.title for x in by_title.entries])
+
+    def test_acquisition_feed_by_author(self):
+        lane = "Foo"
+        language="eng"
+
+        w_z = self._work(title="A", authors="ZZZ", languages=language,
+                         lane=lane, with_license_pool=True)
+        w_a = self._work(title="Z", authors="AAA", languages=language,
+                         lane=lane, with_license_pool=True)
         self._db.commit()
-        by_title = AcquisitionFeed.by_title(self._db, languages, lane)
-        set_trace()
+
+        # We get a feed...
+        by_author = AcquisitionFeed.by_author(self._db, [language], lane)
+        eq_("Foo: by author", by_author.title)
+        assert by_author.url.endswith("/lanes/eng/Foo?order=author")
+
+        # ...with two entries.
+        eq_(2, len(by_author.entries))
+
+        # The "AAA" title shows up first, even though it was created
+        # second.
+        names = []
+        for entry in by_author.entries:
+            names.append([author['name'] for author in entry.author])
+        eq_([["AAA"], ["ZZZ"]], names)
+
+    def test_acquisition_feed_gets_one_lane_only(self):
+        work = self._work(lane="Foo", with_license_pool=True)
+        work2 = self._work(lane="Bar", with_license_pool=True)
+        by_title = AcquisitionFeed.by_title(self._db, "eng", "Foo")
+        eq_(1, len(by_title.entries))
+        eq_([work.title], [x.title for x in by_title.entries])
+
+    def test_acquisition_feed_gets_only_specified_languages(self):
+        lane="Foo"
+        work = self._work(lane=lane, languages="eng", with_license_pool=True)
+        work2 = self._work(lane=lane, languages="spa", with_license_pool=True)
+
+        feed = AcquisitionFeed.by_title(self._db, "eng", lane)
+        eq_(1, len(feed.entries))
+
+        feed = AcquisitionFeed.by_title(self._db, ["eng", "spa"], lane)
+        eq_(2, len(feed.entries))
+
+
+    def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
+        lane = "Foo"
+        work = self._work(lane=lane, with_license_pool=True)
+        no_license_pool = self._work(lane=lane, with_license_pool=False)
+        not_open_access = self._work(lane=lane, with_license_pool=True)
+        not_open_access.license_pools[0].open_access = False
+        self._db.commit()
+
+        # We get a feed with only one entry--the one with an open-access
+        # license pool.
+        by_title = AcquisitionFeed.by_title(self._db, "eng", lane)
+        eq_(1, len(by_title.entries))
+        eq_([work.title], [x.title for x in by_title.entries])
