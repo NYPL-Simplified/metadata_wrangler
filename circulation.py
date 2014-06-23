@@ -42,7 +42,7 @@ def feed(languages, lane):
 
 @app.route('/works/<data_source>/<identifier>/checkout')
 def checkout(data_source, identifier):
-    return "hey there."
+    return "I heard you like books."
 
 print "DONE"
 print __name__
