@@ -14,10 +14,12 @@ from opds import (
     NavigationFeed
 )
 
+print "LOADED"
 db = production_session()
+print "DB"
 app = Flask(__name__)
 app.debug = True
-
+print "APP"
 @app.route('/')
 def index():
     return redirect(url_for('.navigation_feed', languages='eng'))
@@ -42,6 +44,8 @@ def feed(languages, lane):
 def checkout(data_source, identifier):
     return "hey there."
 
+print "DONE"
+print __name__
 if __name__ == '__main__':
 
     debug = True
