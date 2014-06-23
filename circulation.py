@@ -4,7 +4,7 @@ from flask import Flask
 import flask
 
 from model import (
-    production_db,
+    production_session,
     WorkRecord,
     Work,
     )
@@ -14,8 +14,7 @@ from opds import (
     NavigationFeed
 )
 
-
-db = production_db()
+db = production_session()
 app = Flask(__name__)
 
 @app.route('/lanes/<languages>')
@@ -34,18 +33,17 @@ def feed(languages, lane):
 
     return unicode(m(db, languages, lane))
 
+# if __name__ == '__main__':
 
-if __name__ == '__main__':
+#     debug = False
+#     if len(sys.argv) >= 2:
+#         debug = not (sys.argv[1] == 'production')
 
-    debug = False
-    if len(sys.argv) >= 2:
-        debug = not (sys.argv[1] == 'production')
+#     if debug:
+#         host = "0.0.0.0"
+#     else:
+#         host = "10.128.36.26"
 
-    if debug:
-        host = "0.0.0.0"
-    else:
-        host = "10.128.36.26"
+#     CONFIG['site']['root'] = "http://" + host + ":5000"
 
-    CONFIG['site']['root'] = "http://" + host + ":5000"
-
-    app.run(debug=debug, host=host)
+#     app.run(debug=debug, host=host)
