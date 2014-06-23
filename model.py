@@ -46,7 +46,6 @@ from sqlalchemy import (
 from classification import Classification
 from lane import Lane
 from util import (
-    random_isbns,
     MetadataSimilarity,
 )
 
