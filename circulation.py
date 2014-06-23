@@ -1,7 +1,7 @@
 import sys
 
-from flask import Flask
 import flask
+from flask import Flask, url_for, redirect
 
 from model import (
     production_session,
@@ -17,6 +17,10 @@ from opds import (
 db = production_session()
 app = Flask(__name__)
 app.debug = True
+
+@app.route('/')
+def index():
+    return redirect(url_for('.navigation_feed', languages='eng'))
 
 @app.route('/lanes/<languages>')
 def navigation_feed(languages):
@@ -34,17 +38,12 @@ def feed(languages, lane):
 
     return unicode(m(db, languages, lane))
 
-# if __name__ == '__main__':
+@app.route('/works/<data_source>/<identifier>/checkout')
+def checkout(data_source, identifier):
+    return "hey there."
 
-#     debug = False
-#     if len(sys.argv) >= 2:
-#         debug = not (sys.argv[1] == 'production')
+if __name__ == '__main__':
 
-#     if debug:
-#         host = "0.0.0.0"
-#     else:
-#         host = "10.128.36.26"
-
-#     CONFIG['site']['root'] = "http://" + host + ":5000"
-
-#     app.run(debug=debug, host=host)
+    debug = True
+    host = "0.0.0.0"
+    app.run(debug=debug, host=host)

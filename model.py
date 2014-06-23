@@ -63,8 +63,6 @@ from sqlalchemy.dialects.postgresql import (
 )
 from sqlalchemy.orm import sessionmaker
 
-from config import SERVER, MAIN_DB, CONFIG
-
 DEBUG = False
 
 def production_session():

@@ -23,7 +23,6 @@ from urlparse import urljoin
 from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
-from config import CONFIG
 
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
@@ -31,6 +30,8 @@ from model import (
     WorkRecord,
     Work,
     )
+from flask import request, url_for
+
 from lane import Lane, Unclassified
 
 class OPDSFeed(AtomFeed):
@@ -45,23 +46,14 @@ class OPDSFeed(AtomFeed):
     EPUB_MEDIA_TYPE = "application/epub+zip"
 
     @classmethod
-    def _url(cls, base):
-        return urljoin(CONFIG['site']['root'], base)
-
-    @classmethod
     def lane_url(cls, languages, lane, order=None):
         if isinstance(lane, Lane):
             lane = lane.name
-        d = dict(
-            language=urllib.quote(",".join(languages)),
-            lane=urllib.quote(lane),
-        )
+        if isinstance(languages, list):
+            languages = ",".join(languages)
 
-        base = "/lanes/%(language)s/%(lane)s" % d
-        if order:
-            base += "?order=%(order)s" % dict(order=urllib.quote(order))
-
-        return cls._url(base)
+        return url_for('feed', languages=languages, lane=lane, order=order,
+                       _external=True)
 
 class FeedPosition(object):
 
@@ -141,7 +133,9 @@ class AcquisitionFeed(OPDSFeed):
         work_record = active_license_pool.work_record()
         identifier = work_record.primary_identifier
         key = "/".join(map(urllib.quote, [work_record.data_source.name, identifier.identifier]))
-        checkout_url = self._url("/works/%s/checkout" % key)
+        checkout_url = url_for(
+            "checkout", data_source=work_record.data_source.name,
+            identifier=identifier.identifier)
 
         links=[dict(rel=self.OPEN_ACCESS_REL, 
                     href=checkout_url)]
@@ -176,7 +170,8 @@ class NavigationFeed(OPDSFeed):
         language_code = ",".join(sorted(languages))
         feed = NavigationFeed(
             "Navigation feed", [],
-            url=urljoin(CONFIG['site']['root'], "/lanes/%s" % urllib.quote(language_code)))
+            url=url_for('navigation_feed', languages=language_code,
+                        _external=True))
 
         for lane in sorted(parent_lane.self_and_sublanes(), key=lambda x: x.name):
             if not lane.name:
