@@ -161,4 +161,4 @@ class TestOPDS(DatabaseTest):
 
         # We get the good one and omit the bad one.
         feed = AcquisitionFeed.recommendations(self._db, "eng", lane)
-        ea([good.title], [x.title for x in feed.entries])
+        eq_([good.title], [x.title for x in feed.entries])

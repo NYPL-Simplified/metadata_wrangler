@@ -23,6 +23,7 @@ from urlparse import urljoin
 from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
+from config import CONFIG
 
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
