@@ -260,10 +260,9 @@ class TestParser(DatabaseTest):
         status, records = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
-
         # We parsed five editions, but none of them have any
         # contributors listed.
-        eq_([[] * 5], [r.contributors for r in records])
+        eq_([[]] * 5, [r.contributors for r in records])
 
 
 class TestAuthorParser(DatabaseTest):

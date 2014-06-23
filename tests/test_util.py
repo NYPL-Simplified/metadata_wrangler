@@ -40,20 +40,12 @@ class DummyAuthor(object):
 class TestMetadataSimilarity(object):
 
     def test_identity(self):
-        """Verify that we ignore the order of words in titles/authors,
+        """Verify that we ignore the order of words in titles,
         as well as non-alphanumeric characters."""
 
         eq_(1, MetadataSimilarity.title_similarity("foo bar", "foo bar"))
         eq_(1, MetadataSimilarity.title_similarity("foo bar", "bar, foo"))
         eq_(1, MetadataSimilarity.title_similarity("foo bar.", "FOO BAR"))
-
-        a1 = DummyAuthor("Foo Bar", ["baz Quux"])
-        a2 = DummyAuthor("Bar Foo", ["QUUX, baz"])
-        a3 = DummyAuthor("BAR FOO", ["baz (QuuX)"])
-
-        eq_(1, MetadataSimilarity.author_similarity([a1], [a2]))
-        eq_(1, MetadataSimilarity.author_similarity([a1], [a3]))
-        eq_(1, MetadataSimilarity.author_similarity([a2], [a3]))
 
     def test_histogram_distance(self):
 
@@ -157,24 +149,6 @@ class TestMetadataSimilarity(object):
         # much more common than the likes of "Tom Sawyer Abroad - Tom
         # Sawyer, Detective", so the difference in histogram
         # difference will be even more stark.
-
-    def test_author_found_in(self):
-        eq_(True, MetadataSimilarity.author_found_in(
-            "Herman Melville", [DummyAuthor("Melville, Herman"),
-                                DummyAuthor("Someone else")]))
-
-        eq_(False, MetadataSimilarity.author_found_in(
-            "Herman Melville", [DummyAuthor("Someone else")]))
-
-        eq_(False, MetadataSimilarity.author_found_in(
-            "No Such Person", [DummyAuthor("Melville, Herman"),
-                               DummyAuthor("Tanner, Tony")]))
-
-        eq_(True, MetadataSimilarity.author_found_in(
-            "Lewis Carroll", [DummyAuthor("Someone else"),
-                              DummyAuthor(
-                                  "Charles Dodgson", ["Lewis Carroll"])]))
-
 
     def _arrange_by_confidence_level(self, title, *other_titles):
         matches = defaultdict(list)
