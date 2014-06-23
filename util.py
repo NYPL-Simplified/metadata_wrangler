@@ -7,9 +7,6 @@ from collections import (
 import pkgutil
 import re
 
-data = pkgutil.get_data("resources", "random_isbns.txt")
-random_isbns = [x.strip() for x in data.split()]    
-
 def batch(iterable, size=1):
     """Split up `iterable` into batches of size `size`."""
 
