@@ -16,6 +16,7 @@ from opds import (
 
 db = production_session()
 app = Flask(__name__)
+app.debug = True
 
 @app.route('/lanes/<languages>')
 def navigation_feed(languages):
