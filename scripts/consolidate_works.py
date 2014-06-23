@@ -12,10 +12,10 @@ from model import (
     Work,
     WorkRecord,
 )
-from database_credentials import SERVER, MAIN_DB
+from model import production_session
 
 if __name__ == '__main__':
-    session = SessionManager.session(SERVER, MAIN_DB)
+    session = production_session()
 
     if len(sys.argv) > 1 and sys.argv[1] == 'delete':
         print "Deleting all works."

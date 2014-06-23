@@ -11,8 +11,8 @@ from model import (
     Work,
 )
 
-from database_credentials import SERVER, MAIN_DB
-db = SessionManager.session(SERVER, MAIN_DB)
+from model import production_session
+db = production_session()
 
 def explain_identifier(identifier):
     print "  %r" % identifier

@@ -4,19 +4,18 @@ from flask import Flask
 import flask
 
 from model import (
-    SessionManager,
+    production_db,
     WorkRecord,
     Work,
     )
 from lane import Lane, Unclassified
-from database_credentials import SERVER, MAIN_DB, CONFIG
 from opds import (
     AcquisitionFeed,
     NavigationFeed
 )
 
 
-db = SessionManager.session(SERVER, MAIN_DB)
+db = production_db()
 app = Flask(__name__)
 
 @app.route('/lanes/<languages>')

@@ -4,7 +4,7 @@ from urlparse import urljoin
 from urllib import urlencode
 
 from integration import XMLParser
-from database_credentials import CONFIG
+from config import CONFIG
 
 class MilleniumPatronAPI(XMLParser):
 

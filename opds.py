@@ -11,7 +11,7 @@
             #         if not 'noimages' in epub_href:
             #             break
 
-
+from collections import defaultdict
 from nose.tools import set_trace
 import os
 import site
@@ -27,15 +27,10 @@ from sqlalchemy.sql.expression import func
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
-    SessionManager,
     WorkRecord,
     Work,
     )
 from lane import Lane, Unclassified
-from database_credentials import SERVER, CONFIG, MAIN_DB
-
-db = SessionManager.session(SERVER, MAIN_DB)
-from collections import defaultdict
 
 class OPDSFeed(AtomFeed):
 

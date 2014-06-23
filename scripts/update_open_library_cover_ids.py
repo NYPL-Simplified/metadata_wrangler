@@ -6,8 +6,7 @@ site.addsitedir(os.path.join(d, ".."))
 from integration.openlibrary import (
     OpenLibraryMonitor
 )
-from model import SessionManager
-from database_credentials import SERVER, MAIN_DB
+from model import production_session
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -18,5 +17,5 @@ if __name__ == '__main__':
     path = os.path.join(
         path, "Open Library", "oclc_coverids_2011-03-31.txt")
 
-    session = SessionManager.session(SERVER, MAIN_DB)
+    session = production_session()
     OpenLibraryMonitor().run(session, path)

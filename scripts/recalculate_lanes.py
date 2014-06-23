@@ -11,10 +11,10 @@ from model import (
     SessionManager,
     Work,
 )
-from database_credentials import SERVER, MAIN_DB
+from model import production_session
 
 if __name__ == '__main__':
-    session = SessionManager.session(SERVER, MAIN_DB)
+    session = production_session()
 
     print "Recalculating lanes for all works."
     i = 0

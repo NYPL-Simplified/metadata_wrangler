@@ -62,9 +62,12 @@ from sqlalchemy.dialects.postgresql import (
 )
 from sqlalchemy.orm import sessionmaker
 
-from database_credentials import SERVER, MAIN_DB, CONTENT_CAFE
+from config import SERVER, MAIN_DB, CONFIG
 
 DEBUG = False
+
+def production_session():
+    return SessionManager.session(SERVER, MAIN_DB)
 
 class SessionManager(object):
 
