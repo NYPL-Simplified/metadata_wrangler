@@ -3,6 +3,7 @@ from collections import (
     defaultdict,
 )
 import datetime
+import os
 from nose.tools import set_trace
 import random
 
@@ -67,25 +68,24 @@ from config import SERVER, MAIN_DB, CONFIG
 DEBUG = False
 
 def production_session():
-    return SessionManager.session(SERVER, MAIN_DB)
+    return SessionManager.session(os.environ['DATABASE_URL'])
 
 class SessionManager(object):
 
     @classmethod
-    def engine(cls, server, database):
-        url = URL(server['engine'], database['username'], database['password'],
-                  server['host'], server['port'], database['database'])
+    def engine(cls, url=None):
+        url = url or os.environ['DATABASE_URL']
         return create_engine(url, echo=DEBUG)
 
     @classmethod
-    def initialize(cls, server, database):
-        engine = cls.engine(server, database)
+    def initialize(cls, url):
+        engine = cls.engine(url)
         Base.metadata.create_all(engine)
         return engine, engine.connect()
 
     @classmethod
-    def session(cls, server, database):
-        engine, connection = cls.initialize(server, database)
+    def session(cls, url):
+        engine, connection = cls.initialize(url)
         session = Session(connection)
         cls.initialize_data(session)
         session.commit()

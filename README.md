@@ -19,3 +19,5 @@ pip install beautifulsoup4
 pip install requests
 pip install rdflib
 pip install gunicorn
+
+heroku addons:add heroku-postgresql

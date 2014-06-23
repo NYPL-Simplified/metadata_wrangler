@@ -1,3 +1,4 @@
+import os
 from nose.tools import set_trace
 from sqlalchemy.engine import create_engine
 from sqlalchemy.orm.session import Session
@@ -11,13 +12,12 @@ from model import (
     Work,
     get_one_or_create
 )
-from config import SERVER, TEST_DB
 
 def setup_module():
     global transaction, connection, engine
 
     # Connect to the database and create the schema within a transaction
-    engine, connection = SessionManager.initialize(SERVER, TEST_DB)
+    engine, connection = SessionManager.initialize(os.environ['DATABASE_URL_TEST'])
     Base.metadata.drop_all(connection)
     Base.metadata.create_all(connection)
     transaction = connection.begin()
