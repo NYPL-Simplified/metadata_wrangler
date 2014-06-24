@@ -15,6 +15,7 @@ from sqlalchemy.sql.expression import func
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
+    WorkIdentifier,
     WorkRecord,
     Work,
     )
@@ -165,6 +166,12 @@ class AcquisitionFeed(OPDSFeed):
         if work.full_cover_link:
             url = URLRewriter.rewrite(work.full_cover_link)
             links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
+        elif identifier.type == WorkIdentifier.GUTENBERG_ID:
+            host = URLRewriter.GENERATED_COVER_HOST
+            url = urljoin(
+                host, "/Gutenberg ID/%s.png" % identifier.identifier)
+            links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
+
 
         tag = "tag:work:%s" % work.id
         entry = dict(title=work.title, url=checkout_url, id=tag,
