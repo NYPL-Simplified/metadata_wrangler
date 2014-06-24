@@ -36,15 +36,6 @@ class URLRewriter(object):
 
     @classmethod
     def _rewrite_gutenberg(cls, parsed):
-        host = "http://gutenberg.10.128.36.172.xip.io/"
-        # http://www.gutenberg.org/ebooks/126.epub.noimages
-        #  =>
-        # http://gutenberg.10.128.36.172.xip.io/126/pg126.epub
-
-        # http://www.gutenberg.org/cache/epub/22475/pg22475.cover.medium.jpg
-        #  =>
-        # http://gutenberg.10.128.36.172.xip.io/22475/pg22475.cover.medium.jpg
-
         if parsed.path.startswith('/cache/epub/'):
             new_path = parsed.path.replace('/cache/epub/', '', 1)
         elif '.epub' in parsed.path:
