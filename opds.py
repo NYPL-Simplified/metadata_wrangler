@@ -1,25 +1,13 @@
-# Some code for the checkout manager.
-            # r = p.primary_work_record
-            # if not self.OPEN_ACCESS_REL in r.links:
-            #     continue
-            # for l in r.links[open_access]:
-            #     if l['type'].startswith(self.EPUB_MEDIA_TYPE):
-            #         epub_href, epub_type = l['href'], l['type']
-
-            #         # If we find a 'noimages' epub, we'll keep
-            #         # looking in hopes of finding a better one.
-            #         if not 'noimages' in epub_href:
-            #             break
-
 from collections import defaultdict
 from nose.tools import set_trace
+import re
 import os
 import site
 import sys
 import datetime
 import random
 import urllib
-from urlparse import urljoin
+from urlparse import urlparse, urljoin
 from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
@@ -33,6 +21,43 @@ from model import (
 from flask import request, url_for
 
 from lane import Lane, Unclassified
+
+class URLRewriter(object):
+
+    epub_id = re.compile("/([0-9]+)")
+
+    @classmethod
+    def rewrite(cls, url):
+        parsed = urlparse(url)
+        if parsed.hostname in ('www.gutenberg.org', 'gutenberg.org'):
+            return cls._rewrite_gutenberg(parsed)
+        else:
+            return url
+
+    @classmethod
+    def _rewrite_gutenberg(cls, parsed):
+        host = "http://gutenberg.10.128.36.172.xip.io/"
+        # http://www.gutenberg.org/ebooks/126.epub.noimages
+        #  =>
+        # http://gutenberg.10.128.36.172.xip.io/126/pg126.epub
+
+        # http://www.gutenberg.org/cache/epub/22475/pg22475.cover.medium.jpg
+        #  =>
+        # http://gutenberg.10.128.36.172.xip.io/22475/pg22475.cover.medium.jpg
+
+        if parsed.path.startswith('/cache/epub/'):
+            new_path = parsed.path.replace('/cache/epub/', '', 1)
+        elif '.epub' in parsed.path:
+            text_id = cls.epub_id.search(parsed.path).groups()[0]
+            if 'noimages' in parsed.path:
+                new_path = "%(pub_id)s/pg%(pub_id)s.epub" 
+            else:
+                new_path = "%(pub_id)s/pg%(pub_id)s.epub.images"
+            new_path = new_path % dict(pub_id=text_id)
+        else:
+            new_path = parsed_path
+        return urljoin(host, new_path)
+
 
 class OPDSFeed(AtomFeed):
 
@@ -141,11 +166,11 @@ class AcquisitionFeed(OPDSFeed):
                     href=checkout_url)]
 
         if work.thumbnail_cover_link:
-            links.append(dict(rel=self.THUMBNAIL_IMAGE_REL,
-                              href=work.thumbnail_cover_link))
+            url = URLRewriter.rewrite(work.thumbnail_cover_link)
+            links.append(dict(rel=self.THUMBNAIL_IMAGE_REL, href=url))
         if work.full_cover_link:
-            links.append(dict(rel=self.FULL_IMAGE_REL,
-                              href=work.full_cover_link))
+            url = URLRewriter.rewrite(work.full_cover_link)
+            links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
 
         tag = "tag:work:%s" % work.id
         entry = dict(title=work.title, url=checkout_url, id=tag,

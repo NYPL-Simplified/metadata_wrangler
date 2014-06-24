@@ -13,15 +13,15 @@ from model import (
 from lane import Lane, Unclassified
 from opds import (
     AcquisitionFeed,
-    NavigationFeed
+    NavigationFeed,
+    URLRewriter,
 )
 
-print "LOADED"
 db = production_session()
-print "DB"
 app = Flask(__name__)
 app.debug = True
-print "APP"
+
+
 @app.route('/')
 def index():
     return redirect(url_for('.navigation_feed', languages='eng'))
@@ -65,8 +65,7 @@ def checkout(data_source, identifier):
     if not best_link:
         return "Sorry, couldn't find an available license."
     
-    return "Your book is at %s" % best_link
-    #return redirect(link)
+    return redirect(URLRewriter.rewrite(best_link))
 
 
 print "DONE"

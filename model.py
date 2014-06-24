@@ -861,6 +861,7 @@ class WorkRecord(Base):
         if not open_access in self.links:
             return None
 
+        epub_href = None
         for l in self.links[open_access]:
             if l['type'].startswith("application/epub+zip"):
                 epub_href, epub_type = l['href'], l['type']
@@ -1113,6 +1114,9 @@ class Work(Base):
                     best_index = i
                     break
             self.thumbnail_cover_link, self.full_cover_link = items[best_index][0]
+        else:
+            self.thumbnail_cover_link = None
+            self.full_cover_link = None
 
     def calculate_quality(self):
         """Calculate some measure of the quality of a work.

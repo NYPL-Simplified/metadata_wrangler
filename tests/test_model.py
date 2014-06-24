@@ -310,6 +310,7 @@ class TestWorkRecord(DatabaseTest):
         work.work_records.extend([gutenberg])
         eq_(4, work.all_workrecords().count())
 
+
 class TestLicensePool(DatabaseTest):
 
     def test_for_foreign_id(self):
