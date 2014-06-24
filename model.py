@@ -151,7 +151,10 @@ class DataSource(Base):
 
     @classmethod
     def lookup(cls, _db, name):
-        return _db.query(cls).filter_by(name=name).one()
+        try:
+            return _db.query(cls).filter_by(name=name).one()
+        except NoResultFound:
+            return None
 
     @classmethod
     def well_known_sources(cls, _db):
@@ -269,11 +272,21 @@ class WorkIdentifier(Base):
     )
 
     @classmethod
-    def for_foreign_id(cls, _db, foreign_identifier_type, foreign_id):
-        work_identifier, was_new = get_one_or_create(
-            _db, cls, type=foreign_identifier_type,
-            identifier=foreign_id)
-        return work_identifier, was_new
+    def for_foreign_id(cls, _db, foreign_identifier_type, foreign_id,
+                       autocreate=True):
+        was_new = None
+        if autocreate:
+            m = get_one_or_create
+        else:
+            m = get_one
+            was_new = False
+
+        result = m(_db, cls, type=foreign_identifier_type,
+                   identifier=foreign_id)
+        if isinstance(result, tuple):
+            return result
+        else:
+            return result, False
 
     def equivalent_to(self, data_source, work_identifier):
         """Make one WorkIdentifier equivalent to another.
@@ -840,6 +853,23 @@ class WorkRecord(Base):
     def classifications(self):
         if not self.subjects:
             return None
+
+    @property
+    def best_open_access_link(self):
+        """Find the best open-access link for this LicensePool."""
+        open_access = WorkRecord.OPEN_ACCESS_DOWNLOAD
+        if not open_access in self.links:
+            return None
+
+        for l in self.links[open_access]:
+            if l['type'].startswith("application/epub+zip"):
+                epub_href, epub_type = l['href'], l['type']
+
+                # A Project Gutenberg-ism: if we find a 'noimages' epub,
+                # we'll keep looking in hopes of finding a better one.
+                if not 'noimages' in epub_href:
+                    break
+        return epub_href
 
 
 class Work(Base):
@@ -1413,6 +1443,26 @@ class LicensePool(Base):
         #    print "Created %r" % work
         # All done!
         return work, created
+
+    @property
+    def best_license_link(self):
+        """Find the best available licensing link for the work associated
+        with this LicensePool.
+        """
+        wr = self.work_record()
+        link = wr.best_open_access_link
+        if link:
+            return self, link
+
+        # Either this work is not open-access, or there was no epub
+        # link associated with it.
+        work = self.work
+        for pool in work.license_pools:
+            wr = pool.work_record()
+            link = wr.best_open_access_link
+            if link:
+                return pool, link
+        return self, None
 
 
 class CirculationEvent(Base):
