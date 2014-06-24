@@ -40,15 +40,18 @@ class TestURLRewriter(object):
 
     def test_gutenberg_rewrite(self):
 
-        eq_(
-            "",
-            URLRewriter.rewrite("http://www.gutenberg.org/ebooks/126.epub.noimages"))
-        eq_(
-            "",
-            URLRewriter.rewrite("http://www.gutenberg.org/ebooks/32975-images.epub"))
-        eq_(
-            "",
-            URLRewriter.rewrite("http://www.gutenberg.org/cache/epub/24270/pg24270.cover.medium.jpg"))
+        u = URLRewriter.rewrite(
+            "http://www.gutenberg.org/ebooks/126.epub.noimages")
+        set_trace()
+        assert u.endswith("/126/pg126.epub")
+
+        u = URLRewriter.rewrite(
+            "http://www.gutenberg.org/ebooks/32975.epub.images")
+        assert u.endswith("/32975/pg32975-images.epub")
+
+        u = URLRewriter.rewrite(
+            "http://www.gutenberg.org/cache/epub/24270/pg24270.cover.medium.jpg")
+        assert u.endswith("/24270/pg24270.cover.medium.jpg")
 
 class TestOPDS(DatabaseTest):
     

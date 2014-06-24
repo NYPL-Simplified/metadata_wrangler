@@ -26,6 +26,9 @@ class URLRewriter(object):
 
     epub_id = re.compile("/([0-9]+)")
 
+    GUTENBERG_MIRROR_HOST = "http://gutenberg.10.128.36.172.xip.io/"
+    GENERATED_COVER_HOST = "http://covers.10.128.36.172.xip.io/"
+
     @classmethod
     def rewrite(cls, url):
         parsed = urlparse(url)
@@ -43,11 +46,11 @@ class URLRewriter(object):
             if 'noimages' in parsed.path:
                 new_path = "%(pub_id)s/pg%(pub_id)s.epub" 
             else:
-                new_path = "%(pub_id)s/pg%(pub_id)s.epub.images"
+                new_path = "%(pub_id)s/pg%(pub_id)s-images.epub"
             new_path = new_path % dict(pub_id=text_id)
         else:
             new_path = parsed_path
-        return urljoin(host, new_path)
+        return urljoin(cls.GUTENBERG_MIRROR_HOST, new_path)
 
 
 class OPDSFeed(AtomFeed):
