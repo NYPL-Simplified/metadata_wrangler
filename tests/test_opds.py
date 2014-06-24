@@ -19,6 +19,7 @@ from lane import Lane
 from opds import (
     AcquisitionFeed,
     NavigationFeed,
+    URLRewriter
 )
 
 class TopLevel(Lane):
@@ -34,6 +35,20 @@ class ChildLane(Lane):
     name = "Child"
     sublanes = set([])
 ParentLane.sublanes.add(ChildLane)
+
+class TestURLRewriter(object):
+
+    def test_gutenberg_rewrite(self):
+
+        eq_(
+            "",
+            URLRewriter.rewrite("http://www.gutenberg.org/ebooks/126.epub.noimages"))
+        eq_(
+            "",
+            URLRewriter.rewrite("http://www.gutenberg.org/ebooks/32975-images.epub"))
+        eq_(
+            "",
+            URLRewriter.rewrite("http://www.gutenberg.org/cache/epub/24270/pg24270.cover.medium.jpg"))
 
 class TestOPDS(DatabaseTest):
     
