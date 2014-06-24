@@ -76,6 +76,18 @@ class TestWorkIdentifier(DatabaseTest):
         eq_(identifier, identifier2)
         eq_(False, was_new)
 
+    def test_for_foreign_id_without_autocreate(self):
+        identifier_type = WorkIdentifier.ISBN
+        isbn = self._str
+
+        # We don't want to auto-create a database record, so we set
+        # autocreate=False
+        identifier, was_new = WorkIdentifier.for_foreign_id(
+            self._db, identifier_type, isbn, autocreate=False)
+        eq_(None, identifier)
+        eq_(False, was_new)
+
+
 class TestContributor(DatabaseTest):
 
     def test_lookup_by_viaf(self):
