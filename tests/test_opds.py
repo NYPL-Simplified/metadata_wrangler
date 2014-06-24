@@ -9,6 +9,8 @@ from tests.db import (
     DatabaseTest,
 )
 
+from circulation import app
+
 from model import (
     get_one_or_create,
     Work,
@@ -42,7 +44,6 @@ class TestURLRewriter(object):
 
         u = URLRewriter.rewrite(
             "http://www.gutenberg.org/ebooks/126.epub.noimages")
-        set_trace()
         assert u.endswith("/126/pg126.epub")
 
         u = URLRewriter.rewrite(
@@ -54,6 +55,12 @@ class TestURLRewriter(object):
         assert u.endswith("/24270/pg24270.cover.medium.jpg")
 
 class TestOPDS(DatabaseTest):
+
+    def setup(self):
+        super(TestOPDS, self).setup()
+        self.app = app.test_client()
+        self.ctx = app.test_request_context()
+        self.ctx.push()
     
     def test_navigation_feed(self):
         feed = NavigationFeed.main_feed(TopLevel, ["eng", "spa"])
