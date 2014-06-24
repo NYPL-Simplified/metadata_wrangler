@@ -48,6 +48,15 @@ class TestDataSource(DatabaseTest):
         ]
         eq_(set(sources), set(expect))
 
+    def test_lookup(self):
+        gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        eq_(DataSource.GUTENBERG, gutenberg.name)
+        eq_(True, gutenberg.offers_licenses)
+
+    def test_lookup_returns_none_for_nonexistent_source(self):
+        eq_(None, DataSource.lookup(
+            self._db, "No such data source " + self._str))
+
 class TestWorkIdentifier(DatabaseTest):
 
     def test_for_foreign_id(self):
