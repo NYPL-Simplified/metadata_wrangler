@@ -169,7 +169,7 @@ class AcquisitionFeed(OPDSFeed):
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             url = urljoin(
-                host, "/Gutenberg%20ID/%s.png" % identifier.identifier)
+                host, "/Gutenberg%%20ID/%s.png" % identifier.identifier)
             links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
 
 
