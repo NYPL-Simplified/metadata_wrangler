@@ -169,8 +169,8 @@ class NavigationFeed(OPDSFeed):
             links = []
 
             for title, order, facet_group, rel in [
-                    ('By title', 'title', 'Sort By', 'subsection'),
-                    ('By author', 'author', 'Sort By', 'subsection'),
+                    ('Title', 'title', 'Sort by', 'subsection'),
+                    ('Author', 'author', 'Sort by', 'subsection'),
                     ('Recommended', None, None, self.RECOMMENDED_REL)]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
