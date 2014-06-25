@@ -167,16 +167,19 @@ class NavigationFeed(OPDSFeed):
                 continue
             lane = lane.name
             links = []
-            for title, order, rel in [
-                    ('By title', 'title', 'subsection'),
-                    ('By author', 'author', 'subsection'),
-                    ('Recommended', None, self.RECOMMENDED_REL)]:
+
+            for title, order, facet_group, rel in [
+                    ('By title', 'title', 'Sort By', 'subsection'),
+                    ('By author', 'author', 'Sort By', 'subsection'),
+                    ('Recommended', None, None, self.RECOMMENDED_REL)]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
                     href=self.lane_url(languages, lane, order),
                     rel=rel,
                     title=title,
                 )
+                if facet_group:
+                    link['opds:facetGroup'] = facet_group
                 links.append(link)
 
             feed.add(
