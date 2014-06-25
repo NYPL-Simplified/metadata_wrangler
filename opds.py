@@ -75,18 +75,6 @@ class OPDSFeed(AtomFeed):
         return url_for('feed', languages=languages, lane=lane, order=order,
                        _external=True)
 
-class FeedPosition(object):
-
-    """Identify a certain point in a feed."""
-
-    def __init__(self, languages, lane, order, page):
-        self.lane = lane
-        self.lane_name = lane.name
-        if isinstance(languages, basestring):
-            languages = [languages]
-        self.languages = languages
-                
-
 class AcquisitionFeed(OPDSFeed):
 
     def __init__(self, _db, title, url, works):

@@ -11,15 +11,18 @@ from nose.tools import (
 )
 
 from model import (
-    Contributor,
     CirculationEvent,
+    Contributor,
     DataSource,
-    get_one_or_create,
-    Work,
     LicensePool,
+    Work,
+    WorkFeed,
     WorkIdentifier,
     WorkRecord,
+    get_one_or_create,
 )
+
+from lane import Fiction
 
 from tests.db import (
     setup_module, 
@@ -780,3 +783,91 @@ class TestWorkConsolidation(DatabaseTest):
         # Its presentation has been updated and its title now comes from
         # one of the now-deleted Work's WorkRecords.
         eq_("The only title in this whole test.", work1.title)
+
+
+class TestWorkFeed(DatabaseTest):
+
+    def test_setup(self):
+        by_author = WorkFeed("eng", Fiction, Work.authors)
+
+        eq_(["eng"], by_author.languages)
+        eq_("Fiction", by_author.lane)
+        eq_([Work.authors, Work.title, Work.id], by_author.order_by)
+
+        by_title = WorkFeed(["eng", "spa"], "Fiction", Work.title)
+        eq_(["eng", "spa"], by_title.languages)
+        eq_("Fiction", by_title.lane)
+        eq_([Work.title, Work.authors, Work.id], by_title.order_by)
+
+    def test_several_books_same_author(self):
+        title = "The Title"
+        author = "Author, The"
+        language = ["eng"]
+        lane = "Fiction"
+
+        # We've got three works with the same author but different
+        # titles, plus one with a different author and title.
+        w1 = self._work("Title B", author, lane, language, True)
+        w2 = self._work("Title A", author, lane, language, True)
+        w3 = self._work("Title C", author, lane, language, True)
+        w4 = self._work("Title D", "Author, Another", lane, language, True)
+
+        # Order them by title, and everything's fine.
+        feed = WorkFeed(language, lane, Work.title)
+        eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
+        eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
+
+        # Order them by author, and they're secondarily ordered by title.
+        feed = WorkFeed(language, lane, Work.authors)
+        eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
+        eq_([w3], feed.page_query(self._db, w1, 10).all())
+
+        eq_([], feed.page_query(self._db, w3, 10).all())
+
+    def test_several_books_same_author(self):
+        title = "The Title"
+        language = ["eng"]
+        lane = "Fiction"
+
+        # We've got three works with the same author but different
+        # titles, plus one with a different author and title.
+        w1 = self._work(title, "Author B", lane, language, True)
+        w2 = self._work(title, "Author A", lane, language, True)
+        w3 = self._work(title, "Author C", lane, language, True)
+        w4 = self._work("Different title", "Author D", lane, language, True)
+
+        # Order them by author, and everything's fine.
+        feed = WorkFeed(language, lane, Work.authors)
+        eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
+        eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
+
+        # Order them by title, and they're secondarily ordered by author.
+        feed = WorkFeed(language, lane, Work.title)
+        eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
+        eq_([w3], feed.page_query(self._db, w1, 10).all())
+
+        eq_([], feed.page_query(self._db, w3, 10).all())
+
+    def test_several_books_same_author_and_title(self):
+        
+        title = "The Title"
+        author = "Author, The"
+        language = ["eng"]
+        lane = "Fiction"
+
+        # We've got four works with the exact same title and author
+        # string.
+        w1, w2, w3, w4 = [self._work(title, author, lane, language, True)
+                          for i in range(4)]
+
+        # WorkFeed orders them by ID.
+        feed = WorkFeed(language, lane, Work.authors)
+        query = feed.page_query(self._db, None, 10)
+        eq_([w1, w2, w3, w4], query.all())
+
+        # If we provide a last seen work, we only get the works
+        # after that one.
+        query = feed.page_query(self._db, w2, 10)
+        eq_([w3, w4], query.all())
+
+        eq_([], feed.page_query(self._db, w4, 10).all())

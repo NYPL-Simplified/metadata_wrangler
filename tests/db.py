@@ -78,7 +78,7 @@ class DatabaseTest(object):
         work, ignore = get_one_or_create(
             self._db, Work, create_method_kwargs=dict(
                 title=title, languages=languages, lane=lane,
-                authors=authors), id=self._str)
+                authors=authors), id=self._id)
         if with_license_pool:
             work.license_pools.append(pool)
         work.primary_work_record = wr

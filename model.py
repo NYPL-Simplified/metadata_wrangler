@@ -24,6 +24,10 @@ from sqlalchemy.ext.mutable import (
     MutableDict,
 )
 from sqlalchemy.sql.functions import func
+from sqlalchemy.sql.expression import (
+    and_,
+    or_,
+)
 from sqlalchemy.exc import (
     IntegrityError
 )
@@ -888,7 +892,7 @@ class Work(Base):
     contributions = relationship("WorkContribution", backref="work")
 
     # A Work may be merged into one other Work.
-    was_merged_into_id = Column(Integer, ForeignKey('works.id'))
+    was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
     was_merged_into = relationship("Work", remote_side = [id])
 
     title = Column(Unicode)
@@ -929,7 +933,8 @@ class Work(Base):
             query = _db.query(Work).filter(
                 Work.languages.in_(languages),
                 Work.lane==lane,
-                Work.quality >= quality_min
+                Work.quality >= quality_min,
+                Work.was_merged_into == None,
             )
             if previous_quality_min is not None:
                 query = query.filter(
@@ -1159,6 +1164,61 @@ class Work(Base):
             dict(lane=self.lane, fiction=self.fiction,
                  audience=self.audience, subjects=self.subjects.get('names',{})))
         print
+
+
+class WorkFeed(object):
+
+    """Identify a certain page in a certain feed."""
+
+    def __init__(self, languages, lane, order_by):
+        if isinstance(lane, type) and issubclass(lane, Lane):
+            self.lane = lane.name
+        else:
+            self.lane = lane
+        if isinstance(languages, basestring):
+            languages = [languages]
+        self.languages = languages
+        if not isinstance(order_by, list):
+            order_by = [order_by]
+        self.order_by = order_by
+        # In addition to the given order, we order by author,
+        # then title, then work ID.
+        for i in (Work.authors, Work.title, Work.id):
+            if i not in self.order_by:
+                self.order_by.append(i)
+
+    def page_query(self, _db, last_work_seen, page_size):
+        """A page of works."""
+
+        query = _db.query(Work).filter(
+            Work.languages.in_(self.languages),
+            Work.lane==self.lane,
+            Work.was_merged_into == None,
+        )
+
+        if last_work_seen:
+            # Only find works that show up after the last work seen.
+            primary_order_field = self.order_by[0]
+            last_value = getattr(last_work_seen, primary_order_field.name)
+
+            # This means works where the primary ordering field has a
+            # higher value.
+            clause = (primary_order_field > last_value)
+
+            base_and_clause = (primary_order_field == last_value)
+            for next_order_field in self.order_by[1:]:
+                # OR, it means works where all the previous ordering
+                # fields have the same value as the last work seen,
+                # and this next ordering field has a higher value.
+                new_value = getattr(last_work_seen, next_order_field.name)
+                clause = or_(clause,
+                             and_(base_and_clause, 
+                                  (next_order_field > new_value)))
+                base_and_clause = and_(base_and_clause,
+                                       (next_order_field == new_value))
+            query = query.filter(clause)
+
+        return query.order_by(*self.order_by).limit(page_size)
 
 class LicensePool(Base):
 
