@@ -91,9 +91,6 @@ class AcquisitionFeed(OPDSFeed):
             languages = [languages]
 
         url = cls.lane_url(languages, lane, "title")
-        query = _db.query(Work).filter(
-            Work.languages.in_(languages),
-            Work.lane==lane).order_by(Work.title).limit(50)
         return AcquisitionFeed(_db, "%s: by title" % lane, url, query)
 
     @classmethod
