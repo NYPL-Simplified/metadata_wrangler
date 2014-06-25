@@ -887,6 +887,10 @@ class Work(Base):
     # A single Work may be built of many Contributions
     contributions = relationship("WorkContribution", backref="work")
 
+    # A Work may be merged into one other Work.
+    was_merged_into_id = Column(Integer, ForeignKey('works.id'))
+    was_merged_into = relationship("Work", remote_side = [id])
+
     title = Column(Unicode)
     authors = Column(Unicode, index=True)
     languages = Column(Unicode, index=True)
@@ -1029,10 +1033,13 @@ class Work(Base):
             (title_quotient * 0.80) + (author_quotient * 0.20))
 
     def merge_into(self, target_work, similarity_threshold=0.5):
-        """This Work ceases to exist and is replaced by target_work.
+        """This Work is replaced by target_work.
 
         The two works must be similar to within similarity_threshold,
         or nothing will happen.
+
+        All of this work's WorkRecords will be assigned to target_work,
+        and it will be marked as merged into target_work.
         """
         _db = Session.object_session(self)
         similarity = self.similarity_to(target_work)
@@ -1046,7 +1053,7 @@ class Work(Base):
             target_work.work_records.extend(self.work_records)
             target_work.calculate_presentation()
             print "The resulting work: %r" % target_work
-            _db.delete(self)
+            self.was_merged_into = target_work
 
     def calculate_subjects(self):
         """Consolidate subject information from across WorkRecords."""

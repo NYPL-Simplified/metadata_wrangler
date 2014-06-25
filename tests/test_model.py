@@ -756,15 +756,18 @@ class TestWorkConsolidation(DatabaseTest):
         # This attempt to merge the two work records will fail because
         # they don't meet the similarity threshold.
         work2.merge_into(work1, similarity_threshold=1)
-
-        assert work2 not in self._db.deleted
+        eq_(None, work2.was_merged_into)
 
         # This attempt will succeed because we lower the similarity
         # threshold.
         work2.merge_into(work1, similarity_threshold=0)
+        eq_(work1, work2.was_merged_into)
 
-        # The merged Work has been deleted.
-        assert work2 in self._db.deleted
+        # The merged Work no longer has any work records or license
+        # pools.
+        eq_([], work2.work_records)
+        eq_([], work2.license_pools)
+
 
         # The remaining Work has all three license pools.
         for p in pool_1a, pool_2a, pool_2b:
