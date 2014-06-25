@@ -84,29 +84,6 @@ class AcquisitionFeed(OPDSFeed):
             self.add_entry(work, lane_link)
 
     @classmethod
-    def by_title(cls, _db, languages, lane):
-        if isinstance(lane, Lane):
-            lane = lane.name
-        if not isinstance(languages, list):
-            languages = [languages]
-
-        url = cls.lane_url(languages, lane, "title")
-        return AcquisitionFeed(_db, "%s: by title" % lane, url, query)
-
-    @classmethod
-    def by_author(cls, _db, languages, lane):
-        if isinstance(lane, Lane):
-            lane = lane.name
-        if not isinstance(languages, list):
-            languages = [languages]
-
-        url = cls.lane_url(languages, lane, "author")
-        query = _db.query(Work).filter(
-            Work.languages.in_(languages),
-            Work.lane==lane).order_by(Work.authors).limit(50)
-        return AcquisitionFeed(_db, "%s: by author" % lane, url, query)
-
-    @classmethod
     def recommendations(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
