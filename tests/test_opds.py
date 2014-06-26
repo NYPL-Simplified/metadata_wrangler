@@ -75,23 +75,40 @@ class TestOPDS(DatabaseTest):
         toplevel = [x for x in feed.entries if x.title == 'Toplevel'][0]
         eq_("tag:eng,spa:Toplevel", toplevel.id)
 
-        # There are three links to acquisition feeds.
-        featured, author, title = sorted(toplevel.links)
+        # There are two links to acquisition feeds.
+        featured, by_author = sorted(toplevel.links)
 
         assert featured['href'].endswith("/lanes/eng%2Cspa/Toplevel")
         eq_("Featured", featured['title'])
         eq_(NavigationFeed.FEATURED_REL, featured['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, featured['type'])
 
-        assert author['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=author")
-        eq_("Author", author['title'])
-        eq_("subsection", author['rel'])
-        eq_(NavigationFeed.ACQUISITION_FEED_TYPE, author['type'])
+        assert by_author['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=author")
+        eq_("All books", by_author['title'])
+        eq_("subsection", by_author['rel'])
+        eq_(NavigationFeed.ACQUISITION_FEED_TYPE, by_author['type'])
 
-        assert title['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=title")
-        eq_("Title", title['title'])
-        eq_("subsection", title['rel'])
-        eq_(NavigationFeed.ACQUISITION_FEED_TYPE, title['type'])
+    def test_acquisition_feed_contains_facet_links(self):
+        lane = "Foo"
+        work = self._work(lane=lane, with_license_pool=True)
+
+        def facet_url_generator(facet):
+            return "http://blah/" + facet
+
+        works = self._db.query(Work)
+        by_title = AcquisitionFeed(self._db, "test", "url", works,
+                                   facet_url_generator)
+        by_author, by_title = sorted(by_title.links)
+        eq_('Sort by', by_author['opds:facetGroup'])
+        eq_('http://opds-spec.org/facet', by_author['rel'])
+        eq_('Author', by_author['title'])
+        eq_(facet_url_generator("author"), by_author['href'])
+
+        eq_('Sort by', by_title['opds:facetGroup'])
+        eq_('http://opds-spec.org/facet', by_title['rel'])
+        eq_('Title', by_title['title'])
+        eq_(facet_url_generator("title"), by_title['href'])
+
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
         lane = "Foo"

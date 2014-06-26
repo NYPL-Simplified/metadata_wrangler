@@ -78,11 +78,21 @@ class OPDSFeed(AtomFeed):
 
 class AcquisitionFeed(OPDSFeed):
 
-    def __init__(self, _db, title, url, works):
+    def __init__(self, _db, title, url, works, facet_url_generator=None):
         super(AcquisitionFeed, self).__init__(title, [], url=url)
         lane_link = dict(rel="collection", href=url)
         for work in works:
             self.add_entry(work, lane_link)
+
+        if facet_url_generator:
+            for title, order, facet_group, in [
+                    ('Title', 'title', 'Sort by'),
+                    ('Author', 'author', 'Sort by')]:
+                link = dict(href=facet_url_generator(order),
+                            title=title)
+                link['rel'] = "http://opds-spec.org/facet"
+                link['opds:facetGroup'] = facet_group
+                self.links.append(link)
 
     @classmethod
     def featured(cls, _db, languages, lane):
@@ -169,18 +179,16 @@ class NavigationFeed(OPDSFeed):
             lane = lane.name
             links = []
 
-            for title, order, facet_group, rel in [
-                    ('Title', 'title', 'Sort by', 'subsection'),
-                    ('Author', 'author', 'Sort by', 'subsection'),
-                    ('Featured', None, None, self.FEATURED_REL)]:
+            for title, order, rel in [
+                    ('All books', 'author', 'subsection'),
+                    ('Featured', None, self.FEATURED_REL)
+            ]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
                     href=self.lane_url(languages, lane, order),
                     rel=rel,
                     title=title,
                 )
-                if facet_group:
-                    link['opds:facetGroup'] = facet_group
                 links.append(link)
 
             feed.add(

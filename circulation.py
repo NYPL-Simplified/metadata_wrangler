@@ -55,7 +55,7 @@ def feed(languages, lane):
     order = arg('order', 'recommended')
     last_seen_id = arg('last_seen', None)
     if order == 'recommended':
-        return unicode(AcquisitionFeed.recommendations(db, languages, lane))
+        return unicode(AcquisitionFeed.featured(db, languages, lane))
 
     if order == 'title':
         feed = WorkFeed(languages, lane, Work.title)
@@ -90,14 +90,19 @@ def feed(languages, lane):
     this_url = url_for('feed', languages=language_key, lane=lane, order=order,
                        _external=True)
     page = feed.page_query(db, last_work_seen, size).all()
-    opds_feed = AcquisitionFeed(db, title, this_url, page)
+    url_generator = lambda x : url_for(
+        'feed', languages=language_key, lane=lane, order=x,
+        _external=True)
+
+    opds_feed = AcquisitionFeed(db, title, this_url, page, url_generator)
     # Add a 'next' link if appropriate.
+
     if page and len(page) >= size:
         after = page[-1].id
         next_url = url_for('feed', languages=language_key, 
                            lane=lane, order=order,
                            after=after, _external=True)
-        opds_feed.links=[dict(rel="next", href=next_url)]
+        opds_feed.links.append(dict(rel="next", href=next_url))
     return unicode(opds_feed)
 
 @app.route('/works/<data_source>/<identifier>/checkout')
