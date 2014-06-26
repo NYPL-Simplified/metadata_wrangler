@@ -59,6 +59,7 @@ class OPDSFeed(AtomFeed):
     ACQUISITION_FEED_TYPE = "application/atom+xml;profile=opds-catalog;kind=acquisition"
     NAVIGATION_FEED_TYPE = "application/atom+xml;profile=opds-catalog;kind=navigation"
 
+    FEATURED_REL = "http://opds-spec.org/featured"
     RECOMMENDED_REL = "http://opds-spec.org/recommended"
     OPEN_ACCESS_REL = "http://opds-spec.org/acquisition/open-access"
     THUMBNAIL_IMAGE_REL = "http://opds-spec.org/image/thumbnail" 
@@ -84,7 +85,7 @@ class AcquisitionFeed(OPDSFeed):
             self.add_entry(work, lane_link)
 
     @classmethod
-    def recommendations(cls, _db, languages, lane):
+    def featured(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
         if not isinstance(languages, list):
@@ -95,7 +96,7 @@ class AcquisitionFeed(OPDSFeed):
         feed_size = 20
         works = Work.quality_sample(_db, languages, lane, 75, 1, feed_size)
         return AcquisitionFeed(
-            _db, "%s: recommendations" % lane, url, works)
+            _db, "%s: featured" % lane, url, works)
 
     def create_entry(self, work, lane_link):
         """Turn a work into an entry for an acquisition feed."""
@@ -171,7 +172,7 @@ class NavigationFeed(OPDSFeed):
             for title, order, facet_group, rel in [
                     ('Title', 'title', 'Sort by', 'subsection'),
                     ('Author', 'author', 'Sort by', 'subsection'),
-                    ('Recommended', None, None, self.RECOMMENDED_REL)]:
+                    ('Featured', None, None, self.FEATURED_REL)]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
                     href=self.lane_url(languages, lane, order),

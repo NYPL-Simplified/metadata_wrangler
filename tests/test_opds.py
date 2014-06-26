@@ -76,20 +76,20 @@ class TestOPDS(DatabaseTest):
         eq_("tag:eng,spa:Toplevel", toplevel.id)
 
         # There are three links to acquisition feeds.
-        recommended, author, title = sorted(toplevel.links)
+        featured, author, title = sorted(toplevel.links)
 
-        assert recommended['href'].endswith("/lanes/eng%2Cspa/Toplevel")
-        eq_("Recommended", recommended['title'])
-        eq_(NavigationFeed.RECOMMENDED_REL, recommended['rel'])
-        eq_(NavigationFeed.ACQUISITION_FEED_TYPE, recommended['type'])
+        assert featured['href'].endswith("/lanes/eng%2Cspa/Toplevel")
+        eq_("Featured", featured['title'])
+        eq_(NavigationFeed.FEATURED_REL, featured['rel'])
+        eq_(NavigationFeed.ACQUISITION_FEED_TYPE, featured['type'])
 
         assert author['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=author")
-        eq_("By author", author['title'])
+        eq_("Author", author['title'])
         eq_("subsection", author['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, author['type'])
 
         assert title['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=title")
-        eq_("By title", title['title'])
+        eq_("Title", title['title'])
         eq_("subsection", title['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, title['type'])
 
@@ -108,7 +108,7 @@ class TestOPDS(DatabaseTest):
         eq_(1, len(by_title.entries))
         eq_([work.title], [x.title for x in by_title.entries])
 
-    def test_recommendation_feed_ignores_low_quality_works(self):
+    def test_featured_feed_ignores_low_quality_works(self):
         lane="Foo"
         good = self._work(lane=lane, languages="eng", with_license_pool=True)
         good.quality = 100
@@ -116,5 +116,5 @@ class TestOPDS(DatabaseTest):
         bad.quality = 0
 
         # We get the good one and omit the bad one.
-        feed = AcquisitionFeed.recommendations(self._db, "eng", lane)
+        feed = AcquisitionFeed.featured(self._db, "eng", lane)
         eq_([good.title], [x.title for x in feed.entries])
