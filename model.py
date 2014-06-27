@@ -911,6 +911,29 @@ class Work(Base):
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
     @classmethod
+    def search(cls, _db, query, languages, lane=None):
+        """Find works that match a search query.
+        
+        TODO: Current implementation is incredibly bad and does
+        a direct database search using LIKE.
+        """
+        if isinstance(lane, Lane):
+            lane = lane.name
+        if not isinstance(languages, list):
+            languages = [languages]
+
+        k = "%" + query + "%"
+        q = _db.query(Work).filter(
+            Work.languages.in_(languages),
+            or_(Work.title.like(k),
+                Work.authors.like(k)))
+        
+        if lane:
+            q = q.filter(Work.lane==lane)
+        q = q.order_by(Work.quality.desc())
+        return q
+
+    @classmethod
     def quality_sample(
             cls, _db, languages, lane, quality_min_start,
             quality_min_rock_bottom, target_size):
