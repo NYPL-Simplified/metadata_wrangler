@@ -67,14 +67,11 @@ class OPDSFeed(AtomFeed):
     EPUB_MEDIA_TYPE = "application/epub+zip"
 
     @classmethod
-    def lane_url(cls, languages, lane, order=None):
+    def lane_url(cls, lane, order=None):
         if isinstance(lane, Lane):
             lane = lane.name
-        if isinstance(languages, list):
-            languages = ",".join(languages)
 
-        return url_for('feed', languages=languages, lane=lane, order=order,
-                       _external=True)
+        return url_for('feed', lane=lane, order=order, _external=True)
 
 class AcquisitionFeed(OPDSFeed):
 
@@ -98,10 +95,8 @@ class AcquisitionFeed(OPDSFeed):
     def featured(cls, _db, languages, lane):
         if isinstance(lane, Lane):
             lane = lane.name
-        if not isinstance(languages, list):
-            languages = [languages]
 
-        url = cls.lane_url(languages, lane)
+        url = cls.lane_url(lane)
         links = []
         feed_size = 20
         works = Work.quality_sample(_db, languages, lane, 75, 1, feed_size)
@@ -164,14 +159,10 @@ class AcquisitionFeed(OPDSFeed):
 class NavigationFeed(OPDSFeed):
 
     @classmethod
-    def main_feed(self, parent_lane, languages):
-        if isinstance(languages, basestring):
-            languages = [languages]
-        language_code = ",".join(sorted(languages))
+    def main_feed(self, parent_lane):
         feed = NavigationFeed(
-            "Navigation feed", [],
-            url=url_for('navigation_feed', languages=language_code,
-                        _external=True))
+            "Navigation feed", [], 
+            url=url_for('navigation_feed', _external=True))
 
         for lane in sorted(parent_lane.self_and_sublanes(), key=lambda x: x.name):
             if not lane.name:
@@ -185,7 +176,7 @@ class NavigationFeed(OPDSFeed):
             ]:
                 link = dict(
                     type=self.ACQUISITION_FEED_TYPE,
-                    href=self.lane_url(languages, lane, order),
+                    href=self.lane_url(lane, order),
                     rel=rel,
                     title=title,
                 )
@@ -193,8 +184,8 @@ class NavigationFeed(OPDSFeed):
 
             feed.add(
                 title=lane,
-                id="tag:%s:%s" % (language_code, lane),
-                url=self.lane_url(languages, lane),
+                id="tag:%s" % (lane),
+                url=self.lane_url(lane),
                 links=links,
                 updated=datetime.datetime.utcnow(),
             )

@@ -24,49 +24,57 @@ from opds import (
     URLRewriter,
 )
 import urllib
+from util import LanguageCodes
 
 db = production_session()
 app = Flask(__name__)
 app.debug = True
 
+DEFAULT_LANGUAGES = ['eng']
+
+def languages_for_request():
+    return languages_from_accept(flask.request.accept_languages)
+
+def languages_from_accept(accept_languages):
+    languages = []
+    for locale, quality in accept_languages:
+        language = LanguageCodes.iso_639_2_for_locale(locale)
+        if language:
+            languages.append(language)
+    if not languages:
+        languages = DEFAULT_LANGUAGES
+    return languages
 
 @app.route('/')
 def index():    
-    return redirect(url_for('.navigation_feed', languages='eng'))
+    return redirect(url_for('.navigation_feed'))
 
-@app.route('/lanes/<languages>')
-def navigation_feed(languages):
-    feed = NavigationFeed.main_feed(Lane, languages)
+@app.route('/lanes/')
+def navigation_feed():
+    languages = languages_for_request()
+    feed = NavigationFeed.main_feed(Lane)
 
     feed.links.append(
         dict(rel="search",
-             href=url_for('lane_search', languages=languages, lane=None,
-                          _external=True)))
+             href=url_for('lane_search', lane=None, _external=True)))
     return unicode(feed)
 
-def lane_url(cls, languages, lane, order=None):
+def lane_url(cls, lane, order=None):
     if isinstance(lane, Lane):
         lane = lane.name
-    if isinstance(languages, list):
-        languages = ",".join(languages)
-
-    return url_for('feed', languages=languages, lane=lane, order=order,
-                   _external=True)
+    return url_for('feed', lane=lane, order=order, _external=True)
 
 
-@app.route('/lanes/<languages>/<lane>')
-def feed(languages, lane):
+@app.route('/lanes/<lane>')
+def feed(lane):
+    languages = languages_for_request()
     arg = flask.request.args.get
     order = arg('order', 'recommended')
     last_seen_id = arg('last_seen', None)
 
-    language_key = languages
-    languages = languages.split(",")
-
     search_link = dict(
         rel="search",
-        href=url_for('lane_search', languages=language_key, lane=lane,
-                     _external=True))
+        href=url_for('lane_search', lane=lane, _external=True))
 
     if order == 'recommended':
         feed = AcquisitionFeed.featured(db, languages, lane)
@@ -102,38 +110,34 @@ def feed(languages, lane):
         except NoResultFound:
             return "No such work id: %s" % last_id
 
-    this_url = url_for('feed', languages=language_key, lane=lane, order=order,
-                       _external=True)
+    this_url = url_for('feed', lane=lane, order=order, _external=True)
     page = feed.page_query(db, last_work_seen, size).all()
     url_generator = lambda x : url_for(
-        'feed', languages=language_key, lane=lane, order=x,
-        _external=True)
+        'feed', lane=lane, order=x, _external=True)
 
     opds_feed = AcquisitionFeed(db, title, this_url, page, url_generator)
     # Add a 'next' link if appropriate.
     if page and len(page) >= size:
         after = page[-1].id
-        next_url = url_for('feed', languages=language_key, 
-                           lane=lane, order=order,
-                           after=after, _external=True)
+        next_url = url_for(
+            'feed', lane=lane, order=order, after=after, _external=True)
         opds_feed.links.append(dict(rel="next", href=next_url))
 
     opds_feed.links.append(search_link)
     return unicode(opds_feed)
 
-@app.route('/search/<languages>/', defaults=dict(lane=None))
-@app.route('/search/<languages>/<lane>')
-def lane_search(languages, lane):
+@app.route('/search', defaults=dict(lane=None))
+@app.route('/search/<lane>')
+def lane_search(lane):
+    languages = languages_for_request()
     query = flask.request.args.get('q')
-    this_url = url_for('lane_search', languages=languages,
-                       lane=lane, _external=True)
+    this_url = url_for('lane_search', lane=lane, _external=True)
     if not query:
         # Send the search form
-        return OpenSearchDocument.for_lane(languages, lane, this_url)
+        return OpenSearchDocument.for_lane(lane, this_url)
     # Run a search.
-    language_list = languages.split(",")
-    results = Work.search(db, query, language_list, lane).limit(50)
-    info = OpenSearchDocument.search_info(languages, lane)
+    results = Work.search(db, query, languages, lane).limit(50)
+    info = OpenSearchDocument.search_info(lane)
     opds_feed = AcquisitionFeed(
         db, info['name'], 
         this_url + "?q=" + urllib.quote(query),

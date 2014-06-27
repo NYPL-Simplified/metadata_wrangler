@@ -11,25 +11,23 @@ class OpenSearchDocument(object):
  </OpenSearchDescription>"""
 
     @classmethod
-    def search_info(cls, languages, lane):
+    def search_info(cls, lane):
 
-        d = dict()
-        tags = languages.split(",")
+        d = dict(name="Search")
+        tags = []
+        
         if lane is not None:
             tags.append(lane.lower().replace(" ", "-"))
-            name = "%s books (Language=%s)" % (lane, languages)
-            description = "Search for %s" % lane
+            description = "Search for %s books" % lane
         else:
-            name = "Books (Language=%s)" % languages
             description = "Search for books"
         d['description'] = description
-        d['name'] = name
         d['tags'] = " ".join(tags)
         return d
 
     @classmethod
-    def for_lane(cls, languages, lane, base_url):
-        info = cls.search_info(languages, lane)
+    def for_lane(cls, lane, base_url):
+        info = cls.search_info(lane)
         info['url_template'] = base_url + "?q={searchTerms}"
 
         return cls.TEMPLATE % info
