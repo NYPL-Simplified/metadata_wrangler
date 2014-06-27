@@ -63,8 +63,8 @@ class TestOPDS(DatabaseTest):
         self.ctx.push()
     
     def test_navigation_feed(self):
-        feed = NavigationFeed.main_feed(TopLevel, ["eng", "spa"])
-        assert feed.url.endswith("/lanes/eng%2Cspa")
+        feed = NavigationFeed.main_feed(TopLevel)
+        assert feed.url.endswith("/lanes/")
 
         # Every lane has an entry.
         eq_(3, len(feed.entries))
@@ -73,17 +73,17 @@ class TestOPDS(DatabaseTest):
 
         # Let's take one entry as an example.
         toplevel = [x for x in feed.entries if x.title == 'Toplevel'][0]
-        eq_("tag:eng,spa:Toplevel", toplevel.id)
+        eq_("tag:Toplevel", toplevel.id)
 
         # There are two links to acquisition feeds.
         featured, by_author = sorted(toplevel.links)
 
-        assert featured['href'].endswith("/lanes/eng%2Cspa/Toplevel")
+        assert featured['href'].endswith("/lanes/Toplevel")
         eq_("Featured", featured['title'])
         eq_(NavigationFeed.FEATURED_REL, featured['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, featured['type'])
 
-        assert by_author['href'].endswith("/lanes/eng%2Cspa/Toplevel?order=author")
+        assert by_author['href'].endswith("/lanes/Toplevel?order=author")
         eq_("All books", by_author['title'])
         eq_("subsection", by_author['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, by_author['type'])
