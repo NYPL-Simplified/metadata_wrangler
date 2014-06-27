@@ -29,6 +29,12 @@ class TestLanguageCodes(object):
         eq_(None, c.three_to_two['nosuchlanguage'])
         eq_([], c.english_names['nosuchlanguage'])
 
+    def test_locale(self):
+        m = LanguageCodes.iso_639_2_for_locale
+        eq_("eng", m("en-US"))
+        eq_("eng", m("en"))
+        eq_("eng", m("en-GB"))
+        eq_(None, m("nq-none"))
 
 class DummyAuthor(object):
 

@@ -31,7 +31,7 @@ app.debug = True
 
 
 @app.route('/')
-def index():
+def index():    
     return redirect(url_for('.navigation_feed', languages='eng'))
 
 @app.route('/lanes/<languages>')
@@ -56,6 +56,9 @@ def lane_url(cls, languages, lane, order=None):
 
 @app.route('/lanes/<languages>/<lane>')
 def feed(languages, lane):
+    arg = flask.request.args.get
+    order = arg('order', 'recommended')
+    last_seen_id = arg('last_seen', None)
 
     language_key = languages
     languages = languages.split(",")
@@ -65,9 +68,6 @@ def feed(languages, lane):
         href=url_for('lane_search', languages=language_key, lane=lane,
                      _external=True))
 
-    arg = flask.request.args.get
-    order = arg('order', 'recommended')
-    last_seen_id = arg('last_seen', None)
     if order == 'recommended':
         feed = AcquisitionFeed.featured(db, languages, lane)
         feed.links.append(search_link)
