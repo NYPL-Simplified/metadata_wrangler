@@ -368,27 +368,30 @@ class TestWork(DatabaseTest):
 
     def test_calculate_presentation(self):
 
-        gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        gutenberg_source = DataSource.GUTENBERG
 
-        wr1, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+        wr1, pool1 = self._workrecord(
+            gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr1.title = "Title 1"
         wr1.add_contributor("Bob", Contributor.AUTHOR_ROLE)
 
-        wr2, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
+        wr2, pool2 = self._workrecord(
+            gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr2.title = "Title 2"
         wr2.add_contributor("Bob", Contributor.AUTHOR_ROLE)
         wr2.add_contributor("Alice", Contributor.AUTHOR_ROLE)
 
-        wr3, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "3")
+        wr3, pool3 = self._workrecord(
+            gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr3.title = "Title 2"
         wr3.add_contributor("Bob", Contributor.AUTHOR_ROLE)
         wr3.add_contributor("Alice", Contributor.AUTHOR_ROLE)
 
         work = Work()
-        work.work_records.extend([wr1, wr2, wr3])
+        for i in wr1, wr2, wr3:
+            work.work_records.append(i)
+        for p in pool1, pool2, pool3:
+            work.license_pools.append(p)
 
         # The title of the Work is the most common title among
         # its associated WorkRecords.
@@ -729,10 +732,8 @@ class TestWorkConsolidation(DatabaseTest):
     def test_merge_into(self):
 
         # Here's a work with a license pool and two work records.
-        pool_1a, ignore = LicensePool.for_foreign_id(
-            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
-        work_record_1a, ignore = WorkRecord.for_foreign_id(
-            self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W1")
+        work_record_1a, pool_1a = self._workrecord(
+            DataSource.OCLC, WorkIdentifier.OCLC_WORK, True)
         work_record_1b, ignore = WorkRecord.for_foreign_id(
             self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W2")
 
@@ -740,18 +741,14 @@ class TestWorkConsolidation(DatabaseTest):
         work1.license_pools = [pool_1a]
         work1.work_records = [work_record_1a, work_record_1b]
 
-        # Here's a work with two license pools and one work record.
-        pool_2a, ignore = LicensePool.for_foreign_id(
-            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "2")
-        pool_2b, ignore = LicensePool.for_foreign_id(
-            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "2")
-
-        work_record_2a, ignore = WorkRecord.for_foreign_id(
-            self._db, DataSource.OCLC, WorkIdentifier.OCLC_WORK, "W3")
+        # Here's a work with two license pools and one work record
+        work_record_2a, pool_2a = self._workrecord(
+            DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, True)
         work_record_2a.title = "The only title in this whole test."
+        pool_2b = self._licensepool(work_record_2a, DataSource.OCLC)
 
         work2 = Work()
-        work2.license_pools = [pool_2a]
+        work2.license_pools = [pool_2a, pool_2b]
         work2.work_records = [work_record_2a]
 
         self._db.commit()

@@ -1082,6 +1082,8 @@ class Work(Base):
             target_work.calculate_presentation()
             print "The resulting work: %r" % target_work
             self.was_merged_into = target_work
+            self.license_pools = []
+            self.work_records = []
 
     def calculate_subjects(self):
         """Consolidate subject information from across WorkRecords."""
@@ -1094,7 +1096,7 @@ class Work(Base):
         """Figure out the 'best' title/author/subjects for this Work.
 
         For the time being, 'best' means the most common among this
-        Work's WorkRecords.
+        Work's WorkRecords *that have associated LicensePools*.
         """
 
         titles = []
@@ -1107,12 +1109,14 @@ class Work(Base):
 
         # Find all Open Library WorkRecords that are equivalent to the
         # same OCLC WorkIdentifier as one of this work's WorkRecords.
-        equivalent_records = self.all_workrecords()
+        #equivalent_records = self.all_workrecords()
+        equivalent_records = [p.work_record() for p in self.license_pools]
+
         for r in equivalent_records:
-            titles.append(r.title)
-            if r.title and (
-                    not shortest_title or len(r.title) < len(shortest_title)):
-                shortest_title = r.title
+            if r.title:
+                titles.append(r.title)
+                if not shortest_title or len(r.title) < len(shortest_title):
+                    shortest_title = r.title
 
             for a in r.contributors:
                 authors[a.name] += 1

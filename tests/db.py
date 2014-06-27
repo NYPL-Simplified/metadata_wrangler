@@ -61,7 +61,7 @@ class DatabaseTest(object):
         wr = WorkRecord.for_foreign_id(
             self._db, source, identifier_type, id)[0]
         if with_license_pool:
-            pool = self._licensepool(wr)
+            pool = self._licensepool(wr, data_source_name=data_source_name)
             return wr, pool
         return wr
 
