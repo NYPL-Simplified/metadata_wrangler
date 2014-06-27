@@ -128,7 +128,7 @@ class AcquisitionFeed(OPDSFeed):
         key = "/".join(map(urllib.quote, [work_record.data_source.name, identifier.identifier]))
         checkout_url = url_for(
             "checkout", data_source=work_record.data_source.name,
-            identifier=identifier.identifier)
+            identifier=identifier.identifier, _external=True)
 
         links=[dict(rel=self.OPEN_ACCESS_REL, 
                     href=checkout_url)]
