@@ -15,8 +15,6 @@ from model import (
 )
 
 from tests.db import (
-    setup_module, 
-    teardown_module, 
     DatabaseTest,
 )
 

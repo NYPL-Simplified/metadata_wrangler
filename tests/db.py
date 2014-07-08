@@ -1,38 +1,22 @@
 import os
 from nose.tools import set_trace
-from sqlalchemy.engine import create_engine
 from sqlalchemy.orm.session import Session
 from model import (
-    Base,
-    SessionManager,
     DataSource,
+    SessionManager,
     LicensePool,
     WorkIdentifier,
     WorkRecord,
     Work,
     get_one_or_create
 )
-
-def setup_module():
-    global transaction, connection, engine
-
-    # Connect to the database and create the schema within a transaction
-    engine, connection = SessionManager.initialize(os.environ['DATABASE_URL_TEST'])
-    Base.metadata.drop_all(connection)
-    Base.metadata.create_all(connection)
-    transaction = connection.begin()
-
-def teardown_module():
-    # Roll back the top level transaction and disconnect from the database
-    transaction.rollback()
-    connection.close()
-    engine.dispose()
+from tests import DBInfo
 
 
 class DatabaseTest(object):
     def setup(self):
-        self.__transaction = connection.begin_nested()
-        self._db = Session(connection)
+        self.__transaction = DBInfo.connection.begin_nested()
+        self._db = Session(DBInfo.connection)
         SessionManager.initialize_data(self._db)
         self.counter = 0
 

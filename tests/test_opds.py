@@ -4,8 +4,6 @@ from nose.tools import (
 )
 
 from tests.db import (
-    setup_module, 
-    teardown_module, 
     DatabaseTest,
 )
 

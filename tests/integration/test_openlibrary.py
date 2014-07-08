@@ -2,8 +2,6 @@
 from nose.tools import set_trace, eq_
 
 from tests.db import (
-    setup_module,
-    teardown_module,
     DatabaseTest,
 )
 

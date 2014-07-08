@@ -2,8 +2,6 @@ from nose.tools import eq_, set_trace
 import datetime
 
 from tests.db import (
-    setup_module,
-    teardown_module,
     DatabaseTest,
 )
 

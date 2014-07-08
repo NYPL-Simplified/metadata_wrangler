@@ -25,8 +25,6 @@ from model import (
 from lane import Fiction
 
 from tests.db import (
-    setup_module, 
-    teardown_module, 
     DatabaseTest,
 )
 
