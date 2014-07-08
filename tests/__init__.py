@@ -18,8 +18,9 @@ def setup():
     Base.metadata.create_all(connection)
     DBInfo.engine = engine
     DBInfo.connection = connection
-    DBInfo.transaction = connection.begin()
-    SessionManager.initialize_data(Session(DBInfo.transaction))
+    DBInfo.transaction = connection.begin_nested()
+
+    SessionManager.initialize_data(Session(DBInfo.connection))
     print "Connection is now %r" % DBInfo.connection
     print "Transaction is now %r" % DBInfo.transaction
 
