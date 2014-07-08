@@ -17,7 +17,6 @@ class DatabaseTest(object):
     def setup(self):
         self.__transaction = DBInfo.connection.begin_nested()
         self._db = Session(DBInfo.connection)
-        SessionManager.initialize_data(self._db)
         self.counter = 0
 
     def teardown(self):

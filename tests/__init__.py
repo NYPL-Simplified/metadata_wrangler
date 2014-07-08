@@ -4,6 +4,7 @@ from model import (
     Base,
     SessionManager,
 )
+from sqlalchemy.orm.session import Session
 
 class DBInfo(object):
     connection = None
@@ -18,6 +19,7 @@ def setup():
     DBInfo.engine = engine
     DBInfo.connection = connection
     DBInfo.transaction = connection.begin()
+    SessionManager.initialize_data(Session(DBInfo.transaction))
     print "Connection is now %r" % DBInfo.connection
     print "Transaction is now %r" % DBInfo.transaction
 
