@@ -1,3 +1,4 @@
+from functools import wraps
 from nose.tools import set_trace
 import sys
 
@@ -6,7 +7,7 @@ from sqlalchemy.orm.exc import (
 )
 
 import flask
-from flask import Flask, url_for, redirect
+from flask import Flask, url_for, redirect, Response
 
 from model import (
     DataSource,
@@ -25,6 +26,7 @@ from opds import (
 )
 import urllib
 from util import LanguageCodes
+from integration.millenium_patron import DummyMilleniumPatronAPI as authenticator
 
 db = production_session()
 app = Flask(__name__)
@@ -44,6 +46,27 @@ def languages_from_accept(accept_languages):
     if not languages:
         languages = DEFAULT_LANGUAGES
     return languages
+
+def check_auth(username, password):
+    """This function is called to check if a username /
+    password combination is valid.
+    """
+    return authenticator().pintest(username, password)
+
+def authenticate():
+    """Sends a 401 response that enables basic auth"""
+    return Response(
+        'A library card barcode number and PIN are required.', 401,
+        {'WWW-Authenticate': 'Basic realm="Library card"'})
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = flask.request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 
 @app.route('/')
 def index():    
@@ -145,6 +168,7 @@ def lane_search(lane):
     return unicode(opds_feed)
 
 @app.route('/works/<data_source>/<identifier>/checkout')
+@requires_auth
 def checkout(data_source, identifier):
 
     # Turn source + identifier into a LicensePool

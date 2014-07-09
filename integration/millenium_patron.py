@@ -38,3 +38,33 @@ class MilleniumPatronAPI(XMLParser):
             return True
         return False
 
+class DummyMilleniumPatronAPI(object):
+
+    user1 = { 'PATRN NAME[pn]' : "SHELDON, ALICE",
+              'RECORD #[p81]' : "12345",
+              'P BARCODE[pb]' : "0",
+              '.pin' : '1234'}
+    user2 = { 'PATRN NAME[pn]' : "HEINLEIN, BOB",
+              'RECORD #[p81]' : "67890",
+              'P BARCODE[pb]' : "5",
+              '.pin' : '6789'}
+
+    users = [user1, user2]
+
+    def pintest(self, barcode, pin):
+        for u in self.users:
+            if self._match(u, barcode, pin):
+                return True
+        return False
+
+    def dump(self, barcode):
+        for u in self.users:
+            if user['P BARCODE[pb]'] == barcode:
+                d = dict(u)
+                del d['.pin']
+                return d
+        return dict(ERRNUM='1', ERRMSG="Requested record not found")
+
+    def _match(self, user, barcode, pin):
+        return user['P BARCODE[pb]'] == barcode and user['.pin'] == pin
+

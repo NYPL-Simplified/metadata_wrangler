@@ -1096,7 +1096,8 @@ class Work(Base):
         """Figure out the 'best' title/author/subjects for this Work.
 
         For the time being, 'best' means the most common among this
-        Work's WorkRecords *that have associated LicensePools*.
+        Work's WorkRecords *and also used by at least one WorkRecord
+        with an associated LicensePool*.
         """
 
         titles = []
