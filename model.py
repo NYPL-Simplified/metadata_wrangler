@@ -123,6 +123,31 @@ def get_one_or_create(db, model, create_method='',
 
 Base = declarative_base()
 
+active_loan_table = Table(
+    'active_loans', Base.metadata,
+    Column('patron_id', Integer, ForeignKey('patrons.id')),
+    Column('license_pool_id', Integer, ForeignKey('licensepools.id')),
+)
+
+class Patron(Base):
+
+    __tablename__ = 'patrons'
+    id = Column(Integer, primary_key=True)
+
+    # The patron's permanent unique identifier in an external library
+    # system, probably never seen by the patron.
+    external_identifier = Column(Unicode, index=True)
+
+    # A long-lived but temporary identifier used by the patron to
+    # signify their ability to check out books, e.g. a library card
+    # barcode or username.
+    authorization_identifier = Column(Unicode, unique=True, index=True)
+
+    # TODO: A username
+
+    active_loans = relationship("LicensePool", secondary=active_loan_table,
+                                backref="loaned_to")
+
 class DataSource(Base):
     """A source for information about books, and possibly the books themselves."""
 
@@ -1356,7 +1381,7 @@ class LicensePool(Base):
         for field, actual_value, more, fewer in (
             [self.patrons_in_hold_queue, Event.HOLD_PLACE, Event.HOLD_RELEASE], 
             [self.licenses_available, Event.CHECKIN, Event.CHECKOUT], 
-            [self.licenses_reserved, Event.AVAILABILITY_NOTIFY, None], 
+                [self.licenses_reserved, Event.AVAILABILITY_NOTIFY, None], 
             [self.licenses_owned, Event.LICENSE_ADD, Event.LICENSE_REMOVE]):
             estimated_value = estimate.get(key,0)
             if estimated_value == actual_value:

@@ -10,9 +10,11 @@ import flask
 from flask import Flask, url_for, redirect, Response
 
 from model import (
+    get_one_or_create,
     DataSource,
     production_session,
     LicensePool,
+    Patron,
     WorkIdentifier,
     Work,
     WorkFeed,
@@ -47,11 +49,13 @@ def languages_from_accept(accept_languages):
         languages = DEFAULT_LANGUAGES
     return languages
 
-def check_auth(username, password):
-    """This function is called to check if a username /
-    password combination is valid.
-    """
-    return authenticator().pintest(username, password)
+def authenticated_patron(barcode, pin):
+    """Look up the patron authenticated by the given barcode/pin."""
+    if not authenticator().pintest(barcode, pin):
+        return None
+
+    # The external source says they're legit; find or create them locally.
+    return get_one_or_create(db, Patron, authorization_identifier=barcode)[0]
 
 def authenticate():
     """Sends a 401 response that enables basic auth"""
@@ -63,7 +67,10 @@ def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = flask.request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
+        if not auth:
+            return authenticate()
+        flask.request.patron = authenticated_patron(auth.username, auth.password)
+        if not flask.request.patron:
             return authenticate()
         return f(*args, **kwargs)
     return decorated
@@ -190,7 +197,9 @@ def checkout(data_source, identifier):
     best_pool, best_link = pool.best_license_link
     if not best_link:
         return "Sorry, couldn't find an available license."
-    
+
+    flask.request.patron.active_loans.append(pool)
+    db.commit()
     return redirect(URLRewriter.rewrite(best_link))
 
 print __name__
