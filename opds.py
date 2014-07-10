@@ -11,6 +11,7 @@ from urlparse import urlparse, urljoin
 from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
+from sqlalchemy.orm.session import Session
 
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
@@ -104,8 +105,10 @@ class AcquisitionFeed(OPDSFeed):
             _db, "%s: featured" % lane, url, works)
 
     @classmethod
-    def with_active_loans(cls, patron):
-        pass
+    def active_loans_for(cls, patron):
+        db = Session.object_session(patron)
+        url = url_for('active_loans', _external=True)
+        return AcquisitionFeed(db, "Active loans", url, patron.works_on_loan())
 
     def create_entry(self, work, lane_link, loan=None):
         """Turn a work into an entry for an acquisition feed."""

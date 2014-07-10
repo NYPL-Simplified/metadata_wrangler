@@ -94,6 +94,12 @@ def lane_url(cls, lane, order=None):
         lane = lane.name
     return url_for('feed', lane=lane, order=order, _external=True)
 
+@app.route('/loans/')
+@requires_auth
+def active_loans():
+    feed = AcquisitionFeed.active_loans_for(flask.request.patron)
+    return unicode(feed)
+
 
 @app.route('/lanes/<lane>')
 def feed(lane):

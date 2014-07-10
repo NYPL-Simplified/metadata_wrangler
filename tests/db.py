@@ -33,6 +33,14 @@ class DatabaseTest(object):
     def _str(self):
         return str(self._id)
 
+    @property
+    def default_patron(self):
+        """The patron automatically created for the test dataset and 
+        used by default when authenticating.
+        """
+        return self._db.query(Patron).filter(
+            Patron.authorization_identifier=="0").one()
+
     def _patron(self, external_identifier=None):
         external_identifier = external_identifier or self._str
         return get_one_or_create(

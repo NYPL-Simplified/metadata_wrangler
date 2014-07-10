@@ -2,7 +2,9 @@ from nose.tools import set_trace
 import os
 from model import (
     Base,
+    Patron,
     SessionManager,
+    get_one_or_create,
 )
 from sqlalchemy.orm.session import Session
 
@@ -20,7 +22,14 @@ def setup():
     DBInfo.connection = connection
     DBInfo.transaction = connection.begin_nested()
 
-    SessionManager.initialize_data(Session(DBInfo.connection))
+    db = Session(DBInfo.connection)
+    SessionManager.initialize_data(db)
+
+    # Test data: Create the patron used by the dummy authentication
+    # mechanism.
+    get_one_or_create(db, Patron, authorization_identifier="0")
+    db.commit()
+
     print "Connection is now %r" % DBInfo.connection
     print "Transaction is now %r" % DBInfo.transaction
 

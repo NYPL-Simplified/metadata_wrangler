@@ -11,6 +11,7 @@ from circulation import app
 
 from model import (
     get_one_or_create,
+    Patron,
     Work,
 )
 
@@ -133,3 +134,22 @@ class TestOPDS(DatabaseTest):
         # We get the good one and omit the bad one.
         feed = AcquisitionFeed.featured(self._db, "eng", lane)
         eq_([good.title], [x.title for x in feed.entries])
+
+    def test_active_loan_feed(self):
+        patron = self.default_patron
+        feed = AcquisitionFeed.active_loans_for(patron)
+
+        work = self._work(
+            lane="Nonfiction", languages="eng", with_license_pool=True)
+        work.license_pools[0].loan_to(patron)
+        unused = self._work(
+            lane="Nonfiction", languages="eng", with_license_pool=True)
+
+        # Get the feed.
+        feed = AcquisitionFeed.active_loans_for(patron)
+
+        # The only entry in the feed is the work currently out on loan
+        # to this patron.
+        eq_(1, len(feed.entries))
+        eq_(work.title, feed.entries[0].title)
+

@@ -99,6 +99,23 @@ class TestNavigationFeed(CirculationTest):
             assert u"Très Français" in response
 
 
+class TestAcquisitionFeed(CirculationTest):
+
+    def test_active_loan_feed(self):
+        # No loans.
+        with self.app.test_request_context(
+                "/", headers=dict(Authorization=self.valid_auth)):
+            response = circulation.active_loans()
+            assert not "<entry>" in response
+
+        # One loan.
+        self.english_1.license_pools[0].loan_to(self.default_patron)
+        with self.app.test_request_context(
+                "/", headers=dict(Authorization=self.valid_auth)):
+            response = circulation.active_loans()
+            assert self.english_1.title in response
+
+
 class TestCheckout(CirculationTest):
 
     def setup(self):
