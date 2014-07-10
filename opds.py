@@ -103,16 +103,24 @@ class AcquisitionFeed(OPDSFeed):
         return AcquisitionFeed(
             _db, "%s: featured" % lane, url, works)
 
-    def create_entry(self, work, lane_link):
+    def create_entry(self, work, lane_link, loan=None):
         """Turn a work into an entry for an acquisition feed."""
         # Find the .epub link
         epub_href = None
         p = None
+
         active_license_pool = None
-        for p in work.license_pools:
-            if p.open_access:
-                active_license_pool = p
-                break
+        if loan:
+            # The active license pool is the one associated with
+            # the loan.
+            active_license_pool = loan.license_pool
+        else:
+            # The active license pool is the one that *would* be associated
+            # with a loan, were a loan to be issued right now.
+            for p in work.license_pools:
+                if p.open_access:
+                    active_license_pool = p
+                    break
 
         # There's no reason to present a book that has no active license pool.
         if not active_license_pool:
@@ -120,7 +128,12 @@ class AcquisitionFeed(OPDSFeed):
 
         work_record = active_license_pool.work_record()
         identifier = work_record.primary_identifier
-        key = "/".join(map(urllib.quote, [work_record.data_source.name, identifier.identifier]))
+
+        # TODO: If there's an active loan, the links and the license
+        # information should be much different. But we currently don't
+        # include license information at all, because OPDS For
+        # Libraries is still in flux. So for now we always put up an
+        # open access link that leads to the checkout URL.
         checkout_url = url_for(
             "checkout", data_source=work_record.data_source.name,
             identifier=identifier.identifier, _external=True)
