@@ -32,6 +32,7 @@ from integration.millenium_patron import DummyMilleniumPatronAPI as authenticato
 
 db = production_session()
 app = Flask(__name__)
+app.config['DEBUG'] = True
 app.debug = True
 
 DEFAULT_LANGUAGES = ['eng']

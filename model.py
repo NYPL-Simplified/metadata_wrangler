@@ -93,8 +93,10 @@ class SessionManager(object):
     def session(cls, url):
         engine, connection = cls.initialize(url)
         session = Session(connection)
+        print "INITIALIZING DATA"
         cls.initialize_data(session)
         session.commit()
+        print "DONE INITIALIZING DATA"
         return session
 
     @classmethod
