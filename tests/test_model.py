@@ -794,6 +794,8 @@ class TestLoans(DatabaseTest):
         # Loan them the book
         loan = pool.loan_to(patron)
 
+        # Now they have a loan!
+        eq_([loan], patron.loans)
         eq_(loan.patron, patron)
         eq_(loan.license_pool, pool)
         assert (datetime.datetime.utcnow() - loan.start) < datetime.timedelta(seconds=1)
