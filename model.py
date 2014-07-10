@@ -69,7 +69,12 @@ from sqlalchemy.orm import sessionmaker
 DEBUG = False
 
 def production_session():
-    return SessionManager.session(os.environ['DATABASE_URL'])
+    url = os.environ['DATABASE_URL']
+    if url.startswith('"'):
+        url = url[1:]
+    print "ENVIRONMENT: %s" % os.environ['DATABASE_URL'] 
+    print "MODIFIED: %s" % url
+    return SessionManager.session(url)
 
 class SessionManager(object):
 
