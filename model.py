@@ -1439,8 +1439,10 @@ class LicensePool(Base):
 
     def loan_to(self, patron):
         _db = Session.object_session(patron)
-        return Loan(patron=patron, license_pool=self, 
-                    start=datetime.datetime.utcnow())
+        kwargs = dict(start=datetime.datetime.utcnow())
+        return get_one_or_create(
+            _db, Loan, patron=patron, license_pool=self, 
+            create_method_kwargs=kwargs)
 
     @classmethod
     def consolidate_works(cls, _db):

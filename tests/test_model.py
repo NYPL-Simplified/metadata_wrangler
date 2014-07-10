@@ -792,7 +792,7 @@ class TestLoans(DatabaseTest):
         eq_([], patron.loans)
 
         # Loan them the book
-        loan = pool.loan_to(patron)
+        loan, was_new = pool.loan_to(patron)
 
         # Now they have a loan!
         eq_([loan], patron.loans)
@@ -804,6 +804,13 @@ class TestLoans(DatabaseTest):
         # is None here, but before that happens the loan process will
         # become more complicated, so there's no point in writing
         # a bunch of test code now.
+
+        # Try getting another loan for this book.
+        loan2, was_new = pool.loan_to(patron)
+
+        # They're the same!
+        eq_(loan, loan2)
+        eq_(False, was_new)
 
 class TestWorkFeed(DatabaseTest):
 

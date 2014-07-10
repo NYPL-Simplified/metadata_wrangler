@@ -103,6 +103,10 @@ class AcquisitionFeed(OPDSFeed):
         return AcquisitionFeed(
             _db, "%s: featured" % lane, url, works)
 
+    @classmethod
+    def with_active_loans(cls, patron):
+        pass
+
     def create_entry(self, work, lane_link, loan=None):
         """Turn a work into an entry for an acquisition feed."""
         # Find the .epub link

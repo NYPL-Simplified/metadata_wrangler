@@ -61,7 +61,7 @@ def authenticate():
     """Sends a 401 response that enables basic auth"""
     return Response(
         'A library card barcode number and PIN are required.', 401,
-        {'WWW-Authenticate': 'Basic realm="Library card"'})
+        { 'WWW-Authenticate' : 'Basic realm="Library card"'})
 
 def requires_auth(f):
     @wraps(f)
