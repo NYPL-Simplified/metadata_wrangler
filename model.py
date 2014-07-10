@@ -123,12 +123,6 @@ def get_one_or_create(db, model, create_method='',
 
 Base = declarative_base()
 
-active_loan_table = Table(
-    'active_loans', Base.metadata,
-    Column('patron_id', Integer, ForeignKey('patrons.id')),
-    Column('license_pool_id', Integer, ForeignKey('licensepools.id')),
-)
-
 class Patron(Base):
 
     __tablename__ = 'patrons'
@@ -145,8 +139,17 @@ class Patron(Base):
 
     # TODO: A username
 
-    active_loans = relationship("LicensePool", secondary=active_loan_table,
-                                backref="loaned_to")
+    loans = relationship('Loan', backref='patron')
+
+
+class Loan(Base):
+    __tablename__ = 'loans'
+    id = Column(Integer, primary_key=True)
+    patron_id = Column(Integer, ForeignKey('patrons.id'), index=True)
+    license_pool_id = Column(Integer, ForeignKey('licensepools.id'), index=True)
+    start = Column(DateTime)
+    end = Column(DateTime)
+
 
 class DataSource(Base):
     """A source for information about books, and possibly the books themselves."""
@@ -1290,6 +1293,9 @@ class LicensePool(Base):
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
     identifier_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
 
+    # One LicensePool can have many Loans.
+    loans = relationship('Loan', backref='license_pool')
+
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
         "CirculationEvent", backref="license_pool")
@@ -1430,6 +1436,11 @@ class LicensePool(Base):
         elif name in (CirculationEvent.HOLD_RELEASE,
                       CirculationEvent.HOLD_PLACE):
             self.patrons_in_hold_queue = event.new_value
+
+    def loan_to(self, patron):
+        _db = Session.object_session(patron)
+        return Loan(patron=patron, license_pool=self, 
+                    start=datetime.datetime.utcnow())
 
     @classmethod
     def consolidate_works(cls, _db):

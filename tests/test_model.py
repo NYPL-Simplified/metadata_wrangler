@@ -780,6 +780,29 @@ class TestWorkConsolidation(DatabaseTest):
         eq_("The only title in this whole test.", work1.title)
 
 
+class TestLoans(DatabaseTest):
+
+    def test_open_access_loan(self):
+        patron = self._patron()
+        work = self._work(with_license_pool=True)
+        pool = work.license_pools[0]
+        pool.is_open_access = True
+
+        # The patron has no active loans.
+        eq_([], patron.loans)
+
+        # Loan them the book
+        loan = pool.loan_to(patron)
+
+        eq_(loan.patron, patron)
+        eq_(loan.license_pool, pool)
+        assert (datetime.datetime.utcnow() - loan.start) < datetime.timedelta(seconds=1)
+
+        # TODO: At some future point it may be relevant that loan.end
+        # is None here, but before that happens the loan process will
+        # become more complicated, so there's no point in writing
+        # a bunch of test code now.
+
 class TestWorkFeed(DatabaseTest):
 
     def test_setup(self):

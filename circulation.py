@@ -198,8 +198,7 @@ def checkout(data_source, identifier):
     if not best_link:
         return "Sorry, couldn't find an available license."
 
-    flask.request.patron.active_loans.append(pool)
-    db.commit()
+    best_pool.loan_to(flask.request.patron)
     return redirect(URLRewriter.rewrite(best_link))
 
 print __name__

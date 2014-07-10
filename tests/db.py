@@ -5,6 +5,7 @@ from model import (
     DataSource,
     SessionManager,
     LicensePool,
+    Patron,
     WorkIdentifier,
     WorkRecord,
     Work,
@@ -31,6 +32,11 @@ class DatabaseTest(object):
     @property
     def _str(self):
         return str(self._id)
+
+    def _patron(self, external_identifier=None):
+        external_identifier = external_identifier or self._str
+        return get_one_or_create(
+            self._db, Patron, external_identifier=external_identifier)[0]
 
     def _workidentifier(self, identifier_type=WorkIdentifier.GUTENBERG_ID):
         id = self._str
