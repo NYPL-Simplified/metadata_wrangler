@@ -22,6 +22,7 @@ from model import (
 from lane import Lane, Unclassified
 from opensearch import OpenSearchDocument
 from opds import (
+    E,
     AcquisitionFeed,
     NavigationFeed,
     URLRewriter,
@@ -85,9 +86,9 @@ def navigation_feed():
     languages = languages_for_request()
     feed = NavigationFeed.main_feed(Lane)
 
-    feed.links.append(
-        dict(rel="search",
-             href=url_for('lane_search', lane=None, _external=True)))
+    feed.add_link(
+        rel="search", 
+        href=url_for('lane_search', lane=None, _external=True))
     return unicode(feed)
 
 def lane_url(cls, lane, order=None):
@@ -115,7 +116,7 @@ def feed(lane):
 
     if order == 'recommended':
         feed = AcquisitionFeed.featured(db, languages, lane)
-        feed.links.append(search_link)
+        feed.add_link(**search_link)
         return unicode(feed)
 
     if order == 'title':
@@ -160,7 +161,7 @@ def feed(lane):
             'feed', lane=lane, order=order, after=after, _external=True)
         opds_feed.links.append(dict(rel="next", href=next_url))
 
-    opds_feed.links.append(search_link)
+    opds_feed.add_link(**search_link)
     return unicode(opds_feed)
 
 @app.route('/search', defaults=dict(lane=None))

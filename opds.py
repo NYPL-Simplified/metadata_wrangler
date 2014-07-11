@@ -8,10 +8,11 @@ import datetime
 import random
 import urllib
 from urlparse import urlparse, urljoin
-from pyatom import AtomFeed
 import md5
 from sqlalchemy.sql.expression import func
 from sqlalchemy.orm.session import Session
+
+from lxml import builder, etree
 
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
@@ -23,6 +24,29 @@ from model import (
 from flask import request, url_for
 
 from lane import Lane, Unclassified
+
+ATOM_NAMESPACE = atom_ns = 'http://www.w3.org/2005/Atom'
+app_ns = 'http://www.w3.org/2007/app'
+xhtml_ns = 'http://www.w3.org/1999/xhtml'
+dc_ns = 'http://purl.org/dc/elements/1.1/'
+opds_ns = 'http://opds-spec.org/2010/catalog'
+
+nsmap = {
+    None: atom_ns,
+    'app': app_ns,
+    'dc' : dc_ns,
+    'opds' : opds_ns,
+}
+
+def _strftime(d):
+    """
+Format a date the way Atom likes it (RFC3339?)
+"""
+    return d.strftime('%Y-%m-%dT%H:%M:%SZ%z')
+
+E = builder.ElementMaker(typemap={datetime: lambda e, v: _strftime(v)},
+                         nsmap=nsmap)
+
 
 class URLRewriter(object):
 
@@ -55,6 +79,23 @@ class URLRewriter(object):
         return urljoin(cls.GUTENBERG_MIRROR_HOST, new_path)
 
 
+class AtomFeed(object):
+
+    def __init__(self, title, url):
+        self.feed = E.feed(
+            E.id(url),
+            E.title(title),
+            E.updated(_strftime(datetime.datetime.utcnow())),
+            E.link(href=url),
+            E.link(href=url, rel="self"),
+        )
+
+    def add_link(self, **kwargs):
+        self.feed.append(E.link(**kwargs))
+
+    def __unicode__(self):
+        return etree.tostring(self.feed, pretty_print=True)
+
 class OPDSFeed(AtomFeed):
 
     ACQUISITION_FEED_TYPE = "application/atom+xml;profile=opds-catalog;kind=acquisition"
@@ -77,7 +118,7 @@ class OPDSFeed(AtomFeed):
 class AcquisitionFeed(OPDSFeed):
 
     def __init__(self, _db, title, url, works, facet_url_generator=None):
-        super(AcquisitionFeed, self).__init__(title, [], url=url)
+        super(AcquisitionFeed, self).__init__(title, url=url)
         lane_link = dict(rel="collection", href=url)
         for work in works:
             self.add_entry(work, lane_link)
@@ -89,8 +130,8 @@ class AcquisitionFeed(OPDSFeed):
                 link = dict(href=facet_url_generator(order),
                             title=title)
                 link['rel'] = "http://opds-spec.org/facet"
-                link['opds:facetGroup'] = facet_group
-                self.links.append(link)
+                link['{%s}facetGroup' % opds_ns] = facet_group
+                self.add_link(**link)
 
     @classmethod
     def featured(cls, _db, languages, lane):
@@ -109,6 +150,11 @@ class AcquisitionFeed(OPDSFeed):
         db = Session.object_session(patron)
         url = url_for('active_loans', _external=True)
         return AcquisitionFeed(db, "Active loans", url, patron.works_on_loan())
+
+    def add_entry(self, work, lane_link, loan=None):
+        entry = self.create_entry(work, lane_link, loan)
+        if entry:
+            self.feed.append(entry)
 
     def create_entry(self, work, lane_link, loan=None):
         """Turn a work into an entry for an acquisition feed."""
@@ -145,35 +191,38 @@ class AcquisitionFeed(OPDSFeed):
             "checkout", data_source=work_record.data_source.name,
             identifier=identifier.identifier, _external=True)
 
-        links=[dict(rel=self.OPEN_ACCESS_REL, 
-                    href=checkout_url)]
+        links=[E.link(rel=self.OPEN_ACCESS_REL, 
+                      href=checkout_url)]
 
         if work.thumbnail_cover_link:
             url = URLRewriter.rewrite(work.thumbnail_cover_link)
-            links.append(dict(rel=self.THUMBNAIL_IMAGE_REL, href=url))
+            links.append(E.link(rel=self.THUMBNAIL_IMAGE_REL, href=url))
         if work.full_cover_link:
             url = URLRewriter.rewrite(work.full_cover_link)
-            links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
+            links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             url = urljoin(
                 host, urllib.quote(
                     "/Gutenberg ID/%s.png" % identifier.identifier))
-            links.append(dict(rel=self.FULL_IMAGE_REL, href=url))
+            links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
 
 
         tag = "tag:work:%s" % work.id
-        entry = dict(title=work.title, url=checkout_url, id=tag,
-                    author=work.authors or "", 
-                    summary="Quality: %s" % work.quality,
-                    links=links,
-                    updated=datetime.datetime.utcnow())
-        return entry
+        language = E._makeelement("{%s}language" % dc_ns)
+        language.text = work.languages
 
-    def add_entry(self, work, lane_link):
-        entry = self.create_entry(work, lane_link)
-        if entry:
-            self.add(**entry)
+        entry = E.entry(
+            E.id(tag),
+            E.title(work.title),
+            E.author(work.authors or ""),
+            E.summary("Quality: %d" % work.quality),
+            language,
+            E.link(href=checkout_url),
+            E.updated(_strftime(datetime.datetime.utcnow())),
+            *links
+        )
+        return entry
 
 
 class NavigationFeed(OPDSFeed):
@@ -181,7 +230,7 @@ class NavigationFeed(OPDSFeed):
     @classmethod
     def main_feed(self, parent_lane):
         feed = NavigationFeed(
-            "Navigation feed", [], 
+            "Navigation feed",
             url=url_for('navigation_feed', _external=True))
 
         for lane in sorted(parent_lane.self_and_sublanes(), key=lambda x: x.name):
@@ -194,7 +243,7 @@ class NavigationFeed(OPDSFeed):
                     ('All books', 'author', 'subsection'),
                     ('Featured', None, self.FEATURED_REL)
             ]:
-                link = dict(
+                link = E.link(
                     type=self.ACQUISITION_FEED_TYPE,
                     href=self.lane_url(lane, order),
                     rel=rel,
@@ -202,11 +251,13 @@ class NavigationFeed(OPDSFeed):
                 )
                 links.append(link)
 
-            feed.add(
-                title=lane,
-                id="tag:%s" % (lane),
-                url=self.lane_url(lane),
-                links=links,
-                updated=datetime.datetime.utcnow(),
+            feed.feed.append(
+                E.entry(
+                    E.id("tag:%s" % (lane)),
+                    E.title(lane),
+                    E.link(href=self.lane_url(lane)),
+                    E.updated(_strftime(datetime.datetime.utcnow())),
+                    *links
+                )
             )
         return feed

@@ -1,3 +1,4 @@
+import feedparser
 from nose.tools import (
     eq_,
     set_trace,
@@ -62,21 +63,23 @@ class TestOPDS(DatabaseTest):
         self.ctx.push()
     
     def test_navigation_feed(self):
-        feed = NavigationFeed.main_feed(TopLevel)
-        assert feed.url.endswith("/lanes/")
+        original_feed = NavigationFeed.main_feed(TopLevel)
+        parsed = feedparser.parse(unicode(original_feed))
+        feed = parsed['feed']
+        link = [link for link in feed['links'] if link['rel'] == 'self'][0]
+        assert link['href'].endswith("/lanes/")
 
         # Every lane has an entry.
-        eq_(3, len(feed.entries))
-        tags = [x.title for x in feed.entries]
+        eq_(3, len(parsed['entries']))
+        tags = [x['title'] for x in parsed['entries']]
         eq_(['Child', 'Parent', 'Toplevel'], sorted(tags))
 
         # Let's take one entry as an example.
-        toplevel = [x for x in feed.entries if x.title == 'Toplevel'][0]
+        toplevel = [x for x in parsed['entries'] if x.title == 'Toplevel'][0]
         eq_("tag:Toplevel", toplevel.id)
 
         # There are two links to acquisition feeds.
-        featured, by_author = sorted(toplevel.links)
-
+        self_link, featured, by_author = sorted(toplevel['links'])
         assert featured['href'].endswith("/lanes/Toplevel")
         eq_("Featured", featured['title'])
         eq_(NavigationFeed.FEATURED_REL, featured['rel'])
@@ -95,15 +98,28 @@ class TestOPDS(DatabaseTest):
             return "http://blah/" + facet
 
         works = self._db.query(Work)
-        by_title = AcquisitionFeed(self._db, "test", "url", works,
-                                   facet_url_generator)
-        by_author, by_title = sorted(by_title.links)
-        eq_('Sort by', by_author['opds:facetGroup'])
+        feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
+                               works, facet_url_generator)
+        u = unicode(feed)
+        parsed = feedparser.parse(u)
+        by_title = parsed['feed']
+
+        alternate_link, self_link, by_author, by_title = sorted(
+            by_title['links'])
+
+        eq_("http://the-url.com/", self_link['href'])
+
+        # As we'll see below, the feed parser parses facetGroup as
+        # facetgroup; that's not a problem with the generator code.
+        assert 'opds:facetgroup' not in u
+        assert 'opds:facetGroup' in u
+
+        eq_('Sort by', by_author['opds:facetgroup'])
         eq_('http://opds-spec.org/facet', by_author['rel'])
         eq_('Author', by_author['title'])
         eq_(facet_url_generator("author"), by_author['href'])
 
-        eq_('Sort by', by_title['opds:facetGroup'])
+        eq_('Sort by', by_title['opds:facetgroup'])
         eq_('http://opds-spec.org/facet', by_title['rel'])
         eq_('Title', by_title['title'])
         eq_(facet_url_generator("title"), by_title['href'])
@@ -121,8 +137,9 @@ class TestOPDS(DatabaseTest):
         # license pool.
         works = self._db.query(Work)
         by_title = AcquisitionFeed(self._db, "test", "url", works)
-        eq_(1, len(by_title.entries))
-        eq_([work.title], [x.title for x in by_title.entries])
+        by_title = feedparser.parse(unicode(by_title))
+        eq_(1, len(by_title['entries']))
+        eq_([work.title], [x['title'] for x in by_title['entries']])
 
     def test_featured_feed_ignores_low_quality_works(self):
         lane="Foo"
@@ -133,7 +150,8 @@ class TestOPDS(DatabaseTest):
 
         # We get the good one and omit the bad one.
         feed = AcquisitionFeed.featured(self._db, "eng", lane)
-        eq_([good.title], [x.title for x in feed.entries])
+        feed = feedparser.parse(unicode(feed))
+        eq_([good.title], [x['title'] for x in feed['entries']])
 
     def test_active_loan_feed(self):
         patron = self.default_patron
@@ -147,9 +165,10 @@ class TestOPDS(DatabaseTest):
 
         # Get the feed.
         feed = AcquisitionFeed.active_loans_for(patron)
+        feed = feedparser.parse(unicode(feed))
 
         # The only entry in the feed is the work currently out on loan
         # to this patron.
-        eq_(1, len(feed.entries))
-        eq_(work.title, feed.entries[0].title)
+        eq_(1, len(feed['entries']))
+        eq_(work.title, feed['entries'][0]['title'])
 

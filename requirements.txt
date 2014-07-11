@@ -2,9 +2,9 @@ Flask
 nose
 sqlalchemy
 psycopg2
-pyatom
 lxml
 beautifulsoup4
 requests
 rdflib
 gunicorn
+feedparser

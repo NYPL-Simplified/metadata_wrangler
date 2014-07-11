@@ -73,7 +73,7 @@ class TestNavigationFeed(CirculationTest):
             response = circulation.feed('Nonfiction')
             assert "Totally American" in response
             assert "Quite British" not in response # Wrong lane
-            assert u"Très Français" not in response # Wrong language
+            assert u"Tr&#232;s Fran&#231;ais" not in response # Wrong language
 
         # Now change the default language.
         old_default = circulation.DEFAULT_LANGUAGES
@@ -81,7 +81,7 @@ class TestNavigationFeed(CirculationTest):
         with self.app.test_request_context("/"):
             response = circulation.feed('Nonfiction')
             assert "Totally American" not in response
-            assert u"Très Français" in response
+            assert u"Tr&#232;s Fran&#231;ais" in response
         circulation.DEFAULT_LANGUAGES = old_default
 
     def test_lane_with_language_preference(self):
@@ -90,13 +90,13 @@ class TestNavigationFeed(CirculationTest):
                 "/", headers={"Accept-Language": "fr"}):
             response = circulation.feed('Nonfiction')
             assert "Totally American" not in response
-            assert u"Très Français" in response
+            assert "Tr&#232;s Fran&#231;ais" in response
 
         with self.app.test_request_context(
                 "/", headers={"Accept-Language": "fr,en-us"}):
             response = circulation.feed('Nonfiction')
             assert "Totally American" in response
-            assert u"Très Français" in response
+            assert "Tr&#232;s Fran&#231;ais" in response
 
 
 class TestAcquisitionFeed(CirculationTest):
