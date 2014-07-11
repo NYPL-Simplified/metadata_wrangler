@@ -4,12 +4,12 @@ from urlparse import urljoin
 from urllib import urlencode
 
 from integration import XMLParser
-from config import CONFIG
+import os
 
 class MilleniumPatronAPI(XMLParser):
 
     def __init__(self):
-        root = CONFIG['millenium']['root']
+        root = os.environ['MILLENIUM_HOST']
         self.root = root
         self.parser = etree.HTMLParser()
 
