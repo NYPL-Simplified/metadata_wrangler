@@ -89,6 +89,9 @@ def navigation_feed():
     feed.add_link(
         rel="search", 
         href=url_for('lane_search', lane=None, _external=True))
+    feed.add_link(
+        rel="http://opds-spec.org/shelf", 
+        href=url_for('active_loans', _external=True))
     return unicode(feed)
 
 def lane_url(cls, lane, order=None):

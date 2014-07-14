@@ -2,6 +2,7 @@
 """Test the Flask app for the circulation server."""
 
 import base64
+import feedparser
 
 from nose.tools import (
     eq_,
@@ -67,6 +68,17 @@ class TestNavigationFeed(CirculationTest):
         response = self.client.get('/')
         eq_(302, response.status_code)
         assert response.headers['Location'].endswith('/lanes/')
+
+    def test_presence_of_extra_links(self):
+        with self.app.test_request_context("/"):
+            response = circulation.navigation_feed()
+            feed = feedparser.parse(response)
+            links = feed['feed']['links']
+            for expect_rel, expect_href_end in (
+                    ('search', '/search'), 
+                    ('http://opds-spec.org/shelf', '/loans/')):
+                link = [x for x in links if x['rel'] == expect_rel][0]
+                assert link['href'].endswith(expect_href_end)
 
     def test_lane_without_language_preference_uses_default_language(self):
         with self.app.test_request_context("/"):
