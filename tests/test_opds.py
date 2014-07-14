@@ -125,6 +125,22 @@ class TestOPDS(DatabaseTest):
         eq_(facet_url_generator("title"), by_title['href'])
 
 
+    def test_acquisition_feed_includes_language_tag(self):
+        lane = "Foo"
+        work = self._work(lane=lane, with_license_pool=True)
+        work.languages = "eng,fre"
+        work2 = self._work(lane=lane, with_license_pool=True)
+        work.languages = None
+        self._db.commit()
+
+        works = self._db.query(Work)
+        with_language = AcquisitionFeed(self._db, "test", "url", works)
+        with_language = feedparser.parse(unicode(with_language))
+        entries = sorted(with_language['entries'], key = lambda x: x['title'])
+        assert 'language' not in entries[0]
+        eq_('en', entries[1]['language'])
+
+
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
         lane = "Foo"
         work = self._work(lane=lane, with_license_pool=True)

@@ -50,6 +50,7 @@ from sqlalchemy import (
 from classification import Classification
 from lane import Lane
 from util import (
+    LanguageCodes,
     MetadataSimilarity,
 )
 
@@ -1033,6 +1034,17 @@ class Work(Base):
         q = _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(identifier_ids))
         return q
+
+    @property
+    def language(self):
+        """A single 2-letter language code for display purposes."""
+        if not self.languages:
+            return None
+        languages = [x.strip() for x in self.languages.split(",")]
+        language = languages[0]
+        if language in LanguageCodes.three_to_two:
+            language = LanguageCodes.three_to_two[language]
+        return language
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
