@@ -90,6 +90,27 @@ class TestOPDS(DatabaseTest):
         eq_("subsection", by_author['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, by_author['type'])
 
+    def test_acquisition_feed(self):
+        lane = "Foo"
+        work = self._work(lane=lane, with_license_pool=True)
+        work.authors = "Alice"
+
+        feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
+                               [work])
+        u = unicode(feed)
+        parsed = feedparser.parse(u)
+        [with_author] = parsed['entries']
+        eq_("Alice", with_author['authors'][0]['name'])
+
+
+    def test_acquisition_feed_includes_author_tag_even_when_no_author(self):
+        lane = "Foo"
+        work = self._work(lane=lane, with_license_pool=True)
+        feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
+                               [work])
+        u = unicode(feed)
+        assert "<author>" in u
+
     def test_acquisition_feed_contains_facet_links(self):
         lane = "Foo"
         work = self._work(lane=lane, with_license_pool=True)

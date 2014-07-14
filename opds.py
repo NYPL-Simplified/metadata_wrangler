@@ -210,12 +210,13 @@ class AcquisitionFeed(OPDSFeed):
         entry = E.entry(
             E.id(tag),
             E.title(work.title),
-            E.author(work.authors or ""),
+            E.author(E.name(work.authors or "")),
             E.summary("Quality: %d" % work.quality),
             E.link(href=checkout_url),
             E.updated(_strftime(datetime.datetime.utcnow())),
             *links
         )
+        
         language = work.language
         if language:
             language_tag = E._makeelement("{%s}language" % dcterms_ns)
