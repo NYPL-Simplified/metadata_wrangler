@@ -80,6 +80,41 @@ class TestNavigationFeed(CirculationTest):
                 link = [x for x in links if x['rel'] == expect_rel][0]
                 assert link['href'].endswith(expect_href_end)
 
+    def test_faceted_links(self):
+        # Create some more books to force pagination.
+        self.english_2 = self._work(
+            "Quite British 2: British Harder", "John Bull", "Fiction",
+            "eng", True
+        )
+        self.english_3 = self._work(
+            "Quite British 3: Live Free Or Die British", "John Bull", "Fiction",
+            "eng", True
+        )
+
+        with self.app.test_request_context(
+                "/", query_string=dict(size=1, order="author")):
+            response = circulation.feed('Fiction')
+            parsed = feedparser.parse(unicode(response))
+            [author_facet, title_facet, next_link, search] = sorted(
+                [(x['rel'], x['href'])
+                 for x in parsed['feed']['links']
+                 if x['rel'] not in ('alternate', 'self')
+             ]
+            )
+
+            eq_("http://opds-spec.org/facet", author_facet[0])
+            assert author_facet[1].endswith("/Fiction?order=author")
+
+            eq_("http://opds-spec.org/facet", title_facet[0])
+            assert title_facet[1].endswith("/Fiction?order=title")
+
+            eq_("next", next_link[0])
+            assert "?after=" in next_link[1]
+            assert next_link[1].endswith("order=author")
+
+            eq_("search", search[0])
+            assert search[1].endswith('/search/Fiction')
+
     def test_lane_without_language_preference_uses_default_language(self):
         with self.app.test_request_context("/"):
             response = circulation.feed('Nonfiction')

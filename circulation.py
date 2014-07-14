@@ -136,7 +136,6 @@ def feed(lane):
         size = int(size)
     except ValueError:
         return "Invalid size: %s" % size
-    size = max(size, 10)
     size = min(size, 100)
 
     last_work_seen = None
@@ -162,7 +161,7 @@ def feed(lane):
         after = page[-1].id
         next_url = url_for(
             'feed', lane=lane, order=order, after=after, _external=True)
-        opds_feed.links.append(dict(rel="next", href=next_url))
+        opds_feed.add_link(rel="next", href=next_url)
 
     opds_feed.add_link(**search_link)
     return unicode(opds_feed)
