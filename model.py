@@ -191,7 +191,8 @@ class DataSource(Base):
     id_equivalencies = relationship("Equivalency", backref="data_source")
 
     # One DataSource can grant access to many LicensePools.
-    license_pools = relationship("LicensePool", backref="data_source")
+    license_pools = relationship("LicensePool", backref="data_source",
+                                 lazy='joined')
 
     @classmethod
     def lookup(cls, _db, name):
@@ -307,7 +308,7 @@ class WorkIdentifier(Base):
     # One WorkIdentifier may serve as the identifier for
     # a single LicensePool.
     licensed_through = relationship(
-        "LicensePool", backref="identifier", uselist=False,
+        "LicensePool", backref="identifier", uselist=False, lazy='joined',
     )
 
     # Type + identifier is unique.
@@ -923,7 +924,7 @@ class Work(Base):
     id = Column(Integer, primary_key=True)
 
     # One Work may have copies scattered across many LicensePools.
-    license_pools = relationship("LicensePool", backref="work")
+    license_pools = relationship("LicensePool", backref="work", lazy='joined')
 
     # A single Work may claim many WorkRecords.
     work_records = relationship("WorkRecord", backref="work")
