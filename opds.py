@@ -179,16 +179,14 @@ class AcquisitionFeed(OPDSFeed):
         if not active_license_pool:
             return False
 
-        work_record = active_license_pool.work_record()
-        identifier = work_record.primary_identifier
-
         # TODO: If there's an active loan, the links and the license
         # information should be much different. But we currently don't
         # include license information at all, because OPDS For
         # Libraries is still in flux. So for now we always put up an
         # open access link that leads to the checkout URL.
+        identifier = active_license_pool.identifier
         checkout_url = url_for(
-            "checkout", data_source=work_record.data_source.name,
+            "checkout", data_source=active_license_pool.data_source.name,
             identifier=identifier.identifier, _external=True)
 
         links=[E.link(rel=self.OPEN_ACCESS_REL, 
