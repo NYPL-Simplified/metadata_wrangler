@@ -138,7 +138,7 @@ class TestOPDS(DatabaseTest):
         with_language = feedparser.parse(unicode(with_language))
         entries = sorted(with_language['entries'], key = lambda x: x['title'])
         assert 'language' not in entries[0]
-        eq_('en', entries[1]['language'])
+        eq_('en', entries[1]['dcterms_language'])
 
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):

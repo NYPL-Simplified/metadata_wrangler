@@ -28,13 +28,13 @@ from lane import Lane, Unclassified
 ATOM_NAMESPACE = atom_ns = 'http://www.w3.org/2005/Atom'
 app_ns = 'http://www.w3.org/2007/app'
 xhtml_ns = 'http://www.w3.org/1999/xhtml'
-dc_ns = 'http://purl.org/dc/elements/1.1/'
+dcterms_ns = 'http://purl.org/dc/terms/'
 opds_ns = 'http://opds-spec.org/2010/catalog'
 
 nsmap = {
     None: atom_ns,
     'app': app_ns,
-    'dc' : dc_ns,
+    'dcterms' : dcterms_ns,
     'opds' : opds_ns,
 }
 
@@ -218,7 +218,7 @@ class AcquisitionFeed(OPDSFeed):
         )
         language = work.language
         if language:
-            language_tag = E._makeelement("{%s}language" % dc_ns)
+            language_tag = E._makeelement("{%s}language" % dcterms_ns)
             language_tag.text = language
             entry.append(language_tag)
         return entry
