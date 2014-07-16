@@ -213,37 +213,31 @@ class TestWorkRecord(DatabaseTest):
         g2, ignore = WorkRecord.for_foreign_id(
             self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "2")
 
-        # One of them is equivalent to an OCLC record.
-        o, ignore = WorkRecord.for_foreign_id(
-            self._db, oclc, WorkIdentifier.OCLC_WORK, "10034")
-        g1.primary_identifier.equivalent_to(oclc, o.primary_identifier)
+        # One of them has coverage from OCLC Classify
+        c1 = self._coverage_record(g1, oclc)
 
         # Here's a web record, just sitting there.
         w, ignore = WorkRecord.for_foreign_id(
             self._db, web, WorkIdentifier.URI, "http://www.foo.com/")
 
         # missing_coverage_from picks up the Gutenberg record with no
-        # corresponding record from OCLC. It doesn't pick up the other
+        # coverage from OCLC. It doesn't pick up the other
         # Gutenberg record, and it doesn't pick up the web record.
         [in_gutenberg_but_not_in_oclc] = WorkRecord.missing_coverage_from(
-            self._db, WorkIdentifier.GUTENBERG_ID, oclc, 
-            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
+            self._db, gutenberg, oclc).all()
 
         eq_(g2, in_gutenberg_but_not_in_oclc)
 
-        # We can pick up the web record by doing a lookup by URI instead of Gutenberg ID.
+        # We don't put web sites into OCLC, so this will pick up the
+        # web record (but not the Gutenberg record).
         [in_web_but_not_in_oclc] = WorkRecord.missing_coverage_from(
-            self._db, WorkIdentifier.URI, oclc, WorkIdentifier.OCLC_WORK,
-            WorkIdentifier.OCLC_NUMBER)
+            self._db, web, oclc).all()
         eq_(w, in_web_but_not_in_oclc)
 
-        # Now let's look for something impossible--a mapping from
-        # Gutenberg ID to OCLC Work ID or OCLC Number obtained via the
-        # web. This will pick up both the Gutenberg works, but not the
-        # web work (since it's not identified by Gutenberg ID).
-        eq_([g1, g2], WorkRecord.missing_coverage_from(
-            self._db, WorkIdentifier.GUTENBERG_ID, web, 
-            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER))
+        # We don't use the web as a source of coverage, so this will
+        # return both Gutenberg records (but not the web record).
+        eq_([g1, g2], sorted(WorkRecord.missing_coverage_from(
+            self._db, gutenberg, web).all()))
 
     def test_recursive_workrecord_equivalence(self):
 

@@ -188,6 +188,9 @@ class DataSource(Base):
     # One DataSource can generate many WorkRecords.
     work_records = relationship("WorkRecord", backref="data_source")
 
+    # One DataSource can generate many CoverageRecords.
+    coverage_records = relationship("CoverageRecord", backref="data_source")
+
     # One DataSource can generate many IDEquivalencies.
     id_equivalencies = relationship("Equivalency", backref="data_source")
 
@@ -233,6 +236,18 @@ class DataSource(Base):
                 )
             )
             yield obj
+
+
+class CoverageRecord(Base):
+    """A record of a WorkRecord being used as input into another data source."""
+    __tablename__ = 'coveragerecords'
+
+    id = Column(Integer, primary_key=True)
+    work_record_id = Column(
+        Integer, ForeignKey('workrecords.id'), index=True)
+    data_source_id = Column(
+        Integer, ForeignKey('datasources.id'), index=True)
+    date = Column(Date, index=True)
 
 
 class Equivalency(Base):
@@ -583,8 +598,11 @@ class WorkRecord(Base):
     primary_identifier_id = Column(
         Integer, ForeignKey('workidentifiers.id'), index=True)
 
-    # A WorkRecord may be associated with a Work
+    # A WorkRecord may be associated with a single Work.
     work_id = Column(Integer, ForeignKey('works.id'), index=True)
+
+    # One WorkRecord may have many associated CoverageRecords.
+    coverage_records = relationship("CoverageRecord", backref="work_record")
 
     title = Column(Unicode)
     subtitle = Column(Unicode)
@@ -694,53 +712,25 @@ class WorkRecord(Base):
             WorkRecord.primary_identifier_id.in_(identifier_ids))
 
     @classmethod
-    def missing_coverage_from(cls, _db, primary_id_type,
-                              data_source, *not_identified_by):
-        """Find WorkRecords with primary identifier of the given type
-        `primary_id_type` which have no *direct* equivalency to an
-        identifier of the types `not_identified_by`.
+    def missing_coverage_from(
+            cls, _db, workrecord_data_source, coverage_data_source):
+        """Find WorkRecords from `workrecord_data_source` which have no
+        CoverageRecord from `coverage_data_source`.
 
         e.g.
 
-        missing_coverage_from(_db, WorkIdentifier.GUTENBERG_ID,
-                                   DataSource.lookup(_db, DataSource.OCLC),
-                                   WorkIdentifier.OCLC_WORK, 
-                                   WorkIdentifier.OCLC_NUMBER)
+         gutenberg = DataSource.lookup(_db, DataSource.GUTENBERG)
+         oclc_classify = DataSource.lookup(_db, DataSource.OCLC)
+         missing_coverage_from(_db, gutenberg, oclc_classify)
 
-        will find WorkRecords primarily associated with a Project
-        Gutenberg ID which have not been associated by the OCLC
-        Classify data source with any OCLC Work ID or OCLC Number.
-        These are Gutenberg books that need to have an OCLC Classify
-        lookup done.
-
-        We restrict to direct equivalency rather than recursive lookup
-        because otherwise this query will take forever.
-
+        will find WorkRecords that came from Project Gutenberg and
+        have never been used as input to the OCLC Classify web
+        service.
         """
-        # First build the subquery. This will find all the WorkIdentifiers
-        # which are of the correct type and are *also* equivalent to a
-        # WorkIdentifier of the other type.
-        primary_identifier = aliased(WorkIdentifier)
-        secondary_identifier = aliased(WorkIdentifier)
-        
-        qu = _db.query(primary_identifier.id).join(
-            primary_identifier.equivalencies).join(
-                secondary_identifier,
-                secondary_identifier.id==Equivalency.output_id).filter(
-                    Equivalency.data_source_id==data_source.id).filter(
-                    primary_identifier.type==primary_id_type,
-                    secondary_identifier.type.in_(not_identified_by))
-        qu = qu.distinct()
-
-        # Now build the main query. This will find all WorkRecords
-        # whose primary identifiers are of the correct type but were
-        # not in the first list.
-        primary_identifier = aliased(WorkIdentifier)
-        main_query = _db.query(WorkRecord).join(
-            primary_identifier, WorkRecord.primary_identifier).filter(
-            primary_identifier.type==primary_id_type,
-            ~primary_identifier.id.in_(qu.subquery()))
-        return main_query
+        return _db.query(WorkRecord).filter(
+            WorkRecord.data_source==workrecord_data_source).filter(
+            ~WorkRecord.coverage_records.any(
+                data_source=coverage_data_source))
 
     @classmethod
     def _content(cls, content, is_html=False):

@@ -1,7 +1,9 @@
 import os
+from datetime import datetime
 from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 from model import (
+    CoverageRecord,
     DataSource,
     SessionManager,
     LicensePool,
@@ -80,6 +82,14 @@ class DatabaseTest(object):
             work.license_pools.append(pool)
         work.primary_work_record = wr
         return work
+
+    def _coverage_record(self, workrecord, coverage_source):
+        record, ignore = get_one_or_create(
+            self._db, CoverageRecord,
+            work_record=workrecord,
+            data_source=coverage_source,
+            create_method_kwargs = dict(date=datetime.utcnow()))
+        return record
 
     def _licensepool(self, workrecord, open_access=True, 
                      data_source_name=DataSource.GUTENBERG):
