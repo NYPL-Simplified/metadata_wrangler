@@ -13,4 +13,4 @@ if __name__ == '__main__':
         print "Usage: %s [data storage directory]" % sys.argv[0]
         sys.exit()
     path = sys.argv[1]      
-    OCLCMonitorForGutenberg(path).run(production_session())
+    OCLCMonitorForGutenberg(production_session(), path).run()

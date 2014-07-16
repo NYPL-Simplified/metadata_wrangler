@@ -1752,8 +1752,50 @@ class Timestamp(Base):
 
     __tablename__ = 'timestamps'
     service = Column(String(255), primary_key=True)
-    type = Column(String(255), primary_key=True)
     timestamp = Column(DateTime)
+
+    @classmethod
+    def stamp(self, service):
+        now = datetime.utcnow()
+        stamp, was_new = get_one_or_create(
+            self._db, Timestamp,
+            service=service,
+            create_kw_args=dict(timestamp=now))
+        if not was_new:
+            stamp.timestamp = now
+        return stamp
+
+class CoverageProvider(object):
+
+    """Run WorkRecords from one DataSource (the input DataSource) through
+    code associated with another DataSource (the output
+    DataSource). If the code returns success, add a CoverageRecord for
+    the WorkRecord and the output DataSource, so that the record
+    doesn't get processed next time.
+    """
+
+    def __init__(self, service_name, input_source, output_source):
+        self._db = Session.object_session(input_source)
+        self.service_name = service_name
+        self.input_source = input_source
+        self.output_source = output_source
+
+    def run(self):
+        for record in WorkRecord.missing_coverage_from(
+                self._db, self.input_source, self.output_source):
+            if self.process_work_record(record):
+                # Success! Now there's coverage! Add a CoverageRecord.
+                get_one_or_create(
+                    self._db, CoverageRecord,
+                    work_record=record,
+                    data_source=self.output_source,
+                    create_method_kwargs = dict(date=datetime.utcnow()))
+
+        # Now that we're done, update the timestamp
+        Timestamp.stamp(self.service_name)
+
+    def process_work_record(self, work_record):
+        raise NotImplementedError()
 
 
 class SubjectType(object):

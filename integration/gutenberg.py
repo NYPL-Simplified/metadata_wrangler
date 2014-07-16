@@ -22,6 +22,7 @@ from rdflib import Namespace
 from model import (
     get_one_or_create,
     CirculationEvent,
+    CoverageProvider,
     Contributor,
     WorkRecord,
     DataSource,
@@ -329,7 +330,7 @@ class GutenbergMonitor(Monitor):
             _db.commit()
 
 
-class OCLCMonitorForGutenberg(object):
+class OCLCMonitorForGutenberg(CoverageProvider):
 
     """Track OCLC's opinions about books with the same title/author as 
     Gutenberg works."""
@@ -343,9 +344,14 @@ class OCLCMonitorForGutenberg(object):
     # especially colons.
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
     
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
         self.gutenberg = GutenbergMonitor(data_directory)
         self.oclc = OCLCClassifyAPI(data_directory)
+        input_source = DataSource.lookup(_db, DataSource.GUTENBERG)
+        output_source = DataSource.lookup(_db, DataSource.OCLC)
+        super(OCLCMonitorForGutenberg, self).__init__(
+            "OCLC Monitor for Gutenberg", input_source, output_source)
+        set_trace()
 
     def oclc_safe_title(self, title):
         return self.NON_TITLE_SAFE.sub("", title)
@@ -360,99 +366,88 @@ class OCLCMonitorForGutenberg(object):
             author = authors[0].name
         return title, author
 
-    def run(self, _db):
-        counter = 0
+    def process_work_record(self, work_record):
+        title, author = self.title_and_author(book)
+        languages = book.languages
 
-        data_source = DataSource.lookup(_db, DataSource.OCLC)
-        in_gutenberg_but_not_in_oclc = WorkRecord.missing_coverage_from(
-            _db, WorkIdentifier.GUTENBERG_ID,
-            data_source,
-            WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH)
+        print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, languages)
+        # Perform a title/author lookup
+        xml = self.oclc.lookup_by(title=title, author=author)
 
-        print "Processing %s books." % len(in_gutenberg_but_not_in_oclc)
-        for book in in_gutenberg_but_not_in_oclc:
-            title, author = self.title_and_author(book)
-            languages = book.languages
+        # Register the fact that we did a title/author lookup
+        query_string = self.oclc.query_string(title=title, author=author)
+        search, ignore = WorkIdentifier.for_foreign_id(
+            _db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
 
-            print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, languages)
-            # Perform a title/author lookup
-            xml = self.oclc.lookup_by(title=title, author=author)
+        # For now, the only restriction we apply is the language
+        # restriction. If we know that a given OCLC record is in a
+        # different language from this record, there's no need to
+        # even import that record. Restrictions on title and
+        # author will be applied statistically, when we calculate
+        # works.
+        restrictions = dict(languages=languages)
 
-            # Register the fact that we did a title/author lookup
-            query_string = self.oclc.query_string(title=title, author=author)
-            search, ignore = WorkIdentifier.for_foreign_id(
-                _db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
+        # Turn the raw XML into some number of bibliographic records.
+        representation_type, records = OCLCXMLParser.parse(
+            _db, xml, **restrictions)
 
-            # For now, the only restriction we apply is the language
-            # restriction. If we know that a given OCLC record is in a
-            # different language from this record, there's no need to
-            # even import that record. Restrictions on title and
-            # author will be applied statistically, when we calculate
-            # works.
-            restrictions = dict(languages=languages)
+        if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
+            # `records` contains a bunch of SWIDs, not
+            # WorkRecords. Do another lookup to turn each SWID
+            # into a set of WorkRecords.
+            swids = records
+            records = []
+            for swid in swids:
+                swid_xml = self.oclc.lookup_by(swid=swid)
+                representation_type, editions = OCLCXMLParser.parse(
+                    _db, swid_xml, **restrictions)
 
-            # Turn the raw XML into some number of bibliographic records.
-            representation_type, records = OCLCXMLParser.parse(
-                _db, xml, **restrictions)
+                if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
+                    records.extend(editions)
+                elif representation_type == OCLCXMLParser.NOT_FOUND_STATUS:
+                    # This shouldn't happen, but if it does,
+                    # it's not a big deal. Just do nothing.
+                    pass
+                else:
+                    set_trace()
+                    print " Got unexpected representation type from lookup: %s" % representation_type
+        # Connect the Gutenberg book to the OCLC works looked up by
+        # title/author. Hopefully we can also connect the Gutenberg book
+        # to an author who has an LC and VIAF.
 
-            if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
-                # `records` contains a bunch of SWIDs, not
-                # WorkRecords. Do another lookup to turn each SWID
-                # into a set of WorkRecords.
-                swids = records
-                records = []
-                for swid in swids:
-                    swid_xml = self.oclc.lookup_by(swid=swid)
-                    representation_type, editions = OCLCXMLParser.parse(
-                        _db, swid_xml, **restrictions)
-
-                    if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
-                        records.extend(editions)
-                    elif representation_type == OCLCXMLParser.NOT_FOUND_STATUS:
-                        # This shouldn't happen, but if it does,
-                        # it's not a big deal. Just do nothing.
-                        pass
-                    else:
-                        set_trace()
-                        print " Got unexpected representation type from lookup: %s" % representation_type
-            # Connect the Gutenberg book to the OCLC works looked up by
-            # title/author. Hopefully we can also connect the Gutenberg book
-            # to an author who has an LC and VIAF.
-
-            # First, find any authors associated with this book that
-            # have not been given VIAF or LC IDs.
-            gutenberg_authors_to_merge = [
-                x for x in book.authors if not x.viaf or not x.lc
-            ]
-            gutenberg_names = set([x.name for x in book.authors])
-            for r in records:
-                book.primary_identifier.equivalent_to(
-                    data_source, r.primary_identifier)
-                if gutenberg_authors_to_merge:
-                    oclc_names = set([x.name for x in r.authors])
-                    if gutenberg_names == oclc_names:
-                        # Perfect overlap. We've found an OCLC record
-                        # for a book written by exactly the same
-                        # people as the Gutenberg book. Merge each
-                        # Gutenberg author into its OCLC equivalent.
-                        print oclc_names, gutenberg_names
-                        for gutenberg_author in gutenberg_authors_to_merge:
-                            oclc_authors = [x for x in r.authors 
-                                            if x.name==gutenberg_author.name]
-                            if len(oclc_authors) == 1:
-                                oclc_author = oclc_authors[0]
-                                if oclc_author != gutenberg_author:
-                                    gutenberg_author.merge_into(oclc_author)
-                                    gutenberg_authors_to_merge.remove(
-                                        gutenberg_author)
-
+        # First, find any authors associated with this book that
+        # have not been given VIAF or LC IDs.
+        gutenberg_authors_to_merge = [
+            x for x in book.authors if not x.viaf or not x.lc
+        ]
+        gutenberg_names = set([x.name for x in book.authors])
+        for r in records:
             book.primary_identifier.equivalent_to(
-                data_source, search)
-            
-            print " Created %s records(s)." % len(records)
-            _db.commit()
-        _db.commit()
+                data_source, r.primary_identifier)
+            if gutenberg_authors_to_merge:
+                oclc_names = set([x.name for x in r.authors])
+                if gutenberg_names == oclc_names:
+                    # Perfect overlap. We've found an OCLC record
+                    # for a book written by exactly the same
+                    # people as the Gutenberg book. Merge each
+                    # Gutenberg author into its OCLC equivalent.
+                    print oclc_names, gutenberg_names
+                    for gutenberg_author in gutenberg_authors_to_merge:
+                        oclc_authors = [x for x in r.authors 
+                                        if x.name==gutenberg_author.name]
+                        if len(oclc_authors) == 1:
+                            oclc_author = oclc_authors[0]
+                            if oclc_author != gutenberg_author:
+                                gutenberg_author.merge_into(oclc_author)
+                                gutenberg_authors_to_merge.remove(
+                                    gutenberg_author)
 
+        book.primary_identifier.equivalent_to(
+            data_source, search)
+            
+        print " Created %s records(s)." % len(records)
+        if random.randint(0, 10) == 0:
+            _db.commit()
 
 class PopularityScraper(object):
 
