@@ -1760,12 +1760,12 @@ class Timestamp(Base):
     timestamp = Column(DateTime)
 
     @classmethod
-    def stamp(self, service):
-        now = datetime.utcnow()
+    def stamp(self, _db, service):
+        now = datetime.datetime.utcnow()
         stamp, was_new = get_one_or_create(
-            self._db, Timestamp,
+            _db, Timestamp,
             service=service,
-            create_kw_args=dict(timestamp=now))
+            create_method_kwargs=dict(timestamp=now))
         if not was_new:
             stamp.timestamp = now
         return stamp
@@ -1801,7 +1801,7 @@ class CoverageProvider(object):
                 self._db.commit()
 
         # Now that we're done, update the timestamp
-        Timestamp.stamp(self.service_name)
+        Timestamp.stamp(self._db, self.service_name)
         self._db.commit()
 
     def process_work_record(self, work_record):
