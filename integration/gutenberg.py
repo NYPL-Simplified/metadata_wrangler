@@ -422,7 +422,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         gutenberg_names = set([x.name for x in book.authors])
         for r in records:
             book.primary_identifier.equivalent_to(
-                data_source, r.primary_identifier)
+                self.output_source, r.primary_identifier)
             if gutenberg_authors_to_merge:
                 oclc_names = set([x.name for x in r.authors])
                 if gutenberg_names == oclc_names:

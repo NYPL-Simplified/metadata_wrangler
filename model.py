@@ -1795,7 +1795,7 @@ class CoverageProvider(object):
                     self._db, CoverageRecord,
                     work_record=record,
                     data_source=self.output_source,
-                    create_method_kwargs = dict(date=datetime.utcnow()))
+                    create_method_kwargs = dict(date=datetime.datetime.utcnow()))
             counter += 1
             if counter % 50 == 0:
                 self._db.commit()
