@@ -1785,10 +1785,14 @@ class CoverageProvider(object):
         self.input_source = input_source
         self.output_source = output_source
 
+    @property
+    def workrecords_that_need_coverage(self):
+        return WorkRecord.missing_coverage_from(
+            self._db, self.input_source, self.output_source)
+
     def run(self):
         counter = 0
-        for record in WorkRecord.missing_coverage_from(
-                self._db, self.input_source, self.output_source):
+        for record in self.workrecords_that_need_coverage:
             if self.process_work_record(record):
                 # Success! Now there's coverage! Add a CoverageRecord.
                 get_one_or_create(
