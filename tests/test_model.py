@@ -226,14 +226,24 @@ class TestWorkRecord(DatabaseTest):
         # corresponding record from OCLC. It doesn't pick up the other
         # Gutenberg record, and it doesn't pick up the web record.
         [in_gutenberg_but_not_in_oclc] = WorkRecord.missing_coverage_from(
-            self._db, WorkIdentifier.GUTENBERG_ID, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
+            self._db, WorkIdentifier.GUTENBERG_ID, oclc, 
+            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
 
         eq_(g2, in_gutenberg_but_not_in_oclc)
 
         # We can pick up the web record by doing a lookup by URI instead of Gutenberg ID.
         [in_web_but_not_in_oclc] = WorkRecord.missing_coverage_from(
-            self._db, WorkIdentifier.URI, WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER)
+            self._db, WorkIdentifier.URI, oclc, WorkIdentifier.OCLC_WORK,
+            WorkIdentifier.OCLC_NUMBER)
         eq_(w, in_web_but_not_in_oclc)
+
+        # Now let's look for something impossible--a mapping from
+        # Gutenberg ID to OCLC Work ID or OCLC Number obtained via the
+        # web. This will pick up both the Gutenberg works, but not the
+        # web work (since it's not identified by Gutenberg ID).
+        eq_([g1, g2], WorkRecord.missing_coverage_from(
+            self._db, WorkIdentifier.GUTENBERG_ID, web, 
+            WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER))
 
     def test_recursive_workrecord_equivalence(self):
 

@@ -694,7 +694,8 @@ class WorkRecord(Base):
             WorkRecord.primary_identifier_id.in_(identifier_ids))
 
     @classmethod
-    def missing_coverage_from(cls, _db, primary_id_type, *not_identified_by):
+    def missing_coverage_from(cls, _db, primary_id_type,
+                              data_source, *not_identified_by):
         """Find WorkRecords with primary identifier of the given type
         `primary_id_type` which have no *direct* equivalency to an
         identifier of the types `not_identified_by`.
@@ -702,13 +703,15 @@ class WorkRecord(Base):
         e.g.
 
         missing_coverage_from(_db, WorkIdentifier.GUTENBERG_ID,
+                                   DataSource.lookup(_db, DataSource.OCLC),
                                    WorkIdentifier.OCLC_WORK, 
                                    WorkIdentifier.OCLC_NUMBER)
 
         will find WorkRecords primarily associated with a Project
-        Gutenberg ID which is not directly equivalent to any OCLC Work
-        ID or OCLC Number. These are Gutenberg books that need to have
-        an OCLC lookup done.
+        Gutenberg ID which have not been associated by the OCLC
+        Classify data source with any OCLC Work ID or OCLC Number.
+        These are Gutenberg books that need to have an OCLC Classify
+        lookup done.
 
         We restrict to direct equivalency rather than recursive lookup
         because otherwise this query will take forever.
@@ -724,6 +727,7 @@ class WorkRecord(Base):
             primary_identifier.equivalencies).join(
                 secondary_identifier,
                 secondary_identifier.id==Equivalency.output_id).filter(
+                    Equivalency.data_source_id==data_source.id).filter(
                     primary_identifier.type==primary_id_type,
                     secondary_identifier.type.in_(not_identified_by))
         qu = qu.distinct()
@@ -736,7 +740,7 @@ class WorkRecord(Base):
             primary_identifier, WorkRecord.primary_identifier).filter(
             primary_identifier.type==primary_id_type,
             ~primary_identifier.id.in_(qu.subquery()))
-        return main_query.all()
+        return main_query
 
     @classmethod
     def _content(cls, content, is_html=False):

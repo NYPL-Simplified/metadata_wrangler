@@ -363,11 +363,12 @@ class OCLCMonitorForGutenberg(object):
     def run(self, _db):
         counter = 0
 
+        data_source = DataSource.lookup(_db, DataSource.OCLC)
         in_gutenberg_but_not_in_oclc = WorkRecord.missing_coverage_from(
             _db, WorkIdentifier.GUTENBERG_ID,
+            data_source,
             WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH)
 
-        data_source = DataSource.lookup(_db, DataSource.OCLC)
         print "Processing %s books." % len(in_gutenberg_but_not_in_oclc)
         for book in in_gutenberg_but_not_in_oclc:
             title, author = self.title_and_author(book)
