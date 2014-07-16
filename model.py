@@ -727,10 +727,15 @@ class WorkRecord(Base):
         have never been used as input to the OCLC Classify web
         service.
         """
-        return _db.query(WorkRecord).filter(
-            WorkRecord.data_source==workrecord_data_source).filter(
-            ~WorkRecord.coverage_records.any(
-                data_source=coverage_data_source))
+        join_clause = ((WorkRecord.id==CoverageRecord.work_record_id) &
+                       (CoverageRecord.data_source_id==coverage_data_source.id))
+        
+        q = _db.query(WorkRecord).outerjoin(
+            CoverageRecord, join_clause).filter(
+                WorkRecord.data_source==workrecord_data_source)
+        q2 = q.filter(CoverageRecord.id==None)
+        return q2
+
 
     @classmethod
     def _content(cls, content, is_html=False):
@@ -1781,6 +1786,7 @@ class CoverageProvider(object):
         self.output_source = output_source
 
     def run(self):
+        counter = 0
         for record in WorkRecord.missing_coverage_from(
                 self._db, self.input_source, self.output_source):
             if self.process_work_record(record):
@@ -1790,9 +1796,13 @@ class CoverageProvider(object):
                     work_record=record,
                     data_source=self.output_source,
                     create_method_kwargs = dict(date=datetime.utcnow()))
+            counter += 1
+            if counter % 50 == 0:
+                self._db.commit()
 
         # Now that we're done, update the timestamp
         Timestamp.stamp(self.service_name)
+        self._db.commit()
 
     def process_work_record(self, work_record):
         raise NotImplementedError()

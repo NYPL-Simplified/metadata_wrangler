@@ -236,8 +236,8 @@ class TestWorkRecord(DatabaseTest):
 
         # We don't use the web as a source of coverage, so this will
         # return both Gutenberg records (but not the web record).
-        eq_([g1, g2], sorted(WorkRecord.missing_coverage_from(
-            self._db, gutenberg, web).all()))
+        eq_([g1.id, g2.id], sorted([x.id for x in WorkRecord.missing_coverage_from(
+            self._db, gutenberg, web)]))
 
     def test_recursive_workrecord_equivalence(self):
 

@@ -351,7 +351,6 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         output_source = DataSource.lookup(_db, DataSource.OCLC)
         super(OCLCMonitorForGutenberg, self).__init__(
             "OCLC Monitor for Gutenberg", input_source, output_source)
-        set_trace()
 
     def oclc_safe_title(self, title):
         return self.NON_TITLE_SAFE.sub("", title)
@@ -366,7 +365,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
             author = authors[0].name
         return title, author
 
-    def process_work_record(self, work_record):
+    def process_work_record(self, book):
         title, author = self.title_and_author(book)
         languages = book.languages
 
@@ -377,7 +376,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # Register the fact that we did a title/author lookup
         query_string = self.oclc.query_string(title=title, author=author)
         search, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
+            self._db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
 
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
@@ -389,7 +388,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = OCLCXMLParser.parse(
-            _db, xml, **restrictions)
+            self._db, xml, **restrictions)
 
         if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
             # `records` contains a bunch of SWIDs, not
@@ -400,7 +399,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
             for swid in swids:
                 swid_xml = self.oclc.lookup_by(swid=swid)
                 representation_type, editions = OCLCXMLParser.parse(
-                    _db, swid_xml, **restrictions)
+                    self._db, swid_xml, **restrictions)
 
                 if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                     records.extend(editions)
@@ -442,13 +441,9 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                                 gutenberg_authors_to_merge.remove(
                                     gutenberg_author)
 
-        book.primary_identifier.equivalent_to(
-            data_source, search)
-            
         print " Created %s records(s)." % len(records)
-        if random.randint(0, 10) == 0:
-            _db.commit()
-
+        return True
+            
 class PopularityScraper(object):
 
     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
