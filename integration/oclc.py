@@ -32,6 +32,7 @@ class OCLC(object):
 class OCLCLinkedData(object):
 
     BASE_URL = 'http://experiment.worldcat.org/%(type)s/%(id)s.jsonld'
+    WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/%(id)s.jsonld'
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
@@ -62,7 +63,11 @@ class OCLCLinkedData(object):
             cached = True
             print " Retrieved from cache."
         if not raw:
-            url = self.BASE_URL % dict(id=id, type=type)
+            if type == 'work':
+                base_url = self.WORK_BASE_URL
+            else:
+                base_url = self.BASE_URL
+            url = base_url % dict(id=id, type=type)
             print "Requesting %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
@@ -243,21 +248,21 @@ class OCLCXMLParser(XMLParser):
                 # succeed either.
                 return representation_type, records
 
-            data_source = DataSource.lookup(_db, DataSource.OCLC)
-            for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
-                edition_record, ignore = cls.extract_edition_record(
-                    _db, edition_tag, existing_authors, **restrictions)
-                if not edition_record:
-                    # This edition did not become a WorkRecord because it
-                    # didn't meet one of the restrictions.
-                    continue
-                records.append(edition_record)
-                # Identify the edition with the work based on its
-                # primary identifier.
-                work_record.primary_identifier.equivalent_to(
-                    data_source, edition_record.primary_identifier)
-                edition_record.primary_identifier.equivalent_to(
-                    data_source, work_record.primary_identifier)
+            # data_source = DataSource.lookup(_db, DataSource.OCLC)
+            # for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
+            #     edition_record, ignore = cls.extract_edition_record(
+            #         _db, edition_tag, existing_authors, **restrictions)
+            #     if not edition_record:
+            #         # This edition did not become a WorkRecord because it
+            #         # didn't meet one of the restrictions.
+            #         continue
+            #     records.append(edition_record)
+            #     # Identify the edition with the work based on its
+            #     # primary identifier.
+            #     work_record.primary_identifier.equivalent_to(
+            #         data_source, edition_record.primary_identifier)
+            #     edition_record.primary_identifier.equivalent_to(
+            #         data_source, work_record.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
