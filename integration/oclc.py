@@ -82,10 +82,15 @@ class OCLCLinkedData(object):
         #    raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
-    def lookup(self, id, type=None):
-        """Perform an OCLC Open Data lookup."""
-        type = type or "oclc"
-        cache_key = self.cache_key(id, type)
+    def lookup(self, work_identifier):
+        """Perform an OCLC Open Data lookup for the given identifier."""
+        if work_identifier.type == WorkIdentifier.OCLC_WORK:
+            foreign_type = 'work'
+        elif work_identifier.type == WorkIdentifier.OCLC_NUMBER:
+            foreign_type = "oclc"
+        else:
+            set_trace()
+        cache_key = self.cache_key(id, foreign_type)
         raw = None
         cached = False
         #if self.cache.exists(cache_key):
@@ -95,7 +100,7 @@ class OCLCLinkedData(object):
         #    cached = True
         #    print " Retrieved from cache."
         if not raw:
-            url = self.BASE_URL % dict(id=id, type=type)
+            url = self.BASE_URL % dict(id=id, foreign_type=type)
             print "Requesting %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
