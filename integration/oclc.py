@@ -33,8 +33,10 @@ class OCLC(object):
 
 class OCLCLinkedData(object):
 
-    BASE_URL = 'http://experiment.worldcat.org/%(type)s/%(id)s.jsonld'
-    WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/%(id)s.jsonld'
+    """NOTE: This class is still very much under construction."""
+
+    BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
+    WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/data/%(id)s.jsonld'
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
@@ -65,12 +67,11 @@ class OCLCLinkedData(object):
         import pprint
         all_types = set([])
         for x in graph:
-            for t in types_of(x):
-                all_types.add(t)
+            all_types.add(tuple(sorted(types_of(x))))
         for type in sorted(all_types):
-            print "TYPE: %s" % type
+            print "TYPE: %s" % ", ".join(str(x) for x in type)
             for x in graph:
-                if type in list(types_of(x)):
+                if type == tuple(sorted(types_of(x))):
                     if 'rdf:type' in x:
                         del x['rdf:type']
                     pprint.pprint(x)
@@ -103,7 +104,7 @@ class OCLCLinkedData(object):
         #    cached = True
         #    print " Retrieved from cache."
         if not raw:
-            url = url % dict(id=id, type=foreign_type)
+            url = url % dict(id=work_identifier.identifier, type=foreign_type)
             print "Requesting %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
