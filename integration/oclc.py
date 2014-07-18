@@ -1,5 +1,6 @@
 import collections
 import datetime
+import json
 import md5
 import os
 import re
@@ -45,7 +46,37 @@ class OCLCLinkedData(object):
     def request(self, url):
         """Make a request to OCLC Linked Data."""
         data = jsonld.load_document(url)
-        set_trace()
+        document = json.loads(data['document'])
+        graph = document['@graph']
+
+        def types_of(g):
+            if not 'rdf:type' in x:
+                yield None # It's a link.
+                return
+            t = x['rdf:type']
+            if not isinstance(t, list):
+                t = [t]
+            for i in t:
+                if isinstance(i, dict):
+                    i = i['@id']
+                yield i
+
+        import pprint
+        all_types = set([])
+        for x in graph:
+            for t in types_of(x):
+                all_types.add(t)
+        for type in sorted(all_types):
+            print "TYPE: %s" % type
+            for x in graph:
+                if type in list(types_of(x)):
+                    if 'rdf:type' in x:
+                        del x['rdf:type']
+                    pprint.pprint(x)
+                    print
+            print "-" * 80
+            
+        return data
         #content = response.content
         #if response.status_code != 200:
         #    raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
@@ -68,8 +99,18 @@ class OCLCLinkedData(object):
             print "Requesting %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
+            # self.cache.store(cache_key, raw)
         return raw, cached
+
+    @classmethod
+    def process(_db, loaded):
+        """Turn JSON-LD data from OCLC into a WorkRecord object.
+
+        Will also create a bunch of Equivalencies.
+        """
+        data = json.loads(loaded['document'])
+        set_trace()
+        pass
 
 
 class XIDAPI(object):
@@ -240,21 +281,21 @@ class OCLCXMLParser(XMLParser):
                 # succeed either.
                 return representation_type, records
 
-            data_source = DataSource.lookup(_db, DataSource.OCLC)
-            for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
-                edition_record, ignore = cls.extract_edition_record(
-                    _db, edition_tag, existing_authors, **restrictions)
-                if not edition_record:
-                    # This edition did not become a WorkRecord because it
-                    # didn't meet one of the restrictions.
-                    continue
-                records.append(edition_record)
-                # Identify the edition with the work based on its
-                # primary identifier.
-                work_record.primary_identifier.equivalent_to(
-                    data_source, edition_record.primary_identifier)
-                edition_record.primary_identifier.equivalent_to(
-                    data_source, work_record.primary_identifier)
+            # data_source = DataSource.lookup(_db, DataSource.OCLC)
+            # for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
+            #     edition_record, ignore = cls.extract_edition_record(
+            #         _db, edition_tag, existing_authors, **restrictions)
+            #     if not edition_record:
+            #         # This edition did not become a WorkRecord because it
+            #         # didn't meet one of the restrictions.
+            #         continue
+            #     records.append(edition_record)
+            #     # Identify the edition with the work based on its
+            #     # primary identifier.
+            #     work_record.primary_identifier.equivalent_to(
+            #         data_source, edition_record.primary_identifier)
+            #     edition_record.primary_identifier.equivalent_to(
+            #         data_source, work_record.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
@@ -607,14 +648,3 @@ class OCLCXMLParser(XMLParser):
         for author, roles in authors_and_roles:
             edition_record.add_contributor(author, roles)
         return edition_record, new
-
-
-class OCLCLinkedDataParser(object):
-
-    @classmethod
-    def parse(_db, json_data):
-        """Turn JSON-LD data from OCLC into a WorkRecord object.
-
-        Will also create a bunch of Equivalencies.
-        """
-        
