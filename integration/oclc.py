@@ -1,5 +1,6 @@
 import collections
 import datetime
+import json
 import md5
 import os
 import re
@@ -7,6 +8,7 @@ import requests
 import time
 import urllib
 
+from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
 
@@ -44,35 +46,79 @@ class OCLCLinkedData(object):
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code != 200:
-            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
+        data = jsonld.load_document(url)
+        document = json.loads(data['document'])
+        graph = document['@graph']
+
+        def types_of(g):
+            if not 'rdf:type' in x:
+                yield None # It's a link.
+                return
+            t = x['rdf:type']
+            if not isinstance(t, list):
+                t = [t]
+            for i in t:
+                if isinstance(i, dict):
+                    i = i['@id']
+                yield i
+
+        import pprint
+        all_types = set([])
+        for x in graph:
+            for t in types_of(x):
+                all_types.add(t)
+        for type in sorted(all_types):
+            print "TYPE: %s" % type
+            for x in graph:
+                if type in list(types_of(x)):
+                    if 'rdf:type' in x:
+                        del x['rdf:type']
+                    pprint.pprint(x)
+                    print
+            print "-" * 80
+            
+        return data
+        #content = response.content
+        #if response.status_code != 200:
+        #    raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
-    def lookup(self, id, type=None):
-        """Perform an OCLC Open Data lookup."""
-        type = type or "oclc"
-        cache_key = self.cache_key(id, type)
+    def lookup(self, work_identifier):
+        """Perform an OCLC Open Data lookup for the given identifier."""
+        if work_identifier.type == WorkIdentifier.OCLC_WORK:
+            foreign_type = 'work'
+            url = self.WORK_BASE_URL
+        elif work_identifier.type == WorkIdentifier.OCLC_NUMBER:
+            foreign_type = "oclc"
+            url = self.BASE_URL
+        else:
+            set_trace()
+        cache_key = self.cache_key(id, foreign_type)
         raw = None
         cached = False
-        if self.cache.exists(cache_key):
-            # Don't go over the wire. Get the raw XML from cache
-            # and process it fresh.
-            raw = self.cache.open(cache_key).read()
-            cached = True
-            print " Retrieved from cache."
+        #if self.cache.exists(cache_key):
+        #    # Don't go over the wire. Get the raw XML from cache
+        #    # and process it fresh.
+        #    raw = self.cache.open(cache_key).read()
+        #    cached = True
+        #    print " Retrieved from cache."
         if not raw:
-            if type == 'work':
-                base_url = self.WORK_BASE_URL
-            else:
-                base_url = self.BASE_URL
-            url = base_url % dict(id=id, type=type)
+            url = url % dict(id=id, type=foreign_type)
             print "Requesting %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
+            # self.cache.store(cache_key, raw)
         return raw, cached
+
+    @classmethod
+    def process(_db, loaded):
+        """Turn JSON-LD data from OCLC into a WorkRecord object.
+
+        Will also create a bunch of Equivalencies.
+        """
+        data = json.loads(loaded['document'])
+        set_trace()
+        pass
 
 
 class XIDAPI(object):
@@ -111,7 +157,6 @@ class XIDAPI(object):
             # and process it fresh.
             raw = self.cache.open(cache_key).read()
             cached = True
-            print " Retrieved from cache."
         if not raw:
             url = self.BASE_URL % dict(id=id, type=type)
             url += self.ARGUMENTS
@@ -160,13 +205,11 @@ class OCLCClassifyAPI(object):
         query_string = self.query_string(**kwargs)
         cache_key = self.cache_key(**kwargs)
         print " Query string: %s" % query_string
-        print " Cache key: %s" % cache_key
         raw = None
         if self.cache.exists(cache_key):
             # Don't go over the wire. Get the raw XML from cache
             # and process it fresh.
             raw = self.cache.open(cache_key).read()
-            print " Retrieved from cache."
         if not raw:
             url = self.BASE_URL + query_string + self.NO_SUMMARY
             raw = self.request(url)
@@ -229,8 +272,6 @@ class OCLCXMLParser(XMLParser):
 
         # The real action happens here.
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
-            print "Extracting work, authors and editions."
-
             authors_tag = cls._xpath1(tree, "//oclc:authors")
             existing_authors = cls.extract_authors(_db, authors_tag)
 
@@ -481,8 +522,11 @@ class OCLCXMLParser(XMLParser):
         work (identified by OCLC Work ID).
         """
         oclc_work_id = unicode(work_tag.get('pswid'))
-        if not oclc_work_id:
-            print " No OCLC Work ID (pswid) in %s" % etree.tostring(work_tag)
+        if oclc_work_id:
+            print " owi: %s" % oclc_work_id
+        else:
+            print " No owi in %s" % etree.tostring(work_tag)
+
 
         try:
             int(oclc_work_id)

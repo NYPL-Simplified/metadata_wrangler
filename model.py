@@ -71,6 +71,7 @@ DEBUG = False
 
 def production_session():
     url = os.environ['DATABASE_URL']
+    print url
     if url.startswith('"'):
         url = url[1:]
     print "ENVIRONMENT: %s" % os.environ['DATABASE_URL'] 
@@ -670,12 +671,10 @@ class WorkRecord(Base):
         identifier.
         """
         # Look up the data source if necessary.
-        print "Looking up data source."
         if isinstance(data_source, basestring):
             data_source = DataSource.lookup(_db, data_source)
 
         print "Looking up identifier."
-        # Then look up the identifier.
         work_identifier, ignore = WorkIdentifier.for_foreign_id(
             _db, foreign_id_type, foreign_id)
 
@@ -686,7 +685,6 @@ class WorkRecord(Base):
         else:
             f = get_one
             kwargs = dict()
-        print "Looking up/creating WorkRecord."
         return f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier,
                  **kwargs)
