@@ -53,6 +53,7 @@ from util import (
     LanguageCodes,
     MetadataSimilarity,
 )
+from util.summary import SummaryEvaluator
 
 #import logging
 #logging.basicConfig()
@@ -936,6 +937,7 @@ class Work(Base):
     title = Column(Unicode)
     authors = Column(Unicode, index=True)
     languages = Column(Unicode, index=True)
+    description = Column(Unicode, index=True)
     audience = Column(Unicode, index=True)
     subjects = Column(MutableDict.as_mutable(JSON), default={})
     thumbnail_cover_link = Column(Unicode)
@@ -1207,19 +1209,53 @@ class Work(Base):
             self.thumbnail_cover_link = None
             self.full_cover_link = None
 
-    def calculate_quality(self):
+    def calculate_quality_and_description(self):
         """Calculate some measure of the quality of a work.
 
         Higher numbers are better.
 
+        Also try to find a good description of the book.
+
         The quality of this quality measure is currently very poor,
         but we will be improving it over time as we have more data.
         """
-        # For public domain books, the quality is the number of
-        # records we have for it.
-        self.quality = self.all_workrecords().count()
+        work_records = self.all_workrecords(recursion_level=1)
+        total_work_records = work_records.count()
+
+        from integration.oclc import OCLCLinkedData
+        linked_data = OCLCLinkedData("/home/leonardr/data")
+
+        # A subset of these work records correspond to OCLC Works.
+        # We can get descriptions from those.
+        oclc_work_records = work_records.join(
+            WorkRecord.primary_identifier).filter(
+                WorkIdentifier.type==WorkIdentifier.OCLC_WORK)
+        total_descriptions = 0
+        oclcs = oclc_work_records.all()
+        evaluator = SummaryEvaluator()
+        for r in oclcs:
+            data, cached = linked_data.lookup(r.primary_identifier)
+            graph = linked_data.graph(data)
+            titles, descriptions = linked_data.titles_and_descriptions(graph)
+            for description in descriptions:
+                evaluator.add(description)
+                total_descriptions += 1
+        
+        description_contribution_to_score = 0
+        if total_work_records:
+            # A work with a lot of descriptions per work record is
+            # likely to be a classic.
+            description_contribution_to_score = (
+                float(total_descriptions)/total_work_records)
+
+        # A work with more than one license pool is likely to be a classic.
+        self.quality = len(self.license_pools) * (
+            total_work_records + description_contribution_to_score)
+
         if self.title:
             print "%s %s" % (self.quality, self.title.encode("utf8"))
+        if total_descriptions:
+            self.description = evaluator.best_choices(1)[0][0]
 
     def calculate_lane(self):
         """Calculate audience, fiction status, and best lane for this book.
@@ -1237,10 +1273,10 @@ class Work(Base):
 
         self.fiction, self.lane = Lane.best_match(
             self.subjects)
-        print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
-            dict(lane=self.lane, fiction=self.fiction,
-                 audience=self.audience, subjects=self.subjects.get('names',{})))
-        print
+        #print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
+        #    dict(lane=self.lane, fiction=self.fiction,
+        #         audience=self.audience, subjects=self.subjects.get('names',{})))
+        #print
 
 
 class WorkFeed(object):

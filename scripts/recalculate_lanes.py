@@ -20,7 +20,7 @@ if __name__ == '__main__':
     i = 0
     for work in session.query(Work).filter():
         work.calculate_lane()
-        work.calculate_quality()
+        work.calculate_quality_and_description()
         work.calculate_presentation()
         print repr(work)
         i += 1

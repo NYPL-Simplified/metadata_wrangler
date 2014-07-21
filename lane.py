@@ -46,8 +46,8 @@ class Lane(object):
             if lane is Unclassified or lane is Lane:
                 continue
             affinity = lane.affinity(subjects)
-            if affinity > 0:
-                print " Affinity for %s: %.2f" % (lane.name, affinity)
+            #if affinity > 0:
+            #    print " Affinity for %s: %.2f" % (lane.name, affinity)
             if affinity > best_affinity:
                 best_lane = lane
                 best_affinity = affinity

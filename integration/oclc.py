@@ -49,10 +49,12 @@ class ldq(object):
 
     @classmethod
     def restrict_to_language(self, values, code_2):
-        if isinstance(values, basestring):
+        if isinstance(values, basestring) or isinstance(values, dict):
             values = [values]
         for v in values:
             if isinstance(v, basestring):
+                if v == '@value':
+                    set_trace()
                 yield v
             elif not '@language' in v or v['@language'] == code_2:
                 yield v
@@ -84,7 +86,11 @@ class OCLCLinkedData(object):
         """Make a request to OCLC Linked Data."""
         response = requests.get(url)
         content = response.content
-        if response.status_code != 200:
+        if response.status_code == 404:
+            return ''
+        elif response.status_code == 500:
+            return None
+        elif response.status_code != 200:
             raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
@@ -100,7 +106,8 @@ class OCLCLinkedData(object):
         cached = False
         if not self.cache.exists(cache_key):
             url = url % dict(id=work_identifier.identifier, type=foreign_type)
-            raw = self.request(url)
+            print url
+            raw = self.request(url) or ''
             self.cache.store(cache_key, raw)
         f = self.cache._filename(cache_key)
         url = "file://" + f
@@ -108,32 +115,34 @@ class OCLCLinkedData(object):
         return data, cached
 
     @classmethod
-    def annotate_work_record(_db, raw, work_record):
-        """Annotate a WorkRecord object with JSON-LD data from OCLC.
+    def graph(cls, raw_data):
+        if not raw_data or not raw_data['document']:
+            return None
+        document = json.loads(raw_data['document'])
+        return document['@graph']
 
-        Will also create a bunch of Equivalencies.
-        """
-        identifier = work_record.primary_identifier
-        graph = json.loads(raw['document'])['@graph']
+    @classmethod
+    def books(cls, graph):
+        if not graph:
+            return
         for book in ldq.for_type(graph, "schema:Book"):
-            names = ldq.values(ldq.restrict_to_language(book['schema:name'], 'en'))
-            names = list(names)
-            if not names:
-                continue
-            print "%s and %d other names" % (sorted(names)[0],
-                                             len(names))
-            descriptions = book.get('schema:description', [])
-            descriptions = [x for x in ldq.values(ldq.restrict_to_language(descriptions, 'en'))]
-            
-            print " %d descriptions" % len(descriptions)
-            print "", book.keys()
-            if len(descriptions) > 1:
-                if len(descriptions[0]) == 1:
-                    set_trace()
-                d = dict(descriptions=descriptions, names=sorted(names))
-                json.dump(d, open("/home/leonardr/owi/owi-%s.json" % identifier.identifier, "w"))
-        pass
+            yield book
 
+    @classmethod
+    def titles_and_descriptions(cls, graph):
+        titles = []
+        descriptions = []
+        if not graph:
+            return titles, descriptions
+        for book_graph in cls.books(graph):
+            for k, repository in (
+                    ('schema:description', descriptions),
+                    ('schema:name', titles)
+            ):
+                values = book_graph.get(k, [])
+                repository.extend(ldq.values(
+                    ldq.restrict_to_language(values, 'en')))
+        return titles, descriptions
 
 class XIDAPI(object):
 
@@ -156,7 +165,9 @@ class XIDAPI(object):
         """Make a request to the xID API."""
         response = requests.get(url)
         content = response.content
-        if response.status_code != 200:
+        if response.status_code == 404:
+            return None
+        elif response.status_code != 200:
             raise IOError("xID API returned status code %s: %s" % (response.status_code, response.content))
         return content
 
@@ -175,7 +186,7 @@ class XIDAPI(object):
             url = self.BASE_URL % dict(id=id, type=type)
             url += self.ARGUMENTS
             print "Requesting %s" % url
-            raw = self.request(url)
+            raw = self.request(url) or ''
             print " Retrieved over the net."
             self.cache.store(cache_key, raw)
         return raw, cached
@@ -210,7 +221,9 @@ class OCLCClassifyAPI(object):
         """Make a request to the OCLC classification API."""
         response = requests.get(url)
         content = response.content
-        if response.status_code != 200:
+        if response.status_code == 404:
+            return None
+        elif response.status_code != 200:
             raise IOError("OCLC API returned status code %s: %s" % (response.status_code, response.content))
         return content
 
@@ -227,7 +240,7 @@ class OCLCClassifyAPI(object):
         if not raw:
             url = self.BASE_URL + query_string + self.NO_SUMMARY
             print " URL: %s" % url
-            raw = self.request(url)
+            raw = self.request(url) or ''
             print " Retrieved over the net."
             self.cache.store(cache_key, raw)
 

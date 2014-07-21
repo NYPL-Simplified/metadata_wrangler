@@ -1,6 +1,26 @@
 from textblob import TextBlob
 from collections import Counter
 
+"version of"
+"Retelling of"
+"Abridged"
+"retelling"
+"adaptation of"
+"Look for"
+"new edition"
+"excerpts" "version", "edition" "complete texts" "in one volume"
+"contains"
+"Includes"
+"Excerpts"
+"Selections"
+"This is"
+"--Container"
+"--Original container"
+"Here"
+"..."
+"PLAYAWAY"
+"complete novels"
+
 
 class SummaryEvaluator(object):
 
@@ -38,12 +58,26 @@ class SummaryEvaluator(object):
         """Score a summary relative to our current view of the dataset."""
         score = 0.0
         blob = self.blobs[summary]
+
+        scaled_noun_phrases = Counter()
+        total_occurances = float(sum(x for x in self.noun_phrases.values()
+                                     if x > 1))
+        if total_occurances > 0:
+            for k, v in self.noun_phrases.items():
+                scaled_noun_phrases[k] = v/total_occurances
+        else:
+            scaled_noun_phrases = self.noun_phrases
+
+        unique_noun_phrases = 0
         for phrase in blob.noun_phrases:
             # A summary gets points for using noun phrases common
-            # to all summaries.
-            if self.noun_phrases[phrase] > 1:
-                score += self.noun_phrases[phrase]
-
+            # to all summaries. A summary loses points for unique noun
+            # phrases.
+            if phrase in scaled_noun_phrases:
+                score += scaled_noun_phrases[phrase]
+            else:
+                unique_noun_phrases += 1
+            
         try:
             sentences = len(blob.sentences)
         except Exception, e:
@@ -53,9 +87,12 @@ class SummaryEvaluator(object):
         off_from_optimal = abs(sentences-self.optimal_number_of_sentences)
         if off_from_optimal:
             # This summary is too long or too short.
-            score /= off_from_optimal
+            score /= (off_from_optimal ** 1.5)
 
         # All else being equal, shorter summaries are better.
-        score = score / (len(summary) * 0.5)
+        score = score / (len(summary) * 0.75)
+
+        if unique_noun_phrases:
+            score = score * (0.8 ** unique_noun_phrases)
 
         return score
