@@ -53,8 +53,6 @@ class ldq(object):
             values = [values]
         for v in values:
             if isinstance(v, basestring):
-                if v == '@value':
-                    set_trace()
                 yield v
             elif not '@language' in v or v['@language'] == code_2:
                 yield v
@@ -143,6 +141,11 @@ class OCLCLinkedData(object):
                 repository.extend(ldq.values(
                     ldq.restrict_to_language(values, 'en')))
         return titles, descriptions
+
+oclc_linked_data = None
+if 'DATA_DIRECTORY' in os.environ:
+    oclc_linked_data = OCLCLinkedData(os.environ['DATA_DIRECTORY'])
+
 
 class XIDAPI(object):
 

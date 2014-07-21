@@ -1219,11 +1219,9 @@ class Work(Base):
         The quality of this quality measure is currently very poor,
         but we will be improving it over time as we have more data.
         """
+        from integration.oclc import oclc_linked_data
         work_records = self.all_workrecords(recursion_level=1)
         total_work_records = work_records.count()
-
-        from integration.oclc import OCLCLinkedData
-        linked_data = OCLCLinkedData("/home/leonardr/data")
 
         # A subset of these work records correspond to OCLC Works.
         # We can get descriptions from those.
@@ -1234,9 +1232,9 @@ class Work(Base):
         oclcs = oclc_work_records.all()
         evaluator = SummaryEvaluator()
         for r in oclcs:
-            data, cached = linked_data.lookup(r.primary_identifier)
-            graph = linked_data.graph(data)
-            titles, descriptions = linked_data.titles_and_descriptions(graph)
+            data, cached = oclc_linked_data.lookup(r.primary_identifier)
+            graph = oclc_linked_data.graph(data)
+            titles, descriptions = oclc_linked_data.titles_and_descriptions(graph)
             for description in descriptions:
                 evaluator.add(description)
                 total_descriptions += 1
@@ -1252,10 +1250,12 @@ class Work(Base):
         self.quality = len(self.license_pools) * (
             total_work_records + description_contribution_to_score)
 
-        if self.title:
-            print "%s %s" % (self.quality, self.title.encode("utf8"))
         if total_descriptions:
             self.description = evaluator.best_choices(1)[0][0]
+        if self.title:
+            print "%s %s" % (self.quality, self.title.encode("utf8"))
+        if self.description:
+            print "", self.description
 
     def calculate_lane(self):
         """Calculate audience, fiction status, and best lane for this book.
