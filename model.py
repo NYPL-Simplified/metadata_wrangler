@@ -1278,6 +1278,16 @@ class Work(Base):
         #         audience=self.audience, subjects=self.subjects.get('names',{})))
         #print
 
+    def gather_presentation_information(self):
+        """Gather title, author, subject, description, and cover information.
+
+        For ease of testing, the data-gathering process is separate from
+        the part that actually picks the best version of everything.
+
+        For efficiency, all the data-gathering happens at once. This
+        means only one pass through OCLC Linked Data.
+        """
+        subjects = self.calculate_subjects()
 
 class WorkFeed(object):
 
