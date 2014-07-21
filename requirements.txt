@@ -9,3 +9,4 @@ rdflib
 gunicorn
 feedparser
 pyld
+textblob
