@@ -103,7 +103,7 @@ class GutenbergAPI(object):
         for pg_id, archive, archive_item in books:
             if subset is not None and not subset(pg_id, archive, archive_item):
                 continue
-            #print "Considering %s" % pg_id
+            print "Considering %s" % pg_id
             # Find an existing WorkRecord for the book.
             book = WorkRecord.for_foreign_id(
                 _db, source, WorkIdentifier.GUTENBERG_ID, pg_id,
@@ -394,12 +394,17 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                 representation_type, editions = OCLCXMLParser.parse(
                     self._db, swid_xml, **restrictions)
 
+
                 if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                     records.extend(editions)
                 elif representation_type == OCLCXMLParser.NOT_FOUND_STATUS:
                     # This shouldn't happen, but if it does,
                     # it's not a big deal. Just do nothing.
                     pass
+                elif representation_type == OCLCXMLParser.INVALID_INPUT_STATUS:
+                    # This also shouldn't happen, but if it does,
+                    # there's nothing we can do.
+                    pass                    
                 else:
                     set_trace()
                     print " Got unexpected representation type from lookup: %s" % representation_type

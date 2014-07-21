@@ -31,6 +31,40 @@ class OCLC(object):
     HOLDING_COUNT = "OCLC.holdings"
     FORMAT = "OCLC.format"
 
+class ldq(object):
+    
+    @classmethod
+    def for_type(self, g, search):
+        check = { "@id": search }
+        for node in g:
+            if not isinstance(node, dict):
+                continue
+            node_type = node.get('rdf:type')
+            if not node_type:
+                continue
+            if node_type == check:
+                yield node
+            elif isinstance(node_type, list) and check in node_type:
+                yield node
+
+    @classmethod
+    def restrict_to_language(self, values, code_2):
+        if isinstance(values, basestring):
+            values = [values]
+        for v in values:
+            if isinstance(v, basestring):
+                yield v
+            elif not '@language' in v or v['@language'] == code_2:
+                yield v
+
+    @classmethod
+    def values(self, vs):
+        for v in vs:
+            if isinstance(v, basestring):
+                yield v
+            elif '@value' in v:
+                yield v['@value']
+
 class OCLCLinkedData(object):
 
     """NOTE: This class is still very much under construction."""
@@ -48,40 +82,10 @@ class OCLCLinkedData(object):
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
-        data = jsonld.load_document(url)
-        document = json.loads(data['document'])
-        graph = document['@graph']
-
-        def types_of(g):
-            if not 'rdf:type' in x:
-                yield None # It's a link.
-                return
-            t = x['rdf:type']
-            if not isinstance(t, list):
-                t = [t]
-            for i in t:
-                if isinstance(i, dict):
-                    i = i['@id']
-                yield i
-
-        import pprint
-        all_types = set([])
-        for x in graph:
-            all_types.add(tuple(sorted(types_of(x))))
-        for type in sorted(all_types):
-            print "TYPE: %s" % ", ".join(str(x) for x in type)
-            for x in graph:
-                if type == tuple(sorted(types_of(x))):
-                    if 'rdf:type' in x:
-                        del x['rdf:type']
-                    pprint.pprint(x)
-                    print
-            print "-" * 80
-            
-        return data
-        #content = response.content
-        #if response.status_code != 200:
-        #    raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
+        response = requests.get(url)
+        content = response.content
+        if response.status_code != 200:
+            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
     def lookup(self, work_identifier):
@@ -92,33 +96,42 @@ class OCLCLinkedData(object):
         elif work_identifier.type == WorkIdentifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
-        else:
-            set_trace()
-        cache_key = self.cache_key(id, foreign_type)
-        raw = None
+        cache_key = self.cache_key(work_identifier.identifier, foreign_type)
         cached = False
-        #if self.cache.exists(cache_key):
-        #    # Don't go over the wire. Get the raw XML from cache
-        #    # and process it fresh.
-        #    raw = self.cache.open(cache_key).read()
-        #    cached = True
-        #    print " Retrieved from cache."
-        if not raw:
+        if not self.cache.exists(cache_key):
             url = url % dict(id=work_identifier.identifier, type=foreign_type)
-            print "Requesting %s" % url
             raw = self.request(url)
-            print " Retrieved over the net."
-            # self.cache.store(cache_key, raw)
-        return raw, cached
+            self.cache.store(cache_key, raw)
+        f = self.cache._filename(cache_key)
+        url = "file://" + f
+        data = jsonld.load_document(url)
+        return data, cached
 
     @classmethod
-    def process(_db, loaded):
-        """Turn JSON-LD data from OCLC into a WorkRecord object.
+    def annotate_work_record(_db, raw, work_record):
+        """Annotate a WorkRecord object with JSON-LD data from OCLC.
 
         Will also create a bunch of Equivalencies.
         """
-        data = json.loads(loaded['document'])
-        set_trace()
+        identifier = work_record.primary_identifier
+        graph = json.loads(raw['document'])['@graph']
+        for book in ldq.for_type(graph, "schema:Book"):
+            names = ldq.values(ldq.restrict_to_language(book['schema:name'], 'en'))
+            names = list(names)
+            if not names:
+                continue
+            print "%s and %d other names" % (sorted(names)[0],
+                                             len(names))
+            descriptions = book.get('schema:description', [])
+            descriptions = [x for x in ldq.values(ldq.restrict_to_language(descriptions, 'en'))]
+            
+            print " %d descriptions" % len(descriptions)
+            print "", book.keys()
+            if len(descriptions) > 1:
+                if len(descriptions[0]) == 1:
+                    set_trace()
+                d = dict(descriptions=descriptions, names=sorted(names))
+                json.dump(d, open("/home/leonardr/owi/owi-%s.json" % identifier.identifier, "w"))
         pass
 
 
@@ -213,6 +226,7 @@ class OCLCClassifyAPI(object):
             raw = self.cache.open(cache_key).read()
         if not raw:
             url = self.BASE_URL + query_string + self.NO_SUMMARY
+            print " URL: %s" % url
             raw = self.request(url)
             print " Retrieved over the net."
             self.cache.store(cache_key, raw)
@@ -267,7 +281,7 @@ class OCLCXMLParser(XMLParser):
             raise IOError("Unexpected error from OCLC API: %s" % xml)
         elif representation_type in (
                 cls.NO_INPUT_STATUS, cls.INVALID_INPUT_STATUS):
-            raise IOError("Invalid input to OCLC API: %s" % xml)
+            return representation_type, []
         elif representation_type == cls.SINGLE_WORK_SUMMARY_STATUS:
             raise IOError("Got single-work summary from OCLC despite requesting detail: %s" % xml)
 

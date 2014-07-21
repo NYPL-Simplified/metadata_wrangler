@@ -674,7 +674,6 @@ class WorkRecord(Base):
         if isinstance(data_source, basestring):
             data_source = DataSource.lookup(_db, data_source)
 
-        print "Looking up identifier."
         work_identifier, ignore = WorkIdentifier.for_foreign_id(
             _db, foreign_id_type, foreign_id)
 
