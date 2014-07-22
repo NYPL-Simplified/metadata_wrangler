@@ -117,6 +117,9 @@ class OCLCLinkedData(object):
         if not raw_data or not raw_data['document']:
             return None
         document = json.loads(raw_data['document'])
+        if not '@graph' in document:
+            # Empty graph
+            return dict()
         return document['@graph']
 
     @classmethod
@@ -127,11 +130,13 @@ class OCLCLinkedData(object):
             yield book
 
     @classmethod
-    def titles_and_descriptions(cls, graph):
+    def extract_useful_data(cls, graph):
         titles = []
         descriptions = []
+        authors = []
+        subjects = []
         if not graph:
-            return titles, descriptions
+            return titles, descriptions, authors, subjects
         for book_graph in cls.books(graph):
             for k, repository in (
                     ('schema:description', descriptions),
@@ -140,7 +145,7 @@ class OCLCLinkedData(object):
                 values = book_graph.get(k, [])
                 repository.extend(ldq.values(
                     ldq.restrict_to_language(values, 'en')))
-        return titles, descriptions
+        return titles, descriptions, authors, subjects
 
 oclc_linked_data = None
 if 'DATA_DIRECTORY' in os.environ:

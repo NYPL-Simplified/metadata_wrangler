@@ -21,7 +21,6 @@ class Monitor(object):
         timestamp, new = get_one_or_create(
             _db, Timestamp,
             service=self.service_name,
-            type="monitor",
             create_method_kwargs=dict(
                 timestamp=self.default_start_time
             )

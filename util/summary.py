@@ -47,6 +47,13 @@ class SummaryEvaluator(object):
         for phrase in blob.noun_phrases:
             self.noun_phrases[phrase] = self.noun_phrases[phrase] + 1
 
+    def best_choice(self):
+        c = self.best_choices(1)
+        if c:
+            return c[0]
+        else:
+            return None, None
+
     def best_choices(self, n=3):
         """Choose the best `n` choices among the current summaries."""
         scores = Counter()

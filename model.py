@@ -1136,70 +1136,128 @@ class Work(Base):
             self.license_pools = []
             self.work_records = []
 
-    def calculate_subjects(self):
-        """Consolidate subject information from across WorkRecords."""
-        data = {}
-        for i in self.work_records:
-            data = Classification.classify(i.subjects, data)
-        return data
+    def gather_presentation_information(self):
+        """Consolidate presentation information from multiple sources.
 
-    def calculate_presentation(self):
-        """Figure out the 'best' title/author/subjects for this Work.
-
-        For the time being, 'best' means the most common among this
-        Work's WorkRecords *and also used by at least one WorkRecord
-        with an associated LicensePool*.
+        The main sources are WorkRecord rows and OCLC Linked Data
+        documents.
         """
+        from integration.oclc import oclc_linked_data
+        license_pools = self.license_pools
 
-        titles = []
+        license_pool_work_records = set(
+            [p.work_record() for p in self.license_pools])
+
+        all_work_records = set(self.all_workrecords(recursion_level=1).all())
+        all_work_records = all_work_records.union(license_pool_work_records)
+
+        subject_data = dict()
         authors = Counter()
         languages = Counter()
         image_links = Counter()
 
-        shortest_title = ''
-        titles = []
+        usable_titles = set()
+        title_counter = Counter()
+        author_counter = Counter()
+        language_counter = Counter()
 
-        # Find all Open Library WorkRecords that are equivalent to the
-        # same OCLC WorkIdentifier as one of this work's WorkRecords.
-        #equivalent_records = self.all_workrecords()
-        equivalent_records = [p.work_record() for p in self.license_pools]
+        description_evaluator = SummaryEvaluator()
 
-        for r in equivalent_records:
-            if r.title:
-                titles.append(r.title)
-                if not shortest_title or len(r.title) < len(shortest_title):
-                    shortest_title = r.title
+        # First go through the privileged subset of work records
+        # directly associated with a license pool.
+        #
+        # These work records set the parameters for the
+        # information we display to patrons. For instance, we will
+        # look at other records to decide which title is most
+        # commonly used, but we will only consider titles that are
+        # associated with one license pool or another.
+        #
+        # Similarly, only work records associated with a license
+        # pool are allowed to suggest authors or languages for the
+        # work.
+        for wr in license_pool_work_records:
+            if wr.title:
+                usable_titles.add(wr.title)
+            for a in wr.contributors:
+                author_counter[a] += 1
+            if wr.languages:
+                for l in tuple(wr.languages):
+                    language_counter[l] += 1
 
-            for a in r.contributors:
-                authors[a.name] += 1
-            if r.languages:
-                languages[tuple(r.languages)] += 1
+        # Now go through every work record, whether associated with
+        # a license pool or not.
+        work_records_with_descriptions = 0
+        total_descriptions = 0
+        for wr in all_work_records:
+            if wr.title in usable_titles:
+                title_counter[wr.title] += 1
 
-            if (WorkRecord.THUMBNAIL_IMAGE in r.links and
-                WorkRecord.IMAGE in r.links):
-                thumb = r.links[WorkRecord.THUMBNAIL_IMAGE][0]['href']
-                full = r.links[WorkRecord.IMAGE][0]['href']
+            # Add this record's subject data to the running
+            # classification.
+            subject_data = Classification.classify(wr.subjects, subject_data)
+
+            # Are there cover links? Keep track of them!
+            if (WorkRecord.THUMBNAIL_IMAGE in wr.links and
+                WorkRecord.IMAGE in wr.links):
+                thumb = wr.links[WorkRecord.THUMBNAIL_IMAGE][0]['href']
+                full = wr.links[WorkRecord.IMAGE][0]['href']
                 key = (thumb, full)
                 image_links[key] += 1
 
-        self.title = MetadataSimilarity.most_common(
-            len(shortest_title) * 3, *titles)
+            if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
+                # This is great news. We can almost certainly get a
+                # wealth of information about this work from OCLC
+                # Linked Data.
+                data, cached = oclc_linked_data.lookup(wr.primary_identifier)
+                graph = oclc_linked_data.graph(data)
+                titles, descriptions, authors, subjects = (
+                    oclc_linked_data.extract_useful_data(graph))
+                work_records_with_descriptions += 1
+                total_descriptions += len(descriptions)
+                for title in titles:
+                    if title in usable_titles:
+                        title_counter[title] += 1
 
-        if len(languages) > 1:
-            print "%s includes work records from several different languages: %r" % (self.title, languages)
+                for description in descriptions:
+                    description_evaluator.add(description)
+                    total_descriptions += 1
+
+                # Don't do anything with authors or subjects for now.
+
+        average_descriptions = 0
+        if work_records_with_descriptions:
+            average_descriptions = float(
+                total_descriptions)/work_records_with_descriptions
+
+        return (title_counter, author_counter, language_counter,
+                subject_data, description_evaluator, image_links,
+                len(all_work_records), average_descriptions)
                 
+
+    def calculate_presentation(self):
+        """Figure out the 'best' presentation metadata for this Work."""
+
+        args = self.gather_presentation_information()
+        self._calculate_presentation(*args)
+
+    def _calculate_presentation(self, titles, authors, languages,
+                                subjects, descriptions, cover_links,
+                                total_work_records,
+                                average_descriptions_per_work_record):
+
+        if titles:
+            self.title = titles.most_common(1)[0][0]
         if languages:
             self.languages = languages.most_common(1)[0][0]
-
         if authors:
-            self.authors = authors.most_common(1)[0][0]
+            self.authors = authors.most_common(1)[0][0].name
 
-        if image_links:
+        if cover_links:
             # Without local copies we have no way of determining which
             # image is the best. But in general, the Open Library ones
             # tend to be higher-quality
             best_index = 0
-            items = image_links.most_common()
+            items = cover_links.most_common()
             for i, link in enumerate(items):
                 if 'openlibrary' in link[0][0]:
                     best_index = i
@@ -1209,63 +1267,12 @@ class Work(Base):
             self.thumbnail_cover_link = None
             self.full_cover_link = None
 
-    def calculate_quality_and_description(self):
-        """Calculate some measure of the quality of a work.
-
-        Higher numbers are better.
-
-        Also try to find a good description of the book.
-
-        The quality of this quality measure is currently very poor,
-        but we will be improving it over time as we have more data.
-        """
-        from integration.oclc import oclc_linked_data
-        work_records = self.all_workrecords(recursion_level=1)
-        total_work_records = work_records.count()
-
-        # A subset of these work records correspond to OCLC Works.
-        # We can get descriptions from those.
-        oclc_work_records = work_records.join(
-            WorkRecord.primary_identifier).filter(
-                WorkIdentifier.type==WorkIdentifier.OCLC_WORK)
-        total_descriptions = 0
-        oclcs = oclc_work_records.all()
-        evaluator = SummaryEvaluator()
-        for r in oclcs:
-            data, cached = oclc_linked_data.lookup(r.primary_identifier)
-            graph = oclc_linked_data.graph(data)
-            titles, descriptions = oclc_linked_data.titles_and_descriptions(graph)
-            for description in descriptions:
-                evaluator.add(description)
-                total_descriptions += 1
-        
-        description_contribution_to_score = 0
-        if total_work_records:
-            # A work with a lot of descriptions per work record is
-            # likely to be a classic.
-            description_contribution_to_score = (
-                float(total_descriptions)/total_work_records)
-
-        # A work with more than one license pool is likely to be a classic.
         self.quality = len(self.license_pools) * (
-            total_work_records + description_contribution_to_score)
+            total_work_records + average_descriptions_per_work_record)
 
-        if total_descriptions:
-            self.description = evaluator.best_choices(1)[0][0]
-        if self.title:
-            print "%s %s" % (self.quality, self.title.encode("utf8"))
-        if self.description:
-            print "", self.description
+        self.description, score = descriptions.best_choice()
 
-    def calculate_lane(self):
-        """Calculate audience, fiction status, and best lane for this book.
-
-        The quality of this quality measure is currently fairly poor,
-        but we will be improving it over time as we have more data.
-        """
-
-        print (self.title or "").encode("utf8")
-        self.subjects = self.calculate_subjects()
+        self.subjects = subjects
         if 'audience' in self.subjects:
             self.audience = Lane.most_common(self.subjects['audience'])
         else:
@@ -1273,21 +1280,22 @@ class Work(Base):
 
         self.fiction, self.lane = Lane.best_match(
             self.subjects)
-        #print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
-        #    dict(lane=self.lane, fiction=self.fiction,
-        #         audience=self.audience, subjects=self.subjects.get('names',{})))
-        #print
 
-    def gather_presentation_information(self):
-        """Gather title, author, subject, description, and cover information.
-
-        For ease of testing, the data-gathering process is separate from
-        the part that actually picks the best version of everything.
-
-        For efficiency, all the data-gathering happens at once. This
-        means only one pass through OCLC Linked Data.
-        """
-        subjects = self.calculate_subjects()
+        # Now that everything's calculated, print it out.
+        if True:
+            t = u"%s (by %s)" % (self.title, self.authors)
+            print t.encode("utf8")
+            print " language=%s" % self.languages
+            print " quality=%s" % self.quality
+            print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
+                dict(lane=self.lane, fiction=self.fiction,
+                     audience=self.audience,
+                     subjects=self.subjects.get('names',{})))
+            if self.description:
+                d = " Description (%.2f) %s" % (
+                    score, self.description)
+                print d.encode("utf8")
+            print
 
 class WorkFeed(object):
 
