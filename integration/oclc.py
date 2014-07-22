@@ -134,7 +134,7 @@ class OCLCLinkedData(object):
         titles = []
         descriptions = []
         authors = []
-        subjects = []
+        subjects = {}
         if not graph:
             return titles, descriptions, authors, subjects
         for book_graph in cls.books(graph):

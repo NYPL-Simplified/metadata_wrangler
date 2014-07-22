@@ -608,23 +608,44 @@ class TestWorkQuality(DatabaseTest):
 
         gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
 
-        wr1_1, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "1")
+        wr1_1, pool1 = self._workrecord(with_license_pool=True)
+        wr1_2 = self._workrecord(with_license_pool=False)
 
-        wr1_2, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "2")
-
-        wr2_1, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg_source, WorkIdentifier.GUTENBERG_ID, "3")
+        wr2_1, pool2 = self._workrecord(with_license_pool=True)
 
         work1 = Work()
         work1.work_records.extend([wr1_1, wr1_2])
+        work1.license_pools.extend([pool1])
 
         work2 = Work()
         work2.work_records.extend([wr2_1])
+        work2.license_pools.extend([pool2])
 
-        work1.calculate_quality()
-        work2.calculate_quality()
+        work1.calculate_presentation()
+        work2.calculate_presentation()
+
+        assert work1.quality > work2.quality
+
+    def test_more_license_pools_gets_higher_rating(self):
+
+        gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+
+        wr1_1, pool1 = self._workrecord(with_license_pool=True)
+        wr1_2, pool2 = self._workrecord(with_license_pool=True)
+
+        wr2_1, pool3 = self._workrecord(with_license_pool=True)
+        wr2_2 = self._workrecord(with_license_pool=False)
+
+        work1 = Work()
+        work1.work_records.extend([wr1_1, wr1_2])
+        work1.license_pools.extend([pool1, pool2])
+
+        work2 = Work()
+        work2.work_records.extend([wr2_1, wr2_2])
+        work2.license_pools.extend([pool3])
+
+        work1.calculate_presentation()
+        work2.calculate_presentation()
 
         assert work1.quality > work2.quality
 

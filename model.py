@@ -1194,7 +1194,9 @@ class Work(Base):
 
             # Add this record's subject data to the running
             # classification.
-            subject_data = Classification.classify(wr.subjects, subject_data)
+            if wr.subjects:
+                subject_data = Classification.classify(
+                    wr.subjects, subject_data)
 
             # Are there cover links? Keep track of them!
             if (WorkRecord.THUMBNAIL_IMAGE in wr.links and
