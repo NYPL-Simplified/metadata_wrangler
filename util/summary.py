@@ -1,6 +1,8 @@
 from textblob import TextBlob
 from collections import Counter
+from nose.tools import set_trace
 
+# Strings indicative of descriptions we can't use.
 "version of"
 "Retelling of"
 "Abridged"
@@ -20,6 +22,7 @@ from collections import Counter
 "..."
 "PLAYAWAY"
 "complete novels"
+"the .* Collection"
 
 
 class SummaryEvaluator(object):
@@ -92,6 +95,8 @@ class SummaryEvaluator(object):
             # Make a really bad guess.
             sentences = summary.count(". ") + 1
         off_from_optimal = abs(sentences-self.optimal_number_of_sentences)
+        if off_from_optimal == 1:
+            off_from_optimal = 1.5
         if off_from_optimal:
             # This summary is too long or too short.
             score /= (off_from_optimal ** 1.5)
