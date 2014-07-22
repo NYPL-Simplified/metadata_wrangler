@@ -207,11 +207,14 @@ class AcquisitionFeed(OPDSFeed):
 
 
         tag = "tag:work:%s" % work.id
+
+        summary = (work.description or "") + " (Q=%.1f)" % work.quality
+
         entry = E.entry(
             E.id(tag),
             E.title(work.title),
             E.author(E.name(work.authors or "")),
-            E.summary("Quality: %d" % work.quality),
+            E.summary(summary),
             E.link(href=checkout_url),
             E.updated(_strftime(datetime.datetime.utcnow())),
             *links
