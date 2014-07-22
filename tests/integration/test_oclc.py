@@ -117,9 +117,7 @@ class TestParser(DatabaseTest):
             assert missing not in swids
 
     def test_extract_single_work(self):
-        """We can turn a single-work response into a list of WorkRecords.
-
-        One record for the OCLC Work ID, and one for each OCLC Number.
+        """We can turn a single-work response into a single WorkRecord.
         """
 
         xml = pkgutil.get_data(
@@ -130,10 +128,9 @@ class TestParser(DatabaseTest):
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
 
-        # We expect 3 work records: one for the work and two for
-        # English editions. (In the real response there are 25
-        # editions; I cut them to make the test run faster.)
-        eq_(3, len(records))
+        # We expect 1 work record for the OCLC work. The two
+        # edition records do not become work records.
+        eq_(1, len(records))
 
         # Work and edition both have a primary identifier.
         work = records[0]
@@ -141,17 +138,7 @@ class TestParser(DatabaseTest):
         eq_(WorkIdentifier.OCLC_WORK, work_id.type)
         eq_('4687', work_id.identifier)
 
-        edition = records[1]
-        edition_id = edition.primary_identifier
-        eq_(WorkIdentifier.OCLC_NUMBER, edition_id.type)
-        eq_('47010459', edition_id.identifier)
-
-        # The edition is identified with the work, and vice versa.
-        assert edition_id.id in work.equivalent_identifier_ids()
-        assert work_id.id in edition.equivalent_identifier_ids()
-
         eq_("Moby Dick", work.title)
-        eq_("Moby Dick", edition.title)
 
         work_contributors = [x.name for x in work.contributors]
 
@@ -185,24 +172,17 @@ class TestParser(DatabaseTest):
              if x.role==Contributor.AUTHOR_ROLE])
         eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
 
-        # The edition only has one contributor.
-        edition_authors = sorted([x.name for x in edition.contributors])
-        eq_(['Melville, Herman'], edition_authors)
-
         # The work has no language specified. The edition does have
         # a language specified.
         eq_([], work.languages)
-        eq_(['eng'], edition.languages)
 
         [ws] = work.subjects[SubjectType.DDC]
         eq_("813.3", ws['id'])
         eq_(21183, ws['weight'])
-        eq_("813.3", edition.subjects[SubjectType.DDC][0]['id'])
 
         [ws] = work.subjects[SubjectType.LCC]
         eq_("PS2384", ws['id'])
         eq_(22460, ws['weight'])
-        eq_("PS2384", edition.subjects[SubjectType.LCC][0]['id'])
 
         fast = sorted(
             [(x['value'], x['id'], x['weight'])
@@ -219,21 +199,6 @@ class TestParser(DatabaseTest):
             ('Whaling ships', '1174307', 18913)
         ]
         eq_(expect, fast)
-
-        # If we were to parse the same data looking for Spanish works,
-        # we would get 2 work records: one for the work and one
-        # for a Spanish edition that didn't show up in the English
-        # list.
-        #
-        # TODO: This test fails but I've commented it out because
-        # we're currently not using the OCLCXMLParser restriction code,
-        # and it's probably better to remove that code than to fix it.
-        #
-        # status, records = OCLCXMLParser.parse(
-        #     self._db, xml, languages=["spa"])
-        # set_trace()
-        # eq_(2, len(records))
-        # eq_(["spa"], records[1].languages)
 
     def test_missing_work_id(self):
 
@@ -258,9 +223,8 @@ class TestParser(DatabaseTest):
         status, records = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
-        # We parsed five editions, but none of them have any
-        # contributors listed.
-        eq_([[]] * 5, [r.contributors for r in records])
+        # We parsed the work, but it had no contributors listed.
+        eq_([[]], [r.contributors for r in records])
 
 
 class TestAuthorParser(DatabaseTest):

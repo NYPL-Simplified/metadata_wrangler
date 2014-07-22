@@ -711,13 +711,6 @@ class TestWorkConsolidation(DatabaseTest):
         eq_(True, created)
         assert work != preexisting_work
 
-    def test_calculate_work_for_licensepool_uses_existing_work(self):
-        pass
-
-    def test_calculate_work_for_licensepool_merges_works_as_side_effect(self):
-        pass
-
-
     def test_calculate_work_for_new_work(self):
         # TODO: This test doesn't actually test
         # anything. calculate_work() is too complicated and needs to
