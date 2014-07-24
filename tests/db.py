@@ -41,7 +41,7 @@ class DatabaseTest(object):
         used by default when authenticating.
         """
         return self._db.query(Patron).filter(
-            Patron.authorization_identifier=="0").one()
+            Patron.authorization_identifier=="200").one()
 
     def _patron(self, external_identifier=None):
         external_identifier = external_identifier or self._str

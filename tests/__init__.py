@@ -27,7 +27,7 @@ def setup():
 
     # Test data: Create the patron used by the dummy authentication
     # mechanism.
-    get_one_or_create(db, Patron, authorization_identifier="0")
+    get_one_or_create(db, Patron, authorization_identifier="200")
     db.commit()
 
     print "Connection is now %r" % DBInfo.connection

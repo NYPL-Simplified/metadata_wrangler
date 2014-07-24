@@ -94,8 +94,8 @@ class CirculationTest(DatabaseTest):
             u"Très Français", "Marianne", "Nonfiction", "fre", True
         )
 
-        self.valid_auth = 'Basic ' + base64.b64encode('0:0000')
-        self.invalid_auth = 'Basic ' + base64.b64encode('0:1111')
+        self.valid_auth = 'Basic ' + base64.b64encode('200:2222')
+        self.invalid_auth = 'Basic ' + base64.b64encode('200:2221')
 
 class TestNavigationFeed(CirculationTest):
 

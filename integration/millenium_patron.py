@@ -55,7 +55,7 @@ class MilleniumPatronAPI(XMLParser):
         expires = datetime.datetime.strptime(
             expires, self.EXPIRATION_DATE_FORMAT).date()
         today = datetime.datetime.now().date()
-        if expires <= today:
+        if expires >= today:
             return True
         return False
 
@@ -99,11 +99,11 @@ class DummyMilleniumPatronAPI(MilleniumPatronAPI):
 
         # A barcode that starts with '410' has expired.
         if barcode.startswith('404'):
-            u = dict(user1)
+            u = dict(self.user1)
             u['RECORD #[p81]'] = "410" + barcode
             return 
 
         # Any other barcode is fine.
-        u = dict(user2)
+        u = dict(self.user2)
         u['RECORD #[p81]'] = "200" + barcode
         return u
