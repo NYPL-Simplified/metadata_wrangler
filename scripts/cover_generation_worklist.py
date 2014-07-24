@@ -26,6 +26,8 @@ if __name__ == '__main__':
             WorkRecord).join(WorkRecord.primary_identifier).filter(
             WorkIdentifier.type == WorkIdentifier.GUTENBERG_ID):
         identifier = r.primary_identifier
+        if int(identifier.identifier) < 19000:
+            continue
         filename = "%s/%s.png" % (identifier.type, identifier.identifier)
         data = dict(
             identifier_type=identifier.type, identifier=identifier.identifier,
@@ -33,5 +35,6 @@ if __name__ == '__main__':
             subtitle=r.subtitle,
             authors=", ".join([x.name for x in r.authors])
         )
-        books.append(data)
-    print json.dumps(dict(books=data))
+        print json.dumps(data)
+        #books.append(data)
+    #print json.dumps(dict(books=data))

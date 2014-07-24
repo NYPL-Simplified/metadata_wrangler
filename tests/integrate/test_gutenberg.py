@@ -42,7 +42,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
     def test_rdf_parser(self):
         """Parse RDF into a WorkRecord."""
         fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/gutenberg-17.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "17", fh)
 
@@ -91,7 +91,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_unicode_characters_in_title(self):
         fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/gutenberg-10130.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "10130", fh)
         eq_(u"The Works of Charles and Mary Lamb — Volume 3", book.title)
@@ -99,7 +99,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_includes_cover_image(self):
         fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/gutenberg-40993.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "40993", fh)
 
@@ -117,7 +117,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         """GutenbergRDFExtractor can handle an RDF document that doesn't
         describe any books."""
         fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/gutenberg-0.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "0", fh)
         eq_(None, book)

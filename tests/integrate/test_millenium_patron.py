@@ -15,7 +15,7 @@ class DummyAPI(MilleniumPatronAPI):
 
     def enqueue(self, filename):
         data = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/millenium_patron/%s" % filename)
         self.queue.append(data)
 

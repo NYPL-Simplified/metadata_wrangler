@@ -32,6 +32,8 @@ from util import LanguageCodes
 from util import problem_detail
 from integration.millenium_patron import DummyMilleniumPatronAPI as authenticator
 
+auth = authenticator()
+
 db = production_session()
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -39,7 +41,10 @@ app.debug = True
 
 DEFAULT_LANGUAGES = ['eng']
 
-INVALID_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/invalid-credentials"
+INVALID_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/credentials-invalid"
+INVALID_CREDENTIALS_TITLE = "A valid library card barcode number and PIN are required."
+EXPIRED_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/credentials-expired"
+EXPIRED_CREDENTIALS_TITLE = "Your library card has expired. You need to renew it."
 
 def problem(type, title, status, detail=None, instance=None, headers={}):
     """Create a Response that includes a Problem Detail Document."""
@@ -62,29 +67,47 @@ def languages_from_accept(accept_languages):
     return languages
 
 def authenticated_patron(barcode, pin):
-    """Look up the patron authenticated by the given barcode/pin."""
-    if not authenticator().pintest(barcode, pin):
-        return None
+    """Look up the patron authenticated by the given barcode/pin.
 
-    # The external source says they're legit; find or create them locally.
+    If there's a problem, return a 2-tuple (URI, title) for use in a
+    Problem Detail Document.
+
+    If there's no problem, return a Patron object.
+    """
+    if not auth.pintest(barcode, pin):
+        return (INVALID_CREDENTIALS_PROBLEM,
+                INVALID_CREDENTIALS_TITLE)
+
+    # The external source says their PIN is valid. But maybe the account
+    # has expired?
+    patron = auth.dump(barcode)
+    if not auth.active(patron):
+        return (EXPIRED_CREDENTIALS_PROBLEM,
+                EXPIRED_CREDENTIALS_TITLE)
     return get_one_or_create(db, Patron, authorization_identifier=barcode)[0]
 
-def authenticate():
+def authenticate(uri, title):
     """Sends a 401 response that enables basic auth"""
     return problem(
-        INVALID_CREDENTIALS_PROBLEM,
-        "A valid library card barcode number and PIN are required.",
-        401, headers= { 'WWW-Authenticate' : 'Basic realm="Library card"'})
+        uri, title, 401,
+        headers= { 'WWW-Authenticate' : 'Basic realm="Library card"'})
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = flask.request.authorization
-        if not auth:
-            return authenticate()
-        flask.request.patron = authenticated_patron(auth.username, auth.password)
-        if not flask.request.patron:
-            return authenticate()
+        header = flask.request.authorization
+        if not header:
+            # No credentials were provided.
+            return authenticate(
+                INVALID_CREDENTIALS_PROBLEM,
+                INVALID_CREDENTIALS_TITLE)
+
+        patron = authenticated_patron(header.username, header.password)
+        if isinstance(patron, tuple):
+            flask.request.patron = None
+            return authenticate(*patron)
+        else:
+            flask.request.patron = patron
         return f(*args, **kwargs)
     return decorated
 

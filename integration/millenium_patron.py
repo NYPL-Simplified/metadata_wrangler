@@ -2,11 +2,15 @@ from nose.tools import set_trace
 from lxml import etree
 from urlparse import urljoin
 from urllib import urlencode
+import datetime
 
 from integration import XMLParser
 import os
 
 class MilleniumPatronAPI(XMLParser):
+
+    EXPIRATION_FIELD = 'EXP DATE[p43]'
+    EXPIRATION_DATE_FORMAT = '%m-%d-%y'
 
     def __init__(self):
         root = os.environ['MILLENIUM_HOST']
@@ -38,29 +42,68 @@ class MilleniumPatronAPI(XMLParser):
             return True
         return False
 
-class DummyMilleniumPatronAPI(object):
+    @classmethod
+    def active(self, dump):
+        """Is this patron account active, or has it expired?"""
+        # TODO: This opens up all sorts of questions about which time
+        # zone 'today' is measured from. For now, I will simply use
+        # the time zone of the server. (This is why I don't use
+        # utcnow() here even though I use it everywhere else.)
+        expires = dump.get(self.EXPIRATION_FIELD, None)
+        if not expires:
+            return False
+        expires = datetime.datetime.strptime(
+            expires, self.EXPIRATION_DATE_FORMAT).date()
+        today = datetime.datetime.now().date()
+        if expires <= today:
+            return True
+        return False
 
+
+class DummyMilleniumPatronAPI(MilleniumPatronAPI):
+
+
+    # This user's card has expired.
     user1 = { 'PATRN NAME[pn]' : "SHELDON, ALICE",
               'RECORD #[p81]' : "12345",
               'P BARCODE[pb]' : "0",
-              '.pin' : '0000'}
+              'EXP DATE[p43]' : "04-01-05"
+    }
+    
+    # This user's card still has ten days on it.
+    the_future = datetime.datetime.utcnow() + datetime.timedelta(days=10)
     user2 = { 'PATRN NAME[pn]' : "HEINLEIN, BOB",
               'RECORD #[p81]' : "67890",
               'P BARCODE[pb]' : "5",
-              '.pin' : '5555'}
+              'EXP DATE[p43]' : the_future.strftime("%m-%d-%y")
+    }
 
     users = [user1, user2]
 
     def pintest(self, barcode, pin):
         "A valid test PIN is the first character of the barcode repeated four times."
+        u = self.dump(barcode)
+        if 'ERRNUM' in u:
+            return False
         return pin == barcode[0] * 4
 
     def dump(self, barcode):
+        # We have a couple custom barcodes.
         for u in self.users:
-            if user['P BARCODE[pb]'] == barcode:
-                d = dict(u)
-                del d['.pin']
-                return d
-        return dict(ERRNUM='1', ERRMSG="Requested record not found")
+            if u['P BARCODE[pb]'] == barcode:
+                return u
+                
+        # A barcode that starts with '404' does not exist.
+        if barcode.startswith('404'):
+            return dict(ERRNUM='1', ERRMSG="Requested record not found")
 
+        # A barcode that starts with '410' has expired.
+        if barcode.startswith('404'):
+            u = dict(user1)
+            u['RECORD #[p81]'] = "410" + barcode
+            return 
 
+        # Any other barcode is fine.
+        u = dict(user2)
+        u['RECORD #[p81]'] = "200" + barcode
+        return u

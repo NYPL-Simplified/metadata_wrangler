@@ -4,11 +4,13 @@
 import base64
 import feedparser
 import json
+from integration.millenium_patron import DummyMilleniumPatronAPI
 
 from nose.tools import (
     eq_,
     set_trace,
 )
+
 from tests.db import (
     DatabaseTest,
 )
@@ -20,6 +22,38 @@ from model import (
 
 from flask import url_for
 import circulation
+
+class AuthenticationTest(DatabaseTest):
+
+    def setup(self):
+        super(AuthenticationTest, self).setup()
+        circulation.old_auth = circulation.auth
+        circulation.auth = DummyMilleniumPatronAPI()
+
+    def teardown(self):
+        super(AuthenticationTest, self).teardown()
+        circulation.auth = circulation.old_auth
+        circulation.old_auth = None
+
+    def test_valid_barcode(self):
+        patron = circulation.authenticated_patron("1", "1111")
+        eq_("1", patron.authorization_identifier)
+
+    def test_invalid_barcode(self):
+        uri, title = circulation.authenticated_patron("1", "1112")
+        eq_(circulation.INVALID_CREDENTIALS_PROBLEM, uri)
+        eq_(circulation.INVALID_CREDENTIALS_TITLE, title)
+
+    def test_no_such_patron(self):
+        uri, title = circulation.authenticated_patron("404111", "4444")
+        eq_(circulation.INVALID_CREDENTIALS_PROBLEM, uri)
+        eq_(circulation.INVALID_CREDENTIALS_TITLE, title)
+
+    def test_expired_barcode(self):
+        uri, title = circulation.authenticated_patron("410111", "4444")
+        eq_(circulation.EXPIRED_CREDENTIALS_PROBLEM, uri)
+        eq_(circulation.EXPIRED_CREDENTIALS_TITLE, title)
+
 
 class CirculationTest(DatabaseTest):
     # TODO: The language-based tests assumes that the default sitewide

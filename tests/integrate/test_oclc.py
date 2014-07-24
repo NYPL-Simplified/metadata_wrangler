@@ -23,7 +23,7 @@ class TestParser(DatabaseTest):
     def test_extract_multiple_works(self):
         """We can turn a multi-work response into a list of SWIDs."""
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_multi_work_response.xml")
 
         status, swids = OCLCXMLParser.parse(self._db, xml, languages=["eng"])
@@ -39,7 +39,7 @@ class TestParser(DatabaseTest):
     def test_extract_multiple_works_with_title_restriction(self):
         """We can choose to only accept works similar to a given title."""
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_multi_work_response.xml")
 
         # This will only accept titles that contain exactly the same
@@ -91,7 +91,7 @@ class TestParser(DatabaseTest):
     def test_extract_multiple_works_with_author_restriction(self):
         """We can choose to only accept works by a given author."""
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_multi_work_response.xml")
 
         [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
@@ -121,7 +121,7 @@ class TestParser(DatabaseTest):
         """
 
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_single_work_response.xml")
 
         status, records = OCLCXMLParser.parse(
@@ -206,7 +206,7 @@ class TestParser(DatabaseTest):
         # but there's no work ID, so everything in the document is 
         # thrown away.
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_missing_pswid.xml")
 
         status, records = OCLCXMLParser.parse(
@@ -217,7 +217,7 @@ class TestParser(DatabaseTest):
     def test_no_contributors(self):
         # This document has no contributors listed.
         xml = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/oclc_single_work_no_authors.xml")
 
         status, records = OCLCXMLParser.parse(
