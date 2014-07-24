@@ -29,6 +29,7 @@ from opds import (
 )
 import urllib
 from util import LanguageCodes
+from util import problem_detail
 from integration.millenium_patron import DummyMilleniumPatronAPI as authenticator
 
 db = production_session()
@@ -38,6 +39,15 @@ app.debug = True
 
 DEFAULT_LANGUAGES = ['eng']
 
+INVALID_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/invalid-credentials"
+
+def problem(type, title, status, detail=None, instance=None, headers={}):
+    """Create a Response that includes a Problem Detail Document."""
+    data = problem_detail.json(type, title, status, detail, instance)
+    final_headers = { "Content-Type" : problem_detail.JSON_MEDIA_TYPE }
+    final_headers.update(headers)
+    return Response(data, status, headers)
+    
 def languages_for_request():
     return languages_from_accept(flask.request.accept_languages)
 
@@ -61,9 +71,10 @@ def authenticated_patron(barcode, pin):
 
 def authenticate():
     """Sends a 401 response that enables basic auth"""
-    return Response(
-        'A library card barcode number and PIN are required.', 401,
-        { 'WWW-Authenticate' : 'Basic realm="Library card"'})
+    return problem(
+        INVALID_CREDENTIALS_PROBLEM,
+        "A valid library card barcode number and PIN are required.",
+        401, headers= { 'WWW-Authenticate' : 'Basic realm="Library card"'})
 
 def requires_auth(f):
     @wraps(f)

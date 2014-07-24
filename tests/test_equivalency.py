@@ -55,8 +55,8 @@ class TestEquivalency(DatabaseTest):
         # We use OCLC Classify to do a title/author lookup.
         oclc = DataSource.lookup(self._db, DataSource.OCLC)
         search_id, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH,
-            "Moby Dick/Herman Melville")
+            self._db, WorkIdentifier.OCLC_WORK_ID,
+            "60010")
         gutenberg_id.equivalent_to(oclc, search_id)
 
         # The title/author lookup associates the search term with two

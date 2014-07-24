@@ -20,6 +20,7 @@ from model import production_session
 if __name__ == '__main__':
     session = production_session()
 
+    books = []
     i = 0
     for r in session.query(
             WorkRecord).join(WorkRecord.primary_identifier).filter(
@@ -32,4 +33,5 @@ if __name__ == '__main__':
             subtitle=r.subtitle,
             authors=", ".join([x.name for x in r.authors])
         )
-        print json.dumps(data)
+        books.append(data)
+    print json.dumps(dict(books=data))

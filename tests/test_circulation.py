@@ -3,6 +3,7 @@
 
 import base64
 import feedparser
+import json
 
 from nose.tools import (
     eq_,
@@ -178,6 +179,8 @@ class TestCheckout(CirculationTest):
             response = circulation.checkout(
                 self.data_source.name, self.identifier.identifier)
             eq_(401, response.status_code)
+            detail = json.loads(response.data)
+            eq_(circulation.INVALID_CREDENTIALS_PROBLEM, detail['type'])
 
     def test_checkout_with_bad_authentication_fails(self):
         with self.app.test_request_context(
@@ -185,6 +188,8 @@ class TestCheckout(CirculationTest):
             response = circulation.checkout(
                 self.data_source.name, self.identifier.identifier)
         eq_(401, response.status_code)
+        detail = json.loads(response.data)
+        eq_(circulation.INVALID_CREDENTIALS_PROBLEM, detail['type'])
         
     def test_checkout_success(self):
         with self.app.test_request_context(
