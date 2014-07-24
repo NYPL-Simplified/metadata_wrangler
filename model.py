@@ -15,7 +15,8 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy import or_
 from sqlalchemy.orm import (
-    aliased
+    aliased,
+    backref,
 )
 from sqlalchemy.orm.exc import (
     NoResultFound
@@ -197,13 +198,14 @@ class DataSource(Base):
     id_equivalencies = relationship("Equivalency", backref="data_source")
 
     # One DataSource can grant access to many LicensePools.
-    license_pools = relationship("LicensePool", backref="data_source",
-                                 lazy='joined')
+    license_pools = relationship(
+        "LicensePool", backref=backref("data_source", lazy='joined'))
 
     @classmethod
     def lookup(cls, _db, name):
         try:
-            return _db.query(cls).filter_by(name=name).one()
+            q = _db.query(cls).filter_by(name=name)
+            return q.one()
         except NoResultFound:
             return None
 
@@ -294,7 +296,6 @@ class WorkIdentifier(Base):
     AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
     ISBN = "ISBN"
-    OCLC_TITLE_AUTHOR_SEARCH = "OCLC title/author search"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
     URI = "URI"
@@ -685,10 +686,10 @@ class WorkRecord(Base):
         else:
             f = get_one
             kwargs = dict()
-        return f(_db, WorkRecord, data_source=data_source,
+        r = f(_db, WorkRecord, data_source=data_source,
                  primary_identifier=work_identifier,
                  **kwargs)
-        
+        return r
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other WorkIdentifiers.
@@ -1410,6 +1411,7 @@ class LicensePool(Base):
                 )
             )
 
+ 
         # Get the WorkIdentifier.
         identifier, ignore = WorkIdentifier.for_foreign_id(
             _db, foreign_id_type, foreign_id

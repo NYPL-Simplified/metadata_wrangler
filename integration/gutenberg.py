@@ -99,7 +99,7 @@ class GutenbergAPI(object):
         Yields (WorkRecord, LicensePool) 2-tuples.
         """
         books = self.all_books()
-        source = DataSource.GUTENBERG
+        source = DataSource.lookup(_db, DataSource.GUTENBERG)
         for pg_id, archive, archive_item in books:
             if subset is not None and not subset(pg_id, archive, archive_item):
                 continue
@@ -112,16 +112,15 @@ class GutenbergAPI(object):
             if not book:
                 # Create a new WorkRecord object with bibliographic
                 # information from the Project Gutenberg RDF file.
-                print "%s is new." % pg_id
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
                 fake_fh = StringIO(data)
                 book, new = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
 
-            if book:
-                # Ensure that an open-access LicensePool exists for this book.
-                license, new = self.pg_license_for(_db, book)
-                yield (book, license)
+                if book:
+                    # Ensure that an open-access LicensePool exists for this book.
+                    license, new = self.pg_license_for(_db, book)
+                    yield (book, license)
 
     @classmethod
     def pg_license_for(cls, _db, work_record):
@@ -188,7 +187,6 @@ class GutenbergRDFExtractor(object):
         # Determine the 'about' URI.
         title_triples = list(g.triples((None, cls.dcterms['title'], None)))
 
-        book = None
         new = False
         if title_triples:
             if len(title_triples) > 1:
@@ -206,7 +204,11 @@ class GutenbergRDFExtractor(object):
             # TODO: Some titles such as 44244 have titles in multiple
             # languages. Not sure what to do about that.
             uri, ignore, title = title_triples[0]
+            print " Parsing book %s" % title
             book, new = cls.parse_book(_db, g, uri, title)
+        else:
+            book = None
+            new = False
         return book, new
 
     @classmethod
@@ -365,11 +367,6 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, languages)
         # Perform a title/author lookup
         xml = self.oclc.lookup_by(title=title, author=author)
-
-        # Register the fact that we did a title/author lookup
-        query_string = self.oclc.query_string(title=title, author=author)
-        search, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_TITLE_AUTHOR_SEARCH, query_string)
 
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
