@@ -12,6 +12,8 @@ class MilleniumPatronAPI(XMLParser):
     EXPIRATION_FIELD = 'EXP DATE[p43]'
     EXPIRATION_DATE_FORMAT = '%m-%d-%y'
 
+    MULTIVALUE_FIELDS = set(['NOTE[px]'])
+
     def __init__(self):
         root = os.environ['MILLENIUM_HOST']
         self.root = root
@@ -30,7 +32,13 @@ class MilleniumPatronAPI(XMLParser):
     def dump(self, barcode):
         url = urljoin(self.root, "/%(barcode)s/dump" % dict(barcode=barcode))
         response = self.request(url)
-        return dict(self._extract_text_nodes(response.content))
+        d = dict()
+        for k, v in self._extract_text_nodes(response.content):
+            if k in self.MULTIVALUE_FIELDS:
+                d.setdefault(k, []).append(v)
+            else:
+                d[k] = v
+        return d
 
     def pintest(self, barcode, pin):
         url = urljoin(

@@ -38,6 +38,9 @@ class TestMilleniumPatronAPI(object):
         response = self.api.dump("good barcode")
         eq_('SHELDON, ALICE', response['PATRN NAME[pn]'])
 
+        # The 'note' field has a list of values, not just one.
+        eq_(2, len(response['NOTE[px]']))
+
     def test_pintest_no_such_barcode(self):
         self.api.enqueue("pintest.no such barcode.html")
         eq_(False, self.api.pintest("wrong barcode", "pin"))

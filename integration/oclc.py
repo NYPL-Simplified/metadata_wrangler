@@ -12,7 +12,10 @@ from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
 
-from integration import XMLParser
+from integration import (
+    XMLParser,
+)
+from monitor import Monitor
 from integration import FilesystemCache
 from model import (
     Contributor,
@@ -59,6 +62,9 @@ class ldq(object):
 
     @classmethod
     def values(self, vs):
+        if isinstance(vs, basestring):
+            yield vs
+            return
         for v in vs:
             if isinstance(v, basestring):
                 yield v
@@ -78,7 +84,7 @@ class OCLCLinkedData(object):
         self.cache = FilesystemCache(self.cache_directory)
 
     def cache_key(self, id, type):
-        return "%s-%s" % (type, id) + ".jsonld"
+        return os.path.join(type, "%s-%s.jsonld" % (type, id))
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
@@ -92,19 +98,39 @@ class OCLCLinkedData(object):
             raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
+    URI_WITH_OCLC_NUMBER = re.compile('http://www.worldcat.org/oclc/([0-9]+)')
     def lookup(self, work_identifier):
         """Perform an OCLC Open Data lookup for the given identifier."""
-        if work_identifier.type == WorkIdentifier.OCLC_WORK:
+
+        type = None
+        identifier = None
+        if isinstance(work_identifier, basestring):
+            match = self.URI_WITH_OCLC_NUMBER.search(work_identifier)
+            if match:
+                type = WorkIdentifier.OCLC_NUMBER
+                identifier = match.groups()[0]
+        else:
+            type = work_identifier.type
+            identifier = work_identifier.identifier
+        if not type or not identifier:
+            return None
+        return self.lookup_by_identifier(type, identifier)
+
+    def lookup_by_identifier(self, type, identifier):
+        if type == WorkIdentifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
-        elif work_identifier.type == WorkIdentifier.OCLC_NUMBER:
+        elif type == WorkIdentifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
-        cache_key = self.cache_key(work_identifier.identifier, foreign_type)
+
+        cache_key = self.cache_key(identifier, foreign_type)
         cached = False
-        if not self.cache.exists(cache_key):
-            url = url % dict(id=work_identifier.identifier, type=foreign_type)
-            print url
+        if self.cache.exists(cache_key):
+            cached = True
+        else:
+            url = url % dict(id=identifier, type=foreign_type)
+            # print url
             raw = self.request(url) or ''
             self.cache.store(cache_key, raw)
         f = self.cache._filename(cache_key)
@@ -128,6 +154,20 @@ class OCLCLinkedData(object):
             return
         for book in ldq.for_type(graph, "schema:Book"):
             yield book
+
+    @classmethod
+    def extract_workexamples(cls, graph):
+        examples = []
+        if not graph:
+            return examples
+        for book_graph in cls.books(graph):
+            for k, repository in (
+                    ('schema:workExample', examples),
+                    ('workExample', examples),
+            ):
+                values = book_graph.get(k, [])
+                repository.extend(ldq.values(values))
+        return examples
 
     @classmethod
     def extract_useful_data(cls, graph):
@@ -692,3 +732,38 @@ class OCLCXMLParser(XMLParser):
         for author, roles in authors_and_roles:
             edition_record.add_contributor(author, roles)
         return edition_record, new
+
+
+class ISBNFinder(Monitor):
+
+    def __init__(self, data_directory):
+        self.oclc = OCLCLinkedData(data_directory)
+  
+    def run(self, _db):      
+        for wi in _db.query(WorkIdentifier).filter(
+                WorkIdentifier.type==WorkIdentifier.OCLC_WORK).offset(110000):
+            a = 0
+            isbns_for_year = collections.defaultdict(list)
+            data, cached = oclc_linked_data.lookup(wi)
+            graph = oclc_linked_data.graph(data)
+            examples = oclc_linked_data.extract_workexamples(graph)
+            isbns = []
+            for uri in examples:
+                data, cached = oclc_linked_data.lookup(uri)
+                subgraph = oclc_linked_data.graph(data)
+                for book in oclc_linked_data.books(subgraph):
+                    examples = set(ldq.values(book.get('workExample', [])))
+                    published = book.get('schema:datePublished', None)
+                    if published and not isinstance(published, basestring):
+                        published = "|".join(published)
+                    example_graphs = [x for x in subgraph if x['@id'] in examples]
+                    for example in example_graphs:
+                        isbns_for_year[published].extend(
+                            example.get('schema:isbn', []))
+            wr = _db.query(WorkRecord).filter(
+                WorkRecord.primary_identifier==wi).all()
+            print wi.id, wi.type, wi.identifier
+            print wr[0].id, wr[0].title.encode("utf8")
+            import pprint
+            pprint.pprint(json.dumps(isbns_for_year))
+            print
