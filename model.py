@@ -141,14 +141,23 @@ class Patron(Base):
 
     # The patron's permanent unique identifier in an external library
     # system, probably never seen by the patron.
-    external_identifier = Column(Unicode, index=True)
+    external_identifier = Column(Unicode, unique=True, index=True)
 
-    # A long-lived but temporary identifier used by the patron to
-    # signify their ability to check out books, e.g. a library card
-    # barcode or username.
+    # An identifier used by the patron that gives them the authority
+    # to borrow books. This identifier may change over time.
     authorization_identifier = Column(Unicode, unique=True, index=True)
 
-    # TODO: A username
+    # TODO: An identifier used by the patron that authenticates them,
+    # but does not give them the authority to borrow books. i.e. their
+    # website username.
+
+    # The last time this record was synced up with an external library
+    # system.
+    last_external_sync = Column(DateTime)
+
+    # The time, if any, at which the user's authorization to borrow
+    # books expires.
+    authorization_expires = Column(Date, index=True)
 
     loans = relationship('Loan', backref='patron')
 
@@ -156,6 +165,18 @@ class Patron(Base):
         db = Session.object_session(self)
         loans = db.query(Loan).filter(Loan.patron==self)
         return [loan.license_pool.work for loan in loans]
+
+    @property
+    def authorization_is_active(self):
+        # Unlike pretty much every other place in this app, I use
+        # (server) local time here instead of UTC. This is to make it
+        # less likely that a patron's authorization will expire before
+        # they think it should.
+        if (self.authorization_expires
+            and self.authorization_expires 
+            < datetime.datetime.now().date()):
+            return False
+        return True
 
 
 class Loan(Base):
@@ -168,6 +189,7 @@ class Loan(Base):
 
 
 class DataSource(Base):
+
     """A source for information about books, and possibly the books themselves."""
 
     GUTENBERG = "Gutenberg"

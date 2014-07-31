@@ -74,17 +74,20 @@ def authenticated_patron(barcode, pin):
 
     If there's no problem, return a Patron object.
     """
-    if not auth.pintest(barcode, pin):
+    patron = auth.authenticated_patron(db, barcode, pin)
+    if not patron:
         return (INVALID_CREDENTIALS_PROBLEM,
                 INVALID_CREDENTIALS_TITLE)
 
-    # The external source says their PIN is valid. But maybe the account
-    # has expired?
-    patron = auth.dump(barcode)
-    if not auth.active(patron):
+    # Okay, we know who they are and their PIN is valid. But maybe the
+    # account has expired?
+    if not patron.authorization_is_active:
         return (EXPIRED_CREDENTIALS_PROBLEM,
                 EXPIRED_CREDENTIALS_TITLE)
-    return get_one_or_create(db, Patron, authorization_identifier=barcode)[0]
+
+    # No, apparently we're fine.
+    return patron
+
 
 def authenticate(uri, title):
     """Sends a 401 response that enables basic auth"""
