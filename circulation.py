@@ -153,6 +153,7 @@ def feed(lane):
 
     search_link = dict(
         rel="search",
+        type="application/opensearchdescription+xml",
         href=url_for('lane_search', lane=lane, _external=True))
 
     if order == 'recommended':
