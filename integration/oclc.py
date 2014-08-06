@@ -3,6 +3,7 @@ import datetime
 import json
 import md5
 import os
+import pprint
 import re
 import requests
 import time
@@ -130,7 +131,7 @@ class OCLCLinkedData(object):
             cached = True
         else:
             url = url % dict(id=identifier, type=foreign_type)
-            # print url
+            print "%s => %s" % (url, self.cache._filename(cache_key))
             raw = self.request(url) or ''
             self.cache.store(cache_key, raw)
         f = self.cache._filename(cache_key)
@@ -738,32 +739,39 @@ class ISBNFinder(Monitor):
 
     def __init__(self, data_directory):
         self.oclc = OCLCLinkedData(data_directory)
+
+    def graphs_for(self, work_identifier):
+        data, cached = oclc_linked_data.lookup(work_identifier)
+        graph = oclc_linked_data.graph(data)
+        examples = oclc_linked_data.extract_workexamples(graph)
+        for uri in examples:
+            data, cached = oclc_linked_data.lookup(uri)
+            yield data
+
+    def isbns_for(self, work_identifier):
+        isbns = set([])
+        for data in self.graphs_for(work_identifier):
+            subgraph = oclc_linked_data.graph(data)
+            for book in oclc_linked_data.books(subgraph):
+                publisher = book.get('publisher', None)
+                examples = set(ldq.values(book.get('workExample', [])))
+                published = book.get('schema:datePublished', None)
+                if published and not isinstance(published, basestring):
+                    published = "|".join(published)
+                example_graphs = [x for x in subgraph if x['@id'] in examples]
+                for example in example_graphs:
+                    isbns = isbns.union(example.get('schema:isbn', []))
   
     def run(self, _db):      
         for wi in _db.query(WorkIdentifier).filter(
-                WorkIdentifier.type==WorkIdentifier.OCLC_WORK).offset(110000):
+                WorkIdentifier.type==WorkIdentifier.OCLC_WORK):
             a = 0
-            isbns_for_year = collections.defaultdict(list)
-            data, cached = oclc_linked_data.lookup(wi)
-            graph = oclc_linked_data.graph(data)
-            examples = oclc_linked_data.extract_workexamples(graph)
-            isbns = []
-            for uri in examples:
-                data, cached = oclc_linked_data.lookup(uri)
-                subgraph = oclc_linked_data.graph(data)
-                for book in oclc_linked_data.books(subgraph):
-                    examples = set(ldq.values(book.get('workExample', [])))
-                    published = book.get('schema:datePublished', None)
-                    if published and not isinstance(published, basestring):
-                        published = "|".join(published)
-                    example_graphs = [x for x in subgraph if x['@id'] in examples]
-                    for example in example_graphs:
-                        isbns_for_year[published].extend(
-                            example.get('schema:isbn', []))
-            wr = _db.query(WorkRecord).filter(
-                WorkRecord.primary_identifier==wi).all()
-            print wi.id, wi.type, wi.identifier
-            print wr[0].id, wr[0].title.encode("utf8")
-            import pprint
-            pprint.pprint(json.dumps(isbns_for_year))
-            print
+            for data in self.graphs_for(wi):
+                continue
+
+            #wr = _db.query(WorkRecord).filter(
+            #    WorkRecord.primary_identifier==wi).all()
+            #print wi.id, wi.type, wi.identifier
+            #print wr[0].id, wr[0].title.encode("utf8")
+            #pprint.pprint(json.dumps(isbns_for_year))
+            #print

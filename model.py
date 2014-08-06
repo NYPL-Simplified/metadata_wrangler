@@ -1125,9 +1125,12 @@ class Work(Base):
         other_languages = MetadataSimilarity.normalize_histogram(
             other_languages, total_other_languages)
 
-        language_distance = MetadataSimilarity.counter_distance(
-            my_languages, other_languages)
-        language_factor = 1-language_distance
+        if not other_languages or not my_languages:
+            language_factor = 1
+        else:
+            language_distance = MetadataSimilarity.counter_distance(
+                my_languages, other_languages)
+            language_factor = 1-language_distance
         title_quotient = 1-title_distance
         author_quotient = 1-author_distance
 
