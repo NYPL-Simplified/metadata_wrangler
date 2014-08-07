@@ -978,7 +978,7 @@ class Work(Base):
         """Find works that match a search query.
         
         TODO: Current implementation is incredibly bad and does
-        a direct database search using LIKE.
+        a direct database search using ILIKE.
         """
         if isinstance(lane, Lane):
             lane = lane.name
@@ -988,8 +988,8 @@ class Work(Base):
         k = "%" + query + "%"
         q = _db.query(Work).filter(
             Work.languages.in_(languages),
-            or_(Work.title.like(k),
-                Work.authors.like(k)))
+            or_(Work.title.ilike(k),
+                Work.authors.ilike(k)))
         
         if lane:
             q = q.filter(Work.lane==lane)

@@ -85,7 +85,7 @@ class OCLCLinkedData(object):
         self.cache = FilesystemCache(self.cache_directory)
 
     def cache_key(self, id, type):
-        return os.path.join(type, "%s-%s.jsonld" % (type, id))
+        return os.path.join(type, "%s.jsonld" % id)
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
