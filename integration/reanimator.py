@@ -1,4 +1,5 @@
 """Generate data sets for the Project Gutenberg Reanimator."""
+
 from nose.tools import set_trace
 import os
 import json
@@ -36,6 +37,8 @@ class GutenbergReanimator(object):
                 data = json.loads(i.strip())
                 seen_gutenberg.add(data['id'])
 
+        exclude = [x[len("Gutenberg-"):] for x in seen_gutenberg]
+
         gutenberg_output = open(gutenberg_output_path, "a")
         oclc_work_output = open(oclc_work_output_path, "a")
         oclc_edition_output = open(oclc_edition_output_path, "a")
@@ -43,7 +46,8 @@ class GutenbergReanimator(object):
 
         gutenberg_work_records = self._db.query(WorkRecord).join(
             WorkRecord.primary_identifier).filter(
-                WorkIdentifier.type==WorkIdentifier.GUTENBERG_ID).limit(100)
+                WorkIdentifier.type==WorkIdentifier.GUTENBERG_ID).filter(
+                    ~WorkIdentifier.identifier.in_(exclude))
 
         for g in gutenberg_work_records:
             id = "Gutenberg-%s" % g.primary_identifier.identifier
@@ -54,13 +58,19 @@ class GutenbergReanimator(object):
             if work_obj:
                 for wr in work_obj.work_records:
                     if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
-                        work, editions = self.oclc_work_record(wr)
-                        json.dump(work, oclc_work_output)
-                        oclc_work_output.write("\n")
+                        try:
+                            work, editions = self.oclc_work_record(wr)
+                        except Exception, e:
+                            print "Could not load OCLC work record for %s" % wr.primary_identifier
+                            work = None
+                            editions = []
+                        if work:
+                            json.dump(work, oclc_work_output)
+                            oclc_work_output.write("\n")
 
-                        similarity = work_obj.similarity_to(wr)
-                        self.add_equivalency(
-                            equivalency_output, id, work['id'], similarity)
+                            similarity = work_obj.similarity_to(wr)
+                            self.add_equivalency(
+                                equivalency_output, id, work['id'], similarity)
                                          
                         for edition in editions:
                             json.dump(edition, oclc_edition_output)
@@ -93,8 +103,8 @@ class GutenbergReanimator(object):
 
     def fiction_confidence(self, work):
         a = work.subjects.get('fiction', {})
-        yes = a.get(True, 0)
-        no = a.get(False, 0)
+        yes = a.get("True", 0)
+        no = a.get("False", 0)
         return self.ratio(yes, no)
 
     def subjects(self, wr):
@@ -119,11 +129,15 @@ class GutenbergReanimator(object):
                 if v:
                     author[k] = v
             authors.append(author)
+        language=None
+        if g.languages:
+            language=LanguageCodes.three_to_two.get(g.languages[0], g.languages[0])
         data = dict(id=id,
                     title=g.title,
                     subtitle=g.subtitle,
                     authors=authors,
-                    language=LanguageCodes.three_to_two.get(g.languages[0], g.languages[0]))
+                    language=language,
+                    )
         data['subjects'] = self.subjects(g)
 
         if g.work:
@@ -174,6 +188,7 @@ class GutenbergReanimator(object):
         edition_records = []
         examples = set(self.oclc_ld.extract_workexamples(graph))
         for uri in examples:
+
             data, cached = self.oclc_ld.lookup(uri)
             subgraph = json.loads(data['document'])['@graph']
             isbns = set()
