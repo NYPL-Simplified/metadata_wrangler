@@ -26,6 +26,7 @@ from model import (
     Contributor,
     WorkRecord,
     DataSource,
+    Resource,
     WorkIdentifier,
     LicensePool,
     SubjectType,
@@ -249,12 +250,12 @@ class GutenbergRDFExtractor(object):
             for format_uri in cls._values(
                     g, (href, cls.dcterms['format'], None)):
                 media_type = cls._value(g, (format_uri, cls.rdf.value, None))
-                rel = WorkRecord.OPEN_ACCESS_DOWNLOAD
+                rel = Resource.OPEN_ACCESS_DOWNLOAD
                 if media_type.startswith('image/'):
                     if '.small.' in href:
-                        rel = WorkRecord.THUMBNAIL_IMAGE
+                        rel = Resource.THUMBNAIL_IMAGE
                     elif '.medium.' in href:
-                        rel = WorkRecord.IMAGE
+                        rel = Resource.IMAGE
                 WorkRecord._add_link(links, rel, href, media_type)
         
         subjects = dict()

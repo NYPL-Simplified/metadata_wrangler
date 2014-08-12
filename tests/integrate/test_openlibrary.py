@@ -11,6 +11,7 @@ from integration.openlibrary import (
 )
 
 from model import (
+    Resource,
     WorkIdentifier,
     WorkRecord,
 )
@@ -95,13 +96,13 @@ class TestOpenLibraryMonitor(DatabaseTest):
         # thumbnail image and full image.
         eq_("OL24385118M", wr1.primary_identifier.identifier)
         eq_('http://covers.openlibrary.org/b/id/6636377-M.jpg',
-            wr1.links[WorkRecord.THUMBNAIL_IMAGE][0]['href'])
+            wr1.links[Resource.THUMBNAIL_IMAGE][0]['href'])
         eq_('http://covers.openlibrary.org/b/id/6636377-L.jpg',
-            wr1.links[WorkRecord.IMAGE][0]['href'])
+            wr1.links[Resource.IMAGE][0]['href'])
 
         eq_("OL24390638M", wr2.primary_identifier.identifier)
         eq_('http://covers.openlibrary.org/b/id/6643742-M.jpg',
-            wr2.links[WorkRecord.THUMBNAIL_IMAGE][0]['href'])
+            wr2.links[Resource.THUMBNAIL_IMAGE][0]['href'])
         eq_('http://covers.openlibrary.org/b/id/6643742-L.jpg',
-            wr2.links[WorkRecord.IMAGE][0]['href'])
+            wr2.links[Resource.IMAGE][0]['href'])
 

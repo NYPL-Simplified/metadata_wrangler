@@ -7,6 +7,7 @@ from nose.tools import set_trace, eq_
 from model import (
     Contributor,
     DataSource,
+    Resource,
     SubjectType,
     WorkIdentifier,
     WorkRecord,
@@ -103,12 +104,12 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
             "files/gutenberg-40993.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "40993", fh)
 
-        [thumbnail] = book.links[WorkRecord.THUMBNAIL_IMAGE]
+        [thumbnail] = book.links[Resource.THUMBNAIL_IMAGE]
         eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.small.jpg",
             str(thumbnail['href']))
         eq_("image/jpeg", str(thumbnail['type']))
 
-        [image] = book.links[WorkRecord.IMAGE]
+        [image] = book.links[Resource.IMAGE]
         eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.medium.jpg",
             str(image['href']))
         eq_("image/jpeg", str(image['type']))

@@ -17,6 +17,7 @@ from tests.db import (
 
 from model import (
     Loan,
+    Resource,
     WorkRecord,
 )
 
@@ -79,7 +80,7 @@ class CirculationTest(DatabaseTest):
         pool = self.english_1.license_pools[0]
         pool.open_access = True
         pool.work_record().links = {
-            WorkRecord.OPEN_ACCESS_DOWNLOAD : [
+            Resource.OPEN_ACCESS_DOWNLOAD : [
                 dict(
                     href="http://direct-download.com/",
                     type="application/epub+zip")

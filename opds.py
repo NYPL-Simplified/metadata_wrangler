@@ -153,8 +153,9 @@ class AcquisitionFeed(OPDSFeed):
 
     def add_entry(self, work, lane_link, loan=None):
         entry = self.create_entry(work, lane_link, loan)
-        if entry:
+        if entry is not None:
             self.feed.append(entry)
+        return entry
 
     def create_entry(self, work, lane_link, loan=None):
         """Turn a work into an entry for an acquisition feed."""
@@ -177,7 +178,7 @@ class AcquisitionFeed(OPDSFeed):
 
         # There's no reason to present a book that has no active license pool.
         if not active_license_pool:
-            return False
+            return None
 
         # TODO: If there's an active loan, the links and the license
         # information should be much different. But we currently don't
@@ -204,7 +205,6 @@ class AcquisitionFeed(OPDSFeed):
                 host, urllib.quote(
                     "/Gutenberg ID/%s.png" % identifier.identifier))
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
-
 
         tag = "tag:work:%s" % work.id
 

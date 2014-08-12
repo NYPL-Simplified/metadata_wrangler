@@ -38,6 +38,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Integer,
@@ -223,6 +224,9 @@ class DataSource(Base):
     license_pools = relationship(
         "LicensePool", backref=backref("data_source", lazy='joined'))
 
+    # One DataSource can provide many Resources.
+    resources = relationship("Resource", backref="data_source")
+
     @classmethod
     def lookup(cls, _db, name):
         try:
@@ -352,6 +356,11 @@ class WorkIdentifier(Base):
         "LicensePool", backref="identifier", uselist=False, lazy='joined',
     )
 
+    # One WorkIdentifier may serve to identify many Resources.
+    resources = relationship(
+        "Resource", backref="identifier"
+    )
+
     # Type + identifier is unique.
     __table_args__ = (
         UniqueConstraint('type', 'identifier'),
@@ -420,6 +429,52 @@ class WorkIdentifier(Base):
         return WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, [self.id], levels)
 
+class Resource(Base):
+    """An external resource that may be mirrored locally."""
+
+    __tablename__ = 'resources'
+
+    # Link relations used in the enumerated type.
+    OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
+    IMAGE = "http://opds-spec.org/image"
+    THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
+    SAMPLE = "http://opds-spec.org/acquisition/sample"
+
+    # TODO: Is this the appropriate relation?
+    DRM_ENCRYPTED_DOWNLOAD = "http://opds-spec.org/acquisition/"
+
+    id = Column(Integer, primary_key=True)
+
+    # A Resource is always associated with some WorkIdentifier.
+    identifier_id = Column(
+        Integer, ForeignKey('workidentifiers.id'), index=True)
+
+    # A Resource may also be associated with some LicensePool which
+    # controls scarce access to it.
+    license_pool_id = Column(
+        Integer, ForeignKey('licensepools.id'), index=True)
+
+    # Who provides this resource?
+    source_id = Column(
+        Integer, ForeignKey('datasources.id'), index=True)
+
+    # The relation between the book identified by the WorkIdentifier
+    # and the resource.
+    rel = Enum(OPEN_ACCESS_DOWNLOAD, IMAGE, THUMBNAIL_IMAGE, SAMPLE)
+
+    original_url = Column(Unicode)
+    mirrored_url = Column(Unicode)
+    mirror_date = Column(DateTime)
+
+    # We need this information to determine the appropriateness of this
+    # resource without neccessarily having access to the file.
+    media_type = Column(Unicode, index=True)
+    file_size = Column(Integer)
+    image_height = Column(Integer, index=True)
+    image_width = Column(Integer, index=True)
+
+    # TODO: add a "quality" score representing crowdsourced opinion of
+    # this resource.
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -653,12 +708,6 @@ class WorkRecord(Base):
 
     extra = Column(MutableDict.as_mutable(JSON), default={})
     
-    # Common link relation URIs for the links.
-    OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
-    IMAGE = "http://opds-spec.org/image"
-    THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
-    SAMPLE = "http://opds-spec.org/acquisition/sample"
-
     def __repr__(self):
         return (u"WorkRecord %s (%s/%s/%s)" % (
             self.id, self.title, ", ".join([x.name for x in self.contributors]),
@@ -923,7 +972,7 @@ class WorkRecord(Base):
     @property
     def best_open_access_link(self):
         """Find the best open-access link for this LicensePool."""
-        open_access = WorkRecord.OPEN_ACCESS_DOWNLOAD
+        open_access = Resource.OPEN_ACCESS_DOWNLOAD
         if not open_access in self.links:
             return None
 
@@ -963,6 +1012,8 @@ class Work(Base):
     description = Column(Unicode, index=True)
     audience = Column(Unicode, index=True)
     subjects = Column(MutableDict.as_mutable(JSON), default={})
+
+    # TODO: cover should be a single Resource. Thumbnail is useless.
     thumbnail_cover_link = Column(Unicode)
     full_cover_link = Column(Unicode)
     lane = Column(Unicode, index=True)
@@ -1225,10 +1276,10 @@ class Work(Base):
                     wr.subjects, subject_data)
 
             # Are there cover links? Keep track of them!
-            if (WorkRecord.THUMBNAIL_IMAGE in wr.links and
-                WorkRecord.IMAGE in wr.links):
-                thumb = wr.links[WorkRecord.THUMBNAIL_IMAGE][0]['href']
-                full = wr.links[WorkRecord.IMAGE][0]['href']
+            if (Resource.THUMBNAIL_IMAGE in wr.links and
+                Resource.IMAGE in wr.links):
+                thumb = wr.links[Resource.THUMBNAIL_IMAGE][0]['href']
+                full = wr.links[Resource.IMAGE][0]['href']
                 key = (thumb, full)
                 image_links[key] += 1
 
@@ -1402,6 +1453,9 @@ class LicensePool(Base):
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
         "CirculationEvent", backref="license_pool")
+
+    # One LicensePool can control access to many Resources.
+    resources = relationship("Resource", backref="license_pool")
 
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
