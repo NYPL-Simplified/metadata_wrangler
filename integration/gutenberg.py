@@ -243,21 +243,7 @@ class GutenbergRDFExtractor(object):
             code = LanguageCodes.two_to_three[code]
             if code:
                 languages.append(code)
-
-        links = dict(canonical=[dict(href=uri)])
-        download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
-        for href in download_links:
-            for format_uri in cls._values(
-                    g, (href, cls.dcterms['format'], None)):
-                media_type = cls._value(g, (format_uri, cls.rdf.value, None))
-                rel = Resource.OPEN_ACCESS_DOWNLOAD
-                if media_type.startswith('image/'):
-                    if '.small.' in href:
-                        rel = Resource.THUMBNAIL_IMAGE
-                    elif '.medium.' in href:
-                        rel = Resource.IMAGE
-                WorkRecord._add_link(links, rel, href, media_type)
-        
+       
         subjects = dict()
         subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
         for subject in subject_links:
@@ -287,12 +273,31 @@ class GutenbergRDFExtractor(object):
                 summary=summary,
                 publisher=publisher,
                 languages=languages,
-                links=links,
                 subjects=subjects,
             ),
             data_source=source,
             primary_identifier=identifier,
         )
+
+        # Turn the Gutenberg download links into Resources associated 
+        # with the new WorkRecord. They will serve either as open access
+        # downloads or cover images.
+        download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
+        for href in download_links:
+            for format_uri in cls._values(
+                    g, (href, cls.dcterms['format'], None)):
+                media_type = cls._value(g, (format_uri, cls.rdf.value, None))
+                rel = Resource.OPEN_ACCESS_DOWNLOAD
+                if media_type.startswith('image/'):
+                    if '.medium.' in href:
+                        rel = Resource.IMAGE
+                    else:
+                        # We don't care about thumbnail images--we
+                        # make our own.
+                        rel = None
+                if rel:
+                    book.add_resource(rel, href, source, media_type)
+                book.add_resource(Resource.CANONICAL, uri, source)
 
         # Associate the appropriate contributors with the book.
         for contributor in contributors:
@@ -439,7 +444,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         print " Created %s records(s)." % len(records)
         return True
-            
+
 class PopularityScraper(object):
 
     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"

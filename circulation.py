@@ -45,6 +45,7 @@ INVALID_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/credentials
 INVALID_CREDENTIALS_TITLE = "A valid library card barcode number and PIN are required."
 EXPIRED_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/credentials-expired"
 EXPIRED_CREDENTIALS_TITLE = "Your library card has expired. You need to renew it."
+NO_AVAILABLE_LICENSE_PROBLEM = "http://library-simplified.com/problem/no-license"
 
 def problem(type, title, status, detail=None, instance=None, headers={}):
     """Create a Response that includes a Problem Detail Document."""
@@ -230,25 +231,30 @@ def checkout(data_source, identifier):
     # Turn source + identifier into a LicensePool
     source = DataSource.lookup(db, data_source)
     if source is None:
-        return "No such data source!"
+        return problem("No such data source!", 404)
     identifier_type = source.primary_identifier_type
 
     id_obj, ignore = WorkIdentifier.for_foreign_id(
         db, identifier_type, identifier, autocreate=False)
     if not id_obj:
         # TODO
-        return "I never heard of such a book."
+        return problem(
+            NO_AVAILABLE_LICENSE_PROBLEM, "I never heard of such a book.", 404)
 
     pool = id_obj.licensed_through
     if not pool:
-        return "I don't have any licenses for that book."
+        return problem(
+            NO_AVAILABLE_LICENSE_PROBLEM, 
+            "I don't have any licenses for that book.", 404)
 
     best_pool, best_link = pool.best_license_link
     if not best_link:
-        return "Sorry, couldn't find an available license."
+        return problem(
+            NO_AVAILABLE_LICENSE_PROBLEM,
+            "Sorry, couldn't find an available license.", 404)
 
     best_pool.loan_to(flask.request.patron)
-    return redirect(URLRewriter.rewrite(best_link))
+    return redirect(URLRewriter.rewrite(best_link.href))
 
 print __name__
 if __name__ == '__main__':

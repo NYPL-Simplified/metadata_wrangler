@@ -56,8 +56,9 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         eq_(gutenberg, book.data_source)
         eq_(identifier, book.primary_identifier)
 
-        eq_(["http://www.gutenberg.org/ebooks/17"], 
-            [str(x['href']) for x in book.links['canonical']])
+        [canonical] = [x for x in book.primary_identifier.resources
+                     if x.rel == 'canonical']
+        eq_("http://www.gutenberg.org/ebooks/17", canonical.href)
 
         eq_("The Book of Mormon", book.title)
         eq_("An Account Written by the Hand of Mormon Upon Plates Taken from the Plates of Nephi", book.subtitle)
@@ -104,15 +105,11 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
             "files/gutenberg-40993.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "40993", fh)
 
-        [thumbnail] = book.links[Resource.THUMBNAIL_IMAGE]
-        eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.small.jpg",
-            str(thumbnail['href']))
-        eq_("image/jpeg", str(thumbnail['type']))
-
-        [image] = book.links[Resource.IMAGE]
+        identifier = book.primary_identifier
+        [image] = [x for x in identifier.resources if x.rel == Resource.IMAGE]
         eq_("http://www.gutenberg.org/cache/epub/40993/pg40993.cover.medium.jpg",
-            str(image['href']))
-        eq_("image/jpeg", str(image['type']))
+            image.href)
+        eq_("image/jpeg", image.media_type)
 
     def test_rdf_file_describing_no_books(self):
         """GutenbergRDFExtractor can handle an RDF document that doesn't

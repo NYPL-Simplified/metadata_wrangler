@@ -358,7 +358,7 @@ class WorkIdentifier(Base):
 
     # One WorkIdentifier may serve to identify many Resources.
     resources = relationship(
-        "Resource", backref="identifier"
+        "Resource", backref="work_identifier"
     )
 
     # Type + identifier is unique.
@@ -435,10 +435,12 @@ class Resource(Base):
     __tablename__ = 'resources'
 
     # Link relations used in the enumerated type.
+    CANONICAL = "canonical"
     OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
     IMAGE = "http://opds-spec.org/image"
     THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
     SAMPLE = "http://opds-spec.org/acquisition/sample"
+    ILLUSTRATION = "http://library-simplified.com/rel/illustration"
 
     # TODO: Is this the appropriate relation?
     DRM_ENCRYPTED_DOWNLOAD = "http://opds-spec.org/acquisition/"
@@ -446,7 +448,7 @@ class Resource(Base):
     id = Column(Integer, primary_key=True)
 
     # A Resource is always associated with some WorkIdentifier.
-    identifier_id = Column(
+    work_identifier_id = Column(
         Integer, ForeignKey('workidentifiers.id'), index=True)
 
     # A Resource may also be associated with some LicensePool which
@@ -455,16 +457,22 @@ class Resource(Base):
         Integer, ForeignKey('licensepools.id'), index=True)
 
     # Who provides this resource?
-    source_id = Column(
+    data_source_id = Column(
         Integer, ForeignKey('datasources.id'), index=True)
 
     # The relation between the book identified by the WorkIdentifier
     # and the resource.
-    rel = Enum(OPEN_ACCESS_DOWNLOAD, IMAGE, THUMBNAIL_IMAGE, SAMPLE)
+    rel = Column(Enum(CANONICAL, OPEN_ACCESS_DOWNLOAD, IMAGE, THUMBNAIL_IMAGE,
+                      SAMPLE, ILLUSTRATION, name="link_relation"))
 
-    original_url = Column(Unicode)
+    # The actual URL to the resource.
+    href = Column(Unicode)
+
+    # The URL to our mirrored representation.
     mirrored_url = Column(Unicode)
-    mirror_date = Column(DateTime)
+
+    # The last time we updated the mirror.
+    mirror_date = Column(DateTime, index=True)
 
     # We need this information to determine the appropriateness of this
     # resource without neccessarily having access to the file.
@@ -704,8 +712,6 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
-    links = Column(MutableDict.as_mutable(JSON), default={})
-
     extra = Column(MutableDict.as_mutable(JSON), default={})
     
     def __repr__(self):
@@ -821,25 +827,22 @@ class WorkRecord(Base):
             type = "text"
         return dict(type=type, value=content)
 
-    @classmethod
-    def _add_link(cls, links, rel, href, type=None, description=None):
-        """Add a hypermedia link to a dictionary of links.
+    def add_resource(self, rel, href, data_source, media_type=None):
+        """Associate a Resource with this WorkRecord.
 
-        `links`: A dictionary of links like the one stored in WorkRecord.links.
         `rel`: The relationship between a WorkRecord and the resource
                on the other end of the link.
-        `type`: Media type of the representation available at the
-                other end of the link.
-        `description`: Human-readable description of the link.
+        `media_type`: Media type of the representation available at the
+                      other end of the link.
         """
-        if rel not in links:
-            links[rel] = []
-        d = dict(href=href)
-        if type:
-            d['type'] = type
-        if description:
-            d['description'] = type
-        links[rel].append(d)
+        work_identifier = self.primary_identifier
+        _db = Session.object_session(self)        
+        return get_one_or_create(
+            _db, Resource, work_identifier=work_identifier,
+            rel=rel,
+            href=href,
+            media_type=media_type,
+            create_method_kwargs=dict(data_source=data_source))[0]
         
     @classmethod
     def _add_subject(cls, subjects, type, id, value=None, weight=None):
@@ -971,21 +974,20 @@ class WorkRecord(Base):
 
     @property
     def best_open_access_link(self):
-        """Find the best open-access link for this LicensePool."""
+        """Find the best open-access Resource for this LicensePool."""
         open_access = Resource.OPEN_ACCESS_DOWNLOAD
-        if not open_access in self.links:
-            return None
 
-        epub_href = None
-        for l in self.links[open_access]:
-            if l['type'].startswith("application/epub+zip"):
-                epub_href, epub_type = l['href'], l['type']
-
+        best = None
+        for l in self.primary_identifier.resources:
+            if l.rel != open_access:
+                continue
+            if l.media_type.startswith("application/epub+zip"):
+                best = l
                 # A Project Gutenberg-ism: if we find a 'noimages' epub,
                 # we'll keep looking in hopes of finding a better one.
-                if not 'noimages' in epub_href:
+                if not 'noimages' in best.href:
                     break
-        return epub_href
+        return best
 
 
 class Work(Base):
@@ -1276,12 +1278,10 @@ class Work(Base):
                     wr.subjects, subject_data)
 
             # Are there cover links? Keep track of them!
-            if (Resource.THUMBNAIL_IMAGE in wr.links and
-                Resource.IMAGE in wr.links):
-                thumb = wr.links[Resource.THUMBNAIL_IMAGE][0]['href']
-                full = wr.links[Resource.IMAGE][0]['href']
-                key = (thumb, full)
-                image_links[key] += 1
+            for resource in wr.primary_identifier.resources:
+                if resource.rel == Resource.IMAGE:
+                    full = resource.href
+                    image_links[full] += 1
 
             if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
                 # This is great news. We can almost certainly get a
@@ -1341,9 +1341,8 @@ class Work(Base):
                 if 'openlibrary' in link[0][0]:
                     best_index = i
                     break
-            self.thumbnail_cover_link, self.full_cover_link = items[best_index][0]
+            self.full_cover_link = items[best_index][0]
         else:
-            self.thumbnail_cover_link = None
             self.full_cover_link = None
 
         self.quality = len(self.license_pools) * (

@@ -79,13 +79,11 @@ class CirculationTest(DatabaseTest):
         # download link that points to an EPUB.
         pool = self.english_1.license_pools[0]
         pool.open_access = True
-        pool.work_record().links = {
-            Resource.OPEN_ACCESS_DOWNLOAD : [
-                dict(
-                    href="http://direct-download.com/",
-                    type="application/epub+zip")
-        ]
-        }
+        pool.work_record().add_resource(
+            Resource.OPEN_ACCESS_DOWNLOAD,
+            "http://direct-download.com/",
+            None,
+            "application/epub+zip")
 
         self.english_2 = self._work(
             "Totally American", "Uncle Sam", "Nonfiction", "eng", True
@@ -250,6 +248,6 @@ class TestCheckout(CirculationTest):
                 "/", headers=dict(Authorization=self.valid_auth)):
             response = circulation.checkout(
                 data_source.name, identifier.identifier)
-
-            eq_("Sorry, couldn't find an available license.", response)
+            eq_(404, response.status_code)
+            assert "Sorry, couldn't find an available license." in response.data
         pool.open_access = True

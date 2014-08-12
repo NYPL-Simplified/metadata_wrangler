@@ -11,6 +11,7 @@ from integration.openlibrary import (
 )
 
 from model import (
+    DataSource,
     Resource,
     WorkIdentifier,
     WorkRecord,
@@ -93,16 +94,20 @@ class TestOpenLibraryMonitor(DatabaseTest):
         # cover ID (-1) for it.
 
         # Each existing WorkRecord has been given a link to a
-        # thumbnail image and full image.
-        eq_("OL24385118M", wr1.primary_identifier.identifier)
-        eq_('http://covers.openlibrary.org/b/id/6636377-M.jpg',
-            wr1.links[Resource.THUMBNAIL_IMAGE][0]['href'])
+        # full image.
+        id1 = wr1.primary_identifier
+        eq_("OL24385118M", id1.identifier)
+        [link1] = id1.resources
+        eq_(DataSource.OPEN_LIBRARY, link1.data_source.name)
+        eq_(Resource.IMAGE, link1.rel)
         eq_('http://covers.openlibrary.org/b/id/6636377-L.jpg',
-            wr1.links[Resource.IMAGE][0]['href'])
+            link1.href)
 
-        eq_("OL24390638M", wr2.primary_identifier.identifier)
-        eq_('http://covers.openlibrary.org/b/id/6643742-M.jpg',
-            wr2.links[Resource.THUMBNAIL_IMAGE][0]['href'])
+        id2 = wr2.primary_identifier
+        eq_("OL24390638M", id2.identifier)
+        [link2] = id2.resources
+        eq_(DataSource.OPEN_LIBRARY, link2.data_source.name)
+        eq_(Resource.IMAGE, link2.rel)
         eq_('http://covers.openlibrary.org/b/id/6643742-L.jpg',
-            wr2.links[Resource.IMAGE][0]['href'])
+            link2.href)
 
