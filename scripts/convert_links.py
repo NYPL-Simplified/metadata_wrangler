@@ -6,6 +6,7 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
     DataSource,
+    LicensePool,
     WorkRecord
 )
 
@@ -20,11 +21,17 @@ class LinksConverter(object):
         found_some = True
         while found_some:
             found_some = False
-            for wr in self.db.query(WorkRecord).filter(WorkRecord.links != None).limit(1000):
+            for wr in self.db.query(WorkRecord).filter(WorkRecord.links != None).filter(WorkRecord.data_source==source).limit(1000):
                 if wr.links is None:
                     print "Should not happen."
                     continue
                 found_some = True
+                try:
+                    pool = self.db.query(LicensePool).filter(
+                        LicensePool.data_source==wr.data_source).filter(
+                            LicensePool.identifier==wr.primary_identifier).one()
+                except Exception, e:
+                    set_trace()
                 l = dict(wr.links)
                 for rel, links in l.items():
                     for link in links:
@@ -32,7 +39,7 @@ class LinksConverter(object):
                         media_type = None
                         if 'type' in link:
                             media_type = link['type']
-                        r, new = wr.add_resource(rel, href, source, media_type)
+                        r, new = pool.add_resource(rel, href, source, media_type)
                 wr.links = None
                 a += 1
             self.db.commit()

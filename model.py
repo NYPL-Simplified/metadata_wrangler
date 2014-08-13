@@ -433,6 +433,20 @@ class WorkIdentifier(Base):
         return WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, [self.id], levels)
 
+    def add_resource(self, rel, href, data_source, license_pool=None,
+                     media_type=None):
+        """Associated a resource with this WorkIdentifier."""
+        _db = Session.object_session(self)
+        return get_one_or_create(
+            _db, Resource, work_identifier=self,
+            rel=rel,
+            href=href,
+            media_type=media_type,
+            create_method_kwargs=dict(
+                data_source=data_source,
+                license_pool=license_pool))
+
+
 class Resource(Base):
     """An external resource that may be mirrored locally."""
 
@@ -471,10 +485,14 @@ class Resource(Base):
     # The actual URL to the resource.
     href = Column(Unicode)
 
-    # The URL to our mirrored representation.
-    mirrored_url = Column(Unicode)
+    # Whether or not we have a local copy of the representation.
+    mirrored = Column(Boolean, index=True)
 
-    # The last time we updated the mirror.
+    # The path to our mirrored representation. This can be converted
+    # into a URL for serving to a client. TODO: how?
+    mirrored_path = Column(Unicode)
+
+    # The last time we tried to update the mirror.
     mirror_date = Column(DateTime, index=True)
 
     # The HTTP status code the last time we updated the mirror
@@ -833,24 +851,7 @@ class WorkRecord(Base):
         else:
             type = "text"
         return dict(type=type, value=content)
-
-    def add_resource(self, rel, href, data_source, media_type=None):
-        """Associate a Resource with this WorkRecord.
-
-        `rel`: The relationship between a WorkRecord and the resource
-               on the other end of the link.
-        `media_type`: Media type of the representation available at the
-                      other end of the link.
-        """
-        work_identifier = self.primary_identifier
-        _db = Session.object_session(self)        
-        return get_one_or_create(
-            _db, Resource, work_identifier=work_identifier,
-            rel=rel,
-            href=href,
-            media_type=media_type,
-            create_method_kwargs=dict(data_source=data_source))
-        
+       
     @classmethod
     def _add_subject(cls, subjects, type, id, value=None, weight=None):
         """Add a new entry to a dictionary of bibliographic subjects.
@@ -1524,6 +1525,17 @@ class LicensePool(Base):
         """Find LicensePools that have no corresponding Work."""
         return _db.query(LicensePool).outerjoin(Work).filter(
             Work.id==None).all()
+
+    def add_resource(self, rel, href, data_source, media_type=None):
+        """Associate a Resource with this LicensePool.
+
+        `rel`: The relationship between a LicensePool and the resource
+               on the other end of the link.
+        `media_type`: Media type of the representation available at the
+                      other end of the link.
+        """
+        return self.identifier.add_resource(
+            rel, href, data_source, self, media_type)
 
     def needs_update(self):
         """Is it time to update the circulation info for this license pool?"""
