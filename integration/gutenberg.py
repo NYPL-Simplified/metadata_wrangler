@@ -8,7 +8,7 @@ import random
 import time
 import shutil
 import tarfile
-from urlparse import urljoin
+from urlparse import urljoin, urlparse
 from StringIO import StringIO
 from bs4 import BeautifulSoup
 
@@ -59,9 +59,72 @@ class GutenbergAPI(object):
         "http://snowy.arsc.alaska.edu/gutenberg/cache/generated/feeds/rdf-files.tar.bz2",        
     ] 
 
+    GUTENBERG_ORIGINAL_MIRROR = "%(gutenberg_original_mirror)s"
+    GUTENBERG_EBOOK_MIRROR = "%(gutenberg_ebook_mirror)s"
+    EPUB_ID = re.compile("/([0-9]+)")
+
     def __init__(self, data_directory):
         self.data_directory = data_directory
         self.catalog_path = os.path.join(self.data_directory, self.FILENAME)
+
+    @classmethod
+    def url_to_mirror_path(cls, url):
+        """Convert a URL as seen in the RDF file to the corresponding
+        path in the local archive of a Gutenberg mirror.
+        """
+        parsed = urlparse(url)
+        if parsed.hostname not in ('www.gutenberg.org', 'gutenberg.org'):
+            raise ValueError("Not a Gutenberg URL: %s" % url)
+
+        mirror = cls.GUTENBERG_ORIGINAL_MIRROR
+        if parsed.path.startswith('/files/'):
+            # /files/8594/8594.txt
+            #     =>
+            # /8/5/9/8594/8494.txt           
+            text_id = cls.EPUB_ID.search(parsed.path).groups()[0]
+            path_parts = [i for i in text_id[:-1]]
+            new_path_prefix = os.path.join(*path_parts) 
+            new_path = parsed.path.replace(
+                '/files/', "/" + new_path_prefix + "/", 1)
+            mirror = cls.GUTENBERG_ORIGINAL_MIRROR
+        elif parsed.path.startswith('/dirs/'):
+            # /dirs/etext05/8ivn110.zip
+            #     =>
+            # /etext05/8ivn110.zip
+            mirror = cls.GUTENBERG_ORIGINAL_MIRROR
+            new_path = parsed.path.replace('/dirs/', '/', 1)
+        elif parsed.path.startswith('/ebooks/'):
+            mirror = cls.GUTENBERG_EBOOK_MIRROR
+            text_id = cls.EPUB_ID.search(parsed.path).groups()[0]
+            if '.epub' in parsed.path:
+                # /ebooks/8594.epub.images
+                #     =>
+                # /8594/pg8594-images.epub
+                #
+                # /ebooks/8605.epub.noimages
+                #     =>
+                # /8605/pg8605.epub
+                if 'noimages' in parsed.path:
+                    new_path = "/%(text_id)s/pg%(text_id)s.epub" 
+                else:
+                    new_path = "/%(text_id)s/pg%(text_id)s-images.epub"
+                new_path = new_path % dict(text_id=text_id)
+            else:
+                # /ebooks/8596.plucker
+                #     =>
+                # /8596/pg8596.plucker
+                new_path = parsed.path.replace(
+                    "/ebooks/", "/" + text_id + "/pg")
+        elif parsed.path.startswith('/cache/epub/'):
+            mirror = cls.GUTENBERG_EBOOK_MIRROR
+            # /cache/epub/38044/pg38044.cover.medium.jpg 
+            #     =>
+            # /38044/pg38044.cover.medium.jpg 
+            new_path = parsed.path.replace('/cache/epub/', '/', 1)
+        else:
+            set_trace()
+
+        return mirror, new_path
 
     def update_catalog(self):
         """Download the most recent Project Gutenberg catalog
