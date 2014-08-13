@@ -38,6 +38,28 @@ class TestGutenbergAPI(DatabaseTest):
         eq_(True, new)
         eq_(True, license.open_access)
 
+    def test_url_to_mirror_path(self):
+
+        original = GutenbergAPI.GUTENBERG_ORIGINAL_MIRROR
+        ebooks = GutenbergAPI.GUTENBERG_EBOOK_MIRROR
+
+        def e(expect, url):
+            eq_(expect, GutenbergAPI.url_to_mirror_path(url))
+
+        e((original, "/8/5/9/8594/8594-h.zip"),
+          "http://www.gutenberg.org/files/8594/8594-h.zip")
+        e((original, "/etext05/8wfrt10.zip"),
+          "http://www.gutenberg.org/dirs/etext05/8wfrt10.zip")
+
+        e((ebooks, "/8594/pg8594.plucker"),
+          "http://www.gutenberg.org/ebooks/8594.plucker")
+        e((ebooks, '/8594/pg8594-images.epub'),
+          "http://www.gutenberg.org/ebooks/8594.epub.images")
+        e((ebooks, '/8594/pg8594.epub'),
+          "http://www.gutenberg.org/ebooks/8594.epub.noimages")
+        e((ebooks, '/38044/pg38044.cover.medium.jpg'),
+          "http://www.gutenberg.org/cache/epub/38044/pg38044.cover.medium.jpg")
+
 class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_rdf_parser(self):
