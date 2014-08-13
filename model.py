@@ -718,6 +718,7 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
+    links = Column(MutableDict.as_mutable(JSON), default={})
     extra = Column(MutableDict.as_mutable(JSON), default={})
     
     def __repr__(self):
@@ -848,7 +849,7 @@ class WorkRecord(Base):
             rel=rel,
             href=href,
             media_type=media_type,
-            create_method_kwargs=dict(data_source=data_source))[0]
+            create_method_kwargs=dict(data_source=data_source))
         
     @classmethod
     def _add_subject(cls, subjects, type, id, value=None, weight=None):
