@@ -269,7 +269,11 @@ class DataSource(Base):
 
 
 class CoverageRecord(Base):
-    """A record of a WorkRecord being used as input into another data source."""
+    """A record of a WorkRecord being used as input into another data source.
+
+    TODO: Should probably be a record of a WorkIdentifier being used as input
+    into another source.
+    """
     __tablename__ = 'coveragerecords'
 
     id = Column(Integer, primary_key=True)
@@ -462,8 +466,7 @@ class Resource(Base):
 
     # The relation between the book identified by the WorkIdentifier
     # and the resource.
-    rel = Column(Enum(CANONICAL, OPEN_ACCESS_DOWNLOAD, IMAGE, THUMBNAIL_IMAGE,
-                      SAMPLE, ILLUSTRATION, name="link_relation"))
+    rel = Column(Unicode, index=True)
 
     # The actual URL to the resource.
     href = Column(Unicode)
@@ -473,6 +476,9 @@ class Resource(Base):
 
     # The last time we updated the mirror.
     mirror_date = Column(DateTime, index=True)
+
+    # The HTTP status code the last time we updated the mirror
+    mirror_status = Column(Unicode)
 
     # We need this information to determine the appropriateness of this
     # resource without neccessarily having access to the file.

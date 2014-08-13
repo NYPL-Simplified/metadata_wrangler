@@ -10,3 +10,4 @@ gunicorn
 feedparser
 pyld
 textblob
+isbnlib

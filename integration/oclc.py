@@ -735,20 +735,41 @@ class OCLCXMLParser(XMLParser):
         return edition_record, new
 
 
-class ISBNFinder(Monitor):
+class LinkedDataCoverageProvider(CoverageProvider):
 
-    def __init__(self, data_directory):
+    """Runs WorkRecords obtained from OCLC Lookup through OCLC Linked Data.
+    
+    This (maybe) associates a workrecord with a (potentially) large
+    number of ISBNs, which can be used as input into other services.
+    """
+
+    def __init__(self, data_directory, db):
         self.oclc = OCLCLinkedData(data_directory)
+        self.db = db
+        oclc_classify = DataSource.lookup(db, DataSource.OCLC)
+        self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
+        self.coverage_provider = CoverageProvider(
+            "OCLC-LD lookup", oclc_classify, self.oclc_linked_data)
 
-    def graphs_for(self, work_identifier):
-        data, cached = oclc_linked_data.lookup(work_identifier)
-        graph = oclc_linked_data.graph(data)
-        examples = oclc_linked_data.extract_workexamples(graph)
-        for uri in examples:
-            data, cached = oclc_linked_data.lookup(uri)
-            yield data
+    def process_work_record(self, wr):
+        try:
+            oclc_identifier = wr.primary_identifier
+            for isbn in self.isbns_for(oclc_identifier):
+                isbn_identifier, ignore = WorkIdentifier.for_foreign_id(
+                    _db, WorkIdentifier.ISBN, isbn)
+                oclc_identifier.equivalent_to(self.oclc_linked_data, isbn_identifier)
+            return True
+        except IOError, e:
+            return False
 
     def isbns_for(self, work_identifier):
+        # TODO: blacklist ISBNs from publishers who are either known
+        # to publish related but irrelevant books (Cliffs Notes) or
+        # who republish Gutenberg books.
+        #
+        # General Books
+        # North Books
+        # B & N Digital Library
         isbns = set([])
         for data in self.graphs_for(work_identifier):
             subgraph = oclc_linked_data.graph(data)
@@ -760,18 +781,15 @@ class ISBNFinder(Monitor):
                     published = "|".join(published)
                 example_graphs = [x for x in subgraph if x['@id'] in examples]
                 for example in example_graphs:
-                    isbns = isbns.union(example.get('schema:isbn', []))
-  
-    def run(self, _db):      
-        for wi in _db.query(WorkIdentifier).filter(
-                WorkIdentifier.type==WorkIdentifier.OCLC_WORK):
-            a = 0
-            for data in self.graphs_for(wi):
-                continue
+                    this_book_isbns = map(
+                        isbnlib.to_isbn13, example.get('schema:isbn', []))
+                    isbns = isbns.union(set(this_book_isbns))
+        return isbns
 
-            #wr = _db.query(WorkRecord).filter(
-            #    WorkRecord.primary_identifier==wi).all()
-            #print wi.id, wi.type, wi.identifier
-            #print wr[0].id, wr[0].title.encode("utf8")
-            #pprint.pprint(json.dumps(isbns_for_year))
-            #print
+    def graphs_for(self, work_identifier):
+        data, cached = oclc_linked_data.lookup(work_identifier)
+        graph = oclc_linked_data.graph(data)
+        examples = oclc_linked_data.extract_workexamples(graph)
+        for uri in examples:
+            data, cached = oclc_linked_data.lookup(uri)
+            yield data
