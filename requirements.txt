@@ -11,3 +11,4 @@ feedparser
 pyld
 textblob
 isbnlib
+pillow

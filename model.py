@@ -2,10 +2,13 @@ from collections import (
     Counter,
     defaultdict,
 )
+from cStringIO import StringIO
 import datetime
 import os
 from nose.tools import set_trace
 import random
+
+from PIL import Image
 
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.declarative import declarative_base
@@ -202,6 +205,7 @@ class DataSource(Base):
     AXIS_360 = "Axis 360"
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
+    CONTENT_CAFE = "Content Cafe"
     MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'
@@ -452,13 +456,16 @@ class Resource(Base):
 
     __tablename__ = 'resources'
 
-    # Link relations used in the enumerated type.
+    # Some common link relations.
     CANONICAL = "canonical"
     OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
     IMAGE = "http://opds-spec.org/image"
     THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
     SAMPLE = "http://opds-spec.org/acquisition/sample"
     ILLUSTRATION = "http://library-simplified.com/rel/illustration"
+    REVIEW = "http://schema.org/Review"
+    DESCRIPTION = "http://schema.org/description"
+    AUTHOR = "http://schema.org/author"
 
     # TODO: Is this the appropriate relation?
     DRM_ENCRYPTED_DOWNLOAD = "http://opds-spec.org/acquisition/"
@@ -498,6 +505,10 @@ class Resource(Base):
     # The HTTP status code the last time we updated the mirror
     mirror_status = Column(Unicode)
 
+    # A human-readable description of what happened the last time
+    # we updated the mirror.
+    mirror_exception = Column(Unicode)
+
     # We need this information to determine the appropriateness of this
     # resource without neccessarily having access to the file.
     media_type = Column(Unicode, index=True)
@@ -505,8 +516,43 @@ class Resource(Base):
     image_height = Column(Integer, index=True)
     image_width = Column(Integer, index=True)
 
-    # TODO: add a "quality" score representing crowdsourced opinion of
-    # this resource.
+    # TODO we need a 'quality' field.
+
+    def could_not_mirror(self):
+        """We tried to mirror this resource and failed."""
+        if self.mirrored:
+            # We already have a mirrored copy, so just leave it alone.
+            return
+        self.mirrored = False
+        self.mirror_date = datetime.datetime.utcnow()
+        self.mirrored_path = None
+        self.mirror_status = 404
+        self.media_type = None
+        self.file_size = None
+        self.image_height = None
+        self.image_width = None
+
+    def mirrored_to(self, path, media_type, content=None):
+        """We successfully mirrored this resource to disk."""
+        self.mirrored = True
+        self.mirrored_path = path
+        self.mirror_status = 200
+        self.media_type = media_type
+
+        # If we were provided with the content, make sure the
+        # metadata reflects the content.
+        #
+        # TODO: We don't check the actual file because it's got a
+        # variable expansion in it at this point.
+        if content is not None:
+            self.file_size = len(content)
+        if self.media_type.lower().startswith("image/"):
+            # Try to load it into PIL and determine height and width.
+            try:
+                image = Image.open(StringIO(content))
+            except IOError, e:
+                self.mirror_exception = "Content is not an image."
+            self.image_width, self.image_height = image.size
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
