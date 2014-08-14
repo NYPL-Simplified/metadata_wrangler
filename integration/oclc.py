@@ -734,6 +734,31 @@ class OCLCXMLParser(XMLParser):
             edition_record.add_contributor(author, roles)
         return edition_record, new
 
+class LinkedDataURLLister:
+    """Gets all the work URLs, parses the graphs, and prints out a list of
+    all the edition URLs.
+
+    See scripts/generate_oclcld_url_list for why this is useful.
+    """
+    def __init__(self, db, data_directory, output_file):
+        self.db = db
+        self.data_directory = data_directory
+        self.output_file = output_file
+        self.oclc = OCLCLinkedData(self.data_directory)        
+
+    def run(self):
+        a = 0
+        with open(self.output_file, "w") as output:
+            for wi in self.db.query(WorkIdentifier).filter(
+                    WorkIdentifier.type==WorkIdentifier.OCLC_WORK).yield_per(100):
+                data, cached = self.oclc.lookup(wi)
+                graph = self.oclc.graph(data)
+                examples = self.oclc.extract_workexamples(graph)
+                for uri in examples:
+                    uri = uri.replace("www.worldcat.org", "experiment.worldcat.org")
+                    uri = uri + ".jsonld"
+                    output.write(uri + ".jsonld")
+                    output.write("\n")
 
 class LinkedDataCoverageProvider(CoverageProvider):
 
