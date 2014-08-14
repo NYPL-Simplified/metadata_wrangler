@@ -9,6 +9,7 @@ import requests
 import time
 import urllib
 
+import isbnlib
 from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
@@ -20,6 +21,7 @@ from monitor import Monitor
 from integration import FilesystemCache
 from model import (
     Contributor,
+    CoverageProvider,
     get_one_or_create,
     WorkIdentifier,
     WorkRecord,
@@ -73,8 +75,6 @@ class ldq(object):
                 yield v['@value']
 
 class OCLCLinkedData(object):
-
-    """NOTE: This class is still very much under construction."""
 
     BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
     WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/data/%(id)s.jsonld'
@@ -743,21 +743,28 @@ class LinkedDataCoverageProvider(CoverageProvider):
     number of ISBNs, which can be used as input into other services.
     """
 
-    def __init__(self, data_directory, db):
+    SERVICE_NAME = "OCLC Linked Data from OCLC Classify"
+
+    def __init__(self, db, data_directory):
         self.oclc = OCLCLinkedData(data_directory)
         self.db = db
         oclc_classify = DataSource.lookup(db, DataSource.OCLC)
         self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
         self.coverage_provider = CoverageProvider(
             "OCLC-LD lookup", oclc_classify, self.oclc_linked_data)
+        super(LinkedDataCoverageProvider, self).__init__(
+            self.SERVICE_NAME, oclc_classify, self.oclc_linked_data)
 
     def process_work_record(self, wr):
         try:
             oclc_identifier = wr.primary_identifier
-            for isbn in self.isbns_for(oclc_identifier):
+            isbns = self.isbns_for(oclc_identifier)
+            print "Found %s ISBNs for %s" % (len(isbns), wr.primary_identifier)
+            for isbn in isbns:
                 isbn_identifier, ignore = WorkIdentifier.for_foreign_id(
-                    _db, WorkIdentifier.ISBN, isbn)
-                oclc_identifier.equivalent_to(self.oclc_linked_data, isbn_identifier)
+                    self.db, WorkIdentifier.ISBN, isbn)
+                oclc_identifier.equivalent_to(
+                    self.oclc_linked_data, isbn_identifier)
             return True
         except IOError, e:
             return False

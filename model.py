@@ -1931,11 +1931,13 @@ class CoverageProvider(object):
     doesn't get processed next time.
     """
 
-    def __init__(self, service_name, input_source, output_source):
+    def __init__(self, service_name, input_source, output_source,
+                 workset_size=100):
         self._db = Session.object_session(input_source)
         self.service_name = service_name
         self.input_source = input_source
         self.output_source = output_source
+        self.workset_size = workset_size
 
     @property
     def workrecords_that_need_coverage(self):
@@ -1943,18 +1945,32 @@ class CoverageProvider(object):
             self._db, self.input_source, self.output_source)
 
     def run(self):
-        counter = 0
-        for record in self.workrecords_that_need_coverage:
-            if self.process_work_record(record):
-                # Success! Now there's coverage! Add a CoverageRecord.
-                get_one_or_create(
-                    self._db, CoverageRecord,
-                    work_record=record,
-                    data_source=self.output_source,
-                    create_method_kwargs = dict(date=datetime.datetime.utcnow()))
-            counter += 1
-            if counter % 50 == 0:
-                self._db.commit()
+        remaining = True
+        failures = set([])
+        while remaining:
+            successes = 0
+            if len(failures) > self.workset_size:
+                raise Exception(
+                    "Number of failures equals workset size, cannot continue.")
+            workset = self.workrecords_that_need_coverage.limit(
+                self.workset_size)
+            remaining = False
+            for record in workset:
+                if record in failures:
+                    continue
+                remaining = True
+                if self.process_work_record(record):
+                    # Success! Now there's coverage! Add a CoverageRecord.
+                    successes += 1
+                    get_one_or_create(
+                        self._db, CoverageRecord,
+                        work_record=record,
+                        data_source=self.output_source,
+                        create_method_kwargs = dict(date=datetime.datetime.utcnow()))
+            # Commit this workset before moving on to the next one.
+            print "Workset processed with %d successes, %d failures." % (
+                successes, len(failures))
+            self._db.commit()
 
         # Now that we're done, update the timestamp
         Timestamp.stamp(self._db, self.service_name)
