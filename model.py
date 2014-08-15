@@ -517,11 +517,13 @@ class Resource(Base):
     # We need this information to determine the appropriateness of this
     # resource without neccessarily having access to the file.
     media_type = Column(Unicode, index=True)
+    language = Column(Unicode, index=True)
     file_size = Column(Integer)
     image_height = Column(Integer, index=True)
     image_width = Column(Integer, index=True)
 
-    # TODO we need a 'quality' field.
+    # A calculated value for the quality of this resource.
+    quality = Column(Float, index=True)
 
     def could_not_mirror(self):
         """We tried to mirror this resource and failed."""
