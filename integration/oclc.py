@@ -859,7 +859,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if edition['publishers']:
             publisher = edition['publishers'][0]
         longest_description = None
-        summary = dict(values=edition['descriptions'])
 
         # We should never need this title, but it's helpful
         # for documenting the database.
@@ -911,7 +910,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
             create_method_kwargs = dict(
                 title=title,
                 publisher=publisher,
-                summary=summary,
                 published=publication_date,
             )
         )
@@ -921,6 +919,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
         for isbn_identifier in new_isbns_for_this_oclc_number:
             oclc_number.equivalent_to(
                 self.oclc_linked_data, isbn_identifier)
+
+        # Associate every description with a 
+        for description in edition['descriptions']:
+            set_trace()
+            oclc_number.add_resource(
+                Resource.DESCRIPTION_REL, None, self.oclc_linked_data,
+                content=description)
+
             
         return ld_wr, new_isbns_for_this_oclc_number
 

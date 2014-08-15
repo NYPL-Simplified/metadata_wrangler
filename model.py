@@ -438,10 +438,10 @@ class WorkIdentifier(Base):
             _db, [self.id], levels)
 
     def add_resource(self, rel, href, data_source, license_pool=None,
-                     media_type=None):
+                     media_type=None, content=None):
         """Associated a resource with this WorkIdentifier."""
         _db = Session.object_session(self)
-        return get_one_or_create(
+        resource, new = get_one_or_create(
             _db, Resource, work_identifier=self,
             rel=rel,
             href=href,
@@ -449,7 +449,9 @@ class WorkIdentifier(Base):
             create_method_kwargs=dict(
                 data_source=data_source,
                 license_pool=license_pool))
-
+        if content:
+            resource.set_content(content)
+        return resource, new
 
 class Resource(Base):
     """An external resource that may be mirrored locally."""
@@ -509,6 +511,10 @@ class Resource(Base):
     # we updated the mirror.
     mirror_exception = Column(Unicode)
 
+    # Sometimes the content of a resource can just be stuck into the
+    # database.
+    content = Column(Unicode)
+
     # We need this information to determine the appropriateness of this
     # resource without neccessarily having access to the file.
     media_type = Column(Unicode, index=True)
@@ -531,6 +537,13 @@ class Resource(Base):
         self.file_size = None
         self.image_height = None
         self.image_width = None
+
+    def set_content(self, content, media_type):
+        """Store the content directly in the database."""
+        self.mirrored = True
+        self.mirror_status = 200
+        self.media_type = media_type
+        self.file_size = len(content)
 
     def mirrored_to(self, path, media_type, content=None):
         """We successfully mirrored this resource to disk."""
