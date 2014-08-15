@@ -822,10 +822,18 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # sources of metadata.
     PUBLISHER_BLACKLIST = set([
         "General Books",
-        "Barnes & Noble World Digital Library",
         "Cliffs Notes",
         "North Books",
+        "Emereo",
+        "Emereo Publishing",
+        "Kessinger",
+        "Kessinger Publishing",
+        "Kessinger Pub.",
+        "Recorded Books",
         ])
+
+    # Barnes and Noble have boring book covers, but their ISBNs are likely
+    # to have reviews associated with them.
 
     def __init__(self, db, data_directory):
         self.oclc = OCLCLinkedData(data_directory)
@@ -835,7 +843,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
         self.coverage_provider = CoverageProvider(
             "OCLC-LD lookup", oclc_classify, self.oclc_linked_data)
         super(LinkedDataCoverageProvider, self).__init__(
-            self.SERVICE_NAME, oclc_classify, self.oclc_linked_data)
+            self.SERVICE_NAME, oclc_classify, self.oclc_linked_data,
+            workset_size=10)
 
     def process_work_record(self, wr):
         try:
@@ -995,7 +1004,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         for n in publisher_names:
             if (n in self.PUBLISHER_BLACKLIST
                 or 'Audio' in n or 'Video' in n or 'n Tape' in n
-                or 'Comic' in n):
+                or 'Comic' in n or 'Music' in n):
                 # This book is from a publisher that will probably not
                 # give us metadata we can use.
                 return None
