@@ -78,6 +78,7 @@ class OCLCLinkedData(object):
 
     BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
     WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/data/%(id)s.jsonld'
+    URL_ID_RE = re.compile('http://www.worldcat.org/([a-z]+)/([0-9]+)')
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
@@ -171,22 +172,52 @@ class OCLCLinkedData(object):
         return examples
 
     @classmethod
-    def extract_useful_data(cls, graph):
+    def extract_useful_data(cls, book):
         titles = []
         descriptions = []
-        authors = []
-        subjects = {}
-        if not graph:
-            return titles, descriptions, authors, subjects
-        for book_graph in cls.books(graph):
-            for k, repository in (
-                    ('schema:description', descriptions),
-                    ('schema:name', titles)
-            ):
-                values = book_graph.get(k, [])
-                repository.extend(ldq.values(
-                    ldq.restrict_to_language(values, 'en')))
-        return titles, descriptions, authors, subjects
+        publisher_uris = []
+        publication_dates = []
+        example_uris = []
+
+        no_value = (None, None, titles, descriptions, publisher_uris,
+                    publication_dates, example_uris)
+
+        if not book:
+            return no_value
+
+        id_uri = book['@id']
+        m = cls.URL_ID_RE.match(id_uri)
+        if not m:
+            return no_value
+
+        id_type, id = m.groups()
+        if id_type == 'oclc':
+            id_type = WorkIdentifier.OCLC_NUMBER
+        elif id_type == 'work':
+            # Kind of weird, but okay.
+            id_type = WorkIdentifier.OCLC_WORK
+        else:
+            print "EXPECTED OCLC ID, got %s" % id_type
+            return no_value
+
+        for k, repository in (
+                ('schema:description', descriptions),
+                ('schema:name', titles),
+                ('schema:datePublished', publication_dates),
+                ('workExample', example_uris),
+                ('publisher', publisher_uris)
+        ):
+            values = book.get(k, [])
+            repository.extend(ldq.values(
+                ldq.restrict_to_language(values, 'en')))
+
+        return (id_type, id, titles, descriptions, publisher_uris,
+                publication_dates, example_uris)
+
+    @classmethod
+    def internal_lookup(cls, graph, uris):
+        return [x for x in graph if x['@id'] in uris]
+
 
 oclc_linked_data = None
 if 'DATA_DIRECTORY' in os.environ:
@@ -770,6 +801,31 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     SERVICE_NAME = "OCLC Linked Data from OCLC Classify"
 
+    # We want to present metadata about a book independent of its
+    # format, and metadata from audio books usually contains
+    # information about the format.
+    UNUSED_TYPES = set([
+        'j.1:Audiobook',
+        'j.1:Compact_Cassette',
+        'j.1:Compact_Disc',
+        'j.2:Audiobook',
+        'j.2:Compact_Cassette',
+        'j.2:Compact_Disc',
+        'j.2:LP_record',
+        'schema:AudioObject',
+    ])
+
+    # Publishers who are known to publish related but irrelevant
+    # books, who basically republish Gutenberg books, who publish
+    # books with generic-looking covers, or who are otherwise not good
+    # sources of metadata.
+    PUBLISHER_BLACKLIST = set([
+        "General Books",
+        "Barnes & Noble World Digital Library",
+        "Cliffs Notes",
+        "North Books",
+        ])
+
     def __init__(self, db, data_directory):
         self.oclc = OCLCLinkedData(data_directory)
         self.db = db
@@ -782,41 +838,174 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def process_work_record(self, wr):
         try:
-            oclc_identifier = wr.primary_identifier
-            isbns = self.isbns_for(oclc_identifier)
-            print "Found %s ISBNs for %s" % (len(isbns), wr.primary_identifier)
-            for isbn in isbns:
-                isbn_identifier, ignore = WorkIdentifier.for_foreign_id(
-                    self.db, WorkIdentifier.ISBN, isbn)
-                oclc_identifier.equivalent_to(
-                    self.oclc_linked_data, isbn_identifier)
-            return True
+            oclc_work = wr.primary_identifier
+            new_records = 0
+            new_isbns = 0
+            print "%s (%s)" % (wr.title, oclc_work)
+            for edition in self.info_for(oclc_work):
+                workrecord, isbns = self.process_edition(oclc_work, edition)
+                if workrecord:
+                    new_records += 1
+                    new_isbns += len(isbns)
+                    print "", workrecord.publisher, len(isbns)
+            print "Total: %s edition records, %s ISBNs." % (
+                new_records, new_isbns)
         except IOError, e:
             return False
+        return True
 
-    def isbns_for(self, work_identifier):
-        # TODO: blacklist ISBNs from publishers who are either known
-        # to publish related but irrelevant books (Cliffs Notes) or
-        # who republish Gutenberg books.
-        #
-        # General Books
-        # North Books
-        # B & N Digital Library
-        isbns = set([])
+    def process_edition(self, oclc_work, edition):
+        publisher = None
+        if edition['publishers']:
+            publisher = edition['publishers'][0]
+        longest_description = None
+        summary = dict(values=edition['descriptions'])
+
+        # We should never need this title, but it's helpful
+        # for documenting the database.
+        title = None
+        if edition['titles']:
+            title = edition['titles'][0]
+
+        # Identify the OCLC Number with the OCLC Work.
+        oclc_number, new = WorkIdentifier.for_foreign_id(
+            self.db, edition['oclc_id_type'],
+            edition['oclc_id'])
+        oclc_work.equivalent_to(
+            self.oclc_linked_data, oclc_number)
+
+        # Try to find a publication year.
+        publication_date = None
+        for d in edition['publication_dates']:
+            d = d[:4]
+            try:
+                publication_date = datetime.datetime.strptime(
+                    d[:4], "%Y")
+            except Exception, e:
+                pass
+
+        # Create new ISBNs associated with the OCLC
+        # number. This will help us get metadata from other
+        # sources that use ISBN as input.
+        new_isbns_for_this_oclc_number = []
+        for isbn in edition['isbns']:
+            isbn_identifier, new = WorkIdentifier.for_foreign_id(
+                self.db, WorkIdentifier.ISBN, isbn)
+            if new:
+                new_isbns_for_this_oclc_number.append(isbn_identifier)
+
+        # If this OCLC Number didn't tell us about any ISBNs
+        # we didn't already know, and there is no description,
+        # we don't need to create a WorkRecord for it--it's
+        # redundant.
+        if (len(new_isbns_for_this_oclc_number) == 0
+            and not len(edition['descriptions'])):
+            return None, []
+
+        # Create a WorkRecord for OCLC+LD's view of this OCLC
+        # number.
+        ld_wr, new = get_one_or_create(
+            self.db, WorkRecord,
+            data_source=self.oclc_linked_data,
+            primary_identifier=oclc_number,
+            create_method_kwargs = dict(
+                title=title,
+                publisher=publisher,
+                summary=summary,
+                published=publication_date,
+            )
+        )
+
+        # Associate all newly created ISBNs with the OCLC
+        # Number.
+        for isbn_identifier in new_isbns_for_this_oclc_number:
+            oclc_number.equivalent_to(
+                self.oclc_linked_data, isbn_identifier)
+            
+        return ld_wr, new_isbns_for_this_oclc_number
+
+
+    def info_for(self, work_identifier):
         for data in self.graphs_for(work_identifier):
             subgraph = oclc_linked_data.graph(data)
             for book in oclc_linked_data.books(subgraph):
-                publisher = book.get('publisher', None)
-                examples = set(ldq.values(book.get('workExample', [])))
-                published = book.get('schema:datePublished', None)
-                if published and not isinstance(published, basestring):
-                    published = "|".join(published)
-                example_graphs = [x for x in subgraph if x['@id'] in examples]
-                for example in example_graphs:
-                    this_book_isbns = map(
-                        isbnlib.to_isbn13, example.get('schema:isbn', []))
-                    isbns = isbns.union(set(this_book_isbns))
-        return isbns
+                info = self.info_for_book_graph(subgraph, book)
+                if info:
+                    yield info
+
+    def info_for_book_graph(self, subgraph, book):
+        isbns = set([])
+        descriptions = []
+
+        types = []
+        type_objs = book.get('rdf:type', [])
+        if isinstance(type_objs, dict):
+            type_objs = [type_objs]
+        types = [i['@id'] for i in type_objs if 
+                 i['@id'] not in self.UNUSED_TYPES]
+        if not types:
+            # This book is not available in any format we're
+            # interested in from a metadata perspective.
+            return None
+
+        (oclc_id_type,
+         oclc_id,
+         titles,
+         descriptions,
+         publisher_uris,
+         publication_dates,
+         example_uris) = OCLCLinkedData.extract_useful_data(book)
+
+        example_graphs = OCLCLinkedData.internal_lookup(
+            subgraph, example_uris)
+        for example in example_graphs:
+            for isbn in ldq.values(example.get('schema:isbn', [])):
+                if len(isbn) == 10:
+                    isbn = isbnlib.to_isbn13(isbn)
+                elif len(isbn) != 13:
+                    continue
+                if isbn:
+                    isbns.add(isbn)
+
+        # Something interesting has to come out of this
+        # work--something we couldn't get from another source--or
+        # there's no point.
+        if not isbns or descriptions:
+            return None
+
+        publishers = OCLCLinkedData.internal_lookup(
+            subgraph, publisher_uris)
+        publisher_names = [
+            i['schema:name'] for i in publishers
+            if 'schema:name' in i]
+        publisher_names = list(ldq.values(
+            ldq.restrict_to_language(publisher_names, 'en')))
+
+        for n in publisher_names:
+            if (n in self.PUBLISHER_BLACKLIST
+                or 'Audio' in n or 'Video' in n or 'n Tape' in n):
+                # This book is from a publisher that will probably not
+                # give us metadata we can use.
+                return None
+
+        # Project Gutenberg texts don't have ISBNs, so if there's an
+        # ISBN on there, it's probably wrong. Unless someone stuck a
+        # description on there, there's no point in discussing
+        # OCLC+LD's view of a Project Gutenberg work.
+        if ('Project Gutenberg' in publisher_names and not descriptions):
+            return None
+
+        r = dict(
+            oclc_id_type=oclc_id_type,
+            oclc_id=oclc_id,
+            titles=titles,
+            descriptions=descriptions,
+            publishers=publisher_names,
+            publication_dates=publication_dates,
+            types=types,
+            isbns=isbns,
+        )
+        return r
 
     def graphs_for(self, work_identifier):
         data, cached = oclc_linked_data.lookup(work_identifier)

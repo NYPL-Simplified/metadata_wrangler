@@ -1995,7 +1995,7 @@ class CoverageProvider(object):
         failures = set([])
         while remaining:
             successes = 0
-            if len(failures) > self.workset_size:
+            if len(failures) >= self.workset_size:
                 raise Exception(
                     "Number of failures equals workset size, cannot continue.")
             workset = self.workrecords_that_need_coverage.limit(
@@ -2013,6 +2013,8 @@ class CoverageProvider(object):
                         work_record=record,
                         data_source=self.output_source,
                         create_method_kwargs = dict(date=datetime.datetime.utcnow()))
+                else:
+                    failures.add(record)
             # Commit this workset before moving on to the next one.
             print "Workset processed with %d successes, %d failures." % (
                 successes, len(failures))
