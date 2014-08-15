@@ -26,6 +26,7 @@ from model import (
     WorkIdentifier,
     WorkRecord,
     DataSource,
+    Resource,
     SubjectType,
 )
 from util import MetadataSimilarity
@@ -843,11 +844,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_isbns = 0
             print "%s (%s)" % (wr.title, oclc_work)
             for edition in self.info_for(oclc_work):
-                workrecord, isbns = self.process_edition(oclc_work, edition)
+                workrecord, isbns, descriptions = self.process_edition(oclc_work, edition)
                 if workrecord:
                     new_records += 1
                     new_isbns += len(isbns)
-                    print "", workrecord.publisher, len(isbns)
+                    print "", workrecord.publisher, len(isbns), len(descriptions)
             print "Total: %s edition records, %s ISBNs." % (
                 new_records, new_isbns)
         except IOError, e:
@@ -858,10 +859,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
-        longest_description = None
 
         # We should never need this title, but it's helpful
-        # for documenting the database.
+        # for documenting what's going on.
         title = None
         if edition['titles']:
             title = edition['titles'][0]
@@ -899,7 +899,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # redundant.
         if (len(new_isbns_for_this_oclc_number) == 0
             and not len(edition['descriptions'])):
-            return None, []
+            return None, [], []
 
         # Create a WorkRecord for OCLC+LD's view of this OCLC
         # number.
@@ -920,15 +920,20 @@ class LinkedDataCoverageProvider(CoverageProvider):
             oclc_number.equivalent_to(
                 self.oclc_linked_data, isbn_identifier)
 
-        # Associate every description with a 
+        # Create a description resource for every description.  When
+        # there's more than one description for a given edition, only
+        # one of them is actually a description. The others are tables
+        # of contents or some other stuff we don't need. Unfortunately
+        # I can't think of an automatic way to tell which is the good
+        # description.
+        description_resources = []
         for description in edition['descriptions']:
-            set_trace()
-            oclc_number.add_resource(
-                Resource.DESCRIPTION_REL, None, self.oclc_linked_data,
+            description_resource, new = oclc_number.add_resource(
+                Resource.DESCRIPTION, None, self.oclc_linked_data,
                 content=description)
+            description_resources.append(description_resource)
 
-            
-        return ld_wr, new_isbns_for_this_oclc_number
+        return ld_wr, new_isbns_for_this_oclc_number, description_resources
 
 
     def info_for(self, work_identifier):
@@ -976,7 +981,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # Something interesting has to come out of this
         # work--something we couldn't get from another source--or
         # there's no point.
-        if not isbns or descriptions:
+        if not isbns and not descriptions:
             return None
 
         publishers = OCLCLinkedData.internal_lookup(
@@ -989,7 +994,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         for n in publisher_names:
             if (n in self.PUBLISHER_BLACKLIST
-                or 'Audio' in n or 'Video' in n or 'n Tape' in n):
+                or 'Audio' in n or 'Video' in n or 'n Tape' in n
+                or 'Comic' in n):
                 # This book is from a publisher that will probably not
                 # give us metadata we can use.
                 return None

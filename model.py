@@ -446,11 +446,10 @@ class WorkIdentifier(Base):
             rel=rel,
             href=href,
             media_type=media_type,
+            content=content,
             create_method_kwargs=dict(
                 data_source=data_source,
                 license_pool=license_pool))
-        if content:
-            resource.set_content(content)
         return resource, new
 
 class Resource(Base):
@@ -1585,7 +1584,8 @@ class LicensePool(Base):
         return _db.query(LicensePool).outerjoin(Work).filter(
             Work.id==None).all()
 
-    def add_resource(self, rel, href, data_source, media_type=None):
+    def add_resource(self, rel, href, data_source, media_type=None,
+                     content=None):
         """Associate a Resource with this LicensePool.
 
         `rel`: The relationship between a LicensePool and the resource
@@ -1594,7 +1594,7 @@ class LicensePool(Base):
                       other end of the link.
         """
         return self.identifier.add_resource(
-            rel, href, data_source, self, media_type)
+            rel, href, data_source, self, media_type, content)
 
     def needs_update(self):
         """Is it time to update the circulation info for this license pool?"""
