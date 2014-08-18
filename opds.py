@@ -52,8 +52,8 @@ class URLRewriter(object):
 
     epub_id = re.compile("/([0-9]+)")
 
-    GUTENBERG_MIRROR_HOST = "http://gutenberg.10.128.36.172.xip.io/"
-    GENERATED_COVER_HOST = "http://covers.10.128.36.172.xip.io/"
+    GUTENBERG_MIRROR_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
+    GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
 
     @classmethod
     def rewrite(cls, url):
@@ -76,7 +76,7 @@ class URLRewriter(object):
             new_path = new_path % dict(pub_id=text_id)
         else:
             new_path = parsed_path
-        return urljoin(cls.GUTENBERG_MIRROR_HOST, new_path)
+        return cls.GUTENBERG_MIRROR_HOST + '/' + new_path
 
 
 class AtomFeed(object):
@@ -201,9 +201,8 @@ class AcquisitionFeed(OPDSFeed):
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
-            url = urljoin(
-                host, urllib.quote(
-                    "/Gutenberg ID/%s.png" % identifier.identifier))
+            url = host + urllib.quote(
+                    "/Gutenberg ID/%s.png" % identifier.identifier)
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
 
         tag = "tag:work:%s" % work.id
