@@ -444,9 +444,9 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
     def process_work_record(self, book):
         title, author = self.title_and_author(book)
-        languages = book.languages
+        language = book.language
 
-        print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, languages)
+        print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, language)
         # Perform a title/author lookup
         xml = self.oclc.lookup_by(title=title, author=author)
 
@@ -456,7 +456,9 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # even import that record. Restrictions on title and
         # author will be applied statistically, when we calculate
         # works.
-        restrictions = dict(languages=languages)
+        restrictions = dict(language=language,
+                            title=title,
+                            authors=book.authors)
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = OCLCXMLParser.parse(
@@ -498,8 +500,6 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         ]
         gutenberg_names = set([x.name for x in book.authors])
         for r in records:
-            book.primary_identifier.equivalent_to(
-                self.output_source, r.primary_identifier)
             if gutenberg_authors_to_merge:
                 oclc_names = set([x.name for x in r.authors])
                 if gutenberg_names == oclc_names:
@@ -507,7 +507,6 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                     # for a book written by exactly the same
                     # people as the Gutenberg book. Merge each
                     # Gutenberg author into its OCLC equivalent.
-                    print oclc_names, gutenberg_names
                     for gutenberg_author in gutenberg_authors_to_merge:
                         oclc_authors = [x for x in r.authors 
                                         if x.name==gutenberg_author.name]
@@ -517,6 +516,13 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                                 gutenberg_author.merge_into(oclc_author)
                                 gutenberg_authors_to_merge.remove(
                                     gutenberg_author)
+
+            # Now that we've (perhaps) merged authors, calculate the
+            # similarity between the two records.
+            strength = book.similarity_to(r)
+            if strength > 0:
+                book.primary_identifier.equivalent_to(
+                    self.output_source, r.primary_identifier, strength)
 
         print " Created %s records(s)." % len(records)
         return True

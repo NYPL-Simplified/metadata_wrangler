@@ -672,3 +672,11 @@ class MetadataSimilarity(object):
         are present in both sets?
         """
         return cls._proportion(set(authors1), set(authors2))
+
+    @classmethod
+    def author_name_similarity(cls, authors1, authors2):
+        """What percentage of the total number of authors in the two sets
+        are present in both sets?
+        """
+        return cls._proportion(
+            set([x.name for x in authors1]), set([x.name for x in authors2]))

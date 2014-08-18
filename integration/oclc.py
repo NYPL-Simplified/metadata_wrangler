@@ -579,9 +579,9 @@ class OCLCXMLParser(XMLParser):
         authors_and_roles = cls.parse_author_string(
             _db, author_string, existing_authors)
         if 'language' in tag.keys():
-            languages = [tag.get('language')]
+            language = tag.get('language')
         else:
-            languages = None
+            language = None
 
         if title and 'title' in restrictions:
             must_resemble_title = restrictions['title']
@@ -596,34 +596,35 @@ class OCLCXMLParser(XMLParser):
             # works in an anthology. If there is no semicolon in the
             # original title, do not consider titles that contain
             # semicolons.
-            if (not ';' in must_resemble_title
-                and ';' in title and threshold > 0):
+            if (not ' ; ' in must_resemble_title
+                and ' ; ' in title and threshold > 0):
                 return None
 
         # Apply restrictions. If they're not met, return None.
-        if 'languages' in restrictions and languages:
+        if 'language' in restrictions and language:
             # We know which language this record is for. Match it
             # against the language used in the WorkRecord we're
             # matching against.
-            restrict_to_languages = set(restrictions['languages'])
-            if not restrict_to_languages.intersection(languages):
+            restrict_to_language = set(restrictions['language'])
+            if language != restrict_to_language:
                 # This record is for a book in a different language
                 return None
 
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
-            authors_per_se = [
-                a for a, roles in authors_and_roles if Contributor.AUTHOR_ROLE in roles
-            ]
+            authors_per_se = set([
+                a.name for a, roles in authors_and_roles if Contributor.AUTHOR_ROLE in roles
+            ])
             for restrict_to_author in restrict_to_authors:
-                if not restrict_to_author in authors_per_se:
+                if not restrict_to_author.name in authors_per_se:
                     # The given author did not show up as one of the
                     # per se 'authors' of this book. They may have had
                     # some other role in it, or the book may be about
                     # them, but this book is not *by* them.
                     return None
 
-        return title, authors_and_roles, languages
+        print "SUCCESS %s, %s, %s" % (title, authors_and_roles, language)
+        return title, authors_and_roles, language
 
     @classmethod
     def extract_work_record(cls, _db, work_tag, existing_authors, **restrictions):
@@ -648,7 +649,7 @@ class OCLCXMLParser(XMLParser):
             # This record did not meet one of the restrictions.
             return None, False
 
-        title, authors_and_roles, languages = result
+        title, authors_and_roles, language = result
 
 
         # Get the most popular Dewey and LCC classification for this
@@ -693,7 +694,7 @@ class OCLCXMLParser(XMLParser):
             primary_identifier=identifier,
             create_method_kwargs=dict(
                 title=title,
-                languages=languages,
+                language=language,
                 subjects=subjects,
                 extra=extra,
             )
@@ -725,7 +726,7 @@ class OCLCXMLParser(XMLParser):
             # This record did not meet one of the restrictions.
             return None, False
 
-        title, authors_and_roles, languages = result
+        title, authors_and_roles, language = result
 
         subjects = {}
         for subject_type, oclc_code in (
@@ -755,7 +756,7 @@ class OCLCXMLParser(XMLParser):
             primary_identifier=identifier,
             create_method_kwargs=dict(
                 title=title,
-                languages=languages,
+                language=language,
                 subjects=subjects,
                 extra=extra,
             )
@@ -875,13 +876,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if edition['titles']:
             title = edition['titles'][0]
 
-        # Identify the OCLC Number with the OCLC Work.
-        oclc_number, new = WorkIdentifier.for_foreign_id(
-            self.db, edition['oclc_id_type'],
-            edition['oclc_id'])
-        oclc_work.equivalent_to(
-            self.oclc_linked_data, oclc_number)
-
         # Try to find a publication year.
         publication_date = None
         for d in edition['publication_dates']:
@@ -891,6 +885,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     d[:4], "%Y")
             except Exception, e:
                 pass
+
+        oclc_number, new = WorkIdentifier.for_foreign_id(
+            self.db, edition['oclc_id_type'],
+            edition['oclc_id'])
 
         # Create new ISBNs associated with the OCLC
         # number. This will help us get metadata from other
@@ -922,6 +920,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 published=publication_date,
             )
         )
+
+        # Identify the OCLC Number with the OCLC Work.
+        set_trace()
+        oclc_work.equivalent_to(
+            self.oclc_linked_data, oclc_number)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.

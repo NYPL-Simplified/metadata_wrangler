@@ -813,7 +813,7 @@ class WorkRecord(Base):
     def __repr__(self):
         return (u"WorkRecord %s (%s/%s/%s)" % (
             self.id, self.title, ", ".join([x.name for x in self.contributors]),
-            ", ".join(self.languages))).encode("utf8")
+            self.language)).encode("utf8")
 
     @property
     def contributors(self):
@@ -1009,27 +1009,25 @@ class WorkRecord(Base):
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
-        if set(other_record.languages) == set(self.languages):
-            # The languages match perfectly.
+        if other_record.language == self.language:
+            # The books are in the same language. Hooray!
             language_factor = 1
-        elif self.languages and other_record.languages:
-            # Each record specifies a different set of languages. This
-            # is an immediate disqualification.
-            #
-            # TODO: edge case when one record's languages are a subset
-            # of the other's.
-            return 0
         else:
-            # One record specifies a language and one does not. This
-            # is a little tricky. We're going to apply a penalty, but
-            # since the majority of records we're getting from OCLC are in
-            # English, the penalty will be less if one of the
-            # languages is English. It's more likely that an unlabeled
-            # record is in English than that it's in some other language.
-            if 'eng' in self.languages or 'eng' in other_record.languages:
-                language_factor = 0.80
+            if other_record.language and self.language:
+                # Each record specifies a different set of languages. This
+                # is an immediate disqualification.
+                return 0
             else:
-                language_factor = 0.50
+                # One record specifies a language and one does not. This
+                # is a little tricky. We're going to apply a penalty, but
+                # since the majority of records we're getting from OCLC are in
+                # English, the penalty will be less if one of the
+                # languages is English. It's more likely that an unlabeled
+                # record is in English than that it's in some other language.
+                if self.language == 'eng' or other_record.language == 'eng':
+                    language_factor = 0.80
+                else:
+                    language_factor = 0.50
        
         title_quotient = MetadataSimilarity.title_similarity(
             self.title, other_record.title)
