@@ -253,6 +253,7 @@ class DataSource(Base):
                  (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
                  (cls.WEB, True, WorkIdentifier.URI, None),
+                 (cls.CONTENT_CAFE, False, None, None),
                  (cls.MANUAL, False, None, None),
         ):
 
@@ -862,6 +863,18 @@ class WorkRecord(Base):
         """All WorkIdentifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
         return self.primary_identifier.equivalent_identifier_ids(levels)
+
+    def equivalent_identifiers(self, levels=3, type=None):
+        """All WorkIdentifiers equivalent to this
+        WorkRecord's primary identifier, at the given level of recursion.
+        """
+        _db = Session.object_session(self)
+        identifier_ids = self.equivalent_identifier_ids(levels)
+        q = _db.query(WorkIdentifier).filter(
+            WorkIdentifier.id.in_(identifier_ids))
+        if type:
+            q = q.filter(WorkIdentifier.type==type)
+        return q
 
     def equivalent_work_records(self, levels=3):
         """All WorkRecords whose primary ID is equivalent to this WorkRecord's

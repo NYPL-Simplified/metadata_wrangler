@@ -8,6 +8,7 @@ from sqlalchemy.orm.exc import (
 
 import flask
 from flask import Flask, url_for, redirect, Response
+from jinja2 import Environment, PackageLoader
 
 from model import (
     get_one_or_create,
@@ -18,6 +19,7 @@ from model import (
     WorkIdentifier,
     Work,
     WorkFeed,
+    WorkRecord,
     )
 from lane import Lane, Unclassified
 from opensearch import OpenSearchDocument
@@ -35,6 +37,7 @@ from integration.millenium_patron import DummyMilleniumPatronAPI as authenticato
 auth = authenticator()
 
 db = production_session()
+templates = Environment(loader=PackageLoader("templates", "."))
 app = Flask(__name__)
 app.config['DEBUG'] = True
 app.debug = True
@@ -255,6 +258,16 @@ def checkout(data_source, identifier):
 
     best_pool.loan_to(flask.request.patron)
     return redirect(URLRewriter.rewrite(best_link.href))
+
+@app.route('/gutenberg_tree/<gutenberg_id>')
+def gutenberg_tree(gutenberg_id):
+    source = DataSource.lookup(db, DataSource.GUTENBERG)
+    wr = WorkRecord.for_foreign_id(
+        db, source,
+        WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
+    work = wr.work
+    template = templates.get_template('work_dump.html')
+    return template.render(work=work)
 
 print __name__
 if __name__ == '__main__':
