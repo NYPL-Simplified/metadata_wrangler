@@ -302,7 +302,14 @@ class Equivalency(Base):
     input = relationship("WorkIdentifier", foreign_keys=input_id)
     output_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
     output = relationship("WorkIdentifier", foreign_keys=output_id)
+
+    # Who says?
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    # How strong is this assertion (-1..1)? A negative number is an
+    # assertion that the two WorkIdentifiers do *not* identify the
+    # same work.
+    strength = Column(Float, index=True)
 
     @classmethod
     def for_identifiers(self, _db, workidentifiers):
@@ -391,17 +398,19 @@ class WorkIdentifier(Base):
         else:
             return result, False
 
-    def equivalent_to(self, data_source, work_identifier):
+    def equivalent_to(self, data_source, work_identifier, strength):
         """Make one WorkIdentifier equivalent to another.
         
         `data_source` is the DataSource that believes the two 
         identifiers are equivalent.
         """
         _db = Session.object_session(self)
-        eq, new = get_one_or_create(_db, Equivalency,
-                                    data_source=data_source,
-                                    input=self,
-                                    output=work_identifier)
+        eq, new = get_one_or_create(
+            _db, Equivalency,
+            data_source=data_source,
+            input=self,
+            output=work_identifier,
+            create_method_kwargs=dict(strength=strength))
         return eq
 
     @classmethod
@@ -450,6 +459,8 @@ class WorkIdentifier(Base):
             create_method_kwargs=dict(
                 data_source=data_source,
                 license_pool=license_pool))
+        if content:
+            resource.set_content(content, media_type)
         return resource, new
 
 class Resource(Base):
@@ -541,6 +552,7 @@ class Resource(Base):
 
     def set_content(self, content, media_type):
         """Store the content directly in the database."""
+        self.content = content
         self.mirrored = True
         self.mirror_status = 200
         self.media_type = media_type
@@ -783,9 +795,8 @@ class WorkRecord(Base):
     contributions = relationship("Contribution", backref="workrecord")
 
     subjects = Column(JSON, default=[])
-    summary = Column(MutableDict.as_mutable(JSON), default={})
 
-    languages = Column(JSON, default=[])
+    language = Column(Unicode, index=True)
     publisher = Column(Unicode)
     imprint = Column(Unicode)
 
@@ -796,7 +807,6 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
-    links = Column(MutableDict.as_mutable(JSON), default={})
     extra = Column(MutableDict.as_mutable(JSON), default={})
     
     def __repr__(self):

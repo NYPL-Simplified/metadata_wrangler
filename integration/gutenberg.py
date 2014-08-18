@@ -295,7 +295,6 @@ class GutenbergRDFExtractor(object):
         issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT).date()
 
         summary = cls._value(g, (uri, cls.dcterms.description, None))
-        summary = WorkRecord._content(summary)
         
         publisher = cls._value(g, (uri, cls.dcterms.publisher, None))
 
@@ -306,6 +305,11 @@ class GutenbergRDFExtractor(object):
             code = LanguageCodes.two_to_three[code]
             if code:
                 languages.append(code)
+
+        if 'eng' in languages:
+            language = 'eng'
+        else:
+            language = languages[0]
        
         subjects = dict()
         subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
@@ -333,14 +337,20 @@ class GutenbergRDFExtractor(object):
                 title=title,
                 subtitle=subtitle,
                 issued=issued,
-                summary=summary,
                 publisher=publisher,
-                languages=languages,
+                language=language,
                 subjects=subjects,
             ),
             data_source=source,
             primary_identifier=identifier,
         )
+
+        # If there is a description, turn it into a Resource.
+        identifier = book.primary_identifier
+        if summary:
+            rel = Resource.DESCRIPTION
+            identifier.add_resource(
+                rel, None, source, media_type="text/plain", content=summary)
 
         # Turn the Gutenberg download links into Resources associated 
         # with the new WorkRecord. They will serve either as open access
@@ -349,7 +359,8 @@ class GutenbergRDFExtractor(object):
         for href in download_links:
             for format_uri in cls._values(
                     g, (href, cls.dcterms['format'], None)):
-                media_type = cls._value(g, (format_uri, cls.rdf.value, None))
+                media_type = unicode(
+                    cls._value(g, (format_uri, cls.rdf.value, None)))
                 rel = Resource.OPEN_ACCESS_DOWNLOAD
                 if media_type.startswith('image/'):
                     if '.medium.' in href:
@@ -359,8 +370,10 @@ class GutenbergRDFExtractor(object):
                         # make our own.
                         rel = None
                 if rel:
-                    book.add_resource(rel, href, source, media_type)
-                book.add_resource(Resource.CANONICAL, uri, source)
+                    identifier.add_resource(
+                        rel, unicode(href), source, media_type=media_type)
+                identifier.add_resource(
+                    Resource.CANONICAL, unicode(uri), source)
 
         # Associate the appropriate contributors with the book.
         for contributor in contributors:
