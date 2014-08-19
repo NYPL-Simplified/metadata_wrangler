@@ -22,6 +22,7 @@ from integration import FilesystemCache
 from model import (
     Contributor,
     CoverageProvider,
+    get_one,
     get_one_or_create,
     WorkIdentifier,
     WorkRecord,
@@ -177,11 +178,12 @@ class OCLCLinkedData(object):
         titles = []
         descriptions = []
         publisher_uris = []
+        creator_uris = []
         publication_dates = []
         example_uris = []
 
-        no_value = (None, None, titles, descriptions, publisher_uris,
-                    publication_dates, example_uris)
+        no_value = (None, None, titles, descriptions, creator_uris,
+                    publisher_uris, publication_dates, example_uris)
 
         if not book:
             return no_value
@@ -206,13 +208,14 @@ class OCLCLinkedData(object):
                 ('schema:name', titles),
                 ('schema:datePublished', publication_dates),
                 ('workExample', example_uris),
-                ('publisher', publisher_uris)
+                ('publisher', publisher_uris),
+                ('creator', creator_uris),
         ):
             values = book.get(k, [])
             repository.extend(ldq.values(
                 ldq.restrict_to_language(values, 'en')))
 
-        return (id_type, id, titles, descriptions, publisher_uris,
+        return (id_type, id, titles, descriptions, creator_uris, publisher_uris,
                 publication_dates, example_uris)
 
     @classmethod
@@ -623,7 +626,9 @@ class OCLCXMLParser(XMLParser):
                     # them, but this book is not *by* them.
                     return None
 
-        print "SUCCESS %s, %s, %s" % (title, authors_and_roles, language)
+        author_names = ", ".join([x.name for x, y in authors_and_roles])
+
+        print u"SUCCESS %s, %r, %s" % (title, author_names, language)
         return title, authors_and_roles, language
 
     @classmethod
@@ -852,15 +857,18 @@ class LinkedDataCoverageProvider(CoverageProvider):
             oclc_work = wr.primary_identifier
             new_records = 0
             new_isbns = 0
-            print "%s (%s)" % (wr.title, oclc_work)
+            new_descriptions = 0
+            print u"%s (%s)" % (wr.title, repr(oclc_work).decode("utf8"))
             for edition in self.info_for(oclc_work):
                 workrecord, isbns, descriptions = self.process_edition(oclc_work, edition)
                 if workrecord:
                     new_records += 1
-                    new_isbns += len(isbns)
                     print "", workrecord.publisher, len(isbns), len(descriptions)
-            print "Total: %s edition records, %s ISBNs." % (
-                new_records, new_isbns)
+                new_isbns += len(isbns)
+                new_descriptions += len(descriptions)
+
+            print "Total: %s edition records, %s ISBNs, %s descriptions." % (
+                new_records, new_isbns, new_descriptions)
         except IOError, e:
             return False
         return True
@@ -910,27 +918,50 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         # Create a WorkRecord for OCLC+LD's view of this OCLC
         # number.
-        ld_wr, new = get_one_or_create(
-            self.db, WorkRecord,
-            data_source=self.oclc_linked_data,
-            primary_identifier=oclc_number,
-            create_method_kwargs = dict(
-                title=title,
-                publisher=publisher,
-                published=publication_date,
-            )
-        )
+        #
+        # n.b. we don't really need to do this. It clutters up
+        # the database and the only semi-useful piece of information
+        # kept here is the publisher.
+        #
+        #ld_wr, new = get_one_or_create(
+        #    self.db, WorkRecord,
+        #    data_source=self.oclc_linked_data,
+        #    primary_identifier=oclc_number,
+        #    create_method_kwargs = dict(
+        #        title=title,
+        #        publisher=publisher,
+        #        published=publication_date,
+        #    )
+        #)
 
         # Identify the OCLC Number with the OCLC Work.
-        set_trace()
+        w = oclc_work.primarily_identifies
+        if w:
+            # How similar is the title of the edition to the title of
+            # the work, and how much overlap is there between the
+            # listed authors?
+            oclc_work_record = w[0]
+            if title:
+                title_strength = MetadataSimilarity.title_similarity(
+                    title, oclc_work_record.title)
+            else:
+                title_strength = 0
+            oclc_work_viafs = set([c.viaf for c in oclc_work_record.contributors
+                                   if c.viaf])
+            author_strength = MetadataSimilarity._proportion(
+                oclc_work_viafs, set(edition['creator_viafs']))
+            strength = (title_strength * 0.8) + (author_strength * 0.2)
+        else:
+            strength = 1
+
         oclc_work.equivalent_to(
-            self.oclc_linked_data, oclc_number)
+            self.oclc_linked_data, oclc_number, strength)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
         for isbn_identifier in new_isbns_for_this_oclc_number:
             oclc_number.equivalent_to(
-                self.oclc_linked_data, isbn_identifier)
+                self.oclc_linked_data, isbn_identifier, 1)
 
         # Create a description resource for every description.  When
         # there's more than one description for a given edition, only
@@ -945,6 +976,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 content=description)
             description_resources.append(description_resource)
 
+        ld_wr = None
         return ld_wr, new_isbns_for_this_oclc_number, description_resources
 
 
@@ -975,6 +1007,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
          oclc_id,
          titles,
          descriptions,
+         creator_uris,
          publisher_uris,
          publication_dates,
          example_uris) = OCLCLinkedData.extract_useful_data(book)
@@ -1019,11 +1052,19 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if ('Project Gutenberg' in publisher_names and not descriptions):
             return None
 
+        creator_viafs = []
+        for uri in creator_uris:
+            if not uri.startswith("http://viaf.org"):
+                continue
+            viaf = uri[uri.rindex('/')+1:]
+            creator_viafs.append(viaf)
+
         r = dict(
             oclc_id_type=oclc_id_type,
             oclc_id=oclc_id,
             titles=titles,
             descriptions=descriptions,
+            creator_viafs=creator_viafs,
             publishers=publisher_names,
             publication_dates=publication_dates,
             types=types,

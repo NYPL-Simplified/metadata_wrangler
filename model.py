@@ -1,3 +1,4 @@
+# encoding: utf-8
 from collections import (
     Counter,
     defaultdict,
@@ -127,7 +128,7 @@ def get_one_or_create(db, model, create_method='',
         return one, False
     else:
         try:
-            create(model, create_method, create_method_kwargs, **kwargs)
+            return create(db, model, create_method, create_method_kwargs, **kwargs)
         except IntegrityError:
             db.rollback()
             return db.query(model).filter_by(**kwargs).one(), False
@@ -218,7 +219,6 @@ class DataSource(Base):
     name = Column(String, unique=True, index=True)
     offers_licenses = Column(Boolean, default=False)
     primary_identifier_type = Column(String, index=True)
-    supports_multiple_equivalencies = Column(Boolean, default=False)
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     # One DataSource can generate many WorkRecords.
@@ -250,19 +250,17 @@ class DataSource(Base):
     def well_known_sources(cls, _db):
         """Make sure all the well-known sources exist."""
 
-        for (name, offers_licenses, supports_multiple_equivalencies,
-             primary_identifier_type, refresh_rate) in (
-                 (cls.GUTENBERG, True, False,
-                  WorkIdentifier.GUTENBERG_ID, None),
-                 (cls.OVERDRIVE, True, False, WorkIdentifier.OVERDRIVE_ID, 0),
-                 (cls.THREEM, True, False, WorkIdentifier.THREEM_ID, 60*60*6),
-                 (cls.AXIS_360, True, False, WorkIdentifier.AXIS_360_ID, 0),
-                 (cls.OCLC_LINKED_DATA, False, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OCLC, False, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OPEN_LIBRARY, False, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
-                 (cls.WEB, True, True, WorkIdentifier.URI, None),
-                 (cls.CONTENT_CAFE, False, False, None, None),
-                 (cls.MANUAL, False, True, None, None),
+        for (name, offers_licenses, primary_identifier_type, refresh_rate) in (
+                 (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
+                 (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
+                 (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
+                 (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
+                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
+                 (cls.WEB, True, WorkIdentifier.URI, None),
+                 (cls.CONTENT_CAFE, False, None, None),
+                 (cls.MANUAL, False, None, None),
         ):
 
             extra = dict()
@@ -274,7 +272,6 @@ class DataSource(Base):
                 name=name,
                 create_method_kwargs=dict(
                     offers_licenses=offers_licenses,
-                    supports_multiple_equivalencies=supports_multiple_equivalencies,
                     primary_identifier_type=primary_identifier_type,
                     extra=extra,
                 )
@@ -301,7 +298,8 @@ class CoverageRecord(Base):
 class Equivalency(Base):
     """An assertion that two WorkIdentifiers identify the same work.
 
-    We do not necessarily trust this assertion.
+    This assertion comes with a 'strength' which represents how confident
+    the data source is in the assertion.
     """
     __tablename__ = 'equivalents'
 
@@ -316,24 +314,38 @@ class Equivalency(Base):
     # Who says?
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
 
+    # How many distinct votes went into this assertion? This will let
+    # us scale the change to the strength when additional votes come
+    # in.
+    votes = Column(Integer, default=1)
+
     # How strong is this assertion (-1..1)? A negative number is an
     # assertion that the two WorkIdentifiers do *not* identify the
     # same work.
     strength = Column(Float, index=True)
 
+    def __repr__(self):
+        r = u"[%s ->\n %s\n source=%s strength=%.2f votes=%d)]" % (
+            repr(self.input).decode("utf8"),
+            repr(self.output).decode("utf8"),
+            self.data_source.name, self.strength, self.votes
+        )
+        return r.encode("utf8")
+
     @classmethod
-    def for_identifiers(self, _db, workidentifiers):
+    def for_identifiers(self, _db, workidentifiers, exclude_ids=None):
         """Find all Equivalencies for the given WorkIdentifiers."""
         if not workidentifiers:
             return []
         if isinstance(workidentifiers[0], WorkIdentifier):
             workidentifiers = [x.id for x in workidentifiers]
-        return _db.query(Equivalency).distinct().filter(
+        q = _db.query(Equivalency).distinct().filter(
             or_(Equivalency.input_id.in_(workidentifiers),
                 Equivalency.output_id.in_(workidentifiers))
-
-)
-
+        )
+        if exclude_ids:
+            q = q.filter(~Equivalency.id.in_(exclude_ids))
+        return q
 
 class WorkIdentifier(Base):
     """A way of uniquely referring to a particular text.
@@ -367,7 +379,13 @@ class WorkIdentifier(Base):
     )
 
     def __repr__(self):
-        return (u"%s: %s/%s" % (self.id, self.type, self.identifier))
+        records = self.primarily_identifies
+        if records and records[0].title:
+            title = u' wr="%s"' % records[0].title
+        else:
+            title = ""
+        return (u"%s/%s ID=%s%s" % (self.type, self.identifier, self.id,
+                                    title)).encode("utf8")
 
     # One WorkIdentifier may serve as the primary identifier for
     # several WorkRecords.
@@ -414,18 +432,8 @@ class WorkIdentifier(Base):
         `data_source` is the DataSource that believes the two 
         identifiers are equivalent.
         """
-        if data_source.supports_multiple_equivalencies:
-            # It's okay to have multiple Equivalency objects for this
-            # WorkIdentifier from this data source. (e.g. humans'
-            # opinions)
-            m = create
-        else:
-            # There can only be one Equivalency object for this
-            # WorkIdentifier from this data source. (e.g. OCLC
-            # Classify)
-            m = get_one_or_create
         _db = Session.object_session(self)
-        eq, new = m(
+        eq, new = get_one_or_create(
             _db, Equivalency,
             data_source=data_source,
             input=self,
@@ -435,65 +443,106 @@ class WorkIdentifier(Base):
 
     @classmethod
     def recursively_equivalent_identifier_ids(
-            self, _db, identifier_ids, levels=3, threshold=0.5):
+            self, _db, identifier_ids, levels=5, threshold=0.50):
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
         IDs at the given confidence threshold.
 
         This is an inefficient but simple implementation, performing
         one SQL query for each level of recursion.
+
+        Four levels is enough to go from a Gutenberg text to an ISBN.
+        Gutenberg ID -> OCLC Work IS -> OCLC Number -> ISBN
         """
 
         precursors = defaultdict(list)
+        successors = defaultdict(list)
 
-        all_equivalencies = []
-        already_checked_ids = set([])
+        seen_equivalency_ids = set([])
         this_round_ids = identifier_ids
+        already_checked_ids = set()
         for distance in range(levels):
             next_round_ids = []
-            equivalencies = Equivalency.for_identifiers(_db, this_round_ids)
+            already_checked_ids = already_checked_ids.union(this_round_ids)
+            equivalencies = Equivalency.for_identifiers(
+                _db, this_round_ids, seen_equivalency_ids)
             for e in equivalencies:
-                all_equivalencies.append(e)
+                seen_equivalency_ids.add(e.id)
+
+                # Signal strength decreases monotonically, so
+                # if it dips below the threshold, we can
+                # ignore it from this point on.
 
                 # I -> O becomes "I is a precursor of O with distance
-                # 1 and strength equal to the strength between I and
-                # O."
-                precursors[x.output_id].append((x.input_id, 1, e.strength))
+                # equal to the I->O strength."
+                if e.strength > threshold:
+                    # print "Strong signal: %r" % e
+                    precursors[e.output_id].append((e.input_id, e.strength))
+                    successors[e.input_id].append((e.output_id, e.strength))
+                else:
+                    #print "Ignoring signal below threshold: %r" % e
+                    pass
 
                 # A -> ... -> I -> O becomes "A is a precursor of O
-                # with distance n and strength equal to (n-1)/n of the
-                # A -> I strength and 1/n of the I -> O strength."
-                for (precursor_id, distance, precursor_strength) in precursors[x.input_id]:
+                # with strength equal to the A->I strength times the
+                # I->O strength."
+                for (precursor_id, precursor_strength) in precursors[e.input_id]:
+                    total_strength = precursor_strength * e.strength
+                    if total_strength >= threshold:
+                        precursors[e.output_id].append(
+                            (precursor_id, total_strength))
+                        successors[precursor_id].append(
+                            (e.output_id, total_strength))
+                        # print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
+                    else:
+                        #print "Not confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
+                        pass
 
-                    total_strength = strength + ((distance-1) * precursor_strength)
-                    average_strength = float(total_strength) / distance
-                    precursors[x.output_id].append(
-                        (precursor_id, distance+1, average_strength))
-
-                if x.output_id not in already_checked_ids:
+                if e.output_id not in already_checked_ids:
                     # This is our first time encountering the output
                     # ID of this Equivalency. We will use it as an
                     # input ID in the next round.
-                    next_round_ids.append(x.output_id)
-                    already_checked_ids.add(x.output_id)
+                    next_round_ids.append(e.output_id)
             if not next_round_ids:
                 # We have achieved transitive closure. There
                 # are no more IDs to check.
                 break
+            #print "Finished round: %r" % this_round_ids
+            #print "Next round: %r" % next_round_ids
+            this_round_ids = next_round_ids
 
-        set_trace()
-        # Now that we have a list of equivalencies, we can 
-        multiplied_out = defaultdict(list)
-        for e in equivalencies:
-            connections[e.output_id]
-            connections[e.input_id]
-            
-            
-        return total_set
+        # Now that we have a list of successor signals for each
+        # identifier ID, we can calculate the average strength of the
+        # signal.
+        equivalents = defaultdict(dict)
+        for id in identifier_ids:
+            # Each ID is equivalent to itself.
+            equivalents[id][id] = (1, 1000000)
+            for successor, strength in successors[id]:
+                if successor in equivalents[id]:
+                    existing_strength, num_votes = equivalents[id][successor]
+                else:
+                    existing_strength = 0.0
+                    num_votes = 0
+                total_strength = (existing_strength * num_votes) + strength
+                num_votes += 1
+                new_strength = total_strength / num_votes
+                equivalents[id][successor] = (new_strength, num_votes)
+                for precursor, precursor_strength in precursors[successor]:
+                    if precursor in equivalents[id]:
+                        existing_strength, num_votes = equivalents[id][precursor]
+                    else:
+                        existing_strength = 0.0
+                        num_votes = 0
+                    total_strength = (existing_strength * num_votes) + precursor_strength
+                    num_votes += 1
+                    new_strength = total_strength / num_votes
+                    equivalents[id][precursor] = (new_strength, num_votes)
+        return equivalents
 
-    def equivalent_identifier_ids(self, levels=3):
+    def equivalent_identifier_ids(self, levels=5):
         _db = Session.object_session(self)
         return WorkIdentifier.recursively_equivalent_identifier_ids(
-            _db, [self.id], levels)
+            _db, [self.id], levels)[self.id].keys()
 
     def add_resource(self, rel, href, data_source, license_pool=None,
                      media_type=None, content=None):
@@ -934,9 +983,12 @@ class WorkRecord(Base):
             q = q.filter(WorkIdentifier.type==type)
         return q
 
-    def equivalent_work_records(self, levels=3):
+    def equivalent_work_records(self, levels=5):
         """All WorkRecords whose primary ID is equivalent to this WorkRecord's
         primary ID, at the given level of recursion.
+
+        Five levels is enough to go from a Gutenberg ID to an Overdrive ID
+        (Gutenberg ID -> OCLC Work ID -> OCLC Number -> ISBN -> Overdrive ID)
         """
         _db = Session.object_session(self)
         identifier_ids = self.equivalent_identifier_ids(levels)
@@ -1147,7 +1199,7 @@ class Work(Base):
 
     title = Column(Unicode)
     authors = Column(Unicode, index=True)
-    languages = Column(Unicode, index=True)
+    language = Column(Unicode, index=True)
     description = Column(Unicode, index=True)
     audience = Column(Unicode, index=True)
     subjects = Column(MutableDict.as_mutable(JSON), default={})
@@ -1160,7 +1212,7 @@ class Work(Base):
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.authors, self.lane, self.languages,
+            self.id, self.title, self.authors, self.lane, self.language,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
     @classmethod
@@ -1172,12 +1224,13 @@ class Work(Base):
         """
         if isinstance(lane, Lane):
             lane = lane.name
-        if not isinstance(languages, list):
+
+        if isisntance(languages, basestring):
             languages = [languages]
 
         k = "%" + query + "%"
         q = _db.query(Work).filter(
-            Work.languages.in_(languages),
+            Work.language.in_(languages),
             or_(Work.title.ilike(k),
                 Work.authors.ilike(k)))
         
@@ -1207,7 +1260,7 @@ class Work(Base):
             remaining = target_size - len(results)
             # TODO: If the work has multiple languages, in_ will not work.
             query = _db.query(Work).filter(
-                Work.languages.in_(languages),
+                Work.language.in_(languages),
                 Work.lane==lane,
                 Work.quality >= quality_min,
                 Work.was_merged_into == None,
@@ -1247,12 +1300,11 @@ class Work(Base):
         return q
 
     @property
-    def language(self):
+    def language_code(self):
         """A single 2-letter language code for display purposes."""
-        if not self.languages:
+        if not self.language:
             return None
-        languages = [x.strip() for x in self.languages.split(",")]
-        language = languages[0]
+        language = self.language
         if language in LanguageCodes.three_to_two:
             language = LanguageCodes.three_to_two[language]
         return language
@@ -1277,8 +1329,8 @@ class Work(Base):
         other_authors = Counter()
         total_other_authors = 0
         for record in self.work_records:
-            if record.languages:
-                my_languages[tuple(record.languages)] += 1
+            if record.language:
+                my_languages[record.language] += 1
                 total_my_languages += 1
             my_titles.append(record.title)
             for author in record.authors:
@@ -1291,8 +1343,8 @@ class Work(Base):
             other_work_records = [other_work]
 
         for record in other_work_records:
-            if record.languages:
-                other_languages[tuple(record.languages)] += 1
+            if record.language:
+                other_languages[record.languages] += 1
                 total_other_languages += 1
             other_titles.append(record.title)
             for author in record.authors:
@@ -1396,9 +1448,8 @@ class Work(Base):
                 usable_titles.add(wr.title)
             for a in wr.contributors:
                 author_counter[a] += 1
-            if wr.languages:
-                for l in tuple(wr.languages):
-                    language_counter[l] += 1
+            if wr.language:
+                language_counter[wr.language] += 1
 
         # Now go through every work record, whether associated with
         # a license pool or not.
@@ -1420,25 +1471,25 @@ class Work(Base):
                     full = resource.href
                     image_links[full] += 1
 
-            if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
-                # This is great news. We can almost certainly get a
-                # wealth of information about this work from OCLC
-                # Linked Data.
-                data, cached = oclc_linked_data.lookup(wr.primary_identifier)
-                graph = oclc_linked_data.graph(data)
-                titles, descriptions, authors, subjects = (
-                    oclc_linked_data.extract_useful_data(graph))
-                work_records_with_descriptions += 1
-                total_descriptions += len(descriptions)
-                for title in titles:
-                    if title in usable_titles:
-                        title_counter[title] += 1
+            # if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
+            #     # This is great news. We can almost certainly get a
+            #     # wealth of information about this work from OCLC
+            #     # Linked Data.
+            #     data, cached = oclc_linked_data.lookup(wr.primary_identifier)
+            #     graph = oclc_linked_data.graph(data)
+            #     titles, descriptions, authors, subjects = (
+            #         oclc_linked_data.extract_useful_data(graph))
+            #     work_records_with_descriptions += 1
+            #     total_descriptions += len(descriptions)
+            #     for title in titles:
+            #         if title in usable_titles:
+            #             title_counter[title] += 1
 
-                for description in descriptions:
-                    description_evaluator.add(description)
-                    total_descriptions += 1
+            #     for description in descriptions:
+            #         description_evaluator.add(description)
+            #         total_descriptions += 1
 
-                # Don't do anything with authors or subjects for now.
+            #     # Don't do anything with authors or subjects for now.
 
         average_descriptions = 0
         if work_records_with_descriptions:
@@ -1464,7 +1515,7 @@ class Work(Base):
         if titles:
             self.title = titles.most_common(1)[0][0]
         if languages:
-            self.languages = languages.most_common(1)[0][0]
+            self.language = languages.most_common(1)[0][0]
         if authors:
             self.authors = authors.most_common(1)[0][0].name
 
@@ -1500,7 +1551,7 @@ class Work(Base):
         if True:
             t = u"%s (by %s)" % (self.title, self.authors)
             print t.encode("utf8")
-            print " language=%s" % self.languages
+            print " language=%s" % self.language
             print " quality=%s" % self.quality
             print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
                 dict(lane=self.lane, fiction=self.fiction,
@@ -1796,11 +1847,11 @@ class LicensePool(Base):
                 l.append(r)
         return claimed_records_by_work, unclaimed_records
 
-    def calculate_work(self, record_similarity_threshold=0.8,
-                       work_similarity_threshold=0.8):
+    def calculate_work(self, record_similarity_threshold=0.2,
+                       work_similarity_threshold=0.2):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record()
-        self.languages = primary_work_record.languages
+        self.language = primary_work_record.language
         if primary_work_record.work is not None:
             # That was a freebie.
             print "ALREADY CLAIMED: %s by %s" % (
@@ -1814,7 +1865,6 @@ class LicensePool(Base):
         # unclaimed.
         claimed, unclaimed = self.potential_works(
             record_similarity_threshold)
-
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
@@ -1830,13 +1880,12 @@ class LicensePool(Base):
         # better choices for this LicensePool than creating a new
         # Work. In fact, there's a good chance they are all the same
         # Work, and should be merged.
-        my_languages = set(self.languages)
         more_popular_choices = [
             (work, len(records))
             for work, records in claimed.items()
             if len(records) > len(unclaimed)
-            and work.languages
-            and set(work.languages) == my_languages
+            and work.language
+            and work.language == self.language
             and work.similarity_to(primary_work_record) >= work_similarity_threshold
         ]
         for work, records in claimed.items():

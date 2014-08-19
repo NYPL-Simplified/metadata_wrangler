@@ -267,7 +267,7 @@ def gutenberg_tree(gutenberg_id):
         WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
     work = wr.work
     template = templates.get_template('work_dump.html')
-    return template.render(work=work)
+    return template.render(work=work, len=len)
 
 print __name__
 if __name__ == '__main__':
