@@ -435,30 +435,59 @@ class WorkIdentifier(Base):
 
     @classmethod
     def recursively_equivalent_identifier_ids(
-            self, _db, identifiers, levels=3, threshold=0.5):
+            self, _db, identifier_ids, levels=3, threshold=0.5):
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
         IDs at the given confidence threshold.
 
         This is an inefficient but simple implementation, performing
         one SQL query for each level of recursion.
         """
-        total_set = identifiers
-        last_round = total_set
-        for i in range(levels):
-            this_round = []
-            equivalencies = Equivalency.for_identifiers(_db, last_round)
-            for x in equivalencies:
-                if x.output_id not in already_seen:
-                    this_round.append(x.output_id)
-                    already_seen.add(x.output_id)
-                if x.input_id not in already_seen:
-                    this_round.append(x.input_id)
-                    already_seen.add(x.input_id)
-            total_set += this_round
-            last_round = this_round
-            if not this_round:
-                # We have achieved transitive closure.
+
+        precursors = defaultdict(list)
+
+        all_equivalencies = []
+        already_checked_ids = set([])
+        this_round_ids = identifier_ids
+        for distance in range(levels):
+            next_round_ids = []
+            equivalencies = Equivalency.for_identifiers(_db, this_round_ids)
+            for e in equivalencies:
+                all_equivalencies.append(e)
+
+                # I -> O becomes "I is a precursor of O with distance
+                # 1 and strength equal to the strength between I and
+                # O."
+                precursors[x.output_id].append((x.input_id, 1, e.strength))
+
+                # A -> ... -> I -> O becomes "A is a precursor of O
+                # with distance n and strength equal to (n-1)/n of the
+                # A -> I strength and 1/n of the I -> O strength."
+                for (precursor_id, distance, precursor_strength) in precursors[x.input_id]:
+
+                    total_strength = strength + ((distance-1) * precursor_strength)
+                    average_strength = float(total_strength) / distance
+                    precursors[x.output_id].append(
+                        (precursor_id, distance+1, average_strength))
+
+                if x.output_id not in already_checked_ids:
+                    # This is our first time encountering the output
+                    # ID of this Equivalency. We will use it as an
+                    # input ID in the next round.
+                    next_round_ids.append(x.output_id)
+                    already_checked_ids.add(x.output_id)
+            if not next_round_ids:
+                # We have achieved transitive closure. There
+                # are no more IDs to check.
                 break
+
+        set_trace()
+        # Now that we have a list of equivalencies, we can 
+        multiplied_out = defaultdict(list)
+        for e in equivalencies:
+            connections[e.output_id]
+            connections[e.input_id]
+            
+            
         return total_set
 
     def equivalent_identifier_ids(self, levels=3):
