@@ -274,7 +274,7 @@ class DataSource(Base):
                 name=name,
                 create_method_kwargs=dict(
                     offers_licenses=offers_licenses,
-                    supports_multiple_equivalencies=(name==
+                    supports_multiple_equivalencies=supports_multiple_equivalencies,
                     primary_identifier_type=primary_identifier_type,
                     extra=extra,
                 )
@@ -434,9 +434,10 @@ class WorkIdentifier(Base):
         return eq
 
     @classmethod
-    def recursively_equivalent_identifier_ids(self, _db, identifiers, levels=3)
+    def recursively_equivalent_identifier_ids(
+            self, _db, identifiers, levels=3, threshold=0.5):
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
-        IDs.
+        IDs at the given confidence threshold.
 
         This is an inefficient but simple implementation, performing
         one SQL query for each level of recursion.
