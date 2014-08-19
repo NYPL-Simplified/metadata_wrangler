@@ -126,15 +126,20 @@ def get_one_or_create(db, model, create_method='',
     if one:
         return one, False
     else:
-        kwargs.update(create_method_kwargs or {})
-        created = getattr(model, create_method, model)(**kwargs)
         try:
-            db.add(created)
-            db.flush()
-            return created, True
+            create(model, create_method, create_method_kwargs, **kwargs)
         except IntegrityError:
             db.rollback()
             return db.query(model).filter_by(**kwargs).one(), False
+
+def create(db, model, create_method='',
+           create_method_kwargs=None,
+           **kwargs):
+    kwargs.update(create_method_kwargs or {})
+    created = getattr(model, create_method, model)(**kwargs)
+    db.add(created)
+    db.flush()
+    return created, True
 
 Base = declarative_base()
 
@@ -213,6 +218,7 @@ class DataSource(Base):
     name = Column(String, unique=True, index=True)
     offers_licenses = Column(Boolean, default=False)
     primary_identifier_type = Column(String, index=True)
+    supports_multiple_equivalencies = Column(Boolean, default=False)
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     # One DataSource can generate many WorkRecords.
@@ -231,6 +237,7 @@ class DataSource(Base):
     # One DataSource can provide many Resources.
     resources = relationship("Resource", backref="data_source")
 
+
     @classmethod
     def lookup(cls, _db, name):
         try:
@@ -243,18 +250,19 @@ class DataSource(Base):
     def well_known_sources(cls, _db):
         """Make sure all the well-known sources exist."""
 
-        for (name, offers_licenses, primary_identifier_type,
-             refresh_rate) in (
-                 (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
-                 (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
-                 (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
-                 (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
-                 (cls.WEB, True, WorkIdentifier.URI, None),
-                 (cls.CONTENT_CAFE, False, None, None),
-                 (cls.MANUAL, False, None, None),
+        for (name, offers_licenses, supports_multiple_equivalencies,
+             primary_identifier_type, refresh_rate) in (
+                 (cls.GUTENBERG, True, False,
+                  WorkIdentifier.GUTENBERG_ID, None),
+                 (cls.OVERDRIVE, True, False, WorkIdentifier.OVERDRIVE_ID, 0),
+                 (cls.THREEM, True, False, WorkIdentifier.THREEM_ID, 60*60*6),
+                 (cls.AXIS_360, True, False, WorkIdentifier.AXIS_360_ID, 0),
+                 (cls.OCLC_LINKED_DATA, False, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OCLC, False, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OPEN_LIBRARY, False, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
+                 (cls.WEB, True, True, WorkIdentifier.URI, None),
+                 (cls.CONTENT_CAFE, False, False, None, None),
+                 (cls.MANUAL, False, True, None, None),
         ):
 
             extra = dict()
@@ -266,6 +274,7 @@ class DataSource(Base):
                 name=name,
                 create_method_kwargs=dict(
                     offers_licenses=offers_licenses,
+                    supports_multiple_equivalencies=(name==
                     primary_identifier_type=primary_identifier_type,
                     extra=extra,
                 )
@@ -405,8 +414,18 @@ class WorkIdentifier(Base):
         `data_source` is the DataSource that believes the two 
         identifiers are equivalent.
         """
+        if data_source.supports_multiple_equivalencies:
+            # It's okay to have multiple Equivalency objects for this
+            # WorkIdentifier from this data source. (e.g. humans'
+            # opinions)
+            m = create
+        else:
+            # There can only be one Equivalency object for this
+            # WorkIdentifier from this data source. (e.g. OCLC
+            # Classify)
+            m = get_one_or_create
         _db = Session.object_session(self)
-        eq, new = get_one_or_create(
+        eq, new = m(
             _db, Equivalency,
             data_source=data_source,
             input=self,
@@ -415,19 +434,18 @@ class WorkIdentifier(Base):
         return eq
 
     @classmethod
-    def recursively_equivalent_identifier_ids(self, _db, identifiers, levels=3):
+    def recursively_equivalent_identifier_ids(self, _db, identifiers, levels=3)
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
         IDs.
+
+        This is an inefficient but simple implementation, performing
+        one SQL query for each level of recursion.
         """
-        # TODO: An inefficient but simple implementation, performing
-        # one SQL query for each level of recursion.
         total_set = identifiers
         last_round = total_set
-        already_seen = set(total_set)
         for i in range(levels):
             this_round = []
             equivalencies = Equivalency.for_identifiers(_db, last_round)
-            this_round = []
             for x in equivalencies:
                 if x.output_id not in already_seen:
                     this_round.append(x.output_id)
