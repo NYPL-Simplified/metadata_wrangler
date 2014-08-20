@@ -1439,11 +1439,18 @@ class Work(Base):
             if wr.language in usable_languages:
                 language_counter[wr.language] += 1
 
-        return (title_counter, author_counter, language_counter)
+            # Add this record's subject data to the running
+            # classification.
+            if wr.subjects:
+                subject_data = Classification.classify(
+                    wr.subjects, subject_data)
+
+        return (title_counter, author_counter, language_counter, subject_data)
 
     def calculate_presentation(self):
 
-        titles, authors, languages = self.gather_presentation_information()
+        titles, authors, languages, subjects = (
+            self.gather_presentation_information())
 
         if titles:
             self.title = titles.most_common(1)[0][0]
@@ -1488,9 +1495,9 @@ class Work(Base):
                 dict(lane=self.lane, fiction=self.fiction,
                      audience=self.audience,
                      subjects=self.subjects.get('names',{})))
-            if self.description:
+            if self.summary:
                 d = " Description (%.2f) %s" % (
-                    score, self.description)
+                    self.summary.quality, self.summary.content)
                 print d.encode("utf8")
             print
 

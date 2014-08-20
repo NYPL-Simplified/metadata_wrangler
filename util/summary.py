@@ -1,29 +1,8 @@
 from textblob import TextBlob
 from collections import Counter
 from nose.tools import set_trace
-
-# Strings indicative of descriptions we can't use.
-"version of"
-"Retelling of"
-"Abridged"
-"retelling"
-"adaptation of"
-"Look for"
-"new edition"
-"excerpts" "version", "edition" "complete texts" "in one volume"
-"contains"
-"Includes"
-"Excerpts"
-"Selections"
-"This is"
-"--Container"
-"--Original container"
-"Here"
-"..."
-"PLAYAWAY"
-"complete novels"
-"the .* Collection"
-
+import re
+re_type = type(re.compile(""))
 
 class SummaryEvaluator(object):
 
@@ -37,6 +16,38 @@ class SummaryEvaluator(object):
 
     All else being equal, a shorter summary is better.
     """
+
+    # These phrases are indicative of a description we can't use for
+    # whatever reason.
+    bad_phrases = set([
+        "version of",
+        "retelling of",
+        "abridged",
+        "retelling",
+        "condensed",
+        "adaptation of",
+        "look for",
+        "new edition",
+        "excerpts",
+        "version",
+        "edition",
+        "selections",
+        "complete texts",
+        "in one volume",
+        "contains",
+        "--container",
+        "--original container",
+        "playaway",
+        "complete novels",
+        "all rights reserved",
+    ])
+
+    bad_res = set([
+        re.compile("the [^ ]+ Collection"),
+        re.compile("Includes"),
+        re.compile("This is"),
+    ])
+
     def __init__(self, optimal_number_of_sentences=4,
                  noun_phrases_to_consider=10):
         self.optimal_number_of_sentences=optimal_number_of_sentences
@@ -99,5 +110,20 @@ class SummaryEvaluator(object):
         if off_from_optimal:
             # This summary is too long or too short.
             score /= (off_from_optimal ** 1.5)
+
+        bad_phrases = 0
+        l = summary.lower()
+        for i in self.bad_phrases:
+            if i in l:
+                bad_phrases += 1
+
+        for i in self.bad_res:
+            if i.search(summary):
+                bad_phrases += 1
+
+        if l.count(" -- ") > 3:
+            bad_phrases += 1
+
+        score *= (0.5 ** bad_phrases)
 
         return score
