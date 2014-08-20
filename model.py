@@ -600,25 +600,25 @@ class WorkIdentifier(Base):
         # aspect ratio, and by its deviation (in the "too small"
         # direction only) from the ideal resolution.
         for r in images:
-            if not r.width or not r.height:
+            if not r.image_width or not r.image_height:
                 continue
-            aspect_ratio = r.width / float(r.height)
-            aspect_difference = abs(aspect_ratio-self.IDEAL_COVER_ASPECT_RATIO)
+            aspect_ratio = r.image_width / float(r.image_height)
+            aspect_difference = abs(aspect_ratio-cls.IDEAL_COVER_ASPECT_RATIO)
             quality = 1 - aspect_difference
             width_difference = (
-                (r.width - self.IDEAL_IMAGE_WIDTH) / self.IDEAL_IMAGE_WIDTH)
+                (r.image_width - cls.IDEAL_IMAGE_WIDTH) / cls.IDEAL_IMAGE_WIDTH)
             if width_difference < 0:
                 # Image is not wide enough.
                 quality = quality * (1-width_difference)
             height_difference = (
-                (r.height - self.IDEAL_IMAGE_HEIGHT) / self.IDEAL_IMAGE_HEIGHT)
+                (r.image_height - cls.IDEAL_IMAGE_HEIGHT) / cls.IDEAL_IMAGE_HEIGHT)
             if height_difference < 0:
                 # Image is not tall enough.
                 quality = quality * (1-height_difference)
             r.set_estimated_quality(quality)
             if not champion or r.quality > champion.quality:
                 champion = r
-        return champion
+        return champion, images
 
     @classmethod
     def evaluate_summary_quality(cls, _db, identifier_ids):
@@ -650,16 +650,12 @@ class WorkIdentifier(Base):
         evaluator.ready()
 
         # Then have the evaluator rank each resource.
-        scores = dict()
         for r in summaries:
             quality = evaluator.score(r.content)
-            scores[r] = quality
-            if not champion or quality > champion[1]:
-                champion = (r, quality)
-
-        # Scale it so that 
-        set_trace()
-        return champion
+            r.set_estimated_quality(quality)
+            if not champion or r.quality > champion.quality:
+                champion = r
+        return champion, summaries
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -1463,11 +1459,15 @@ class Work(Base):
         identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids_flat(
             _db, primary_identifier_ids, 5, threshold=0.5)
 
-        self.summary = WorkIdentifier.evaluate_summary_quality(_db, identifier_ids)
-        self.cover = WorkIdentifier.evaluate_cover_quality(_db, identifier_ids)
+        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(_db, identifier_ids)
+        self.cover, covers = WorkIdentifier.evaluate_cover_quality(_db, identifier_ids)
 
-        self.quality = len(self.license_pools) * (
-            total_work_records + average_descriptions_per_work_record)
+        print self.title
+        if self.summary:
+            print "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
+        if self.cover:
+            print self.cover.mirrored_path
+        self.quality = len(self.license_pools) * (len(summaries)+len(covers))
 
         self.subjects = subjects
         if 'audience' in self.subjects:
