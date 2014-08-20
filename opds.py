@@ -61,7 +61,7 @@ class URLRewriter(object):
         if parsed.hostname in ('www.gutenberg.org', 'gutenberg.org'):
             return cls._rewrite_gutenberg(parsed)
         else:
-            return url
+            return url % dict(content_cafe_mirror="http://localhost:8000")
 
     @classmethod
     def _rewrite_gutenberg(cls, parsed):
@@ -104,7 +104,6 @@ class OPDSFeed(AtomFeed):
     FEATURED_REL = "http://opds-spec.org/featured"
     RECOMMENDED_REL = "http://opds-spec.org/recommended"
     OPEN_ACCESS_REL = "http://opds-spec.org/acquisition/open-access"
-    THUMBNAIL_IMAGE_REL = "http://opds-spec.org/image/thumbnail" 
     FULL_IMAGE_REL = "http://opds-spec.org/image" 
     EPUB_MEDIA_TYPE = "application/epub+zip"
 
@@ -193,12 +192,11 @@ class AcquisitionFeed(OPDSFeed):
         links=[E.link(rel=self.OPEN_ACCESS_REL, 
                       href=checkout_url)]
 
-        if work.thumbnail_cover_link:
-            url = URLRewriter.rewrite(work.thumbnail_cover_link)
-            links.append(E.link(rel=self.THUMBNAIL_IMAGE_REL, href=url))
-        if work.full_cover_link:
-            url = URLRewriter.rewrite(work.full_cover_link)
+        cover_quality = 0
+        if work.cover:
+            url = URLRewriter.rewrite(work.cover.mirrored_path)
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
+            cover_quality = work.cover.quality
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             url = host + urllib.quote(
@@ -207,7 +205,11 @@ class AcquisitionFeed(OPDSFeed):
 
         tag = "tag:work:%s" % work.id
 
-        summary = (work.description or "") + " (Q=%.1f)" % work.quality
+        if work.summary:
+            summary = work.summary.content
+            summary_quality = work.summary.quality
+
+        summary += "<ul><li>Work quality: %.1f</li><li>Summary quality: %.1f</li><li>Cover quality: %.1f</li></ul>" % (work.quality, summary_quality, cover_quality)
 
         entry = E.entry(
             E.id(tag),
