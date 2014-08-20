@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     print "Recalculating lanes for all works."
     i = 0
-    for work in session.query(Work).filter(Work.description==None):
+    for work in session.query(Work):
         work.calculate_presentation()
         i += 1
         if not i % 10:

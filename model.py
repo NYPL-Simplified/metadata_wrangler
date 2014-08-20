@@ -452,6 +452,10 @@ class WorkIdentifier(Base):
 
         Four levels is enough to go from a Gutenberg text to an ISBN.
         Gutenberg ID -> OCLC Work IS -> OCLC Number -> ISBN
+
+        Returns a dictionary mapping each ID in the original to a
+        dictionary mapping the equivalent IDs to (confidence, strength
+        of confidence) 2-tuples.
         """
 
         precursors = defaultdict(list)
@@ -492,7 +496,7 @@ class WorkIdentifier(Base):
                             (precursor_id, total_strength))
                         successors[precursor_id].append(
                             (e.output_id, total_strength))
-                        # print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
+                        #print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
                     else:
                         #print "Not confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
                         pass
@@ -539,10 +543,20 @@ class WorkIdentifier(Base):
                     equivalents[id][precursor] = (new_strength, num_votes)
         return equivalents
 
-    def equivalent_identifier_ids(self, levels=5):
+    @classmethod
+    def recursively_equivalent_identifier_ids_flat(
+            cls, _db, identifier_ids, levels=5, threshold=0.5):
+        ids = set()
+        data = cls.recursively_equivalent_identifier_ids(
+            _db, identifier_ids, levels, threshold)
+        for equivalents in data.values():
+            ids = ids.union(set(equivalents.keys()))
+        return ids
+
+    def equivalent_identifier_ids(self, levels=5, threshold=0.5):
         _db = Session.object_session(self)
-        return WorkIdentifier.recursively_equivalent_identifier_ids(
-            _db, [self.id], levels)[self.id].keys()
+        return WorkIdentifier.recursively_equivalent_identifier_ids_flat(
+            _db, [self.id], levels)
 
     def add_resource(self, rel, href, data_source, license_pool=None,
                      media_type=None, content=None):
@@ -561,122 +575,91 @@ class WorkIdentifier(Base):
             resource.set_content(content, media_type)
         return resource, new
 
-class Resource(Base):
-    """An external resource that may be mirrored locally."""
+    @classmethod
+    def resources_for_identifier_ids(self, _db, identifier_ids, rel=None):
+        resources = _db.query(Resource).filter(
+                Resource.work_identifier_id.in_(identifier_ids))
+        if rel:
+            resources = resources.filter(Resource.rel==rel)
+        return resources
 
-    __tablename__ = 'resources'
+    IDEAL_COVER_ASPECT_RATIO = 2.0/3
+    IDEAL_IMAGE_HEIGHT = 240
+    IDEAL_IMAGE_WIDTH = 160
 
-    # Some common link relations.
-    CANONICAL = "canonical"
-    OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
-    IMAGE = "http://opds-spec.org/image"
-    THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
-    SAMPLE = "http://opds-spec.org/acquisition/sample"
-    ILLUSTRATION = "http://library-simplified.com/rel/illustration"
-    REVIEW = "http://schema.org/Review"
-    DESCRIPTION = "http://schema.org/description"
-    AUTHOR = "http://schema.org/author"
+    @classmethod
+    def evaluate_cover_quality(cls, _db, identifier_ids):
+        # Find all image resources associated with any of
+        # these identifiers.
+        images = cls.resources_for_identifier_ids(
+            _db, identifier_ids, Resource.IMAGE)
+        images = images.filter(Resource.mirrored==True).all()
 
-    # TODO: Is this the appropriate relation?
-    DRM_ENCRYPTED_DOWNLOAD = "http://opds-spec.org/acquisition/"
+        champion = None
+        # Judge the image resource by its deviation from the ideal
+        # aspect ratio, and by its deviation (in the "too small"
+        # direction only) from the ideal resolution.
+        for r in images:
+            if not r.width or not r.height:
+                continue
+            aspect_ratio = r.width / float(r.height)
+            aspect_difference = abs(aspect_ratio-self.IDEAL_COVER_ASPECT_RATIO)
+            quality = 1 - aspect_difference
+            width_difference = (
+                (r.width - self.IDEAL_IMAGE_WIDTH) / self.IDEAL_IMAGE_WIDTH)
+            if width_difference < 0:
+                # Image is not wide enough.
+                quality = quality * (1-width_difference)
+            height_difference = (
+                (r.height - self.IDEAL_IMAGE_HEIGHT) / self.IDEAL_IMAGE_HEIGHT)
+            if height_difference < 0:
+                # Image is not tall enough.
+                quality = quality * (1-height_difference)
+            r.set_estimated_quality(quality)
+            if not champion or r.quality > champion.quality:
+                champion = r
+        return champion
 
-    id = Column(Integer, primary_key=True)
+    @classmethod
+    def evaluate_summary_quality(cls, _db, identifier_ids):
+        """Evaluate the summaries for the given group of WorkIdentifier IDs.
 
-    # A Resource is always associated with some WorkIdentifier.
-    work_identifier_id = Column(
-        Integer, ForeignKey('workidentifiers.id'), index=True)
+        This is an automatic evaluation based solely on the content of
+        the summaries. It will be combined with human-entered ratings
+        to form an overall quality score.
 
-    # A Resource may also be associated with some LicensePool which
-    # controls scarce access to it.
-    license_pool_id = Column(
-        Integer, ForeignKey('licensepools.id'), index=True)
+        We need to evaluate summaries from a set of WorkIdentifiers
+        (typically those associated with a single work) because we
+        need to see which noun phrases are most frequently used to
+        describe the underlying work.
 
-    # Who provides this resource?
-    data_source_id = Column(
-        Integer, ForeignKey('datasources.id'), index=True)
+        :return: The single highest-rated summary Resource.
 
-    # The relation between the book identified by the WorkIdentifier
-    # and the resource.
-    rel = Column(Unicode, index=True)
+        """
+        evaluator = SummaryEvaluator()
+        # Find all rel="description" resources associated with any of
+        # these records.
+        summaries = cls.resources_for_identifier_ids(
+            _db, identifier_ids, Resource.DESCRIPTION)
+        summaries = summaries.filter(Resource.content != None).all()
 
-    # The actual URL to the resource.
-    href = Column(Unicode)
+        champion = None
+        # Add each resource's content to the evaluator's corpus.
+        for r in summaries:
+            evaluator.add(r.content)
+        evaluator.ready()
 
-    # Whether or not we have a local copy of the representation.
-    mirrored = Column(Boolean, index=True)
+        # Then have the evaluator rank each resource.
+        scores = dict()
+        for r in summaries:
+            quality = evaluator.score(r.content)
+            scores[r] = quality
+            if not champion or quality > champion[1]:
+                champion = (r, quality)
 
-    # The path to our mirrored representation. This can be converted
-    # into a URL for serving to a client. TODO: how?
-    mirrored_path = Column(Unicode)
-
-    # The last time we tried to update the mirror.
-    mirror_date = Column(DateTime, index=True)
-
-    # The HTTP status code the last time we updated the mirror
-    mirror_status = Column(Unicode)
-
-    # A human-readable description of what happened the last time
-    # we updated the mirror.
-    mirror_exception = Column(Unicode)
-
-    # Sometimes the content of a resource can just be stuck into the
-    # database.
-    content = Column(Unicode)
-
-    # We need this information to determine the appropriateness of this
-    # resource without neccessarily having access to the file.
-    media_type = Column(Unicode, index=True)
-    language = Column(Unicode, index=True)
-    file_size = Column(Integer)
-    image_height = Column(Integer, index=True)
-    image_width = Column(Integer, index=True)
-
-    # A calculated value for the quality of this resource.
-    quality = Column(Float, index=True)
-
-    def could_not_mirror(self):
-        """We tried to mirror this resource and failed."""
-        if self.mirrored:
-            # We already have a mirrored copy, so just leave it alone.
-            return
-        self.mirrored = False
-        self.mirror_date = datetime.datetime.utcnow()
-        self.mirrored_path = None
-        self.mirror_status = 404
-        self.media_type = None
-        self.file_size = None
-        self.image_height = None
-        self.image_width = None
-
-    def set_content(self, content, media_type):
-        """Store the content directly in the database."""
-        self.content = content
-        self.mirrored = True
-        self.mirror_status = 200
-        self.media_type = media_type
-        self.file_size = len(content)
-
-    def mirrored_to(self, path, media_type, content=None):
-        """We successfully mirrored this resource to disk."""
-        self.mirrored = True
-        self.mirrored_path = path
-        self.mirror_status = 200
-        self.media_type = media_type
-
-        # If we were provided with the content, make sure the
-        # metadata reflects the content.
-        #
-        # TODO: We don't check the actual file because it's got a
-        # variable expansion in it at this point.
-        if content is not None:
-            self.file_size = len(content)
-        if self.media_type.lower().startswith("image/"):
-            # Try to load it into PIL and determine height and width.
-            try:
-                image = Image.open(StringIO(content))
-            except IOError, e:
-                self.mirror_exception = "Content is not an image."
-            self.image_width, self.image_height = image.size
+        # Scale it so that 
+        set_trace()
+        return champion
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -960,6 +943,7 @@ class WorkRecord(Base):
                  primary_identifier=work_identifier,
                  **kwargs)
         return r
+
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other WorkIdentifiers.
@@ -1200,13 +1184,11 @@ class Work(Base):
     title = Column(Unicode)
     authors = Column(Unicode, index=True)
     language = Column(Unicode, index=True)
-    description = Column(Unicode, index=True)
+    summary_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_summary_id'), index=True)
     audience = Column(Unicode, index=True)
     subjects = Column(MutableDict.as_mutable(JSON), default={})
 
-    # TODO: cover should be a single Resource. Thumbnail is useless.
-    thumbnail_cover_link = Column(Unicode)
-    full_cover_link = Column(Unicode)
+    cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
     lane = Column(Unicode, index=True)
     quality = Column(Float, index=True)
 
@@ -1293,7 +1275,7 @@ class Work(Base):
         _db = Session.object_session(self)
         primary_identifier_ids = [
             x.primary_identifier.id for x in self.work_records]
-        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids(
+        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids_flat(
             _db, primary_identifier_ids, recursion_level)
         q = _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(identifier_ids))
@@ -1424,14 +1406,7 @@ class Work(Base):
         languages = Counter()
         image_links = Counter()
 
-        usable_titles = set()
-        title_counter = Counter()
-        author_counter = Counter()
-        language_counter = Counter()
-
-        description_evaluator = SummaryEvaluator()
-
-        # First go through the privileged subset of work records
+        # Go through the privileged subset of work records
         # directly associated with a license pool.
         #
         # These work records set the parameters for the
@@ -1443,74 +1418,36 @@ class Work(Base):
         # Similarly, only work records associated with a license
         # pool are allowed to suggest authors or languages for the
         # work.
+        usable_titles = set()
+        usable_authors = set()
+        usable_languages = set()
         for wr in license_pool_work_records:
             if wr.title:
                 usable_titles.add(wr.title)
             for a in wr.contributors:
-                author_counter[a] += 1
+                usable_authors.add(a)
             if wr.language:
-                language_counter[wr.language] += 1
+                usable_languages.add(wr.language)
 
-        # Now go through every work record, whether associated with
-        # a license pool or not.
-        work_records_with_descriptions = 0
-        total_descriptions = 0
+        title_counter = Counter()
+        author_counter = Counter()
+        language_counter = Counter()
+        # Go through all work records to see which titles, authors,
+        # and languages are most common.
         for wr in all_work_records:
             if wr.title in usable_titles:
                 title_counter[wr.title] += 1
+            for a in wr.contributors:
+                if a in usable_authors:
+                    author_counter[a] += 1
+            if wr.language in usable_languages:
+                language_counter[wr.language] += 1
 
-            # Add this record's subject data to the running
-            # classification.
-            if wr.subjects:
-                subject_data = Classification.classify(
-                    wr.subjects, subject_data)
-
-            # Are there cover links? Keep track of them!
-            for resource in wr.primary_identifier.resources:
-                if resource.rel == Resource.IMAGE:
-                    full = resource.href
-                    image_links[full] += 1
-
-            # if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
-            #     # This is great news. We can almost certainly get a
-            #     # wealth of information about this work from OCLC
-            #     # Linked Data.
-            #     data, cached = oclc_linked_data.lookup(wr.primary_identifier)
-            #     graph = oclc_linked_data.graph(data)
-            #     titles, descriptions, authors, subjects = (
-            #         oclc_linked_data.extract_useful_data(graph))
-            #     work_records_with_descriptions += 1
-            #     total_descriptions += len(descriptions)
-            #     for title in titles:
-            #         if title in usable_titles:
-            #             title_counter[title] += 1
-
-            #     for description in descriptions:
-            #         description_evaluator.add(description)
-            #         total_descriptions += 1
-
-            #     # Don't do anything with authors or subjects for now.
-
-        average_descriptions = 0
-        if work_records_with_descriptions:
-            average_descriptions = float(
-                total_descriptions)/work_records_with_descriptions
-
-        return (title_counter, author_counter, language_counter,
-                subject_data, description_evaluator, image_links,
-                len(all_work_records), average_descriptions)
-                
+        return (title_counter, author_counter, language_counter)
 
     def calculate_presentation(self):
-        """Figure out the 'best' presentation metadata for this Work."""
 
-        args = self.gather_presentation_information()
-        self._calculate_presentation(*args)
-
-    def _calculate_presentation(self, titles, authors, languages,
-                                subjects, descriptions, cover_links,
-                                total_work_records,
-                                average_descriptions_per_work_record):
+        titles, authors, languages = self.gather_presentation_information()
 
         if titles:
             self.title = titles.most_common(1)[0][0]
@@ -1519,24 +1456,18 @@ class Work(Base):
         if authors:
             self.authors = authors.most_common(1)[0][0].name
 
-        if cover_links:
-            # Without local copies we have no way of determining which
-            # image is the best. But in general, the Open Library ones
-            # tend to be higher-quality
-            best_index = 0
-            items = cover_links.most_common()
-            for i, link in enumerate(items):
-                if 'openlibrary' in link[0][0]:
-                    best_index = i
-                    break
-            self.full_cover_link = items[best_index][0]
-        else:
-            self.full_cover_link = None
+        # Find all related IDs that might have associated resources.
+        _db = Session.object_session(self)
+        primary_identifier_ids = [
+            x.primary_identifier.id for x in self.work_records]
+        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids_flat(
+            _db, primary_identifier_ids, 5, threshold=0.5)
+
+        self.summary = WorkIdentifier.evaluate_summary_quality(_db, identifier_ids)
+        self.cover = WorkIdentifier.evaluate_cover_quality(_db, identifier_ids)
 
         self.quality = len(self.license_pools) * (
             total_work_records + average_descriptions_per_work_record)
-
-        self.description, score = descriptions.best_choice()
 
         self.subjects = subjects
         if 'audience' in self.subjects:
@@ -1562,6 +1493,170 @@ class Work(Base):
                     score, self.description)
                 print d.encode("utf8")
             print
+
+class Resource(Base):
+    """An external resource that may be mirrored locally."""
+
+    __tablename__ = 'resources'
+
+    # Some common link relations.
+    CANONICAL = "canonical"
+    OPEN_ACCESS_DOWNLOAD = "http://opds-spec.org/acquisition/open-access"
+    IMAGE = "http://opds-spec.org/image"
+    THUMBNAIL_IMAGE = "http://opds-spec.org/image/thumbnail"
+    SAMPLE = "http://opds-spec.org/acquisition/sample"
+    ILLUSTRATION = "http://library-simplified.com/rel/illustration"
+    REVIEW = "http://schema.org/Review"
+    DESCRIPTION = "http://schema.org/description"
+    AUTHOR = "http://schema.org/author"
+
+    # TODO: Is this the appropriate relation?
+    DRM_ENCRYPTED_DOWNLOAD = "http://opds-spec.org/acquisition/"
+
+    # How many votes is the initial quality estimate worth?
+    ESTIMATED_QUALITY_WEIGHT = 5
+
+    id = Column(Integer, primary_key=True)
+
+    # A Resource is always associated with some WorkIdentifier.
+    work_identifier_id = Column(
+        Integer, ForeignKey('workidentifiers.id'), index=True)
+
+    # A Resource may also be associated with some LicensePool which
+    # controls scarce access to it.
+    license_pool_id = Column(
+        Integer, ForeignKey('licensepools.id'), index=True)
+
+    # Who provides this resource?
+    data_source_id = Column(
+        Integer, ForeignKey('datasources.id'), index=True)
+
+    # Many works may use this resource as their cover image.
+    cover_works = relationship("Work", backref="cover", foreign_keys=[Work.cover_id])
+
+    # Many works may use this resource as their summary.
+    summary_works = relationship("Work", backref="summary", foreign_keys=[Work.summary_id])
+
+    # The relation between the book identified by the WorkIdentifier
+    # and the resource.
+    rel = Column(Unicode, index=True)
+
+    # The actual URL to the resource.
+    href = Column(Unicode)
+
+    # Whether or not we have a local copy of the representation.
+    mirrored = Column(Boolean, index=True)
+
+    # The path to our mirrored representation. This can be converted
+    # into a URL for serving to a client. TODO: how?
+    mirrored_path = Column(Unicode)
+
+    # The last time we tried to update the mirror.
+    mirror_date = Column(DateTime, index=True)
+
+    # The HTTP status code the last time we updated the mirror
+    mirror_status = Column(Unicode)
+
+    # A human-readable description of what happened the last time
+    # we updated the mirror.
+    mirror_exception = Column(Unicode)
+
+    # Sometimes the content of a resource can just be stuck into the
+    # database.
+    content = Column(Unicode)
+
+    # We need this information to determine the appropriateness of this
+    # resource without neccessarily having access to the file.
+    media_type = Column(Unicode, index=True)
+    language = Column(Unicode, index=True)
+    file_size = Column(Integer)
+    image_height = Column(Integer, index=True)
+    image_width = Column(Integer, index=True)
+
+    # A calculated value for the quality of this resource, based on an
+    # algorithmic treatment of its content.
+    estimated_quality = Column(Float)
+
+    # The average of human-entered values for the quality of this
+    # resource.
+    voted_quality = Column(Float)
+
+    # How many votes contributed to the voted_quality value. This lets
+    # us scale new votes proportionately while keeping only two piece
+    # of information.
+    votes_for_quality = Column(Integer)
+
+    # A combination of the calculated quality value and the
+    # human-entered quality value.
+    quality = Column(Float, index=True)
+
+    def could_not_mirror(self):
+        """We tried to mirror this resource and failed."""
+        if self.mirrored:
+            # We already have a mirrored copy, so just leave it alone.
+            return
+        self.mirrored = False
+        self.mirror_date = datetime.datetime.utcnow()
+        self.mirrored_path = None
+        self.mirror_status = 404
+        self.media_type = None
+        self.file_size = None
+        self.image_height = None
+        self.image_width = None
+
+    def set_content(self, content, media_type):
+        """Store the content directly in the database."""
+        self.content = content
+        self.mirrored = True
+        self.mirror_status = 200
+        self.media_type = media_type
+        self.file_size = len(content)
+
+    def mirrored_to(self, path, media_type, content=None):
+        """We successfully mirrored this resource to disk."""
+        self.mirrored = True
+        self.mirrored_path = path
+        self.mirror_status = 200
+        self.media_type = media_type
+
+        # If we were provided with the content, make sure the
+        # metadata reflects the content.
+        #
+        # TODO: We don't check the actual file because it's got a
+        # variable expansion in it at this point.
+        if content is not None:
+            self.file_size = len(content)
+        if self.media_type.lower().startswith("image/"):
+            # Try to load it into PIL and determine height and width.
+            try:
+                image = Image.open(StringIO(content))
+            except IOError, e:
+                self.mirror_exception = "Content is not an image."
+            self.image_width, self.image_height = image.size
+
+    def set_estimated_quality(self, estimated_quality):
+        """Update the estimated quality."""
+        self.estimated_quality = estimated_quality
+        self.update_quality()
+
+    def add_quality_votes(self, quality, weight=1):
+        """Record someone's vote as to the quality of this resource."""
+        total_quality = self.voted_quality * self.votes_for_quality
+        total_quality += (quality * weight)
+        self.votes_for_quality += weight
+        self.voted_quality = total_quality / float(self.votes_for_quality)
+        self.update_quality()
+
+    def update_quality(self):
+        """Combine `estimated_quality` with `voted_quality` to form `quality`.
+        """
+        estimated_weight = self.ESTIMATED_QUALITY_WEIGHT
+        votes_for_quality = self.votes_for_quality or 0
+        total_weight = estimated_weight + votes_for_quality
+
+        total_quality = (((self.estimated_quality or 0) * self.ESTIMATED_QUALITY_WEIGHT) + 
+                         ((self.voted_quality or 0) * votes_for_quality))
+        self.quality = total_quality / float(total_weight)
 
 class WorkFeed(object):
 

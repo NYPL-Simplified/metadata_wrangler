@@ -37,18 +37,30 @@ class SummaryEvaluator(object):
 
     All else being equal, a shorter summary is better.
     """
-    def __init__(self, optimal_number_of_sentences=4):
+    def __init__(self, optimal_number_of_sentences=4,
+                 noun_phrases_to_consider=10):
         self.optimal_number_of_sentences=optimal_number_of_sentences
         self.summaries = []
         self.noun_phrases = Counter()
-        self.blobs = {}
+        self.blobs = dict()
+        self.scores = dict()
+        self.noun_phrases_to_consider = float(noun_phrases_to_consider)
 
     def add(self, summary):
+        if summary in self.blobs:
+            # We already evaluated this summary. Don't count it more than once
+            return
         blob = TextBlob(summary)
         self.blobs[summary] = blob
         self.summaries.append(summary)
         for phrase in blob.noun_phrases:
             self.noun_phrases[phrase] = self.noun_phrases[phrase] + 1
+
+    def ready(self):
+        """We are done adding to the corpus and ready to start evaluating."""
+        self.top_noun_phrases = set([
+            k for k, v in self.noun_phrases.most_common(
+                int(self.noun_phrases_to_consider))])
 
     def best_choice(self):
         c = self.best_choices(1)
@@ -66,28 +78,15 @@ class SummaryEvaluator(object):
 
     def score(self, summary):
         """Score a summary relative to our current view of the dataset."""
-        score = 0.0
+        if summary in self.scores:
+            return self.scores[summary]
+        score = 1
         blob = self.blobs[summary]
 
-        scaled_noun_phrases = Counter()
-        total_occurances = float(sum(x for x in self.noun_phrases.values()
-                                     if x > 1))
-        if total_occurances > 0:
-            for k, v in self.noun_phrases.items():
-                scaled_noun_phrases[k] = v/total_occurances
-        else:
-            scaled_noun_phrases = self.noun_phrases
+        top_noun_phrases_used = len(
+            [p for p in self.top_noun_phrases if p in blob.noun_phrases])
+        score = 1 * (top_noun_phrases_used/self.noun_phrases_to_consider)
 
-        unique_noun_phrases = 0
-        for phrase in blob.noun_phrases:
-            # A summary gets points for using noun phrases common
-            # to all summaries. A summary loses points for unique noun
-            # phrases.
-            if phrase in scaled_noun_phrases:
-                score += scaled_noun_phrases[phrase]
-            else:
-                unique_noun_phrases += 1
-            
         try:
             sentences = len(blob.sentences)
         except Exception, e:
@@ -100,11 +99,5 @@ class SummaryEvaluator(object):
         if off_from_optimal:
             # This summary is too long or too short.
             score /= (off_from_optimal ** 1.5)
-
-        # All else being equal, shorter summaries are better.
-        score = score / (len(summary) * 0.75)
-
-        if unique_noun_phrases:
-            score = score * (0.8 ** unique_noun_phrases)
 
         return score
