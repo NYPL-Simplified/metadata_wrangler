@@ -606,15 +606,15 @@ class WorkIdentifier(Base):
             aspect_difference = abs(aspect_ratio-cls.IDEAL_COVER_ASPECT_RATIO)
             quality = 1 - aspect_difference
             width_difference = (
-                (r.image_width - cls.IDEAL_IMAGE_WIDTH) / cls.IDEAL_IMAGE_WIDTH)
+                float(r.image_width - cls.IDEAL_IMAGE_WIDTH) / cls.IDEAL_IMAGE_WIDTH)
             if width_difference < 0:
                 # Image is not wide enough.
-                quality = quality * (1-width_difference)
+                quality = quality * (1+width_difference)
             height_difference = (
-                (r.image_height - cls.IDEAL_IMAGE_HEIGHT) / cls.IDEAL_IMAGE_HEIGHT)
+                float(r.image_height - cls.IDEAL_IMAGE_HEIGHT) / cls.IDEAL_IMAGE_HEIGHT)
             if height_difference < 0:
                 # Image is not tall enough.
-                quality = quality * (1-height_difference)
+                quality = quality * (1+height_difference)
             r.set_estimated_quality(quality)
             if not champion or r.quality > champion.quality:
                 champion = r
