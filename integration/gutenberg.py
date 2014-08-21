@@ -308,9 +308,11 @@ class GutenbergRDFExtractor(object):
 
         if 'eng' in languages:
             language = 'eng'
-        else:
+        elif languages:
             language = languages[0]
-       
+        else:
+            language = None
+
         subjects = dict()
         subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
         for subject in subject_links:
