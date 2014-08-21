@@ -17,12 +17,12 @@ def very_small_subset(pg_id, archive, archive_item):
     "The Adventures of Huckleberry Finn".
     """
     return int(pg_id) in [
-        # 11, 928, 28885, 23716, 19033, # Alice in Wonderland
-        # 12, 23718,                    # Through The Looking Glass
+        11, 928, 28885, 23716, 19033, # Alice in Wonderland
+        12, 23718,                    # Through The Looking Glass
 
-        # 76, 19640, 9007,              # The Adventures of Huckleberry Finn
-        # 32325,                        # "The Adventures of Huckleberry Finn,
-        #                               #  Tom Sawyer's Comrade"
+        76, 19640, 9007,              # The Adventures of Huckleberry Finn
+        32325,                        # "The Adventures of Huckleberry Finn,
+                                      #  Tom Sawyer's Comrade"
 
         # This is the best example for two books that have different titles
         # but are the same work.
@@ -37,28 +37,27 @@ def very_small_subset(pg_id, archive, archive_item):
         # These aren't really that useful except for verifying that
         # books semi-similar enough to other books don't get
         # consolidated.
-        # 19778,                        # AiW in German
-        # 28371,                        # AiW in French
-        # 17482,                        # AiW in Esperanto
-        # 114,                          # Tenniel illustrations only
-        # 19002,                        # Alice's Adventures Under Ground
-        # 10643,                        # World's Greatest Books, includes AiW
-        # 36308,                        # AiW songs only
-        # 19551,                        # AiW in words of one syllable
-        # 35688,                        # "Alice in Wonderland" but by a
-        #                               #  different author.
-        # 35990,                        # "The Story of Lewis Carroll"
+        19778,                        # AiW in German
+        28371,                        # AiW in French
+        17482,                        # AiW in Esperanto
+        114,                          # Tenniel illustrations only
+        19002,                        # Alice's Adventures Under Ground
+        10643,                        # World's Greatest Books, includes AiW
+        36308,                        # AiW songs only
+        19551,                        # AiW in words of one syllable
+        35688,                        # "Alice in Wonderland" but by a
+                                      #  different author.
+        35990,                        # "The Story of Lewis Carroll"
 
-        # 7100, 7101, 7102, 7103,       # Huckleberry Finn in 5-chapter
-        # 7104, 7105, 7106, 7107,       #  chunks
+        7100, 7101, 7102, 7103,       # Huckleberry Finn in 5-chapter
+        7104, 7105, 7106, 7107,       #  chunks
 
-        # 74, 26203, 9038,              # The Adventures of Tom Sawyer
-        # 30165,                        # Tom Sawyer in German
-        # 30890,                        # Tom Sawyer in French
-        # 45333,                        # Tom Sawyer in Finnish
-        # 7193, 7194, 7198, 7196,       # Tom Sawyer in chunks
-        # 7197, 7198, 7199, 7200,
-
+        74, 26203, 9038,              # The Adventures of Tom Sawyer
+        30165,                        # Tom Sawyer in German
+        30890,                        # Tom Sawyer in French
+        45333,                        # Tom Sawyer in Finnish
+        7193, 7194, 7198, 7196,       # Tom Sawyer in chunks
+        7197, 7198, 7199, 7200,
 ]
 
 
@@ -80,7 +79,7 @@ def first_half_subset(pg_id, archive, archive_item):
     but not the entirety of Project Gutenberg."""
     return int(pg_id) < 20000
 
-subset = very_small_subset
+subset = first_half_subset
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
