@@ -652,7 +652,7 @@ class MetadataSimilarity(object):
         """What proportion of words do s1 and s2 share, considered as wordbags?"""
         b1 = cls._wordbag(s1) - stopwords
         b2 = cls._wordbag(s2) - stopwords
-        return cls._proportion(b1, b2)
+        return b1, b2, cls._proportion(b1, b2)
 
     @classmethod
     def _proportion(cls, s1, s2):
@@ -664,7 +664,15 @@ class MetadataSimilarity(object):
 
     @classmethod
     def title_similarity(cls, title1, title2):
-        return cls._word_match_proportion(title1, title2, set(['a', 'the', 'an']))
+        b1, b2, proportion = cls._word_match_proportion(
+            title1, title2, set(['a', 'the', 'an']))
+        if not b1.union(b2) in (b1, b2):
+            # Penalize titles where one title is not a subset of the
+            # other. "Tom Sawyer Abroad" will not face an extra
+            # penalty vis-a-vis "Tom Sawyer", but it will face an
+            # extra penalty vis-a-vis "Tom Sawyer, Detective".
+            proportion *= 0.4
+        return proportion
 
     @classmethod
     def author_similarity(cls, authors1, authors2):

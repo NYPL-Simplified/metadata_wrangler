@@ -1322,7 +1322,7 @@ class Work(Base):
 
         for record in other_work_records:
             if record.language:
-                other_languages[record.languages] += 1
+                other_languages[record.language] += 1
                 total_other_languages += 1
             other_titles.append(record.title)
             for author in record.authors:
@@ -1949,16 +1949,16 @@ class LicensePool(Base):
                 l.append(r)
         return claimed_records_by_work, unclaimed_records
 
-    def calculate_work(self, record_similarity_threshold=0.2,
-                       work_similarity_threshold=0.2):
+    def calculate_work(self, record_similarity_threshold=0.4,
+                       work_similarity_threshold=0.4):
         """Find or create a Work for this LicensePool."""
         primary_work_record = self.work_record()
         self.language = primary_work_record.language
         if primary_work_record.work is not None:
             # That was a freebie.
-            print "ALREADY CLAIMED: %s by %s" % (
-                primary_work_record.title, self.work
-            )
+            #print "ALREADY CLAIMED: %s by %s" % (
+            #    primary_work_record.title, self.work
+            #)
             self.work = primary_work_record.work
             return primary_work_record.work, False
 
@@ -1971,10 +1971,10 @@ class LicensePool(Base):
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
         print " There are %s unclaimed work records" % len(unclaimed)
-        #for i in unclaimed:
-        #    print "  %.3f %r" % (
-        #        primary_work_record.similarity_to(i), i)
-        #print
+        for i in unclaimed:
+            print "  %.3f %r" % (
+                primary_work_record.similarity_to(i), i)
+        print
 
         # Now we know how many unclaimed WorkRecords this LicensePool
         # will claim if it becomes a new Work. Find all existing Works
@@ -1993,7 +1993,7 @@ class LicensePool(Base):
         for work, records in claimed.items():
             sim = work.similarity_to(primary_work_record)
             if sim < work_similarity_threshold:
-                print "REJECTED %r as more popular choice for\n %r (similarity: %.2f)" % (
+                print " REJECTED %r as more popular choice for\n %r (similarity: %.2f)" % (
                     work, primary_work_record, sim
                     )
 
@@ -2009,7 +2009,7 @@ class LicensePool(Base):
             # the most popular because we have the most data for it, so 
             # it's the most accurate choice when calculating similarity.
             work = by_popularity[0][0]
-            print "MORE POPULAR CHOICE for %s: %r" % (
+            print " MORE POPULAR CHOICE for %s: %r" % (
                 primary_work_record.title.encode("utf8"), work)
             for less_popular, claimed_records in by_popularity[1:]:
                 less_popular.merge_into(work, work_similarity_threshold)

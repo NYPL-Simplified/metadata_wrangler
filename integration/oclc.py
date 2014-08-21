@@ -589,10 +589,12 @@ class OCLCXMLParser(XMLParser):
         if title and 'title' in restrictions:
             must_resemble_title = restrictions['title']
             threshold = restrictions.get('title_similarity', 0.25)
-            if MetadataSimilarity.title_similarity(
-                    must_resemble_title, title) < threshold:
+            similarity = MetadataSimilarity.title_similarity(
+                must_resemble_title, title)
+            if similarity < threshold:
                 # The title of the book under consideration is not
                 # similar enough to the given title.
+                print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
                 return None
 
             # The semicolon is frequently used to separate multiple
@@ -628,7 +630,7 @@ class OCLCXMLParser(XMLParser):
 
         author_names = ", ".join([x.name for x, y in authors_and_roles])
 
-        print u"SUCCESS %s, %r, %s" % (title, author_names, language)
+        print u" SUCCESS %s, %r, %s" % (title, author_names, language)
         return title, authors_and_roles, language
 
     @classmethod

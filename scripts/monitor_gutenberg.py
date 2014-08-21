@@ -16,18 +16,59 @@ def very_small_subset(pg_id, archive, archive_item):
     editions of three works: "Moby-Dick", "Alice in Wonderland", and
     "The Adventures of Huckleberry Finn".
     """
-    return int(pg_id) in [11, 19033, 28885, 928, 19778, 19597, 28371, 17482, 23716, 114, 19002, 10643, 36308, 19551, 35688, 35990, 2701, 15, 2489, 28794, 9147, 76, 32325, 19640, 9007, 7100, 7101, 7102, 7103, 7104, 7105, 7106, 7107, 74, 30165, 26203, 93, 7193, 91, 7194, 7198, 9038, 7195, 30890, 7196, 7197, 45333, 7199, 7200, 9037, 9036, 12, 23718]
+    return int(pg_id) in [
+        # 11, 928, 28885, 23716, 19033, # Alice in Wonderland
+        # 19778,                        # AiW in German
+        # 28371,                        # AiW in French
+        # 17482,                        # AiW in Esperanto
+        # 114,                          # Tenniel illustrations only
+        # 19002,                        # Alice's Adventures Under Ground
+        # 10643,                        # World's Greatest Books, includes AiW
+        # 36308,                        # AiW songs only
+        # 19551,                        # AiW in words of one syllable
+        # 35688,                        # "Alice in Wonderland" but by a
+        #                               #  different author.
+        # 35990,                        # "The Story of Lewis Carroll"
+        # 12, 23718,                    # Through The Looking Glass
+
+        # 76, 19640, 9007,              # The Adventures of Huckleberry Finn
+        # 32325,                        # "The Adventures of Huckleberry Finn,
+        #                               #  Tom Sawyer's Comrade"
+
+        # 7100, 7101, 7102, 7103,       # Huckleberry Finn in 5-chapter
+        # 7104, 7105, 7106, 7107,       #  chunks
+
+        # 74, 26203, 9038,              # The Adventures of Tom Sawyer
+        # 30165,                        # Tom Sawyer in German
+        # 30890,                        # Tom Sawyer in French
+        # 45333,                        # Tom Sawyer in Finnish
+        # 7193, 7194, 7198, 7196,       # Tom Sawyer in chunks
+        # 7197, 7198, 7199, 7200,
+
+        # This is the best example for two books that have different titles
+        # but are the same work.
+        15, 9147,                     # Moby Dick
+        2701, 2489, 28794,            # "Moby Dick, or, the Whale"
+
+        # This is the best example for two books that have similar titles
+        # but are different works.
+        # 91, 9036,                     # Tom Sawyer Abroad
+        # 93, 9037,                     # Tom Sawyer, Detective
+
+]
+
+
 
 def secret_garden_subset(pg_id, archive, archive_item):
     return int(pg_id) in [113, 8812, 17396, 21585,   # The Secret Garden
                           146, 19514, 23711, 37332,  # A Little Princess
                           479, 23710,                # Little Lord Fauntleroy
                           
-                          # Some pretty obscure books.
-                          2300,
-                          2400,
-                          2500,
-                          2600,
+                          # # Some pretty obscure books.
+                          # 2300,
+                          # 2400,
+                          # 2500,
+                          # 2600,
     ]
 
 def first_half_subset(pg_id, archive, archive_item):
@@ -35,7 +76,7 @@ def first_half_subset(pg_id, archive, archive_item):
     but not the entirety of Project Gutenberg."""
     return int(pg_id) < 20000
 
-subset = secret_garden_subset
+subset = very_small_subset
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
