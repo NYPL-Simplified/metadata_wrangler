@@ -546,9 +546,13 @@ class WorkIdentifier(Base):
     @classmethod
     def recursively_equivalent_identifier_ids_flat(
             cls, _db, identifier_ids, levels=5, threshold=0.5):
-        ids = set()
         data = cls.recursively_equivalent_identifier_ids(
             _db, identifier_ids, levels, threshold)
+        return cls.flatten_identifier_ids(data)
+
+    @classmethod
+    def flatten_identifier_ids(cls, data):
+        ids = set()
         for equivalents in data.values():
             ids = ids.union(set(equivalents.keys()))
         return ids
@@ -556,7 +560,7 @@ class WorkIdentifier(Base):
     def equivalent_identifier_ids(self, levels=5, threshold=0.5):
         _db = Session.object_session(self)
         return WorkIdentifier.recursively_equivalent_identifier_ids_flat(
-            _db, [self.id], levels)
+            _db, [self.id], levels, threshold)
 
     def add_resource(self, rel, href, data_source, license_pool=None,
                      media_type=None, content=None):
@@ -588,7 +592,7 @@ class WorkIdentifier(Base):
     IDEAL_IMAGE_WIDTH = 160
 
     @classmethod
-    def evaluate_cover_quality(cls, _db, identifier_ids):
+    def evaluate_cover_quality(cls, _db, identifier_data, identifier_ids):
         # Find all image resources associated with any of
         # these identifiers.
         images = cls.resources_for_identifier_ids(
@@ -616,12 +620,20 @@ class WorkIdentifier(Base):
                 # Image is not tall enough.
                 quality = quality * (1+height_difference)
             r.set_estimated_quality(quality)
+
+            # TODO: that says how good the image is as an image. But
+            # how good is it as an image for this particular book?
+            # Determining this requires measuring the conceptual
+            # distance from the image to a WorkRecord, and then from
+            # the WorkRecord to the Work in question. This is much
+            # too big a project to work on right now.
+
             if not champion or r.quality > champion.quality:
                 champion = r
         return champion, images
 
     @classmethod
-    def evaluate_summary_quality(cls, _db, identifier_ids):
+    def evaluate_summary_quality(cls, _db, identifier_data, identifier_ids):
         """Evaluate the summaries for the given group of WorkIdentifier IDs.
 
         This is an automatic evaluation based solely on the content of
@@ -946,24 +958,25 @@ class WorkRecord(Base):
         """
         return self.primary_identifier.equivalencies
         
-    def equivalent_identifier_ids(self, levels=3):
+    def equivalent_identifier_ids(self, levels=3, threshold=0.5):
         """All WorkIdentifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
-        return self.primary_identifier.equivalent_identifier_ids(levels)
+        return self.primary_identifier.equivalent_identifier_ids(
+            levels, threshold)
 
-    def equivalent_identifiers(self, levels=3, type=None):
+    def equivalent_identifiers(self, levels=3, threshold=0.5, type=None):
         """All WorkIdentifiers equivalent to this
         WorkRecord's primary identifier, at the given level of recursion.
         """
         _db = Session.object_session(self)
-        identifier_ids = self.equivalent_identifier_ids(levels)
+        identifier_ids = self.equivalent_identifier_ids(levels, threshold)
         q = _db.query(WorkIdentifier).filter(
             WorkIdentifier.id.in_(identifier_ids))
         if type:
             q = q.filter(WorkIdentifier.type==type)
         return q
 
-    def equivalent_work_records(self, levels=5):
+    def equivalent_work_records(self, levels=5, threshold=0.5):
         """All WorkRecords whose primary ID is equivalent to this WorkRecord's
         primary ID, at the given level of recursion.
 
@@ -971,7 +984,7 @@ class WorkRecord(Base):
         (Gutenberg ID -> OCLC Work ID -> OCLC Number -> ISBN -> Overdrive ID)
         """
         _db = Session.object_session(self)
-        identifier_ids = self.equivalent_identifier_ids(levels)
+        identifier_ids = self.equivalent_identifier_ids(levels, threshold)
         return _db.query(WorkRecord).filter(
             WorkRecord.primary_identifier_id.in_(identifier_ids))
 
@@ -1459,15 +1472,19 @@ class Work(Base):
         if authors:
             self.authors = authors.most_common(1)[0][0].name
 
-        # Find all related IDs that might have associated resources.
+        # Find all related IDs that might have associated resources,
+        # along with 
         _db = Session.object_session(self)
         primary_identifier_ids = [
             x.primary_identifier.id for x in self.work_records]
-        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids_flat(
+        data = WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
+        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(_db, identifier_ids)
-        self.cover, covers = WorkIdentifier.evaluate_cover_quality(_db, identifier_ids)
+        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
+            _db, data, flattened_data)
+        self.cover, covers = WorkIdentifier.evaluate_cover_quality(
+            _db, data, flattened_data)
 
         print self.title
         if self.summary:
@@ -1589,13 +1606,17 @@ class Resource(Base):
     voted_quality = Column(Float)
 
     # How many votes contributed to the voted_quality value. This lets
-    # us scale new votes proportionately while keeping only two piece
+    # us scale new votes proportionately while keeping only two pieces
     # of information.
     votes_for_quality = Column(Integer)
 
     # A combination of the calculated quality value and the
     # human-entered quality value.
     quality = Column(Float, index=True)
+
+    @property
+    def final_url(self):
+        return self.mirrored_path % dict(content_cafe_mirror="http://localhost:8000/")
 
     def could_not_mirror(self):
         """We tried to mirror this resource and failed."""
@@ -1914,7 +1935,7 @@ class LicensePool(Base):
             if a and not a % 100:
                 _db.commit()
 
-    def potential_works(self, similarity_threshold=0.8):
+    def potential_works(self, initial_threshold=0.2, final_threshold=0.8):
         """Find all existing works that have claimed this pool's 
         work records.
 
@@ -1929,8 +1950,11 @@ class LicensePool(Base):
         unclaimed_records = []
 
         # Find all work records connected to this LicensePool's
-        # primary work record.
-        equivalent_work_records = primary_work_record.equivalent_work_records()
+        # primary work record. We are very lenient about scooping up
+        # as many work records as possible here, but we will be very
+        # strict when we apply the similarity threshold.
+        equivalent_work_records = primary_work_record.equivalent_work_records(
+            threshold=initial_threshold)
 
         for r in equivalent_work_records:
             if r.work:
@@ -1945,7 +1969,7 @@ class LicensePool(Base):
                 check_against = primary_work_record
 
             # Apply the similarity threshold filter.
-            if check_against.similarity_to(r) >= similarity_threshold:
+            if check_against.similarity_to(r) >= final_threshold:
                 l.append(r)
         return claimed_records_by_work, unclaimed_records
 
@@ -1966,7 +1990,7 @@ class LicensePool(Base):
         # LicensePool's WorkRecords, and which WorkRecords are still
         # unclaimed.
         claimed, unclaimed = self.potential_works(
-            record_similarity_threshold)
+            final_threshold=record_similarity_threshold)
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record

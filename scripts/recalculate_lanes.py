@@ -3,6 +3,7 @@
 import os
 import site
 import sys
+from nose.tools import set_trace
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
@@ -20,6 +21,8 @@ if __name__ == '__main__':
     i = 0
     for work in session.query(Work):
         work.calculate_presentation()
+        if not work.title:
+            set_trace()
         i += 1
         if not i % 10:
             session.commit()

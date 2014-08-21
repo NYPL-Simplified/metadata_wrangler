@@ -3,6 +3,14 @@
 {% block content %}
 <h2>Work #{{work.id}} - {{work.title}}</h2>
 
+{% if work.cover %}
+ <p><img src="{{work.cover.final_url}}"> ({{work.cover.quality}})</p>
+{% endif %}
+
+{% if work.summary %}
+ <p><b>Description:</b> {{work.summary.content}} ({{work.summary.quality}})</p>
+{% endif %}
+
 <h3>Work records</h3>
 
 <ol>
@@ -34,7 +42,7 @@
            {% endfor %}
            {% for r in oclc_e.output.resources %}
             {% if r.mirrored and r.media_type and r.media_type.startswith("image") %}
-             <p><blockquote><img src="{{r.mirrored_path % dict(content_cafe_mirror="http://localhost:8000/")}}"/></blockquote>
+             <p><blockquote><img src="{{r.final_url}}"/> {{ r.quality }}</blockquote>
             {% endif %}
             {% if r.rel == "http://schema.org/description" and r.content %}
              <p><blockquote>{{ r.content }}</blockquote></p>
@@ -48,7 +56,7 @@
 
                {% for r in isbn_e.output.resources %}
                 {% if r.mirrored and r.media_type and r.media_type.startswith("image") %}
-                 <p><blockquote><img src="{{r.mirrored_path % dict(content_cafe_mirror="http://localhost:8000/")}}"/></blockquote>
+                 <p><blockquote><img src="{{r.final_url}}"/> {{ r.quality }}</blockquote>
                 {% endif %}
                {% endfor %}
 	     </li>

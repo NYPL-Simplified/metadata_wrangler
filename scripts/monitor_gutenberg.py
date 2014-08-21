@@ -18,6 +18,25 @@ def very_small_subset(pg_id, archive, archive_item):
     """
     return int(pg_id) in [
         # 11, 928, 28885, 23716, 19033, # Alice in Wonderland
+        # 12, 23718,                    # Through The Looking Glass
+
+        # 76, 19640, 9007,              # The Adventures of Huckleberry Finn
+        # 32325,                        # "The Adventures of Huckleberry Finn,
+        #                               #  Tom Sawyer's Comrade"
+
+        # This is the best example for two books that have different titles
+        # but are the same work.
+        15, 9147,                     # Moby Dick
+        2701, 2489, 28794,            # "Moby Dick, or, the Whale"
+
+        # This is the best example for two books that have similar titles
+        # but are different works.
+        91, 9036,                     # Tom Sawyer Abroad
+        93, 9037,                     # Tom Sawyer, Detective
+
+        # These aren't really that useful except for verifying that
+        # books semi-similar enough to other books don't get
+        # consolidated.
         # 19778,                        # AiW in German
         # 28371,                        # AiW in French
         # 17482,                        # AiW in Esperanto
@@ -29,11 +48,6 @@ def very_small_subset(pg_id, archive, archive_item):
         # 35688,                        # "Alice in Wonderland" but by a
         #                               #  different author.
         # 35990,                        # "The Story of Lewis Carroll"
-        # 12, 23718,                    # Through The Looking Glass
-
-        # 76, 19640, 9007,              # The Adventures of Huckleberry Finn
-        # 32325,                        # "The Adventures of Huckleberry Finn,
-        #                               #  Tom Sawyer's Comrade"
 
         # 7100, 7101, 7102, 7103,       # Huckleberry Finn in 5-chapter
         # 7104, 7105, 7106, 7107,       #  chunks
@@ -44,16 +58,6 @@ def very_small_subset(pg_id, archive, archive_item):
         # 45333,                        # Tom Sawyer in Finnish
         # 7193, 7194, 7198, 7196,       # Tom Sawyer in chunks
         # 7197, 7198, 7199, 7200,
-
-        # This is the best example for two books that have different titles
-        # but are the same work.
-        15, 9147,                     # Moby Dick
-        2701, 2489, 28794,            # "Moby Dick, or, the Whale"
-
-        # This is the best example for two books that have similar titles
-        # but are different works.
-        # 91, 9036,                     # Tom Sawyer Abroad
-        # 93, 9037,                     # Tom Sawyer, Detective
 
 ]
 
