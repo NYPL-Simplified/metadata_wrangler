@@ -255,8 +255,8 @@ class DataSource(Base):
                  (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
                  (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
                  (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
+                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
                  (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
                  (cls.WEB, True, WorkIdentifier.URI, None),
                  (cls.CONTENT_CAFE, False, None, None),
@@ -1206,6 +1206,10 @@ class Work(Base):
             self.id, self.title, self.authors, self.lane, self.language,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
+    @property
+    def language_code(self):
+        return LanguageCodes.three_to_two.get(self.language, self.language)
+
     @classmethod
     def search(cls, _db, query, languages, lane=None):
         """Find works that match a search query.
@@ -1711,7 +1715,7 @@ class WorkFeed(object):
         """A page of works."""
 
         query = _db.query(Work).filter(
-            Work.languages.in_(self.languages),
+            Work.language.in_(self.languages),
             Work.lane==self.lane,
             Work.was_merged_into == None,
         )

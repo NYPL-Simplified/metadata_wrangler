@@ -603,6 +603,7 @@ class OCLCXMLParser(XMLParser):
             # semicolons.
             if (not ' ; ' in must_resemble_title
                 and ' ; ' in title and threshold > 0):
+                print "SEMICOLON DISQUALIFICATION: %s" % title
                 return None
 
         # Apply restrictions. If they're not met, return None.

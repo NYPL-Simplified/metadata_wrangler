@@ -43,11 +43,13 @@ class TestDataSource(DatabaseTest):
             (DataSource.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID),
             (DataSource.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID),
             (DataSource.THREEM, True, WorkIdentifier.THREEM_ID),
-            (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.AXIS_360, True, WorkIdentifier.AXIS_360_ID),
+
             (DataSource.OCLC, False, WorkIdentifier.OCLC_NUMBER),
             (DataSource.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER),
+            (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.WEB, True, WorkIdentifier.URI),
+            (DataSource.CONTENT_CAFE, False, None),
             (DataSource.MANUAL, False, None)
         ]
         eq_(set(sources), set(expect))
@@ -194,7 +196,7 @@ class TestWorkRecord(DatabaseTest):
         eq_(id, identifier.identifier)
         eq_(type, identifier.type)
         eq_(True, was_new)
-        eq_([identifier.id], record.equivalent_identifier_ids())
+        eq_(set([identifier.id]), record.equivalent_identifier_ids())
 
         # We can get the same work record by providing only the name
         # of the data source.
@@ -268,9 +270,10 @@ class TestWorkRecord(DatabaseTest):
 
         oclc_number, ignore = WorkIdentifier.for_foreign_id(
             self._db, WorkIdentifier.OCLC_NUMBER, "22")
-        gutenberg.primary_identifier.equivalent_to(oclc_classify, oclc_number)
+        gutenberg.primary_identifier.equivalent_to(
+            oclc_classify, oclc_number, 1)
         open_library.primary_identifier.equivalent_to(
-            oclc_linked_data, oclc_number)
+            oclc_linked_data, oclc_number, 1)
        
         # Here's a WorkRecord for a Recovering the Classics cover.
         recovering, ignore = WorkRecord.for_foreign_id(
@@ -282,7 +285,7 @@ class TestWorkRecord(DatabaseTest):
         # with the Project Gutenberg text.
         manual = DataSource.lookup(self._db, DataSource.MANUAL)
         gutenberg.primary_identifier.equivalent_to(
-            manual, recovering.primary_identifier)
+            manual, recovering.primary_identifier, 1)
 
         # Finally, here's a completely unrelated WorkRecord, which
         # will not be showing up.
@@ -419,19 +422,19 @@ class TestWork(DatabaseTest):
 
         # Here's a high-quality work.
         w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, languages=english, lane=lane), id=1)
+            quality=100, language=english, lane=lane), id=1)
 
         # Here's a medium-quality-work.
         w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=10, languages=english, lane=lane), id=2)
+            quality=10, language=english, lane=lane), id=2)
 
         # Here's a low-quality work.
         w3, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=1, languages=english, lane=lane), id=3)
+            quality=1, language=english, lane=lane), id=3)
 
         # Here's a work of abysmal quality.
         w4, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=0, languages=english, lane=lane), id=4)
+            quality=0, language=english, lane=lane), id=4)
 
         # We want two works of quality at least 200, but we'll settle
         # for quality 50. Even that is too much to ask, and we end up with
@@ -454,10 +457,10 @@ class TestWork(DatabaseTest):
 
     def test_quality_sample_language_filter(self):
         w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, languages="eng", lane="Fiction"), id=1)
+            quality=100, language="eng", lane="Fiction"), id=1)
 
         w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, languages="spa", lane="Fiction"), id=2)
+            quality=100, language="spa", lane="Fiction"), id=2)
 
         eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
         eq_([w2], Work.quality_sample(self._db, "spa", "Fiction", 0, 0, 2))
@@ -466,10 +469,10 @@ class TestWork(DatabaseTest):
 
     def test_quality_sample_lane_filter(self):
         w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, languages="eng", lane="Fiction"), id=1)
+            quality=100, language="eng", lane="Fiction"), id=1)
 
         w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=10, languages="eng", lane="Nonfiction"), id=2)
+            quality=10, language="eng", lane="Nonfiction"), id=2)
 
         eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
         eq_([w2], Work.quality_sample(self._db, "eng", "Nonfiction", 0, 0, 2))
@@ -738,7 +741,7 @@ class TestWorkConsolidation(DatabaseTest):
         data_source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         for make_equivalent in wr3, wr1:
             wr4.primary_identifier.equivalent_to(
-                data_source, make_equivalent.primary_identifier)
+                data_source, make_equivalent.primary_identifier, 1)
         preexisting_work = Work()
         preexisting_work.work_records.extend([wr1, wr2])
 

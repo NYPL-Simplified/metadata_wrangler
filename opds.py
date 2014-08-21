@@ -193,10 +193,11 @@ class AcquisitionFeed(OPDSFeed):
                       href=checkout_url)]
 
         cover_quality = 0
+        qualities = [("Work quality", work.quality)]
         if work.cover:
             url = URLRewriter.rewrite(work.cover.mirrored_path)
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
-            cover_quality = work.cover.quality
+            qualities.append(("Cover quality", work.cover.quality))
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             url = host + urllib.quote(
@@ -207,9 +208,13 @@ class AcquisitionFeed(OPDSFeed):
 
         if work.summary:
             summary = work.summary.content
-            summary_quality = work.summary.quality
-
-        summary += "<ul><li>Work quality: %.1f</li><li>Summary quality: %.1f</li><li>Cover quality: %.1f</li></ul>" % (work.quality, summary_quality, cover_quality)
+            qualities.append(("Summary quality", work.summary.quality))
+        else:
+            summary = ""
+        summary += "<ul>"
+        for name, value in qualities:
+            summary += "<li>%s: %.1f</li>" % (name, value)
+        summary += "</ul>"
 
         entry = E.entry(
             E.id(tag),
@@ -221,7 +226,7 @@ class AcquisitionFeed(OPDSFeed):
             *links
         )
         
-        language = work.language
+        language = work.language_code
         if language:
             language_tag = E._makeelement("{%s}language" % dcterms_ns)
             language_tag.text = language

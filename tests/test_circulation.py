@@ -16,6 +16,7 @@ from tests.db import (
 )
 
 from model import (
+    DataSource,
     Loan,
     Resource,
     WorkRecord,
@@ -79,11 +80,14 @@ class CirculationTest(DatabaseTest):
         # download link that points to an EPUB.
         pool = self.english_1.license_pools[0]
         pool.open_access = True
-        pool.work_record().add_resource(
+        identifier = pool.work_record().primary_identifier
+        data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        identifier.add_resource(
             Resource.OPEN_ACCESS_DOWNLOAD,
             "http://direct-download.com/",
-            None,
-            "application/epub+zip")
+            data_source,
+            license_pool=pool,
+            media_type="application/epub+zip")
 
         self.english_2 = self._work(
             "Totally American", "Uncle Sam", "Nonfiction", "eng", True

@@ -180,9 +180,9 @@ class TestOPDS(DatabaseTest):
 
     def test_featured_feed_ignores_low_quality_works(self):
         lane="Foo"
-        good = self._work(lane=lane, languages="eng", with_license_pool=True)
+        good = self._work(lane=lane, language="eng", with_license_pool=True)
         good.quality = 100
-        bad = self._work(lane=lane, languages="eng", with_license_pool=True)
+        bad = self._work(lane=lane, language="eng", with_license_pool=True)
         bad.quality = 0
 
         # We get the good one and omit the bad one.
@@ -195,10 +195,10 @@ class TestOPDS(DatabaseTest):
         feed = AcquisitionFeed.active_loans_for(patron)
 
         work = self._work(
-            lane="Nonfiction", languages="eng", with_license_pool=True)
+            lane="Nonfiction", language="eng", with_license_pool=True)
         work.license_pools[0].loan_to(patron)
         unused = self._work(
-            lane="Nonfiction", languages="eng", with_license_pool=True)
+            lane="Nonfiction", language="eng", with_license_pool=True)
 
         # Get the feed.
         feed = AcquisitionFeed.active_loans_for(patron)

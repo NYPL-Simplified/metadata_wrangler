@@ -67,15 +67,15 @@ class TestParser(DatabaseTest):
         eq_(25, len(swids))
 
         # This is nearly so lax as to be meaningless, but it does
-        # prohibit four works whose titles contain semicolons (these
-        # are usually anthologies) and three works whose titles have
-        # no words in common with the title we're looking for.
+        # prohibit one work whose title contains ' ; ' (these are
+        # usually anthologies) and three works whose titles have no
+        # words in common with the title we're looking for.
         status, swids = OCLCXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0.00000000001)
-        eq_(18, len(swids))
+        eq_(21, len(swids))
 
-        # Add a semicolon to the title we're looking for, and the four
-        # works whose titles contain semicolons are acceptable again.
+        # Add a semicolon to the title we're looking for, and the 
+        # work whose title contains ' ; ' is acceptable again.
         status, swids = OCLCXMLParser.parse(
             self._db, xml, title="Dick ; Moby", title_similarity=0.000000001)
         eq_(22, len(swids))
@@ -174,7 +174,7 @@ class TestParser(DatabaseTest):
 
         # The work has no language specified. The edition does have
         # a language specified.
-        eq_([], work.languages)
+        eq_(None, work.language)
 
         [ws] = work.subjects[SubjectType.DDC]
         eq_("813.3", ws['id'])
