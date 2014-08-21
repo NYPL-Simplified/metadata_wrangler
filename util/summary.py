@@ -56,6 +56,7 @@ class SummaryEvaluator(object):
         self.blobs = dict()
         self.scores = dict()
         self.noun_phrases_to_consider = float(noun_phrases_to_consider)
+        self.top_noun_phrases = None
 
     def add(self, summary):
         if summary in self.blobs:

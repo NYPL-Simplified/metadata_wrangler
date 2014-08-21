@@ -9,6 +9,7 @@ class TestSummaryEvaluator(object):
         e = SummaryEvaluator()
         for s in summaries:
             e.add(s)
+        e.ready()
         return e.best_choice()[0]
 
     def test_four_sentences_is_better_than_three(self):
