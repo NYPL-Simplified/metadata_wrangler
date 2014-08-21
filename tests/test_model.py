@@ -607,6 +607,8 @@ class TestCirculationEvent(DatabaseTest):
 
 class TestWorkQuality(DatabaseTest):
 
+    # TODO: More summaries and more covers gives you a higher rating.
+
     def test_better_known_work_gets_higher_rating(self):
 
         gutenberg_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
@@ -877,7 +879,7 @@ class TestWorkFeed(DatabaseTest):
 
     def test_several_books_same_author(self):
         title = "The Title"
-        language = ["eng"]
+        language = "eng"
         lane = "Fiction"
 
         # We've got three works with the same author but different
@@ -903,7 +905,7 @@ class TestWorkFeed(DatabaseTest):
         
         title = "The Title"
         author = "Author, The"
-        language = ["eng"]
+        language = "eng"
         lane = "Fiction"
 
         # We've got four works with the exact same title and author

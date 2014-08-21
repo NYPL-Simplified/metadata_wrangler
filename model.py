@@ -1490,12 +1490,12 @@ class Work(Base):
         self.cover, covers = WorkIdentifier.evaluate_cover_quality(
             _db, data, flattened_data)
 
-        print self.title
         if self.summary:
             print "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
         if self.cover:
             print self.cover.mirrored_path
-        self.quality = len(self.license_pools) * (len(summaries)+len(covers))
+        self.quality = len(self.license_pools) * (
+            len(flattened_data)/3.0 + len(summaries) / 3.0 +len(covers) / 3.0)
 
         self.subjects = subjects
         if 'audience' in self.subjects:
