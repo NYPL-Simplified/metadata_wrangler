@@ -191,28 +191,28 @@ class TestContributor(DatabaseTest):
         self._names("Jones, Bob", "Jones", "Sally Smith",
                     default_display_name="Sally Smith")
 
-        # Misc. cleanup.
+        # Corporate names are untouched and get no family name.
+        self._names("Bob's Books.", None, "Bob's Books.")
+        self._names("Bob's Books, Inc.", None, "Bob's Books, Inc.")
         self._names("Little, Brown &amp; Co.", None, "Little, Brown & Co.")
         self._names("Philadelphia Broad Street Church (Philadelphia, Pa.)",
                     None, "Philadelphia Broad Street Church")
 
-        # Corporate names are untouched and get no family name.
-        self._names("Bob's Books.", None, "Bob's Books.")
-        self._names("Bob's Books, Inc.", None, "Bob's Books, Inc.")
-
-        self._names("Geering, R. G.", "Geering", "R. G. Geering")
-
+        # Dates and other gibberish after a name is removed.
         self._names("Twain, Mark, 1855-1910", "Twain", "Mark Twain")
         self._names("Twain, Mark, ???-1910", "Twain", "Mark Twain")
         self._names("Twain, Mark, circ. 1900", "Twain", "Mark Twain")
         self._names("Twain, Mark, !@#!@", "Twain", "Mark Twain")
 
+        # Suffixes stay on the end, except for "Mrs.", which goes
+        # to the front.
+        self._names("Twain, Mark, Jr.", "Twain", "Mark Twain, Jr.")
         self._names("Twain, Mark, Mrs.", "Twain", "Mrs. Mark Twain")
         self._names("Twain, Mark, Mrs", "Twain", "Mrs Mark Twain")
-        self._names("Twain, Mark, Jr.", "Twain", "Mark Twain, Jr.")
 
         # The easy case.
         self._names("Twain, Mark", "Twain", "Mark Twain")
+        self._names("Geering, R. G.", "Geering", "R. G. Geering")
 
 class TestWorkRecord(DatabaseTest):
 

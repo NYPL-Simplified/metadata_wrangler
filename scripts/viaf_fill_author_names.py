@@ -4,7 +4,7 @@ import sys
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from integration.viaf import (
-    VIAFParser,
+    VIAFClient,
 )
 from model import production_session
 
@@ -13,4 +13,4 @@ if __name__ == '__main__':
         print "Usage: %s [data storage directory]" % sys.argv[0]
         sys.exit()
     path = sys.argv[1]      
-    VIAFParser(production_session(), path).run()
+    VIAFClient(production_session(), path).run()

@@ -679,15 +679,24 @@ class Contributor(Base):
     lc = Column(Unicode, index=True)
     viaf = Column(Unicode, index=True)
 
-    # This is the name we choose to display for this contributor, of
-    # all the names we know for them. It may change over time.
+    # This is the name by which this person is known in the original
+    # catalog.
     name = Column(Unicode, index=True)
     aliases = Column(ARRAY(Unicode), default=[])
 
-    # We fill this in from VIAF.
-    given_name = Column(Unicode, index=True)
+    # This is the name we will display publicly. Ideally it will be
+    # the name most familiar to readers.
+    display_name = Column(Unicode, index=True)
+
+    # This is a short version of the contributor's name, displayed in
+    # situations where the full name is too long. For corporate contributors
+    # this value will be None.
     family_name = Column(Unicode, index=True)
-    name_extra = Column(Unicode)
+    
+    # This is the name used for this contributor on Wikipedia. This
+    # gives us an entry point to Wikipedia, Wikidata, etc.
+    wikipedia_name = Column(Unicode, index=True)
+
 
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
@@ -853,8 +862,7 @@ class Contributor(Base):
         name = name.replace("&amp;", "&")
 
         # "Philadelphia Broad Street Church (Philadelphia, Pa.)"
-        #  =>
-        # "Philadelphia Broad Street Church"
+        #  => "Philadelphia Broad Street Church"
         name = cls.PARENTHETICAL.sub("", name)
         name = name.strip()
 
