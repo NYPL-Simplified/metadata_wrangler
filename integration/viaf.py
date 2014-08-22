@@ -64,6 +64,9 @@ class VIAFParser(XMLParser):
                 display_name = wikipedia_name.replace("_", " ")
                 if ' (' in display_name:
                     display_name = display_name[:display_name.rindex(' (')]
+                # We're so happy about this we're going to overwrite
+                # any incoming display name.
+                working_name = display_name
 
         # If we found a Wikipedia name, we still need to find a family name.
         # If we didn't find a Wikipedia name, we need to find both a family
@@ -113,8 +116,8 @@ class VIAFParser(XMLParser):
         given_name_for_family_name = defaultdict(Counter)
         extra_for_given_name_and_family_name = defaultdict(Counter)
         for given_name, family_name, name_extra in possibilities:
-            #print "  POSSIBILITY: %s/%s/%s" % (
-            #    given_name, family_name, name_extra)
+            print "  POSSIBILITY: %s/%s/%s" % (
+                given_name, family_name, name_extra)
             if family_name:
                 family_names[family_name] += 1
                 if given_name:
