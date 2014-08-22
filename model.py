@@ -8,6 +8,7 @@ import datetime
 import os
 from nose.tools import set_trace
 import random
+import re
 
 from PIL import Image
 
@@ -683,12 +684,16 @@ class Contributor(Base):
     name = Column(Unicode, index=True)
     aliases = Column(ARRAY(Unicode), default=[])
 
+    # We fill this in from VIAF.
+    given_name = Column(Unicode, index=True)
+    family_name = Column(Unicode, index=True)
+    name_extra = Column(Unicode)
+
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     contributions = relationship("Contribution", backref="contributor")
     work_contributions = relationship("WorkContribution", backref="contributor",
                                       )
-
     # Types of roles
     AUTHOR_ROLE = "Author"
     UNKNOWN_ROLE = 'Unknown'
@@ -822,6 +827,80 @@ class Contributor(Base):
             contribution.contributor_id = destination.id
         _db.query(Contributor).filter(Contributor.id==self.id).delete()
         _db.commit()
+
+    # Regular expressions used by default_names().
+    PARENTHETICAL = re.compile("\([^)]*\)")
+    ALPHABETIC = re.compile("[a-zA-z]")
+    NUMBERS = re.compile("[0-9]")
+
+    def default_names(self, default_display_name=None):
+        """Attempt to derive a family name ("Twain") and a display name ("Mark
+        Twain") from a catalog name ("Twain, Mark").
+
+        This is full of pitfalls, which is why we prefer to use data
+        from VIAF. But when there is no data from VIAF, the output of
+        this algorithm is better than the input in pretty much every
+        case.
+        """
+        return self._default_names(self.name, default_display_name)
+
+    @classmethod
+    def _default_names(cls, name, default_display_name=None):
+        original_name = name
+        """Split out from default_names to make it easy to test."""
+        display_name = default_display_name
+        # "Little, Brown &amp; Co." => "Little, Brown & Co."
+        name = name.replace("&amp;", "&")
+
+        # "Philadelphia Broad Street Church (Philadelphia, Pa.)"
+        #  =>
+        # "Philadelphia Broad Street Church"
+        name = cls.PARENTHETICAL.sub("", name)
+        name = name.strip()
+
+        if ', ' in name:
+            # This is probably a personal name.
+            parts = name.split(", ")
+            if len(parts) > 2:
+                final = parts[-1]
+                # The most likely scenario is that the final part
+                # of the name is a date or a set of dates. If this
+                # seems true, just delete that part.
+                if (cls.NUMBERS.search(parts[-1])
+                    or not cls.ALPHABETIC.search(parts[-1])):
+                    parts = parts[:-1]
+            family_name = parts[0]
+            p = parts[-1].lower()
+            if (p in ('llc', 'inc', 'inc.')
+                or p.endswith("company") or p.endswith(" co.")
+                or p.endswith(" co")):
+                # No, this is a corporate name that contains a comma.
+                # It can't be split on the comma, so don't bother.
+                family_name = None
+                display_name = display_name or name
+            if not display_name:
+                # The fateful moment. Swap the second string and the
+                # first string.
+                display_name = parts[1] + " " + parts[0]
+                if len(parts) > 2:
+                    # There's a leftover bit.
+                    if parts[2] in ('Mrs.', 'Mrs'):
+                        # "Jones, Bob, Mrs."
+                        #  => "Mrs. Bob Jones"
+                        display_name = parts[2] + " " + display_name
+                    else:
+                        # "Jones, Bob, Jr."
+                        #  => "Bob Jones, Jr."
+                        display_name += ", " + " ".join(parts[2:])
+        else:
+            # Since there's no comma, this is probably a corporate name.
+            family_name = None
+            display_name = name
+        print " Default names for %s" % original_name
+        print "  Family name: %s" % family_name
+        print "  Display name: %s" % display_name
+        print
+        return family_name, display_name
 
 
 class Contribution(Base):

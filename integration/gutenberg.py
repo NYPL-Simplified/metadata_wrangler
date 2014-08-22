@@ -489,7 +489,6 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                     # there's nothing we can do.
                     pass                    
                 else:
-                    set_trace()
                     print " Got unexpected representation type from lookup: %s" % representation_type
         # Connect the Gutenberg book to the OCLC works looked up by
         # title/author. Hopefully we can also connect the Gutenberg book

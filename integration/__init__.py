@@ -5,6 +5,19 @@ class XMLParser(object):
 
     """Helper functions to process XML data."""
 
+    @classmethod
+    def _xpath(cls, tag, expression):
+        """Wrapper to do a namespaced XPath expression."""
+        return tag.xpath(expression, namespaces=cls.NAMESPACES)
+
+    @classmethod
+    def _xpath1(cls, tag, expression):
+        """Wrapper to do a namespaced XPath expression."""
+        values = cls._xpath(tag, expression)
+        if not values:
+            return None
+        return values[0]
+
     def text_of_optional_subtag(self, tag, name):
         tag = tag.xpath(name)
         if tag:

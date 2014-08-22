@@ -179,7 +179,40 @@ class TestContributor(DatabaseTest):
         # 'Bob' record.
         eq_([robert], bobs_book.authors)
 
+    def _names(self, in_name, out_family, out_display,
+               default_display_name=None):
+        f, d = Contributor._default_names(in_name, default_display_name)
+        eq_(f, out_family)
+        eq_(d, out_display)
 
+    def test_default_names(self):
+
+        # Pass in a default display name and it will always be used.
+        self._names("Jones, Bob", "Jones", "Sally Smith",
+                    default_display_name="Sally Smith")
+
+        # Misc. cleanup.
+        self._names("Little, Brown &amp; Co.", None, "Little, Brown & Co.")
+        self._names("Philadelphia Broad Street Church (Philadelphia, Pa.)",
+                    None, "Philadelphia Broad Street Church")
+
+        # Corporate names are untouched and get no family name.
+        self._names("Bob's Books.", None, "Bob's Books.")
+        self._names("Bob's Books, Inc.", None, "Bob's Books, Inc.")
+
+        self._names("Geering, R. G.", "Geering", "R. G. Geering")
+
+        self._names("Twain, Mark, 1855-1910", "Twain", "Mark Twain")
+        self._names("Twain, Mark, ???-1910", "Twain", "Mark Twain")
+        self._names("Twain, Mark, circ. 1900", "Twain", "Mark Twain")
+        self._names("Twain, Mark, !@#!@", "Twain", "Mark Twain")
+
+        self._names("Twain, Mark, Mrs.", "Twain", "Mrs. Mark Twain")
+        self._names("Twain, Mark, Mrs", "Twain", "Mrs Mark Twain")
+        self._names("Twain, Mark, Jr.", "Twain", "Mark Twain, Jr.")
+
+        # The easy case.
+        self._names("Twain, Mark", "Twain", "Mark Twain")
 
 class TestWorkRecord(DatabaseTest):
 

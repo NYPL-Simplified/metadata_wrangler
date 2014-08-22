@@ -315,7 +315,7 @@ class OCLCClassifyAPI(object):
         """Perform an OCLC lookup."""
         query_string = self.query_string(**kwargs)
         cache_key = self.cache_key(**kwargs)
-        print " Query string: %s" % query_string
+        #print " Query string: %s" % query_string
         raw = None
         if self.cache.exists(cache_key):
             # Don't go over the wire. Get the raw XML from cache
@@ -323,9 +323,9 @@ class OCLCClassifyAPI(object):
             raw = self.cache.open(cache_key).read()
         if not raw:
             url = self.BASE_URL + query_string + self.NO_SUMMARY
-            print " URL: %s" % url
+            #print " URL: %s" % url
             raw = self.request(url) or ''
-            print " Retrieved over the net."
+            #print " Retrieved over the net."
             self.cache.store(cache_key, raw)
 
         return raw
@@ -346,19 +346,6 @@ class OCLCXMLParser(XMLParser):
     NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
 
     LIST_TYPE = "works"
-
-    @classmethod
-    def _xpath(cls, tag, expression):
-        """Wrapper to do a namespaced XPath expression."""
-        return tag.xpath(expression, namespaces=cls.NAMESPACES)
-
-    @classmethod
-    def _xpath1(cls, tag, expression):
-        """Wrapper to do a namespaced XPath expression."""
-        values = cls._xpath(tag, expression)
-        if not values:
-            return None
-        return values[0]
 
     @classmethod
     def parse(cls, _db, xml, **restrictions):
@@ -419,7 +406,7 @@ class OCLCXMLParser(XMLParser):
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
-            print "Extracting SWIDs from search results."
+            #print "Extracting SWIDs from search results."
             records = cls.extract_swids(_db, tree, **restrictions)
         elif representation_type == cls.NOT_FOUND_STATUS:
             # No problem; OCLC just doesn't have any data.
@@ -594,7 +581,7 @@ class OCLCXMLParser(XMLParser):
             if similarity < threshold:
                 # The title of the book under consideration is not
                 # similar enough to the given title.
-                print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
+                #print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
                 return None
 
             # The semicolon is frequently used to separate multiple
@@ -603,7 +590,7 @@ class OCLCXMLParser(XMLParser):
             # semicolons.
             if (not ' ; ' in must_resemble_title
                 and ' ; ' in title and threshold > 0):
-                print "SEMICOLON DISQUALIFICATION: %s" % title
+                #print "SEMICOLON DISQUALIFICATION: %s" % title
                 return None
 
         # Apply restrictions. If they're not met, return None.
@@ -640,10 +627,10 @@ class OCLCXMLParser(XMLParser):
         work (identified by OCLC Work ID).
         """
         oclc_work_id = unicode(work_tag.get('pswid'))
-        if oclc_work_id:
-            print " owi: %s" % oclc_work_id
-        else:
-            print " No owi in %s" % etree.tostring(work_tag)
+        # if oclc_work_id:
+        #     print " owi: %s" % oclc_work_id
+        # else:
+        #     print " No owi in %s" % etree.tostring(work_tag)
 
 
         try:
@@ -870,8 +857,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 new_isbns += len(isbns)
                 new_descriptions += len(descriptions)
 
-            print "Total: %s edition records, %s ISBNs, %s descriptions." % (
-                new_records, new_isbns, new_descriptions)
+            print "Total: %s ISBNs, %s descriptions." % (
+                new_isbns, new_descriptions)
         except IOError, e:
             return False
         return True
