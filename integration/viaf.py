@@ -202,11 +202,13 @@ class VIAFClient(object):
         self._db = _db
         self.parser = VIAFParser()
 
-    def run(self):
+    def run(self, force=False):
         a = 0
         candidates = self._db.query(Contributor).filter(
-            Contributor.display_name==None).filter(
-                Contributor.viaf != None)
+            Contributor.viaf != None)
+        if not force:
+            # Only process authors that haven't been processed yet.
+            candidates = candidates.filter(Contributor.display_name==None)
         for contributor in candidates:
             xml = self.lookup(contributor.viaf)
             display_name, family_name, wikipedia_name = self.parser.info(
