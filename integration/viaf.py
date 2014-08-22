@@ -210,18 +210,30 @@ class VIAFClient(object):
 
     def run(self, force=False):
         a = 0
-        candidates = self._db.query(Contributor).filter(
-            Contributor.viaf != None)
+        candidates = self._db.query(Contributor)
         if not force:
             # Only process authors that haven't been processed yet.
             candidates = candidates.filter(Contributor.display_name==None)
         for contributor in candidates:
-            xml = self.lookup(contributor.viaf)
-            display_name, family_name, wikipedia_name = self.parser.info(
-                contributor, xml)
-            contributor.display_name = display_name
-            contributor.family_name = family_name
-            contributor.wikipedia_name = wikipedia_name
+            # Sometimes 'viaf' is multiple values.
+            if contributor.viaf:
+                viafs = [x.strip() for x in contributor.viaf.split("|")]
+                for v in viafs:
+                    xml = self.lookup(v)
+                    display_name, family_name, wikipedia_name = self.parser.info(
+                        contributor, xml)
+                    contributor.display_name = display_name
+                    contributor.family_name = family_name
+                    contributor.wikipedia_name = wikipedia_name
+                    if wikipedia_name or family_name:
+                        # Good enough.
+                        break
+            if not contributor.display_name:
+                # We could not find a VIAF record for this contributor,
+                # or none of the records were good enough. Use the
+                # default name.
+                contributor.family_name, contributor.display_name = (
+                    contributor.default_names())
             a += 1
             if not a % 1000:
                 print a

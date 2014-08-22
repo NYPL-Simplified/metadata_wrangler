@@ -18,8 +18,6 @@ from integration.viaf import (
     VIAFClient,
 )
 
-# 288540365 | 288540365 | uncontrolled
-
 class TestNameParser(object):
 
     def setup(self):
