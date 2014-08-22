@@ -50,7 +50,7 @@ class VIAFParser(XMLParser):
         print
         return display_name, family_name, wikipedia_name
 
-    def parse(self, xml, working_name):
+    def parse(self, xml, working_name=None):
         """Parse a VIAF response into a name 3-tuple."""
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         display_name = None
@@ -78,7 +78,7 @@ class VIAFParser(XMLParser):
             # name for it to even be considered. Otherwise it's a
             # better bet to try to munge the original name.
             for v in (possible_given, possible_family, possible_extra):
-                if v and v in working_name:
+                if (not working_name) or (v and v in working_name):
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
                     break
@@ -184,7 +184,10 @@ class VIAFParser(XMLParser):
         else:
             display_name = given + ' ' + family
         if extra and not extra.startswith('pseud'):
-            display_name += ', ' + extra
+            if family and given:
+                display_name += ', ' + extra
+            else:
+                display_name += ' ' + extra
         return display_name
 
 
