@@ -19,64 +19,17 @@
  {% endfor %}
 </ol>
 
+{% for image in work.all_cover_images() %}
+{% if image.mirrored %}
+<img src="{{image.final_url}}" alt="{{image.quality}}"/>
+{% endif %}
+{% endfor %}
+
 <ol>
- {% for workrecord in work.work_records %}
-  <li>
-   <a name="{{loop.index}}"><b>{{workrecord.title}}</b> - {{workrecord.primary_identifier.__repr__().decode("utf8")}} {{workrecord.languages}}</b></a>
-
-   <ul>
-   {% for e in workrecord.primary_identifier.equivalencies %}
-    <li>
-     {{ e.output.__repr__().decode("utf8") }} <b>{{ e.strength }}</b>
-     <ul>
-      {% for oclc_work in e.output.primarily_identifies %}
-       <li>
-        {{ oclc_work.title }} {{ oclc_work.summary }}
-
-        <ul>
-         {% for oclc_e in oclc_work.primary_identifier.equivalencies %}
-	  <li>
-           {{ oclc_e.output }} <b>{{ oclc_e.strength }}</b>
-	   {% for wr2 in oclc_e.output.primarily_identifies %} 
-             {{ wr2.title }} / {{wr2.publisher}} / {{wr2.summary}}
-           {% endfor %}
-           {% for r in oclc_e.output.resources %}
-            {% if r.mirrored and r.media_type and r.media_type.startswith("image") %}
-             <p><blockquote><img src="{{r.final_url}}"/> {{ r.quality }}</blockquote>
-            {% endif %}
-            {% if r.rel == "http://schema.org/description" and r.content %}
-             <p><blockquote>{{ r.content }}</blockquote></p>
-            {% endif %}
-           {% endfor %}
-
-	   <ul>
-            {% for isbn_e in oclc_e.output.equivalencies %}
-	     <li>
-	       {{ isbn_e.output }}
-
-               {% for r in isbn_e.output.resources %}
-                {% if r.mirrored and r.media_type and r.media_type.startswith("image") %}
-                 <p><blockquote><img src="{{r.final_url}}"/> {{ r.quality }}</blockquote>
-                {% endif %}
-               {% endfor %}
-	     </li>
-            {% endfor %}
-           </ul>
-          </li>
-         {% endfor %}
-        </ul>
-
-
-
-       </li>
-       
-      {% endfor %}
-     </ul>
-    </li>
-   {% endfor %}
-   </ul>
-  </li>
-    {% endfor %}
- </ol>
-
+{% for description in work.all_descriptions() %}
+{% if description.content %}
+<li>{{description.content}} {{description.quality}}</li>
+{% endif %}
+{% endfor %}
+</ol>
 {% endblock %}

@@ -67,7 +67,8 @@ class CoverMatcher(object):
                             if a.display_name:
                                 long_names.append(a.display_name)
                             else:
-                                long_names.append(a.name)
+                                if name not in ['Various']:
+                                    long_names.append(a.name)
                         short_name = ", ".join(sorted(short_names))
                         long_name = ", ".join(sorted(long_names))
                         

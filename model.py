@@ -1570,6 +1570,30 @@ class Work(Base):
 
         return (title_counter, author_counter, language_counter, subject_data)
 
+    def all_cover_images(self):
+        _db = Session.object_session(self)
+        primary_identifier_ids = [
+            x.primary_identifier.id for x in self.work_records]
+        data = WorkIdentifier.recursively_equivalent_identifier_ids(
+            _db, primary_identifier_ids, 5, threshold=0.5)
+        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
+        return WorkIdentifier.resources_for_identifier_ids(
+            _db, flattened_data, Resource.IMAGE).filter(
+                Resource.mirrored==True).order_by(
+                Resource.quality.desc())
+
+    def all_descriptions(self):
+        _db = Session.object_session(self)
+        primary_identifier_ids = [
+            x.primary_identifier.id for x in self.work_records]
+        data = WorkIdentifier.recursively_equivalent_identifier_ids(
+            _db, primary_identifier_ids, 5, threshold=0.5)
+        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
+        return WorkIdentifier.resources_for_identifier_ids(
+            _db, flattened_data, Resource.DESCRIPTION).filter(
+                Resource.content != None).order_by(
+                Resource.quality.desc())
+
     def calculate_presentation(self):
 
         titles, authors, languages, subjects = (
