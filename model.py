@@ -594,6 +594,10 @@ class WorkIdentifier(Base):
     IDEAL_IMAGE_HEIGHT = 240
     IDEAL_IMAGE_WIDTH = 160
 
+    # The point at which a generic geometric image is better
+    # than some other image.
+    MINIMUM_IMAGE_QUALITY = 0.25
+
     @classmethod
     def evaluate_cover_quality(cls, _db, identifier_data, identifier_ids):
         # Find all image resources associated with any of
@@ -643,7 +647,8 @@ class WorkIdentifier(Base):
             # the WorkRecord to the Work in question. This is much
             # too big a project to work on right now.
 
-            if not champion or r.quality > champion.quality:
+            if (r.quality >= self.MINIMUM_IMAGE_QUALITY and
+                (not champion or r.quality > champion.quality)):
                 champion = r
         return champion, images
 
@@ -1721,7 +1726,8 @@ class Resource(Base):
 
     @property
     def final_url(self):
-        return self.mirrored_path % dict(content_cafe_mirror="http://localhost:8000/")
+        return self.mirrored_path % dict(
+            content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC")
 
     def could_not_mirror(self):
         """We tried to mirror this resource and failed."""
