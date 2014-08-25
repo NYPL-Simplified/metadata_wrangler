@@ -18,6 +18,19 @@ from classification import Classification
 
 from util import LanguageCodes
 
+def identifier_key(identifier):
+    if identifier.type == WorkIdentifier.OCLC_WORK:
+        return "owi-%s" % identifier.identifier
+    elif identifier.type == WorkIdentifier.GUTENBERG_ID:
+        return "Gutenberg-%s" % identifier.identifier
+    elif identifier.type == WorkIdentifier.OCLC_NUMBER:
+        return "OCLC-%s" % identifier.identifier
+    elif identifier.type == WorkIdentifier.ISBN:
+        return "ISBN-%s" % identifier.identifier
+    else:
+        set_trace()
+
+
 class GutenbergReanimator(object):
 
     def __init__(self, _db, data_directory):
@@ -59,34 +72,38 @@ class GutenbergReanimator(object):
             # Generate the Gutenberg record. This includes a link to
             # an epub, a link to an HTML version, links to covers, and
             # descriptions.
-            r = self.gutenberg_record(g, id)
+            record = self.gutenberg_record(g, id)
 
             # Now generate lists of equivalencies.
             work_obj = g.work
             if work_obj:
                 for wr in work_obj.work_records:
+                    id_key = identifier_key(wr.primary_identifier)
+                    if id == id_key:
+                        continue
+                    similarity = work_obj.similarity_to(wr)
+                    self.add_equivalency(
+                        equivalency_output, id, 
+                        id_key, similarity)
+
                     if wr.primary_identifier.type == WorkIdentifier.OCLC_WORK:
-                        try:
-                            work, editions = self.oclc_work_record(wr)
-                        except Exception, e:
-                            print "Could not load OCLC work record for %s" % wr.primary_identifier
-                            work = None
-                            editions = []
-                        if work:
-                            json.dump(work, oclc_work_output)
-                            oclc_work_output.write("\n")
+                        work = dict(
+                            id=id_key,
+                            title=wr.title,
+                            authors=self.author_list(wr.authors),
+                        )
 
-                            similarity = work_obj.similarity_to(wr)
-                            self.add_equivalency(
-                                equivalency_output, id, work['id'], similarity)
-                                         
-                        for edition in editions:
-                            json.dump(edition, oclc_edition_output)
-                            oclc_edition_output.write("\n")                   
-                            self.add_equivalency(
-                                equivalency_output, edition['id'], work['id'], 0.7)
+                        json.dump(work, oclc_work_output)
+                        oclc_work_output.write("\n")
+                    elif wr.primary_identifier.type == WorkIdentifier.GUTENBERG_ID:
+                        # Do nothing. The other Gutenberg ID will have
+                        # its turn.
+                        pass
+                    else:
+                        set_trace()
+                        pass
 
-            json.dump(r, gutenberg_output)
+            json.dump(record, gutenberg_output)
             gutenberg_output.write("\n")
             for i in (
                     oclc_edition_output, oclc_work_output, gutenberg_output,
@@ -126,10 +143,9 @@ class GutenbergReanimator(object):
                 headings[i].append(v)
         return headings
 
-    def gutenberg_record(self, g, id):
+    def author_list(self, contributors):
         authors = []
-        print "Starting work on %s" % g.title
-        for a in g.authors:
+        for a in contributors:
             author = dict(name=a.name, display_name=a.display_name)
             for k, v in (
                     ('viaf', a.viaf),
@@ -140,6 +156,11 @@ class GutenbergReanimator(object):
                 if v:
                     author[k] = v
             authors.append(author)
+        return authors
+
+    def gutenberg_record(self, g, id):
+        print "Starting work on %s" % g.title
+        authors = self.author_list(g.authors)
         language=None
         if g.language:
             language=LanguageCodes.three_to_two.get(g.language, g.language)
@@ -164,17 +185,24 @@ class GutenbergReanimator(object):
         html_link = None
         epub_link = None
 
-        data['link_epub'] = g.best_open_access_link
+        r = g.best_open_access_link
+        if r:
+            data['link_epub'] = r.href
+        else:
+            data['link_epub'] = None
 
-        primary_identifier_ids = [
-            x.primary_identifier.id for x in g.work.work_records]
+        if g.work:
+            primary_identifier_ids = [
+                x.primary_identifier.id for x in g.work.work_records]
+        else:
+            primary_identifier_ids = [g.primary_identifier.id]
         ids = WorkIdentifier.recursively_equivalent_identifier_ids(
             self._db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(ids)
         print "Got flat identifier IDs."
         resources = WorkIdentifier.resources_for_identifier_ids(
             self._db, flattened_data).options(lazyload('work_identifier'), lazyload('data_source')).all()
-        print "Got resources."
+        print "Got %d resources." % len(resources)
 
         for r in resources:
             if not r.rel == Resource.OPEN_ACCESS_DOWNLOAD:
@@ -189,9 +217,8 @@ class GutenbergReanimator(object):
         for r in resources:
             if r.rel == Resource.IMAGE and r.mirrored:
                 o = dict(href=r.final_url,
-                         id=r.id,
-                         identifier=[r.work_identifier.type,
-                                     r.work_identifier.identifier],
+                         _internal_id=r.id,
+                         id=identifier_key(r.work_identifier),
                          source=r.data_source.name,
                          quality=r.quality,
                          image_height=r.image_height,
@@ -199,8 +226,8 @@ class GutenbergReanimator(object):
                 cover_objs.append(o)
             elif r.rel == Resource.DESCRIPTION:
                 o = dict(
-                    id=r.id,
-                    identifier=[r.work_identifier.type, r.work_identifier.identifier],
+                    _internal_id=r.id,
+                    id=identifier_key(r.work_identifier),
                     content=r.content,
                     quality=r.quality,
                     source=r.data_source.name)
@@ -210,84 +237,3 @@ class GutenbergReanimator(object):
         data['descriptions'] = description_objs
         print "Done."
         return data
-
-    BAD_TYPES = ('schema:AudioObject', 'j.2:Audiobook',
-                 'j.2:Compact_Disc', 'j.2:LP_record',
-                 'j.1:Audiobook', 'j.2:Compact_Cassette',
-                 'j.1:Compact_Cassette', 'j.1:Compact_Disc')
-
-    def oclc_work_record(self, wr):
-
-        identifier = wr.primary_identifier
-        work_record = dict(id="owi-%s" % identifier.identifier)
-
-        graph, cached = self.oclc_ld.lookup(identifier)
-        graph = json.loads(graph['document'])['@graph']
-        #titles, descriptions, authors, subjects = self.oclc_ld.extract_useful_data(graph)
-        #work_record['description'] = descriptions
-
-        edition_records = []
-        examples = set(self.oclc_ld.extract_workexamples(graph))
-        for uri in examples:
-
-            data, cached = self.oclc_ld.lookup(uri)
-            subgraph = json.loads(data['document'])['@graph']
-            isbns = set()
-
-            for item in subgraph:
-                if 'schema:isbn' in item:
-                    isbns = isbns.union(item.get('schema:isbn'))
-
-            for book in self.oclc_ld.books(subgraph):
-                description = book.get('schema:description')
-                if isinstance(description, dict):
-                    description = description['@value']
-
-                if not description and not isbns:
-                    # No reason to consider this edition.
-                    continue
-
-                publisher_url = book.get('publisher', None)
-                p = [x for x in subgraph if x['@id'] == publisher_url]
-                if p:
-                    publisher = p[0]['schema:name']
-                else:
-                    publisher = None
-                # examples = set(ldq.values(book.get('workExample', [])))
-                published = book.get('schema:datePublished', None)
-                good_type = True
-                types = book.get('rdf:type', [])
-                if isinstance(types, dict):
-                    types = [types]
-                for i in types:
-                    if i['@id'] in self.BAD_TYPES:
-                        good_type = False
-                        break
-                    elif i['@id'] != 'schema:Book':
-                        print i['@id']
-                    if not good_type:
-                        break
-                if not good_type:
-                    continue
-
-                title = book.get('schema:name')
-                if isinstance(title, dict):
-                    title = title['@value']
-
-                language = book.get('schema:inLanguage', None)
-                if isinstance(language, list):
-                    language = language[0]
-
-                edition_record = dict(
-                    id = "OCLC-%s" % uri[len('http://www.worldcat.org/oclc/'):],
-                    language = language,
-                    datePublished=published,
-                    isbns=list(isbns))
-                for k, v in (('title', title),
-                             ('description', description),
-                             ('publisher', publisher)):
-                    if v:
-                        edition_record[k] = v
-                edition_records.append(edition_record)
-
-        return work_record, edition_records
