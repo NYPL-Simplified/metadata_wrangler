@@ -49,6 +49,7 @@ class TestDataSource(DatabaseTest):
             (DataSource.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER),
             (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.WEB, True, WorkIdentifier.URI),
+            (DataSource.GUTENBERG_EBOOK_COVER_GENERATOR, False, None),
             (DataSource.CONTENT_CAFE, False, None),
             (DataSource.MANUAL, False, None)
         ]

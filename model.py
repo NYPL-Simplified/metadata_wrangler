@@ -213,6 +213,7 @@ class DataSource(Base):
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
     CONTENT_CAFE = "Content Cafe"
+    GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
     MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'
@@ -252,16 +253,17 @@ class DataSource(Base):
         """Make sure all the well-known sources exist."""
 
         for (name, offers_licenses, primary_identifier_type, refresh_rate) in (
-                 (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
-                 (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
-                 (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
-                 (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                 (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
-                 (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
-                 (cls.WEB, True, WorkIdentifier.URI, None),
-                 (cls.CONTENT_CAFE, False, None, None),
-                 (cls.MANUAL, False, None, None),
+                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
+                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
+                (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
+                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
+                (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
+                (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
+                (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
+                (cls.GUTENBERG_COVER_GENERATOR, False, WorkIdentifier.GUTENBERG_ID, None),
+                (cls.WEB, True, WorkIdentifier.URI, None),
+                (cls.CONTENT_CAFE, False, None, None),
+                (cls.MANUAL, False, None, None),
         ):
 
             extra = dict()
@@ -620,6 +622,18 @@ class WorkIdentifier(Base):
             if height_difference < 0:
                 # Image is not tall enough.
                 quality = quality * (1+height_difference)
+
+            # Scale the estimated quality by the source of the image.
+            source_name = r.source.name
+            if source_name==DataSource.CONTENT_CAFE:
+                quality = quality * 0.70
+            elif source_name==DataSource.GUTENBERG_EBOOK_COVER_GENERATOR:
+                quality = quality * 0.60
+            elif source_name==DataSource.GUTENBERG:
+                quality = quality * 0.50
+            elif source_name==DataSource.OPEN_LIBRARY:
+                quality = quality * 0.25
+
             r.set_estimated_quality(quality)
 
             # TODO: that says how good the image is as an image. But
