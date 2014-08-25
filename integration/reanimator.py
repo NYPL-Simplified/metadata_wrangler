@@ -6,12 +6,14 @@ import json
 from collections import defaultdict
 from model import (
     DataSource,
+    Resource,
     WorkRecord,
     WorkIdentifier,
 )
 from integration.oclc import (
     OCLCLinkedData,
 )
+from sqlalchemy.orm import lazyload
 from classification import Classification
 
 from util import LanguageCodes
@@ -53,7 +55,13 @@ class GutenbergReanimator(object):
             id = "Gutenberg-%s" % g.primary_identifier.identifier
             if id in seen_gutenberg:
                 continue
+
+            # Generate the Gutenberg record. This includes a link to
+            # an epub, a link to an HTML version, links to covers, and
+            # descriptions.
             r = self.gutenberg_record(g, id)
+
+            # Now generate lists of equivalencies.
             work_obj = g.work
             if work_obj:
                 for wr in work_obj.work_records:
@@ -122,16 +130,19 @@ class GutenbergReanimator(object):
         authors = []
         print "Starting work on %s" % g.title
         for a in g.authors:
-            author = dict(name=a.name) 
+            author = dict(name=a.name, display_name=a.display_name)
             for k, v in (
                     ('viaf', a.viaf),
-                    ('lc', a.lc)):
+                    ('lc', a.lc),
+                    ('family_name', a.family_name),
+                    ('display_name', a.display_name),
+                    ('wikipedia_name', a.wikipedia_name)):
                 if v:
                     author[k] = v
             authors.append(author)
         language=None
-        if g.languages:
-            language=LanguageCodes.three_to_two.get(g.languages[0], g.languages[0])
+        if g.language:
+            language=LanguageCodes.three_to_two.get(g.language, g.language)
         data = dict(id=id,
                     title=g.title,
                     subtitle=g.subtitle,
@@ -149,25 +160,55 @@ class GutenbergReanimator(object):
         data['link_homepage'] = "http://gutenberg.org/ebooks/%s" % (
             g.primary_identifier.identifier)
 
+
         html_link = None
         epub_link = None
-        for l in g.links.get('http://opds-spec.org/acquisition/open-access', []):
-            if l['type'].startswith('text/html'):
-                if not html_link or 'zip' in html_link:
-                    html_link = l['href']
-            elif l['type'].startswith('application/epub+zip'):
-                if not epub_link or 'noimages' in epub_link:
-                    epub_link = l['href']
-        data['link_html'] = html_link
-        data['link_epub'] = epub_link
 
-        for link in g.links.get(WorkRecord.IMAGE, []):
-            data['link_cover'] = link['href']
-            break
+        data['link_epub'] = g.best_open_access_link
 
-        # Not available yet.
-        data['links_internal_image'] = []
+        primary_identifier_ids = [
+            x.primary_identifier.id for x in g.work.work_records]
+        ids = WorkIdentifier.recursively_equivalent_identifier_ids(
+            self._db, primary_identifier_ids, 5, threshold=0.5)
+        flattened_data = WorkIdentifier.flatten_identifier_ids(ids)
+        print "Got flat identifier IDs."
+        resources = WorkIdentifier.resources_for_identifier_ids(
+            self._db, flattened_data).options(lazyload('work_identifier'), lazyload('data_source')).all()
+        print "Got resources."
 
+        for r in resources:
+            if not r.rel == Resource.OPEN_ACCESS_DOWNLOAD:
+                continue
+            if r.media_type.startswith('text/html'):
+                if not 'link_html' in data and not 'zip' in r.href:
+                    data['link_html'] = r.href
+                    break
+
+        cover_objs = []
+        description_objs = []
+        for r in resources:
+            if r.rel == Resource.IMAGE and r.mirrored:
+                o = dict(href=r.final_url,
+                         id=r.id,
+                         identifier=[r.work_identifier.type,
+                                     r.work_identifier.identifier],
+                         source=r.data_source.name,
+                         quality=r.quality,
+                         image_height=r.image_height,
+                         image_width=r.image_width)
+                cover_objs.append(o)
+            elif r.rel == Resource.DESCRIPTION:
+                o = dict(
+                    id=r.id,
+                    identifier=[r.work_identifier.type, r.work_identifier.identifier],
+                    content=r.content,
+                    quality=r.quality,
+                    source=r.data_source.name)
+                description_objs.append(o)
+
+        data['links_cover'] = cover_objs
+        data['descriptions'] = description_objs
+        print "Done."
         return data
 
     BAD_TYPES = ('schema:AudioObject', 'j.2:Audiobook',

@@ -1727,7 +1727,9 @@ class Resource(Base):
     @property
     def final_url(self):
         return self.mirrored_path % dict(
-            content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC")
+            content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
+            gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
+)
 
     def could_not_mirror(self):
         """We tried to mirror this resource and failed."""
