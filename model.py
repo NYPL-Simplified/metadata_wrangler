@@ -1758,7 +1758,8 @@ class Resource(Base):
         self.mirrored = True
         self.mirrored_path = path
         self.mirror_status = 200
-        self.media_type = media_type
+        if media_type:
+            self.media_type = media_type
 
         # If we were provided with the content, make sure the
         # metadata reflects the content.
@@ -1767,7 +1768,7 @@ class Resource(Base):
         # variable expansion in it at this point.
         if content is not None:
             self.file_size = len(content)
-        if self.media_type.lower().startswith("image/"):
+        if content and self.media_type.lower().startswith("image/"):
             # Try to load it into PIL and determine height and width.
             try:
                 image = Image.open(StringIO(content))
