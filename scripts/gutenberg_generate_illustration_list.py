@@ -69,16 +69,35 @@ class CoverMatcher(object):
                             else:
                                 if name not in ['Various']:
                                     long_names.append(a.name)
-                        short_name = ", ".join(sorted(short_names))
-                        long_name = ", ".join(sorted(long_names))
+                        short_name = ''
+                        long_name = ''
+                        if len(short_names) == 1:
+                            if short_names[0] == 'Various':
+                                short_name = ''
+                            else:
+                                short_name = short_names[0]
+                        elif len(short_names) > 1:
+                            before_ampersand = short_names[:-1]
+                            after_ampersand = short_names[-1]
+                            short_name = ", ".join(sorted(before_ampersand)) + " & " + after_ampersand
+
+                        if len(long_names) > 1:
+                            before_ampersand = long_names[:-1]
+                            after_ampersand = long_names[-1]
+                            long_name = ", ".join(sorted(before_ampersand)) + " & " + after_ampersand
+                        elif len(long_names) == 1:
+                            if long_names[0] == 'Various':
+                                long_name = ''
+                            else:
+                                long_name = long_names[0]
                         
                         d = dict(
-                            authors_short=short_name,
-                            authors_long=long_name,
+                            authors_short=short_name or "",
+                            authors_long=long_name or "",
                             identifier=gid,
-                            title=wr.title,
-                            title_short=shorten_title(wr.title),
-                            subtitle=wr.subtitle,
+                            title=wr.title or "",
+                            title_short=shorten_title(wr.title) or "",
+                            subtitle=wr.subtitle or "",
                             identifier_type = "Gutenberg ID",
                             illustrations=container,
                         )
