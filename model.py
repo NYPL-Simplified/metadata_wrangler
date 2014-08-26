@@ -2195,6 +2195,8 @@ class LicensePool(Base):
 
         # Associate the unclaimed WorkRecords with the Work.
         work.work_records.extend(unclaimed)
+        for wr in unclaimed:
+            wr.work = work
 
         # Recalculate the display information for the Work, since the
         # associated WorkRecords have changed.

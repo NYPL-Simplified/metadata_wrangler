@@ -262,10 +262,12 @@ def checkout(data_source, identifier):
 @app.route('/gutenberg_tree/<gutenberg_id>')
 def gutenberg_tree(gutenberg_id):
     source = DataSource.lookup(db, DataSource.GUTENBERG)
-    wr = WorkRecord.for_foreign_id(
-        db, source,
-        WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
-    work = wr.work
+    wid, ignore = WorkIdentifier.for_foreign_id(
+        db, WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
+    pool = db.query(LicensePool).filter(
+        LicensePool.data_source==source).filter(
+            LicensePool.identifier==wid).one()
+    work = pool.work
     template = templates.get_template('work_dump.html')
     return template.render(work=work, len=len)
 

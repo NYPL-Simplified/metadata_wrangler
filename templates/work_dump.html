@@ -15,15 +15,19 @@
 
 <ol>
  {% for workrecord in work.work_records %}
-  <li><a href="#{{loop.index}}">{{workrecord.title}} - {{workrecord.primary_identifier.__repr__().decode("utf8")}} {{workrecord.languages}}</a></li>
+  <li>{{workrecord.title}} - {{workrecord.primary_identifier.__repr__().decode("utf8")}} {{workrecord.language}}</li>
  {% endfor %}
 </ol>
+
+<h3>Images</h3>
 
 {% for image in work.all_cover_images() %}
 {% if image.mirrored %}
 <img src="{{image.final_url}}" alt="{{image.quality}}"/>
 {% endif %}
 {% endfor %}
+
+<h3>Descriptions</h3>
 
 <ol>
 {% for description in work.all_descriptions() %}
