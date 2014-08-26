@@ -10,16 +10,20 @@ import logging
 
 from model import Event, LicensedWork
 
-from integration.circulation import (
-    CirculationMonitor,
-    FilesystemMonitorStore,
-)
-
-import _overdrive_creds as _creds
+from integration import FilesystemCache
 
 class OverdriveAPI(object):
 
+    TOKEN_ENDPOINT = "https://oauth.overdrive.com/token"
+    PATRON_TOKEN_ENDPOINT = "https://oauth-patron.overdrive.com/patrontoken"
+
+    LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
+    METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
+    EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
+
     CRED_FILE = "oauth_cred.json"
+    BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
+
     MAX_CREDENTIAL_AGE = 50 * 60
 
     PAGE_SIZE_LIMIT = 300
@@ -28,13 +32,26 @@ class OverdriveAPI(object):
     # The ebook formats we care about.
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
-    EVENTS_URL = "http://api.overdrive.com/v1/collections/%(collection)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
-
+    
     def __init__(self, data_directory):
+
+        self.bibliographic_cache = FilesystemCache(
+            os.path.join(data_directory, self.BIBLIOGRAPHIC_DIRECTORY))
         self.credential_path = os.path.join(data_directory, self.CRED_FILE)
+
+        # Set some stuff from environment variables
+        self.client_key = os.environ['OVERDRIVE_CLIENT_KEY']
+        self.client_secret = os.environ['OVERDRIVE_CLIENT_SECRET']
+        self.website_id = os.environ['OVERDRIVE_WEBSITE_ID']
+        self.library_id = os.environ['OVERDRIVE_LIBRARY_ID']
+        self.collection_name = os.environ['OVERDRIVE_COLLECTION_NAME']
+
+        # Get set up with up-to-date credentials from the API.
         self.check_creds()
+        self.collection_token = self.get_library()['collectionToken']
 
     def check_creds(self):
+        """If the Bearer Token is about to expire, update it."""
         refresh = True
         if os.path.exists(self.credential_path):
             cred_mod_time = os.stat(self.credential_path).st_mtime
@@ -47,22 +64,36 @@ class OverdriveAPI(object):
         self.token = json.load(open(self.credential_path))['access_token']
 
     def refresh_creds(self):
-        URL = "https://oauth.overdrive.com/token"
-        auth = "%s:%s" % (_creds.CLIENT_KEY, _creds.CLIENT_SECRET)
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        headers['Authorization'] = "Basic %s" % base64.b64encode(auth)
-        print "Refreshing OAuth credential."
-        payload = dict(grant_type="client_credentials")
-        response = requests.post(URL, payload, headers=headers)
+        """Fetch a new Bearer Token and write it to disk."""
+        response = self.token_post(
+            self.TOKEN_ENDPOINT,
+            dict(grant_type="client_credentials"))
         open(self.credential_path, "w").write(response.text)
 
-    def get_patron_token(self, barcode, pin):
-        data = dict(username=barcode, password=pin,
-                    grant_type="password",
-                    scope="websiteid:???",
-                    authorizationname="default")
+    def get(self, url):
+        """Make an HTTP GET request using the active Bearer Token."""
+        headers = dict(Authorization="Bearer %s" % self.token)
+        return requests.get(url, headers=headers)
 
-        
+    def token_post(url, payload, headers={}):
+        """Make an HTTP POST request for purposes of getting an OAuth token."""
+        s = "%s:%s" % (self.client_key, self.client_secret)
+        auth = base64.encodestring(s).strip()
+        headers = dict(headers)
+        headers['Authorization'] = "Basic %s" % auth
+        return requests.post(url, payload, headers=headers)
+
+    def get_patron_token(self, barcode, pin):
+        """Create an OAuth token for the given patron."""
+        payload = dict(
+            grant_type="password",
+            username=library_card,
+            password=pin,
+            scope="websiteid:%s authorizationname:%s" % (
+                self.website_id, "default")
+        )
+        response = self.token_post(patron_token_endpoint, payload)
+        return response.content
 
     @classmethod
     def make_link_safe(self, url):
@@ -79,13 +110,9 @@ class OverdriveAPI(object):
         parts[3] = query_string
         return urlparse.urlunsplit(tuple(parts))
 
-    def get(self, url):
-        headers = dict(Authorization="Bearer %s" % self.token)
-        return requests.get(url, headers=headers)
-
     def get_library(self):
-        url = "http://api.overdrive.com/v1/libraries/%s" % _creds.LIBRARY_ID
-        return self.get(url)
+        url = self.LIBRARY_ENDPOINT % dict(library_id=self.libary_id)
+        return self.get(url).json()
 
     def get_events_between(self, start, cutoff, circulation_to_refresh):
         """Get events between the start time and now."""
@@ -96,7 +123,7 @@ class OverdriveAPI(object):
                       formats=self.FORMATS,
                       sort="popularity:desc",
                       limit=self.PAGE_SIZE_LIMIT,
-                      collection=_creds.COLLECTION_NAME)
+                      collection=self.collection_name)
         next_link = self.make_link_safe(self.EVENTS_URL % params)
         while next_link:
             page_inventory, next_link = self._get_book_list_page(next_link)
@@ -134,6 +161,9 @@ class OverdriveAPI(object):
         availability_queue = (
             OverdriveRepresentationExtractor.availability_info(data))
         return availability_queue, next_link
+
+    def bibliographic_lookup(self, overdrive_id):
+        pass
 
     def get_circulation_for(self, to_check):
         """Check the circulation status for a bunch of books."""
