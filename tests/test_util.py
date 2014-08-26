@@ -169,6 +169,10 @@ class TestMetadataSimilarity(object):
                     break
         return matches
 
+    def test_identical_titles_are_identical(self):
+        t = u"a !@#$@#%& the #FDUSG($E% N%SDAMF_) and #$MI# asdff \N{SNOWMAN}"
+        eq_(1, MetadataSimilarity.title_similarity, t, t)
+
     def test_title_similarity(self):
         """Demonstrate how the title similarity algorithm works in common
         cases."""
@@ -307,3 +311,6 @@ class TestMetadataSimilarity(object):
         eq_(['The nursery "Alice"',
              'Through the looking-glass and what Alice found there'],
             sorted(alice[0]))
+
+    def test_author_similarity(self):
+        eq_(1, MetadataSimilarity.author_similarity([], []))

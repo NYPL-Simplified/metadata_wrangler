@@ -384,7 +384,7 @@ class WorkIdentifier(Base):
     def __repr__(self):
         records = self.primarily_identifies
         if records and records[0].title:
-            title = u' wr="%s"' % records[0].title
+            title = u' wr=%d ("%s")' % (records[0].id, records[0].title)
         else:
             title = ""
         return (u"%s/%s ID=%s%s" % (self.type, self.identifier, self.id,
@@ -631,7 +631,7 @@ class WorkIdentifier(Base):
             source_name = r.source.name
             if source_name==DataSource.CONTENT_CAFE:
                 quality = quality * 0.70
-            elif source_name==DataSource.GUTENBERG_EBOOK_COVER_GENERATOR:
+            elif source_name==DataSource.GUTENBERG_COVER_GENERATOR:
                 quality = quality * 0.60
             elif source_name==DataSource.GUTENBERG:
                 quality = quality * 0.50
@@ -1208,6 +1208,10 @@ class WorkRecord(Base):
         TODO: apply much more lenient terms if the two WorkRecords are
         identified by the same ISBN or other unique identifier.
         """
+        if other_record == self:
+            # A record is always identical to itself.
+            return 1
+
         if other_record.language == self.language:
             # The books are in the same language. Hooray!
             language_factor = 1

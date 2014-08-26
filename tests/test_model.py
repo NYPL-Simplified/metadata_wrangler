@@ -49,7 +49,7 @@ class TestDataSource(DatabaseTest):
             (DataSource.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER),
             (DataSource.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID),
             (DataSource.WEB, True, WorkIdentifier.URI),
-            (DataSource.GUTENBERG_EBOOK_COVER_GENERATOR, False, None),
+            (DataSource.GUTENBERG_COVER_GENERATOR, False, WorkIdentifier.GUTENBERG_ID),
             (DataSource.CONTENT_CAFE, False, None),
             (DataSource.MANUAL, False, None)
         ]
@@ -687,6 +687,12 @@ class TestWorkQuality(DatabaseTest):
         work2.calculate_presentation()
 
         assert work1.quality > work2.quality
+
+class TestWorkSimilarity(DatabaseTest):
+
+    def test_work_is_similar_to_itself(self):
+        wr = self._workrecord()
+        eq_(1, wr.similarity_to(wr))
 
 class TestWorkConsolidation(DatabaseTest):
 
