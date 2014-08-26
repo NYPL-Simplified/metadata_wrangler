@@ -19,7 +19,7 @@ class OverdriveAPI(object):
 
     LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
-    EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
+    EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
 
     CRED_FILE = "oauth_cred.json"
     BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
@@ -114,16 +114,17 @@ class OverdriveAPI(object):
         url = self.LIBRARY_ENDPOINT % dict(library_id=self.libary_id)
         return self.get(url).json()
 
-    def get_events_between(self, start, cutoff, circulation_to_refresh):
-        """Get events between the start time and now."""
+    def get_recent_changes(self, start, cutoff):
+        """Get books whose status has changed between the start time and now."""
         # `cutoff` is not supported by Overdrive, so we ignore it. All
         # we can do is get events between the start time and now.
 
+        books = []
         params = dict(lastupdatetime=start,
                       formats=self.FORMATS,
                       sort="popularity:desc",
                       limit=self.PAGE_SIZE_LIMIT,
-                      collection=self.collection_name)
+                      collection_name=self.collection_name)
         next_link = self.make_link_safe(self.EVENTS_URL % params)
         while next_link:
             page_inventory, next_link = self._get_book_list_page(next_link)
@@ -133,11 +134,9 @@ class OverdriveAPI(object):
             # refresh. At that point we will send out events.
             for i in page_inventory:
                 print "Adding %r to the list." % i
-                circulation_to_refresh.append(i)
+                books.append(i)
 
-        # We don't know about any events yet. All events for this
-        # monitor are generated when we check inventory.
-        return []
+        return books
 
     def _get_book_list_page(self, link):
         """Process a page of inventory whose circulation we need to check.
@@ -166,7 +165,14 @@ class OverdriveAPI(object):
         pass
 
     def get_circulation_for(self, to_check):
-        """Check the circulation status for a bunch of books."""
+        """Check the circulation status for a bunch of books.
+
+        If the book has never been seen before, a new LicensePool
+        will be created for the book.
+
+        If the book has been seen before, the LicensePool will be
+        updated with current circulation information.
+        """
         for i, data in enumerate(to_check):
             if i % 50 == 0 and i != 0:
                 print "%s/%s" % (i, len(to_check))
@@ -178,17 +184,36 @@ class OverdriveAPI(object):
             if response.status_code != 200:
                 print "ERROR: Could not get availability for %s: %s" % (id, 
 response.status_code)
-                return
+                continue
 
             # Build a new circulation dictionary
             circulation = OverdriveRepresentationExtractor.circulation_info(
                 response.json())
             circulation[LicensedWork.TITLE] = data[LicensedWork.TITLE]
 
-            # When we yield this item, its data will be compared with
-            # local inventory data, and events will be generated
-            # corresponding to the differences.
-            yield circulation
+            # TODO: get the LicensePool. Tell the LicensePool
+            # to update its inventory and to send out events.
+            self.update_licensepool(data)
+
+    def update_licensepool(self, book):
+        """Update a book's LicensePool with information from a JSON
+        representation of its circulation info.
+        """
+        pool, was_new = LicensePool.for_foreign_id(
+            self._db, self.overdrive_data_source,
+            WorkIdentifier.OVERDRIVE_ID, book['id'])
+        if was_new:
+            pool.open_access = False
+            wr = pool.work_record()
+            # TODO: Any more bibliographic information?
+            wr.title = book['title']
+
+        pool.licenses_owned = book['copiesOwned']
+        pool.licenses_available = book['copiesAvailable']
+        pool.licenses_reserved = 0
+        pool.patrons_in_hold_queue = book['numberOfHolds']
+        pool.last_checked = datetime.datetime.utcnow()
+            
 
 class OverdriveRepresentationExtractor(object):
 
@@ -215,20 +240,6 @@ class OverdriveRepresentationExtractor(object):
                 log.warn("No availability link for %s" % book_id)
             l.append(data)
         return l
-
-    @classmethod
-    def circulation_info(self, book):
-        data = dict()
-        for (inkey, outkey) in [
-                ('id', LicensedWork.SOURCE_ID),
-                ('copiesOwned', LicensedWork.OWNED),
-                ('copiesAvailable', LicensedWork.AVAILABLE),
-                ('numberOfHolds', LicensedWork.HOLDS)]:
-            data[outkey] = book[inkey]
-            data[LicensedWork.RESERVES] = 0
-            data[LicensedWork.CHECKOUTS] = (
-                book['copiesOwned'] - book['copiesAvailable'])
-        return data
 
     @classmethod
     def link(self, page, rel):
