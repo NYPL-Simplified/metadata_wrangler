@@ -628,7 +628,7 @@ class WorkIdentifier(Base):
                 quality = quality * (1+height_difference)
 
             # Scale the estimated quality by the source of the image.
-            source_name = r.source.name
+            source_name = r.data_source.name
             if source_name==DataSource.CONTENT_CAFE:
                 quality = quality * 0.70
             elif source_name==DataSource.GUTENBERG_COVER_GENERATOR:
@@ -647,7 +647,7 @@ class WorkIdentifier(Base):
             # the WorkRecord to the Work in question. This is much
             # too big a project to work on right now.
 
-            if (r.quality >= self.MINIMUM_IMAGE_QUALITY and
+            if (r.quality >= cls.MINIMUM_IMAGE_QUALITY and
                 (not champion or r.quality > champion.quality)):
                 champion = r
         return champion, images
