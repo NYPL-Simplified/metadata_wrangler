@@ -2010,8 +2010,15 @@ class LicensePool(Base):
         age = now - self.last_checked
         return age > maximum_stale_time
 
-    def update_from_event(self, event):
-        """Update circulation info based on an Event object."""
+    def update_availability(
+            self, licenses_owned, licenses_available, licenses_reserved,
+            patrons_in_hold_queue):
+        # TODO: Emit notification events.
+        self.licences_owned = licenses_owned
+        self.licenses_available = licenses_available
+        self.licenses_reserved = licenses_reserved
+        self.patrons_in_hold_queue = patrons_in_hold_queue
+        self.last_checked = datetime.datetime.utcnow()
 
     @classmethod
     def compare_circulation_estimate_to_reality(self, estimate):

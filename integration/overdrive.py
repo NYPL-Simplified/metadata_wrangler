@@ -162,7 +162,7 @@ class OverdriveAPI(object):
             self.bibliographic_cache.store(cache_key, response.content)
             return response.json()
 
-    def update_licensepool(self, _db, data_source, book):
+    def update_licensepool(self, _db, data_source, book, exception_on_401=False):
         """Update availability information for a single book.
 
         If the book has never been seen before, a new LicensePool
@@ -174,9 +174,17 @@ class OverdriveAPI(object):
         # Retrieve current circulation information about this book
         circulation_link = book['availability_link']
         response = self.get(circulation_link)
+        if response.status_code == 401:
+            if exception_on_401:
+                # This is our second try. Give up.
+                raise Exception("Something's wrong with the OAuth Bearer Token!")
+            else:
+                # Refresh the token and try again.
+                self.check_creds()
+                return self.update_licensepool(_db, data_source, book, True)
         if response.status_code != 200:
-            print "ERROR: Could not get availability for %s: %s" % (id, 
-response.status_code)
+            print "ERROR: Could not get availability for %s: %s" % (
+                book['id'], response.status_code)
             return
 
         book.update(response.json())
@@ -200,11 +208,9 @@ response.status_code)
             # in the metadata phase.
             print "New book: %r" % wr
 
-        pool.licenses_owned = book['copiesOwned']
-        pool.licenses_available = book['copiesAvailable']
-        pool.licenses_reserved = 0
-        pool.patrons_in_hold_queue = book['numberOfHolds']
-        pool.last_checked = datetime.datetime.utcnow()
+        pool.update_availability(
+            book['copiesOwned'], book['copiesAvailable'], 0, 
+            book['numberOfHolds'])
         return pool, was_new
 
     def _get_book_list_page(self, link):
@@ -313,6 +319,8 @@ class OverdriveCirculationMonitor(Monitor):
         for i, book in enumerate(books):
             if i > 0 and not i % 50:
                 print "%s/%s" % (i, len(books))
+            if not book:
+                continue
             license_pool, is_new = self.source.update_licensepool(
                 _db, overdrive_data_source, book)
             # Log a circulation event for this work.
@@ -364,8 +372,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         wr.publisher = info.get('publisher', None)
         wr.imprint = info.get('imprint', None)
 
-        wr.published = datetime.datetime.strptime(
-            info['publishDate'][:10], self.DATE_FORMAT)
+        if 'publishDate' in info:
+            wr.published = datetime.datetime.strptime(
+                info['publishDate'][:10], self.DATE_FORMAT)
 
         languages = [
             LanguageCodes.two_to_three.get(l['code'], l['code'])
@@ -388,6 +397,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             role = creator['role']
             contributor = wr.add_contributor(name, role)
             contributor.display_name = display_name
+            if 'bioText' in creator:
+                contributor.extra = dict(description=creator['bioText'])
 
         subjects = {}
         for i in info['subjects']:
@@ -404,6 +415,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         ):
             if inkey in info:
                 extra[outkey] = info.get(inkey)
+        wr.extra = extra
 
         # Associate the Overdrive WorkRecord with other identifiers
         # such as ISBN.
@@ -416,6 +428,10 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     type_key = WorkIdentifier.ASIN
                 elif t == 'ISBN':
                     type_key = WorkIdentifier.ISBN
+                elif t == 'DOI':
+                    type_key = WorkIdentifier.DOI
+                elif t == 'UPC':
+                    type_key = WorkIdentifier.UPC
                 elif t == 'PublisherCatalogNumber':
                     continue
                 if type_key:
@@ -423,8 +439,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                         self._db, type_key, v)
                     identifier.equivalent_to(
                         self.input_source, new_identifier, 1)
-                else:
-                    set_trace()
 
         # Add resources: cover, descriptions, rating and popularity
         if info['starRating']:
@@ -457,4 +471,4 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 "text/html", "tag:short")
 
         print wr
-        set_trace()
+        return True
