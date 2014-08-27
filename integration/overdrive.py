@@ -12,8 +12,11 @@ from nose.tools import set_trace
 from model import (
     get_one_or_create,
     CirculationEvent,
+    CoverageProvider,
     DataSource,
     LicensePool,
+    Resource,
+    SubjectType,
     WorkIdentifier,
     WorkRecord,
 )
@@ -22,6 +25,7 @@ from integration import (
     FilesystemCache
 )
 from monitor import Monitor
+from util import LanguageCodes
 
 class OverdriveAPI(object):
 
@@ -143,20 +147,20 @@ class OverdriveAPI(object):
         Update the corresponding WorkRecord appropriately.
         """
         cache_key = overdrive_id + ".json"
-        if self.cache.exists(cache_key):
-            raw = self.cache.open(cache_key).read()
+        if self.bibliographic_cache.exists(cache_key):
+            raw = self.bibliographic_cache.open(cache_key).read()
+            return json.loads(raw)
         else:
             url = self.METADATA_ENDPOINT % dict(
                 collection_token=self.collection_token,
                 item_id=overdrive_id
                 )
-            print "%s => %s" % (url, self.cache._filename(cache_key))
+            print "%s => %s" % (url, self.bibliographic_cache._filename(cache_key))
             response = self.get(url)
             if response.status_code != 200:
                 raise IOError(response.status_code)
-            self.cache.store(cache_key, response.content)
-
-            set_trace()
+            self.bibliographic_cache.store(cache_key, response.content)
+            return response.json()
 
     def update_licensepool(self, _db, data_source, book):
         """Update availability information for a single book.
@@ -192,11 +196,8 @@ response.status_code)
             wr, wr_new = WorkRecord.for_foreign_id(
                 _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
             wr.title = book['title']
-            if 'author_name' in book:
-                name = book['author_name']
-                if name:
-                    contributor = wr.add_contributor(name, 'Author')
-                    contributor.display_name = name
+            # Don't add the author name--we can get better author data
+            # in the metadata phase.
             print "New book: %r" % wr
 
         pool.licenses_owned = book['copiesOwned']
@@ -311,7 +312,7 @@ class OverdriveCirculationMonitor(Monitor):
 
         for i, book in enumerate(books):
             if i > 0 and not i % 50:
-                print "%s/%s" % (i, len(to_check))
+                print "%s/%s" % (i, len(books))
             license_pool, is_new = self.source.update_licensepool(
                 _db, overdrive_data_source, book)
             # Log a circulation event for this work.
@@ -325,3 +326,135 @@ class OverdriveCirculationMonitor(Monitor):
                     )
                 )
             _db.commit()
+
+
+class OverdriveBibliographicMonitor(CoverageProvider):
+    """Fill in bibliographic metadata for Overdrive records."""
+
+    def __init__(self, _db, data_directory):
+        self.overdrive = OverdriveAPI(data_directory)
+        self._db = _db
+        self.input_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
+        self.output_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
+        super(OverdriveBibliographicMonitor, self).__init__(
+            "Overdrive Bibliographic Monitor",
+            self.input_source, self.output_source)
+
+    def _add_value_as_resource(self, identifier, pool, rel, value,
+                               media_type="text/plain", url=None):
+        if isinstance(value, str):
+            value = value.decode("utf8")
+        elif isinstance(value, unicode):
+            pass
+        else:
+            value = str(value)
+        identifier.add_resource(
+            rel, url, self.input_source, pool, media_type, value)
+
+    DATE_FORMAT = "%Y-%m-%d"
+
+    def process_work_record(self, wr):
+        identifier = wr.primary_identifier
+        info = self.overdrive.metadata_lookup(identifier.identifier)
+        license_pool = wr.license_pool
+
+        # Easy stuff.
+        wr.title = info['title']
+        wr.subtitle = info.get('subtitle', None)
+        wr.publisher = info.get('publisher', None)
+        wr.imprint = info.get('imprint', None)
+
+        wr.published = datetime.datetime.strptime(
+            info['publishDate'][:10], self.DATE_FORMAT)
+
+        languages = [
+            LanguageCodes.two_to_three.get(l['code'], l['code'])
+            for l in info['languages']
+        ]
+        if 'eng' in languages:
+            wr.language = 'eng'
+        else:
+            wr.language = sorted(languages)[0]
+
+        # TODO: Is there a Gutenberg book with this title and the same
+        # author names? If so, they're the same. Merge the work and
+        # reuse the Contributor objects.
+        #
+        # Or, later might be the time to do that stuff.
+
+        for creator in info.get('creators', []):
+            name = creator['fileAs']
+            display_name = creator['name']
+            role = creator['role']
+            contributor = wr.add_contributor(name, role)
+            contributor.display_name = display_name
+
+        subjects = {}
+        for i in info['subjects']:
+            WorkRecord._add_subject(subjects, SubjectType.OVERDRIVE, i['value'])
+        wr.subjects = subjects
+
+        extra = dict()
+        for inkey, outkey in (
+                ('gradeLevels', 'grade_levels'),
+                ('series', 'series'),
+                ('mediaType', 'medium'),
+                ('isPublicDomain', 'is_public_domain'),
+                ('sortTitle', 'sort_title'),
+        ):
+            if inkey in info:
+                extra[outkey] = info.get(inkey)
+
+        # Associate the Overdrive WorkRecord with other identifiers
+        # such as ISBN.
+        for format in info.get('formats', []):
+            for new_id in format.get('identifiers', []):
+                t = new_id['type']
+                v = new_id['value']
+                type_key = None
+                if t == 'ASIN':
+                    type_key = WorkIdentifier.ASIN
+                elif t == 'ISBN':
+                    type_key = WorkIdentifier.ISBN
+                elif t == 'PublisherCatalogNumber':
+                    continue
+                if type_key:
+                    new_identifier, ignore = WorkIdentifier.for_foreign_id(
+                        self._db, type_key, v)
+                    identifier.equivalent_to(
+                        self.input_source, new_identifier, 1)
+                else:
+                    set_trace()
+
+        # Add resources: cover, descriptions, rating and popularity
+        if info['starRating']:
+            self._add_value_as_resource(
+                identifier, license_pool, Resource.RATING, info['starRating'])
+
+        if info['popularity']:
+            self._add_value_as_resource(
+                identifier, license_pool, Resource.POPULARITY,
+                info['popularity'])
+
+        if 'images' in info and 'cover' in info['images']:
+            link = info['images']['cover']
+            href = link['href']
+            media_type = link['type']
+            identifier.add_resource(Resource.IMAGE, href, self.input_source,
+                                    license_pool, media_type)
+
+        short = info['shortDescription']
+        full = info['fullDescription']
+
+        if full:
+            self._add_value_as_resource(
+                identifier, license_pool, Resource.DESCRIPTION, full,
+                "text/html", "tag:full")
+
+        if short and short != full:
+            self._add_value_as_resource(
+                identifier, license_pool, Resource.DESCRIPTION, short,
+                "text/html", "tag:short")
+
+        print wr
+        set_trace()

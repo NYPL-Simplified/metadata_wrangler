@@ -361,6 +361,7 @@ class WorkIdentifier(Base):
     GUTENBERG_ID = "Gutenberg ID"
     AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
+    ASIN = "ASIN"
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
@@ -1058,6 +1059,15 @@ class WorkRecord(Base):
                  **kwargs)
         return r
 
+    @property
+    def license_pool(self):
+        """The WorkRecord's corresponding LicensePool, if any.
+        """
+        _db = Session.object_session(self)
+        return _db.query(LicensePool).filter(
+            LicensePool.data_source==self.data_source).filter(
+                LicensePool.identifier==self.primary_identifier).one()
+
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other WorkIdentifiers.
@@ -1181,7 +1191,8 @@ class WorkRecord(Base):
             get_one_or_create(
                 _db, Contribution, workrecord=self, contributor=contributor,
                 role=role)
-   
+        return contributor
+
     def similarity_to(self, other_record):
         """How likely is it that this record describes the same book as the
         given record?
@@ -1669,6 +1680,8 @@ class Resource(Base):
     SAMPLE = "http://opds-spec.org/acquisition/sample"
     ILLUSTRATION = "http://library-simplified.com/rel/illustration"
     REVIEW = "http://schema.org/Review"
+    RATING = "http://schema.org/reviewRating"
+    POPULARITY = "http://library-simplified.com/rel/popularity"
     DESCRIPTION = "http://schema.org/description"
     AUTHOR = "http://schema.org/author"
 
@@ -2436,6 +2449,7 @@ class SubjectType(object):
     LCC = "LCC"   # Library of Congress Classification
     LCSH = "LCSH" # Library of Congress Subject Headings
     DDC = "DDC"   # Dewey Decimal Classification
+    OVERDRIVE = "Overdrive"   # Overdrive's classification system
     FAST = "FAST"
     TAG = "tag"   # Folksonomic tags.
 
