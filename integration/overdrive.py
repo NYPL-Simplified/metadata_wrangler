@@ -7,10 +7,21 @@ import time
 import urlparse
 import urllib
 import logging
+from nose.tools import set_trace
 
-from model import Event, LicensedWork
+from model import (
+    get_one_or_create,
+    CirculationEvent,
+    DataSource,
+    LicensePool,
+    WorkIdentifier,
+    WorkRecord,
+)
 
-from integration import FilesystemCache
+from integration import (
+    FilesystemCache
+)
+from monitor import Monitor
 
 class OverdriveAPI(object):
 
@@ -36,7 +47,8 @@ class OverdriveAPI(object):
     def __init__(self, data_directory):
 
         self.bibliographic_cache = FilesystemCache(
-            os.path.join(data_directory, self.BIBLIOGRAPHIC_DIRECTORY))
+            os.path.join(data_directory, self.BIBLIOGRAPHIC_DIRECTORY),
+            subdir_chars=4)
         self.credential_path = os.path.join(data_directory, self.CRED_FILE)
 
         # Set some stuff from environment variables
@@ -75,7 +87,7 @@ class OverdriveAPI(object):
         headers = dict(Authorization="Bearer %s" % self.token)
         return requests.get(url, headers=headers)
 
-    def token_post(url, payload, headers={}):
+    def token_post(self, url, payload, headers={}):
         """Make an HTTP POST request for purposes of getting an OAuth token."""
         s = "%s:%s" % (self.client_key, self.client_secret)
         auth = base64.encodestring(s).strip()
@@ -95,27 +107,14 @@ class OverdriveAPI(object):
         response = self.token_post(patron_token_endpoint, payload)
         return response.content
 
-    @classmethod
-    def make_link_safe(self, url):
-        """Turn a server-provided link into a link the server will accept!
-
-        This is completely obnoxious and I have complained about it to
-        Overdrive.
-        """
-        parts = list(urlparse.urlsplit(url))
-        parts[2] = urllib.quote(parts[2])
-        query_string = parts[3]
-        query_string = query_string.replace("+", "%2B")
-        query_string = query_string.replace(":", "%3A")
-        parts[3] = query_string
-        return urlparse.urlunsplit(tuple(parts))
-
     def get_library(self):
-        url = self.LIBRARY_ENDPOINT % dict(library_id=self.libary_id)
+        url = self.LIBRARY_ENDPOINT % dict(library_id=self.library_id)
         return self.get(url).json()
 
-    def get_recent_changes(self, start, cutoff):
-        """Get books whose status has changed between the start time and now."""
+    def recently_changed_ids(self, start, cutoff):
+        """Get IDs of books whose status has changed between the start time
+        and now.
+        """
         # `cutoff` is not supported by Overdrive, so we ignore it. All
         # we can do is get events between the start time and now.
 
@@ -125,7 +124,7 @@ class OverdriveAPI(object):
                       sort="popularity:desc",
                       limit=self.PAGE_SIZE_LIMIT,
                       collection_name=self.collection_name)
-        next_link = self.make_link_safe(self.EVENTS_URL % params)
+        next_link = self.make_link_safe(self.EVENTS_ENDPOINT % params)
         while next_link:
             page_inventory, next_link = self._get_book_list_page(next_link)
             # We won't be sending out any events for these books yet,
@@ -137,6 +136,75 @@ class OverdriveAPI(object):
                 books.append(i)
 
         return books
+
+    def metadata_lookup(self, overdrive_id):
+        """Look up metadata for an Overdrive ID.
+
+        Update the corresponding WorkRecord appropriately.
+        """
+        cache_key = overdrive_id + ".json"
+        if self.cache.exists(cache_key):
+            raw = self.cache.open(cache_key).read()
+        else:
+            url = self.METADATA_ENDPOINT % dict(
+                collection_token=self.collection_token,
+                item_id=overdrive_id
+                )
+            print "%s => %s" % (url, self.cache._filename(cache_key))
+            response = self.get(url)
+            if response.status_code != 200:
+                raise IOError(response.status_code)
+            self.cache.store(cache_key, response.content)
+
+            set_trace()
+
+    def update_licensepool(self, _db, data_source, book):
+        """Update availability information for a single book.
+
+        If the book has never been seen before, a new LicensePool
+        will be created for the book.
+
+        The book's LicensePool will be updated with current
+        circulation information.
+        """
+        # Retrieve current circulation information about this book
+        circulation_link = book['availability_link']
+        response = self.get(circulation_link)
+        if response.status_code != 200:
+            print "ERROR: Could not get availability for %s: %s" % (id, 
+response.status_code)
+            return
+
+        book.update(response.json())
+        return self._update_licensepool(_db, data_source, book)
+
+    def _update_licensepool(self, _db, data_source, book):
+        """Update a book's LicensePool with information from a JSON
+        representation of its circulation info.
+
+        Also adds very basic bibliographic information to the WorkRecord.
+        """
+        overdrive_id = book['id']
+        pool, was_new = LicensePool.for_foreign_id(
+            _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+        if was_new:
+            pool.open_access = False
+            wr, wr_new = WorkRecord.for_foreign_id(
+                _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+            wr.title = book['title']
+            if 'author_name' in book:
+                name = book['author_name']
+                if name:
+                    contributor = wr.add_contributor(name, 'Author')
+                    contributor.display_name = name
+            print "New book: %r" % wr
+
+        pool.licenses_owned = book['copiesOwned']
+        pool.licenses_available = book['copiesAvailable']
+        pool.licenses_reserved = 0
+        pool.patrons_in_hold_queue = book['numberOfHolds']
+        pool.last_checked = datetime.datetime.utcnow()
+        return pool, was_new
 
     def _get_book_list_page(self, link):
         """Process a page of inventory whose circulation we need to check.
@@ -158,61 +226,23 @@ class OverdriveAPI(object):
         # Prepare to get availability information for all the books on
         # this page.
         availability_queue = (
-            OverdriveRepresentationExtractor.availability_info(data))
+            OverdriveRepresentationExtractor.availability_link_list(data))
         return availability_queue, next_link
 
-    def bibliographic_lookup(self, overdrive_id):
-        pass
+    @classmethod
+    def make_link_safe(self, url):
+        """Turn a server-provided link into a link the server will accept!
 
-    def get_circulation_for(self, to_check):
-        """Check the circulation status for a bunch of books.
-
-        If the book has never been seen before, a new LicensePool
-        will be created for the book.
-
-        If the book has been seen before, the LicensePool will be
-        updated with current circulation information.
+        This is completely obnoxious and I have complained about it to
+        Overdrive.
         """
-        for i, data in enumerate(to_check):
-            if i % 50 == 0 and i != 0:
-                print "%s/%s" % (i, len(to_check))
-            now = datetime.datetime.utcnow()
-
-            # Retrieve current circulation information about this book
-            circulation_link = data['availability_link']
-            response = self.get(circulation_link)
-            if response.status_code != 200:
-                print "ERROR: Could not get availability for %s: %s" % (id, 
-response.status_code)
-                continue
-
-            # Build a new circulation dictionary
-            circulation = OverdriveRepresentationExtractor.circulation_info(
-                response.json())
-            circulation[LicensedWork.TITLE] = data[LicensedWork.TITLE]
-
-            # TODO: get the LicensePool. Tell the LicensePool
-            # to update its inventory and to send out events.
-            self.update_licensepool(data)
-
-    def update_licensepool(self, book):
-        """Update a book's LicensePool with information from a JSON
-        representation of its circulation info.
-        """
-        pool, was_new = LicensePool.for_foreign_id(
-            self._db, self.overdrive_data_source,
-            WorkIdentifier.OVERDRIVE_ID, book['id'])
-        if was_new:
-            pool.open_access = False
-            wr = pool.work_record()
-            # TODO: Any more bibliographic information?
-            wr.title = book['title']
-
-        pool.licenses_owned = book['copiesOwned']
-        pool.licenses_available = book['copiesAvailable']
-        pool.licenses_reserved = 0
-        pool.patrons_in_hold_queue = book['numberOfHolds']
-        pool.last_checked = datetime.datetime.utcnow()
+        parts = list(urlparse.urlsplit(url))
+        parts[2] = urllib.quote(parts[2])
+        query_string = parts[3]
+        query_string = query_string.replace("+", "%2B")
+        query_string = query_string.replace(":", "%3A")
+        parts[3] = query_string
+        return urlparse.urlunsplit(tuple(parts))
             
 
 class OverdriveRepresentationExtractor(object):
@@ -220,22 +250,28 @@ class OverdriveRepresentationExtractor(object):
     """Extract useful information from Overdrive's JSON representations."""
 
     @classmethod
-    def availability_info(self, book_list):
-        """Yields a dictionary with a link to availability info for each book."""
+    def availability_link_list(self, book_list):
+        """:return: A list of dictionaries with keys `id`, `title`,
+        `contributor_names`, `availability_link`.
+        """
         l = []
         if not 'products' in book_list:
             return []
 
         products = book_list['products']
         for product in products:
-            data = dict()
-            for inkey, outkey in (
-                    ('id', LicensedWork.SOURCE_ID),
-                    ('title', LicensedWork.TITLE)):
-                data[outkey] =  product[inkey]
+            data = dict(id=product['id'],
+                        title=product['title'],
+                        author_name=None)
+            
+            if 'primaryCreator' in product:
+                creator = product['primaryCreator']
+                if creator.get('role') == 'Author':
+                    data['author_name'] = creator.get('name')
             links = product['links']
             if 'availability' in links:
-                data['availability_link'] = links['availability']['href']
+                link = links['availability']['href']
+                data['availability_link'] = OverdriveAPI.make_link_safe(link)
             else:
                 log.warn("No availability link for %s" % book_id)
             l.append(data)
@@ -251,17 +287,41 @@ class OverdriveRepresentationExtractor(object):
         return link
 
 
-class OverdriveCirculationMonitor(CirculationMonitor):
-    
-    # How stale an inventory record is allowed to get.
-    #
-    # Overdrive doesn't tell us about inventory events directly. We
-    # set this to None to tell CirculationMonitor to check every time.
-    MAXIMUM_STALE_TIME = None
 
+class OverdriveCirculationMonitor(Monitor):
+    """Maintain license pool for Overdrive titles.
+
+    This is where new books are given their LicensePools.  But the
+    bibliographic data isn't inserted into those LicensePools until
+    the OverdriveCoverageProvider runs.
+    """
     def __init__(self, data_directory):
-        path = os.path.join(data_directory, OverdriveAPI.EVENT_SOURCE)
-        source = OverdriveAPI(path)
-        store = FilesystemMonitorStore(path)
         super(OverdriveCirculationMonitor, self).__init__(
-            source, store, 60, self.MAXIMUM_STALE_TIME)
+            "Overdrive Circulation Monitor")
+        path = os.path.join(data_directory, DataSource.OVERDRIVE)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        self.source = OverdriveAPI(path)
+
+    def run_once(self, _db, start, cutoff):
+        added_books = 0
+        books = self.source.recently_changed_ids(start, cutoff)
+        overdrive_data_source = DataSource.lookup(
+            _db, DataSource.OVERDRIVE)
+
+        for i, book in enumerate(books):
+            if i > 0 and not i % 50:
+                print "%s/%s" % (i, len(to_check))
+            license_pool, is_new = self.source.update_licensepool(
+                _db, overdrive_data_source, book)
+            # Log a circulation event for this work.
+            if is_new:
+                event = get_one_or_create(
+                    _db, CirculationEvent,
+                    type=CirculationEvent.TITLE_ADD,
+                    license_pool=license_pool,
+                    create_method_kwargs=dict(
+                        start=license_pool.last_checked
+                    )
+                )
+            _db.commit()
