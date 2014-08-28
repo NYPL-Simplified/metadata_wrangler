@@ -588,6 +588,35 @@ class WorkIdentifier(Base):
             resource.set_content(content, media_type)
         return resource, new
 
+    def classify(self, data_source, subject_type, subject_identifier, weight):
+        """Classify this WorkIdentifier under a Subject.
+
+        :param type: Classification scheme; one of the constants from Subject.
+        :param subject_identifier: Internal ID of the subject according to that classification scheme.
+
+        ``value``: Human-readable description of the subject, if different
+                   from the ID.
+
+        ``weight``: How confident the data source is in classifying a
+                    book under this subject. The meaning of this
+                    number depends entirely on the source of the
+                    information.
+        """
+        _db = Session.object_session(self)
+        # Turn the subject type and identifier into a series of
+        # Subject objects. Some of them may be newly created.
+        subjects = Subject.unfold(_db, subject_type, subject_identifier)
+
+        # Create or update a Classification for every Subject.
+        for subject in subjects:
+            classification = get_one_or_create(
+                _db, Classification,
+                work_identifier=self,
+                subject=subject,
+                data_source=data_source)
+            classification.weight = weight
+            self.classifications.append(classification)
+
     @classmethod
     def resources_for_identifier_ids(self, _db, identifier_ids, rel=None):
         resources = _db.query(Resource).filter(
@@ -1161,31 +1190,7 @@ class WorkRecord(Base):
         else:
             type = "text"
         return dict(type=type, value=content)
-       
-    @classmethod
-    def _add_subject(cls, subjects, type, id, value=None, weight=None):
-        """Add a new entry to a dictionary of bibliographic subjects.
-
-        ``type``: Classification scheme; one of the constants from SubjectType.
-        ``id``: Internal ID of the subject according to that classification
-                scheme.
-        ``value``: Human-readable description of the subject, if different
-                   from the ID.
-
-        ``weight``: How confident this source of work
-                    information is in classifying a book under this
-                    subject. The meaning of this number depends entirely
-                    on the source of the information.
-        """
-        if type not in subjects:
-            subjects[type] = []
-        d = dict(id=id)
-        if value:
-            d['value'] = value
-        if weight:
-            d['weight'] = weight
-        subjects[type].append(d)
-        
+              
     def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
                         **kwargs):
         """Assign a contributor to this WorkRecord."""
@@ -1948,6 +1953,30 @@ class Subject(Base):
     classifications = relationship(
         "Classification", backref="subject"
     )
+
+    classifiers = {
+        DDC : classifier.DeweyDecimalClassification,
+        LCC : classifier.LLCClassification,
+        LCSH : classifier.LCSHClassification,
+        FAST : classifier.FASTClassification,
+        OVERDRIVE : classifier.OverdriveClassification,
+    }
+
+    @classmethod
+    def unfold(cls, _db, subject_type, subject_identifier):
+        """Turn a subject type and identifier into one or more Subjects."""
+        classifier = cls.classifiers[subject_type]
+        for identifier, name, audience, fiction in classifier.names(
+                subject_identifier):
+            subject = get_one_or_create(
+                _db, Subject, Subject.type==subject_type,
+                Subject.identifier==subject_identifier,
+                create_method_kwargs=dict(
+                    name=name,
+                    audience=audience,
+                    fiction=fiction)
+            )
+            yield subject
 
 class Classification(Base):
     """The assignment of a WorkIdentifier to a Subject."""
