@@ -64,7 +64,7 @@ class FilesystemCache(object):
             directory = os.path.join(self.cache_directory, subdir)
         else:
             directory = self.cache_directory
-        return os.path.join(self.cache_directory, key)
+        return os.path.join(directory, key)
 
     def exists(self, key):
         return os.path.exists(self._filename(key))

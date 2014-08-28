@@ -1,13 +1,16 @@
+# encoding: utf-8
 from nose.tools import set_trace, eq_
 import pkgutil
 import json
 from tests.db import DatabaseTest
 from integration.overdrive import (
     OverdriveAPI,
-    OverdriveRepresentationExtractor
+    OverdriveRepresentationExtractor,
+    OverdriveBibliographicMonitor,
 )
 from model import (
     DataSource,
+    Resource,
     WorkIdentifier,
 )
 
@@ -54,8 +57,6 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(0, pool.licenses_reserved)
         eq_(raw['numberOfHolds'], pool.patrons_in_hold_queue)
 
-
-
     def test_update_existing_licensepool(self):
         data = pkgutil.get_data(
             "tests.integrate",
@@ -94,19 +95,106 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(0, pool.licenses_reserved)
         eq_(raw['numberOfHolds'], pool.patrons_in_hold_queue)
 
-    def test_circulation_info_with_holds(self):
+    def test_update_licensepool_with_holds(self):
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_availability_information_holds.json")
         raw = json.loads(data)
-        circulation = OverdriveRepresentationExtractor.circulation_info(raw)
-        eq_(0, circulation[LicensedWork.AVAILABLE])
-        eq_(10, circulation[LicensedWork.HOLDS])
+        identifier = self._workidentifier(
+            identifier_type=WorkIdentifier.OVERDRIVE_ID
+        )
+        raw['id'] = identifier.identifier
+
+        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        pool, was_new = OverdriveAPI.update_licensepool_with_book_info(
+            self._db, overdrive, raw
+            )
+        eq_(10, pool.patrons_in_hold_queue)
 
     def test_link(self):
         data = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/overdrive/overdrive_book_list.json")
         raw = json.loads(data)
         expect = OverdriveAPI.make_link_safe("http://api.overdrive.com/v1/collections/collection-id/products?limit=300&offset=0&lastupdatetime=2014-04-28%2009:25:09&sort=popularity:desc&formats=ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open")
         eq_(expect, OverdriveRepresentationExtractor.link(raw, "first"))
+
+    def test_annotate_work_record_with_bibliographic_information(self):
+
+        wr, new = self._workrecord(with_license_pool=True)
+        data = pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/overdrive_metadata.json")
+        info = json.loads(data)
+
+        input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+            self._db, wr, info, input_source)
+
+        # Basic bibliographic info.
+        eq_("Agile Documentation", wr.title)
+        eq_("A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.subtitle)
+        eq_("Wiley Software Patterns", wr.series)
+        eq_("eng", wr.language)
+        eq_("Wiley", wr.publisher)
+        eq_("John Wiley & Sons, Inc.", wr.imprint)
+        eq_(2005, wr.published.year)
+        eq_(1, wr.published.month)
+        eq_(31, wr.published.day)
+
+        # Author stuff
+        author = wr.authors[0]
+        eq_(u"Rüping, Andreas", author.name)
+        eq_("Andreas R&#252;ping", author.display_name)
+        eq_(set(["Computer Technology", "Nonfiction"]),
+            set([x['id'] for x in wr.subjects['Overdrive']]))
+
+        # Related IDs.
+        equivalents = [x.output for x in wr.primary_identifier.equivalencies]
+        ids = [(x.type, x.identifier) for x in equivalents]
+        eq_([("ASIN", "B000VI88N2"), ("ISBN", "9780470856246")],
+            sorted(ids))
+
+        # Associated resources.
+        resources = wr.primary_identifier.resources
+        eq_(4, len(resources))
+        long_description = [
+            x for x in resources if x.rel==Resource.DESCRIPTION
+            and x.href=="tag:full"
+        ][0]
+        assert long_description.content.startswith("<p>Software documentation")
+
+        short_description = [
+            x for x in resources if x.rel==Resource.DESCRIPTION
+            and x.href=="tag:short"
+        ][0]
+        assert short_description.content.startswith("<p>Software documentation")
+        assert len(short_description.content) < len(long_description.content)
+
+        image = [x for x in resources if x.rel==Resource.IMAGE][0]
+        eq_('http://images.contentreserve.com/ImageType-100/0128-1/{3896665D-9D81-4CAC-BD43-FFC5066DE1F5}Img100.jpg', image.href)
+
+        popularity = [x for x in resources if x.rel==Resource.POPULARITY][0]
+        eq_("2", popularity.content)
+
+        # Un-schematized metadata.
+        eq_("eBook", wr.extra['medium'])
+        eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.extra['sort_title'])
+
+
+    def test_annotate_work_record_with_sample(self):
+        wr, new = self._workrecord(with_license_pool=True)
+        data = pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/overdrive_has_sample.json")
+        info = json.loads(data)
+
+        input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+            self._db, wr, info, input_source)
+        
+        i = wr.primary_identifier
+        [sample] = [x for x in i.resources if x.rel == Resource.SAMPLE]
+        eq_("application/epub+zip", sample.media_type)
+        eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.href)
+        eq_(820171, sample.file_size)

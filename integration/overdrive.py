@@ -51,7 +51,8 @@ class OverdriveAPI(object):
     def __init__(self, data_directory):
 
         self.bibliographic_cache = FilesystemCache(
-            os.path.join(data_directory, self.BIBLIOGRAPHIC_DIRECTORY),
+            os.path.join(data_directory, self.EVENT_SOURCE, 
+                         self.BIBLIOGRAPHIC_DIRECTORY),
             subdir_chars=4)
         self.credential_path = os.path.join(data_directory, self.CRED_FILE)
 
@@ -122,7 +123,6 @@ class OverdriveAPI(object):
         # `cutoff` is not supported by Overdrive, so we ignore it. All
         # we can do is get events between the start time and now.
 
-        books = []
         params = dict(lastupdatetime=start,
                       formats=self.FORMATS,
                       sort="popularity:desc",
@@ -136,10 +136,8 @@ class OverdriveAPI(object):
             # be putting them on the list of inventory items to
             # refresh. At that point we will send out events.
             for i in page_inventory:
-                print "Adding %r to the list." % i
-                books.append(i)
-
-        return books
+                print i
+                yield i
 
     def metadata_lookup(self, overdrive_id):
         """Look up metadata for an Overdrive ID.
@@ -147,6 +145,7 @@ class OverdriveAPI(object):
         Update the corresponding WorkRecord appropriately.
         """
         cache_key = overdrive_id + ".json"
+        set_trace()
         if self.bibliographic_cache.exists(cache_key):
             raw = self.bibliographic_cache.open(cache_key).read()
             return json.loads(raw)
@@ -207,7 +206,8 @@ class OverdriveAPI(object):
             pool.open_access = False
             wr, wr_new = WorkRecord.for_foreign_id(
                 _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
-            wr.title = book['title']
+            if 'title' in book:
+                wr.title = book['title']
             print "New book: %r" % wr
 
         pool.update_availability(
@@ -314,13 +314,12 @@ class OverdriveCirculationMonitor(Monitor):
 
     def run_once(self, _db, start, cutoff):
         added_books = 0
-        books = self.source.recently_changed_ids(start, cutoff)
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
-        for i, book in enumerate(books):
+        for i, book in enumerate(self.source.recently_changed_ids(start, cutoff)):
             if i > 0 and not i % 50:
-                print "%s/%s" % (i, len(books))
+                print " %s processed" % i
             if not book:
                 continue
             license_pool, is_new = self.source.update_licensepool(
@@ -350,7 +349,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             "Overdrive Bibliographic Monitor",
             self.input_source, self.output_source)
 
-    def _add_value_as_resource(self, identifier, pool, rel, value,
+    @classmethod
+    def _add_value_as_resource(cls, input_source, identifier, pool, rel, value,
                                media_type="text/plain", url=None):
         if isinstance(value, str):
             value = value.decode("utf8")
@@ -359,24 +359,41 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         else:
             value = str(value)
         identifier.add_resource(
-            rel, url, self.input_source, pool, media_type, value)
+            rel, url, input_source, pool, media_type, value)
 
     DATE_FORMAT = "%Y-%m-%d"
 
     def process_work_record(self, wr):
         identifier = wr.primary_identifier
         info = self.overdrive.metadata_lookup(identifier.identifier)
+        return self.annotate_work_record_with_bibliographic_information(
+            self._db, wr, info, self.input_source
+        )
+
+    media_type_for_overdrive_type = {
+        "ebook-pdf-adobe" : "application/pdf",
+        "ebook-pdf-open" : "application/pdf",
+        "ebook-epub-adobe" : "application/epub+zip",
+        "ebook-epub-open" : "application/epub+zip",
+    }
+        
+    @classmethod
+    def annotate_work_record_with_bibliographic_information(
+            cls, _db, wr, info, input_source):
+
+        identifier = wr.primary_identifier
         license_pool = wr.license_pool
 
-        # Easy stuff.
+        # First get the easy stuff.
         wr.title = info['title']
         wr.subtitle = info.get('subtitle', None)
+        wr.series = info.get('series', None)
         wr.publisher = info.get('publisher', None)
         wr.imprint = info.get('imprint', None)
 
         if 'publishDate' in info:
             wr.published = datetime.datetime.strptime(
-                info['publishDate'][:10], self.DATE_FORMAT)
+                info['publishDate'][:10], cls.DATE_FORMAT)
 
         languages = [
             LanguageCodes.two_to_three.get(l['code'], l['code'])
@@ -410,9 +427,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         extra = dict()
         for inkey, outkey in (
                 ('gradeLevels', 'grade_levels'),
-                ('series', 'series'),
                 ('mediaType', 'medium'),
-                ('isPublicDomain', 'is_public_domain'),
                 ('sortTitle', 'sort_title'),
         ):
             if inkey in info:
@@ -438,39 +453,56 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     continue
                 if type_key:
                     new_identifier, ignore = WorkIdentifier.for_foreign_id(
-                        self._db, type_key, v)
+                        _db, type_key, v)
                     identifier.equivalent_to(
-                        self.input_source, new_identifier, 1)
+                        input_source, new_identifier, 1)
+
+            # Samples become resources.
+            if 'samples' in format:
+                if format['id'] == 'ebook-overdrive':
+                    # Useless to us.
+                    continue
+                media_type = cls.media_type_for_overdrive_type.get(
+                    format['id'])
+                if not media_type:
+                    print format['id']
+                    set_trace()
+                for sample_info in format['samples']:
+                    href = sample_info['url']
+                    resource, new = identifier.add_resource(
+                        Resource.SAMPLE, href, input_source,
+                        license_pool, media_type)
+                    resource.file_size = format['fileSize']
 
         # Add resources: cover, descriptions, rating and popularity
         if info['starRating']:
-            self._add_value_as_resource(
-                identifier, license_pool, Resource.RATING, info['starRating'])
+            cls._add_value_as_resource(
+                input_source, identifier, license_pool, Resource.RATING,
+                info['starRating'])
 
         if info['popularity']:
-            self._add_value_as_resource(
-                identifier, license_pool, Resource.POPULARITY,
+            cls._add_value_as_resource(
+                input_source, identifier, license_pool, Resource.POPULARITY,
                 info['popularity'])
 
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
             href = link['href']
             media_type = link['type']
-            identifier.add_resource(Resource.IMAGE, href, self.input_source,
+            identifier.add_resource(Resource.IMAGE, href, input_source,
                                     license_pool, media_type)
 
         short = info.get('shortDescription')
         full = info.get('fullDescription')
 
         if full:
-            self._add_value_as_resource(
-                identifier, license_pool, Resource.DESCRIPTION, full,
+            cls._add_value_as_resource(
+                input_source, identifier, license_pool, Resource.DESCRIPTION, full,
                 "text/html", "tag:full")
 
         if short and short != full:
-            self._add_value_as_resource(
-                identifier, license_pool, Resource.DESCRIPTION, short,
+            cls._add_value_as_resource(
+                input_source, identifier, license_pool, Resource.DESCRIPTION, short,
                 "text/html", "tag:short")
 
-        print wr
         return True
