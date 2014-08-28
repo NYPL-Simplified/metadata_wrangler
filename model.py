@@ -408,6 +408,11 @@ class WorkIdentifier(Base):
         "Resource", backref="work_identifier"
     )
 
+    # One WorkIdentifier may participate in many Classifications.
+    classifications = relationship(
+        "Classification", backref="work_identifier"
+    )
+
     # Type + identifier is unique.
     __table_args__ = (
         UniqueConstraint('type', 'identifier'),
@@ -1005,8 +1010,6 @@ class WorkRecord(Base):
 
     contributions = relationship("Contribution", backref="workrecord")
 
-    subjects = Column(JSON, default=[])
-
     language = Column(Unicode, index=True)
     publisher = Column(Unicode)
     imprint = Column(Unicode)
@@ -1334,7 +1337,7 @@ class Work(Base):
     subjects = Column(MutableDict.as_mutable(JSON), default={})
 
     cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
-    lane = Column(Unicode, index=True)
+    lane_id = Column(Integer, ForeignKey('lanes.id'), index=True)
     quality = Column(Float, index=True)
 
     def __repr__(self):
@@ -1711,6 +1714,7 @@ class Work(Base):
                 print d.encode("utf8")
             print
 
+
 class Resource(Base):
     """An external resource that may be mirrored locally."""
 
@@ -1884,6 +1888,80 @@ class Resource(Base):
         total_quality = (((self.estimated_quality or 0) * self.ESTIMATED_QUALITY_WEIGHT) + 
                          ((self.voted_quality or 0) * votes_for_quality))
         self.quality = total_quality / float(total_weight)
+
+
+class Lane(Base):
+    """A grouping of like books."""
+    __tablename__ = 'lanes'
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode)
+
+    # One Lane may have affinity with many Subjects.
+    subjects = relationship("Subject", backref="lane")
+
+    # One Lane may group together many Works.
+    works = relationship("Work", backref="lane")
+
+class Subject(Base):
+    """A subject under which books might be classified."""
+
+    # Types of subjects.
+    LCC = "LCC"   # Library of Congress Classification
+    LCSH = "LCSH" # Library of Congress Subject Headings
+    DDC = "DDC"   # Dewey Decimal Classification
+    OVERDRIVE = "Overdrive"   # Overdrive's classification system
+    FAST = "FAST"
+    TAG = "tag"   # Folksonomic tags.
+
+    by_uri = {
+        "http://purl.org/dc/terms/LCC" : LCC,
+        "http://purl.org/dc/terms/LCSH" : LCSH,
+    }
+
+    __tablename__ = 'subjects'
+    id = Column(Integer, primary_key=True)
+    # Type should be one of the constants in this class.
+    type = Column(Unicode, index=True)
+
+    # Formal identifier for the subject (e.g. "300" for Dewey Decimal
+    # System's Social Sciences subject.)
+    identifier = Column(Unicode, index=True)
+
+    # Human-readable name, if different from the
+    # identifier. (e.g. "Social Sciences" for DDC 300)
+    name = Column(Unicode, default=None)
+
+    # Whether classification under this subject implies anything about
+    # the fiction/nonfiction status of a book.
+    fiction = Column(Boolean, default=None)
+
+    # Whether classification under this subject implies anything about
+    # the book's audience.
+    audience = Column(
+        Enum("adult", "young adult", "children", name="audience"),
+        default=None)
+
+    # Each Subject may claim affinity with one Lane.
+    lane_id = Column(Integer, ForeignKey('lanes.id'), index=True)
+
+    # One Subject may participate in many Classifications.
+    classifications = relationship(
+        "Classification", backref="subject"
+    )
+
+class Classification(Base):
+    """The assignment of a WorkIdentifier to a Subject."""
+    __tablename__ = 'classifications'
+    id = Column(Integer, primary_key=True)
+    work_identifier_id = Column(
+        Integer, ForeignKey('workidentifiers.id'), index=True)
+    subject_id = Column(Integer, ForeignKey('subjects.id'), index=True)
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    # How much weight the data source gives to this classification.
+    weight = Column(Integer)
+
+# Non-database objects.
 
 class WorkFeed(object):
 
@@ -2500,14 +2578,3 @@ class CoverageProvider(object):
 
 class SubjectType(object):
     """Constants for common types of subject classification"""
-    LCC = "LCC"   # Library of Congress Classification
-    LCSH = "LCSH" # Library of Congress Subject Headings
-    DDC = "DDC"   # Dewey Decimal Classification
-    OVERDRIVE = "Overdrive"   # Overdrive's classification system
-    FAST = "FAST"
-    TAG = "tag"   # Folksonomic tags.
-
-    by_uri = {
-        "http://purl.org/dc/terms/LCC" : LCC,
-        "http://purl.org/dc/terms/LCSH" : LCSH,
-    }
