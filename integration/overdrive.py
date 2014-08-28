@@ -429,6 +429,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 ('gradeLevels', 'grade_levels'),
                 ('mediaType', 'medium'),
                 ('sortTitle', 'sort_title'),
+                ('awards', 'awards'),
         ):
             if inkey in info:
                 extra[outkey] = info.get(inkey)

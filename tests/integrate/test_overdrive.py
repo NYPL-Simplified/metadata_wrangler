@@ -198,3 +198,15 @@ class TestOverdriveAPI(DatabaseTest):
         eq_("application/epub+zip", sample.media_type)
         eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.href)
         eq_(820171, sample.file_size)
+
+    def test_annotate_work_record_with_awards(self):
+        wr, new = self._workrecord(with_license_pool=True)
+        data = pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/overdrive_has_awards.json")
+        info = json.loads(data)
+
+        input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+            self._db, wr, info, input_source)
+        eq_(wr.extra['awards'], [{"source":"The New York Times","value":"The New York Times Best Seller List"}])
