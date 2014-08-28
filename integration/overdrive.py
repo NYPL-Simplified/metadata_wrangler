@@ -188,14 +188,18 @@ class OverdriveAPI(object):
             return
 
         book.update(response.json())
-        return self._update_licensepool(_db, data_source, book)
+        return self.update_licensepool_with_book_info(_db, data_source, book)
 
-    def _update_licensepool(self, _db, data_source, book):
+    @classmethod
+    def update_licensepool_with_book_info(cls, _db, data_source, book):
         """Update a book's LicensePool with information from a JSON
         representation of its circulation info.
 
         Also adds very basic bibliographic information to the WorkRecord.
         """
+        if data_source.name != DataSource.OVERDRIVE:
+            raise ValueError(
+                "You're supposed to pass in the Overdrive DataSource object so I can avoid looking it up. That's the only valid value for data_source.")
         overdrive_id = book['id']
         pool, was_new = LicensePool.for_foreign_id(
             _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
@@ -204,8 +208,6 @@ class OverdriveAPI(object):
             wr, wr_new = WorkRecord.for_foreign_id(
                 _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
             wr.title = book['title']
-            # Don't add the author name--we can get better author data
-            # in the metadata phase.
             print "New book: %r" % wr
 
         pool.update_availability(
@@ -259,7 +261,7 @@ class OverdriveRepresentationExtractor(object):
     @classmethod
     def availability_link_list(self, book_list):
         """:return: A list of dictionaries with keys `id`, `title`,
-        `contributor_names`, `availability_link`.
+        `availability_link`.
         """
         l = []
         if not 'products' in book_list:

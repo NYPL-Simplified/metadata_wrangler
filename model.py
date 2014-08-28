@@ -2058,7 +2058,7 @@ class LicensePool(Base):
             self, licenses_owned, licenses_available, licenses_reserved,
             patrons_in_hold_queue):
         # TODO: Emit notification events.
-        self.licences_owned = licenses_owned
+        self.licenses_owned = licenses_owned
         self.licenses_available = licenses_available
         self.licenses_reserved = licenses_reserved
         self.patrons_in_hold_queue = patrons_in_hold_queue
