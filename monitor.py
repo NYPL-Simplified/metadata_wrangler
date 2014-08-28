@@ -29,7 +29,7 @@ class Monitor(object):
 
         while not self.stop_running:
             cutoff = datetime.datetime.utcnow()
-            self.run_once(start, cutoff)
+            self.run_once(_db, start, cutoff)
             duration = datetime.datetime.utcnow() - cutoff
             to_sleep = self.interval_seconds-duration.seconds-1
             self.cleanup()

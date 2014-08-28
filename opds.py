@@ -52,8 +52,9 @@ class URLRewriter(object):
 
     epub_id = re.compile("/([0-9]+)")
 
-    GUTENBERG_MIRROR_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
+    GUTENBERG_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
+    CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
 
     @classmethod
     def rewrite(cls, url):
@@ -61,7 +62,8 @@ class URLRewriter(object):
         if parsed.hostname in ('www.gutenberg.org', 'gutenberg.org'):
             return cls._rewrite_gutenberg(parsed)
         else:
-            return url % dict(content_cafe_mirror="http://localhost:8000")
+            return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
+                              gutenberg_illustrated_mirror=cls.GUTENBERG_MIRROR_HOST)
 
     @classmethod
     def _rewrite_gutenberg(cls, parsed):
@@ -170,10 +172,18 @@ class AcquisitionFeed(OPDSFeed):
         else:
             # The active license pool is the one that *would* be associated
             # with a loan, were a loan to be issued right now.
+            open_access_license_pool = None
             for p in work.license_pools:
                 if p.open_access:
+                    # Make sure there's a usable link--it might be
+                    # audio-only or something.
+                    if p.work_record().best_open_access_link:
+                        open_access_license_pool = p
+                else:
                     active_license_pool = p
                     break
+            if not active_license_pool:
+                active_license_pool = open_access_license_pool
 
         # There's no reason to present a book that has no active license pool.
         if not active_license_pool:
@@ -195,7 +205,10 @@ class AcquisitionFeed(OPDSFeed):
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
         if work.cover:
-            url = URLRewriter.rewrite(work.cover.mirrored_path)
+            if work.cover.mirrored_path:
+                url = URLRewriter.rewrite(work.cover.mirrored_path)
+            else:
+                url = URLRewriter.rewrite(work.cover.href)
             links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
             qualities.append(("Cover quality", work.cover.quality))
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:

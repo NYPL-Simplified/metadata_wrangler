@@ -361,6 +361,7 @@ class WorkIdentifier(Base):
     GUTENBERG_ID = "Gutenberg ID"
     AXIS_360_ID = "Axis 360 ID"
     QUERY_STRING = "Query string"
+    ASIN = "ASIN"
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
@@ -604,13 +605,28 @@ class WorkIdentifier(Base):
         # these identifiers.
         images = cls.resources_for_identifier_ids(
             _db, identifier_ids, Resource.IMAGE)
-        images = images.filter(Resource.mirrored==True).all()
+        images = images.join(Resource.data_source)
+        licensed_sources = (
+            DataSource.OVERDRIVE, DataSource.THREEM,
+            DataSource.AXIS_360)
+        mirrored_or_embeddable = or_(
+            Resource.mirrored==True,
+            DataSource.name.in_(licensed_sources)
+            )
+
+        images = images.filter(mirrored_or_embeddable).all()
 
         champion = None
         # Judge the image resource by its deviation from the ideal
         # aspect ratio, and by its deviation (in the "too small"
         # direction only) from the ideal resolution.
         for r in images:
+            if r.data_source.name in licensed_sources:
+                # For licensed works, always present the cover
+                # provided by the licensing authority.
+                r.quality = 1
+                champion = r
+                continue
             if not r.image_width or not r.image_height:
                 continue
             aspect_ratio = r.image_width / float(r.image_height)
@@ -1058,6 +1074,15 @@ class WorkRecord(Base):
                  **kwargs)
         return r
 
+    @property
+    def license_pool(self):
+        """The WorkRecord's corresponding LicensePool, if any.
+        """
+        _db = Session.object_session(self)
+        return _db.query(LicensePool).filter(
+            LicensePool.data_source==self.data_source).filter(
+                LicensePool.identifier==self.primary_identifier).one()
+
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other WorkIdentifiers.
@@ -1181,7 +1206,8 @@ class WorkRecord(Base):
             get_one_or_create(
                 _db, Contribution, workrecord=self, contributor=contributor,
                 role=role)
-   
+        return contributor
+
     def similarity_to(self, other_record):
         """How likely is it that this record describes the same book as the
         given record?
@@ -1581,9 +1607,20 @@ class Work(Base):
         data = WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
+        
+        # TODO: In the long run we don't want to trust embeddable
+        # images at all, without looking at them, but images from the
+        # same source as the licensed books are trustable for now.
+        mirrored_or_embeddable = or_(
+            Resource.mirrored==True,
+            Resource.data_source.name.in_(DataSource.OVERDRIVE, 
+                                          DataSource.THREEM)
+            )
+
+        set_trace()
         return WorkIdentifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.IMAGE).filter(
-                Resource.mirrored==True).order_by(
+                mirrored_or_embeddable).order_by(
                 Resource.quality.desc())
 
     def all_descriptions(self):
@@ -1608,7 +1645,8 @@ class Work(Base):
         if languages:
             self.language = languages.most_common(1)[0][0]
         if authors:
-            self.authors = authors.most_common(1)[0][0].name
+            author = authors.most_common(1)[0][0]
+            self.authors = author.display_name or author.name
 
         # Find all related IDs that might have associated resources,
         # along with 
@@ -1619,6 +1657,7 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
+        set_trace()
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
         self.cover, covers = WorkIdentifier.evaluate_cover_quality(
@@ -1628,8 +1667,24 @@ class Work(Base):
             print "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
         if self.cover:
             print self.cover.mirrored_path
+
+        non_generated_covers = [
+            x for x in covers
+            if x.data_source.name != DataSource.GUTENBERG_COVER_GENERATOR
+        ]
+
         self.quality = len(self.license_pools) * (
-            len(flattened_data)/3.0 + len(summaries) / 3.0 +len(covers) / 3.0)
+            len(flattened_data)/3.0 + len(summaries) / 3.0 +len(non_generated_covers) / 3.0)
+
+        # Boost license content significantly.
+        licensed_pools = [
+            x for x in self.license_pools
+            if not x.open_access
+        ]
+        if licensed_pools:
+            set_trace()
+            self.quality *= (50 * len(licensed_pools))
+            
 
         self.subjects = subjects
         if 'audience' in self.subjects:
@@ -1669,6 +1724,8 @@ class Resource(Base):
     SAMPLE = "http://opds-spec.org/acquisition/sample"
     ILLUSTRATION = "http://library-simplified.com/rel/illustration"
     REVIEW = "http://schema.org/Review"
+    RATING = "http://schema.org/reviewRating"
+    POPULARITY = "http://library-simplified.com/rel/popularity"
     DESCRIPTION = "http://schema.org/description"
     AUTHOR = "http://schema.org/author"
 
@@ -1997,8 +2054,15 @@ class LicensePool(Base):
         age = now - self.last_checked
         return age > maximum_stale_time
 
-    def update_from_event(self, event):
-        """Update circulation info based on an Event object."""
+    def update_availability(
+            self, licenses_owned, licenses_available, licenses_reserved,
+            patrons_in_hold_queue):
+        # TODO: Emit notification events.
+        self.licenses_owned = licenses_owned
+        self.licenses_available = licenses_available
+        self.licenses_reserved = licenses_reserved
+        self.patrons_in_hold_queue = patrons_in_hold_queue
+        self.last_checked = datetime.datetime.utcnow()
 
     @classmethod
     def compare_circulation_estimate_to_reality(self, estimate):
@@ -2118,7 +2182,10 @@ class LicensePool(Base):
     def calculate_work(self, record_similarity_threshold=0.4,
                        work_similarity_threshold=0.4):
         """Find or create a Work for this LicensePool."""
-        primary_work_record = self.work_record()
+        try:
+            primary_work_record = self.work_record()
+        except NoResultFound, e:
+            return None, False
         self.language = primary_work_record.language
         if primary_work_record.work is not None:
             # That was a freebie.
@@ -2436,6 +2503,7 @@ class SubjectType(object):
     LCC = "LCC"   # Library of Congress Classification
     LCSH = "LCSH" # Library of Congress Subject Headings
     DDC = "DDC"   # Dewey Decimal Classification
+    OVERDRIVE = "Overdrive"   # Overdrive's classification system
     FAST = "FAST"
     TAG = "tag"   # Folksonomic tags.
 
