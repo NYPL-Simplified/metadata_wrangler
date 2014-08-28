@@ -12,6 +12,7 @@ class Lane(object):
     sublanes = set([])
     LCC = []
     DDC = []
+    OVERDRIVE = []
     KEYWORDS = []
     name = None
 
@@ -27,7 +28,7 @@ class Lane(object):
     @classmethod
     def best_match(cls, subjects):
         if 'fiction' in subjects:
-            fiction = cls.most_common(subjects['fiction'])
+            fiction = (cls.most_common(subjects['fiction']) == True)
         else:
             fiction = False
 
@@ -72,7 +73,7 @@ class Lane(object):
         fast_names = subjects.get('names', {}).get('FAST', {})
         total = 0
         possibilities = lcsh_names.items() + fast_names.items()
-        
+
         for k, v in possibilities:
             for kw in cls.KEYWORDS:
                 if isinstance(kw, basestring):
@@ -107,6 +108,17 @@ class Lane(object):
                     break
             if match:
                 total += v
+
+        overdrive_codes = subjects.get('codes', {}).get('Overdrive', {})
+        for k, v in overdrive_codes.items():
+            match = False
+            for check in cls.OVERDRIVE:
+                match = (k in check)
+                if match:
+                    break
+            if match:
+                total += v
+
         return total
 
 class Unclassified(Lane):
@@ -146,6 +158,7 @@ class History(Nonfiction):
            "KBR", "LA",
     ]
     DDC = [900, 904, 909, range(930, 941), 950, 960, 970, 980, 990]
+    OVERDRIVE = ["History"]
     sublanes = set([])
 Nonfiction.sublanes.add(History)
 
@@ -153,6 +166,7 @@ class Biography(Nonfiction):
     name = "Biography"
     KEYWORDS = make_kw("biography")
     DDC = [920, "B"]
+    OVERDRIVE = ["Biography & Autobiography"]
     sublanes = set([])
 Nonfiction.sublanes.add(Biography)
 
@@ -213,6 +227,7 @@ Lane.sublanes.add(Fiction)
 class Romance(Fiction):
     name = "Romance"
     KEYWORDS = make_kw("love stories", "romances")
+    OVERDRIVE = ["Romance"]
     sublanes = set([])
 Fiction.sublanes.add(Romance)
 
@@ -235,6 +250,7 @@ class Mystery(Fiction):
         "detective and mystery stories",
         "crime",
     )
+    OVERDRIVE = ["Mystery"]
     sublanes = set([])
 Fiction.sublanes.add(Mystery)
 

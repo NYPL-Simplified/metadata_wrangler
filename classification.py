@@ -24,6 +24,7 @@ class Classification(object):
         for type, classifier, key in (
                 ('DDC', DeweyDecimalClassification, 'id'),
                 ('LCC', LCCClassification, 'id'),
+                ('Overdrive', OverdriveClassification, 'id'),
                 ('FAST', FASTClassification, 'value'),
                 ('LCSH', LCSHClassification, 'id'),):
             raw_subjects = subjects.get(type, [])
@@ -45,6 +46,31 @@ class Classification(object):
                 names[k] = n(v)
         return dict(audience=audience, fiction=fiction, codes=codes,
                     names=names)
+
+class OverdriveClassification(Classification):
+
+    @classmethod
+    def is_fiction(cls, key):
+        if "Fiction" in key:
+            return True
+        if "Nonfiction" in key:
+            return False
+        return None
+
+    @classmethod
+    def audience(cls, key):
+        if 'Juvenile' in key:
+            return cls.AUDIENCE_JUVENILE
+        elif 'Young Adult' in key:
+            return cls.AUDIENCE_YOUNG_ADULT
+        else:
+            return cls.AUDIENCE_ADULT
+
+    @classmethod
+    def names(cls, key):
+        yield (key, key, cls.audience(key), 
+               cls.is_fiction(key))
+
 
 class DeweyDecimalClassification(Classification):
 
@@ -99,7 +125,6 @@ class DeweyDecimalClassification(Classification):
         if not cls.DEWEY:
             cls._load()
         return cls.DEWEY.get(key.upper(), None)
-        set_trace()
 
     @classmethod
     def names(cls, ddc):

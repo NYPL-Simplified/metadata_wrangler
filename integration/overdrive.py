@@ -457,8 +457,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             identifier.add_resource(Resource.IMAGE, href, self.input_source,
                                     license_pool, media_type)
 
-        short = info['shortDescription']
-        full = info['fullDescription']
+        short = info.get('shortDescription')
+        full = info.get('fullDescription')
 
         if full:
             self._add_value_as_resource(
