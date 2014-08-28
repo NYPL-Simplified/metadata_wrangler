@@ -28,7 +28,7 @@ from model import (
     WorkRecord,
     DataSource,
     Resource,
-    SubjectType,
+    Subject,
 )
 from util import MetadataSimilarity
 
@@ -651,8 +651,8 @@ class OCLCXMLParser(XMLParser):
         # work.
         subjects = {}
         for tag_name, subject_type in (
-                ("ddc", SubjectType.DDC),
-                ("lcc", SubjectType.LCC)):
+                ("ddc", Subject.DDC),
+                ("lcc", Subject.LCC)):
             tag = cls._xpath1(
                 work_tag,
                 "//oclc:%s/oclc:mostPopular" % tag_name)
@@ -667,7 +667,7 @@ class OCLCXMLParser(XMLParser):
             id = heading.get('ident')
             weight = int(heading.get('heldby'))
             value = heading.text
-            WorkRecord._add_subject(subjects, SubjectType.FAST, id, value, weight=weight)
+            WorkRecord._add_subject(subjects, Subject.FAST, id, value, weight=weight)
 
         # Record some extra OCLC-specific information
         extra = {
@@ -725,8 +725,8 @@ class OCLCXMLParser(XMLParser):
 
         subjects = {}
         for subject_type, oclc_code in (
-                (SubjectType.LCC, "050"),
-                (SubjectType.DDC, "082")):
+                (Subject.LCC, "050"),
+                (Subject.DDC, "082")):
             classification = cls._xpath1(edition_tag,
                 "oclc:classifications/oclc:class[@tag=%s]" % oclc_code)
             if classification is not None:

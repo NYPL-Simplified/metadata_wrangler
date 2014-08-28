@@ -54,7 +54,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from classification import Classification
+import classification
 from lane import Lane
 from util import (
     LanguageCodes,
@@ -605,15 +605,13 @@ class WorkIdentifier(Base):
         _db = Session.object_session(self)
         # Turn the subject type and identifier into a series of
         # Subject objects. Some of them may be newly created.
-        subjects = Subject.unfold(_db, subject_type, subject_identifier)
-
-        # Create or update a Classification for every Subject.
-        for subject in subjects:
-            classification = get_one_or_create(
+        for subject, new_subject in Subject.unfold(
+                _db, subject_type, subject_identifier):
+            classification, new_classification = get_one_or_create(
                 _db, Classification,
                 work_identifier=self,
                 subject=subject,
-                data_source=data_source)
+                data_source_id=data_source.id)
             classification.weight = weight
             self.classifications.append(classification)
 
@@ -1943,7 +1941,7 @@ class Subject(Base):
     # Whether classification under this subject implies anything about
     # the book's audience.
     audience = Column(
-        Enum("adult", "young adult", "children", name="audience"),
+        Enum("Adult", "Young Adult", "Children", name="audience"),
         default=None)
 
     # Each Subject may claim affinity with one Lane.
@@ -1955,11 +1953,11 @@ class Subject(Base):
     )
 
     classifiers = {
-        DDC : classifier.DeweyDecimalClassification,
-        LCC : classifier.LLCClassification,
-        LCSH : classifier.LCSHClassification,
-        FAST : classifier.FASTClassification,
-        OVERDRIVE : classifier.OverdriveClassification,
+        DDC : classification.DeweyDecimalClassification,
+        LCC : classification.LCCClassification,
+        LCSH : classification.LCSHClassification,
+        FAST : classification.FASTClassification,
+        OVERDRIVE : classification.OverdriveClassification,
     }
 
     @classmethod
@@ -1968,15 +1966,15 @@ class Subject(Base):
         classifier = cls.classifiers[subject_type]
         for identifier, name, audience, fiction in classifier.names(
                 subject_identifier):
-            subject = get_one_or_create(
-                _db, Subject, Subject.type==subject_type,
-                Subject.identifier==subject_identifier,
+            subject, new = get_one_or_create(
+                _db, Subject, type=subject_type,
+                identifier=identifier,
                 create_method_kwargs=dict(
                     name=name,
                     audience=audience,
                     fiction=fiction)
             )
-            yield subject
+            yield subject, new
 
 class Classification(Base):
     """The assignment of a WorkIdentifier to a Subject."""
@@ -2603,7 +2601,3 @@ class CoverageProvider(object):
 
     def process_work_record(self, work_record):
         raise NotImplementedError()
-
-
-class SubjectType(object):
-    """Constants for common types of subject classification"""

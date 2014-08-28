@@ -29,7 +29,7 @@ from model import (
     Resource,
     WorkIdentifier,
     LicensePool,
-    SubjectType,
+    Subject,
 )
 
 from monitor import Monitor
@@ -313,14 +313,6 @@ class GutenbergRDFExtractor(object):
         else:
             language = None
 
-        subjects = dict()
-        subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
-        for subject in subject_links:
-            value = cls._value(g, (subject, cls.rdf.value, None))
-            vocabulary = cls._value(g, (subject, cls.dcam.memberOf, None))
-            vocabulary=SubjectType.by_uri[str(vocabulary)]
-            WorkRecord._add_subject(subjects, vocabulary, value)
-
         contributors = []
         for ignore, ignore, author_uri in g.triples((uri, cls.dcterms.creator, None)):
             name = cls._value(g, (author_uri, cls.gutenberg.name, None))
@@ -341,11 +333,20 @@ class GutenbergRDFExtractor(object):
                 issued=issued,
                 publisher=publisher,
                 language=language,
-                subjects=subjects,
             ),
             data_source=source,
             primary_identifier=identifier,
         )
+
+        # Classify the WorkRecord.
+        if new:
+            subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
+            for subject in subject_links:
+                value = cls._value(g, (subject, cls.rdf.value, None))
+                vocabulary = cls._value(g, (subject, cls.dcam.memberOf, None))
+                vocabulary = Subject.by_uri[str(vocabulary)]
+                identifier.classify(source, vocabulary, value, 1)
+
 
         # If there is a description, turn it into a Resource.
         identifier = book.primary_identifier
