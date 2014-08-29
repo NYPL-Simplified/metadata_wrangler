@@ -138,7 +138,8 @@ class DeweyDecimalClassification(Classification):
         Yields 4-tuples:
          (code, human_readable_name, audience, fiction).
         """
-
+        audience = None
+        is_fiction = None
         ddc = ddc.upper()
 
         if ddc.startswith('[') and ddc.endswith(']'):
