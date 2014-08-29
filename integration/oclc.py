@@ -1,3 +1,4 @@
+# encoding: utf-8
 import collections
 import datetime
 import json
@@ -183,7 +184,10 @@ class OCLCLinkedData(object):
         re.compile("http://id.loc.gov/authorities/subjects/sh([^/]+)") : Subject.LCSH,
     }
 
-    ACCEPTABLE_TYPES = 'schema:Topic', 'schema:Place', 'schema:Person', 'schema:Organization', 'schema:Event'
+    ACCEPTABLE_TYPES = (
+        'schema:Topic', 'schema:Place', 'schema:Person',
+        'schema:Organization', 'schema:Event', 'schema:CreativeWork',
+    )
 
     @classmethod
     def extract_useful_data(cls, subgraph, book):
@@ -898,7 +902,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             "OCLC-LD lookup", oclc_classify, self.oclc_linked_data)
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME, oclc_classify, self.oclc_linked_data,
-            workset_size=10)
+            workset_size=3)
 
     def process_work_record(self, wr):
         try:
@@ -1027,19 +1031,35 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 if info:
                     yield info
 
-    TAG_BLACKLIST = set([
-        'audiobook', 'audio book', 'large type', 'large print',
-        'sound recording', 'compact disc', 'talking book',
-        '(binding)', 'movable books', 'electronic books',
+    # These tags are useless for our purposes.
+    POINTLESS_TAGS = set([
+        'large type', 'large print', '(binding)', 'movable books',
+        'electronic books', 'braille books', 'board books',
+        'electronic resource', u'états-unis', 'etats-unis',
+        'ebooks',
+        ])
+
+    # These tags indicate that the record as a whole is useless 
+    # for our purposes.
+    TAGS_FOR_UNUSABLE_RECORDS = set([
+        'audiobook', 'audio book', 'sound recording', 'compact disc',
+        'talking book', 'books on cd', 'audiocassettes', 'playaway',
+        'vhs',
     ])
+
+    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
+
+    UNUSABLE_RECORD = object()
 
     def fix_tag(self, tag):
         if tag.endswith('.'):
             tag = tag[:-1]
-        if tag in self.TAG_BLACKLIST:
-            return None
         l = tag.lower()
-        if any([x in l for x in self.TAG_BLACKLIST]):
+        #if any([x in l for x in self.TAGS_FOR_UNUSABLE_RECORDS]):
+        #    return self.UNUSABLE_RECORD
+        if any([x in l for x in self.FILTER_TAGS]):
+            return None
+        if l == 'cd' or l == 'cds':
             return None
         return tag
 
@@ -1083,7 +1103,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
         tags = set()
         for tag in subjects.get(Subject.TAG, []):
             fixed = self.fix_tag(tag)
-            if fixed:
+            if fixed == self.UNUSABLE_RECORD:
+                return None
+            elif fixed:
                 tags.add(fixed)
         if tags:
             subjects[Subject.TAG] = tags

@@ -12,7 +12,7 @@ from util import MetadataSimilarity
 class Classification(object):
 
     AUDIENCE_CHILDREN = "Children"
-    AUDIENCE_YA = "Young Adult"
+    AUDIENCE_YOUNG_ADULT = "Young Adult"
     AUDIENCE_ADULT = "Adult"
 
     @classmethod
