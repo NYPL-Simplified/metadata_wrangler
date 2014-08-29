@@ -8,7 +8,7 @@ def make_kw(*l):
         res.append(re.compile(r'\b%s\b' % i, re.I))
     return res
 
-class Lane(object):
+class LaneData(object):
     sublanes = set([])
     LCC = []
     DDC = []
@@ -121,31 +121,31 @@ class Lane(object):
 
         return total
 
-class Unclassified(Lane):
+class Unclassified(LaneData):
     name = "Unclassified"
     sublanes = set([])
 Lane.sublanes.add(Unclassified)
 
-class Humor(Lane):
+class Humor(LaneData):
     name = "Humor"
     KEYWORDS = make_kw(
         "humor", "wit", "humorous", "satire", "comedies", "comedy")
     sublanes = set([])
 Lane.sublanes.add(Humor)
 
-class Poetry(Lane):
+class Poetry(LaneData):
     name = "Poetry"
     KEYWORDS = make_kw("poetry")
     sublanes = set([])
 Lane.sublanes.add(Poetry)
 
-class Drama(Lane):
+class Drama(LaneData):
     name = "Drama"
     KEYWORDS = make_kw("drama")
     sublanes = set([])
 Lane.sublanes.add(Drama)
 
-class Nonfiction(Lane):
+class Nonfiction(LaneData):
     name = "Nonfiction"
     sublanes = set()
 Lane.sublanes.add(Nonfiction)
@@ -219,7 +219,7 @@ class Cooking(Nonfiction):
     sublanes = set([])
 Nonfiction.sublanes.add(Cooking)
 
-class Fiction(Lane):
+class Fiction(LaneData):
     name = "Fiction"
     sublanes = set()
 Lane.sublanes.add(Fiction)

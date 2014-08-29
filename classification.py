@@ -9,6 +9,33 @@ import re
 
 from util import MetadataSimilarity
 
+from model import (
+    Subject
+)
+
+from lane import LaneData
+
+class AssignSubjectsToLanes(object):
+
+    def __init__(self, _db):
+        self._db = _db
+
+    def run(self, force=False):
+        q = self._db.query(Subject).filter(Subject.locked==False)
+        if not force:
+            q = q.filter(Subject.lane==None)
+        for subject in q:
+            classifier = Subject.classifiers.get(
+                subject.type, GenericClassification)
+            lane, audience, fiction = classifier.classify(subject)
+            if lane:
+                subject.lane = lane
+            if audience:
+                subject.audience = audience
+            if fiction:
+                subject.fiction = fiction
+
+
 class Classification(object):
 
     AUDIENCE_CHILDREN = "Children"
@@ -16,7 +43,7 @@ class Classification(object):
     AUDIENCE_ADULT = "Adult"
 
     @classmethod
-    def classify(self, subjects, normalize=False, counters={}):
+    def old_classify(self, subjects, normalize=False, counters={}):
         audience = counters.get('audience', Counter())
         fiction = counters.get('fiction', Counter())
         names = counters.get('names', defaultdict(Counter))
@@ -50,26 +77,44 @@ class Classification(object):
 class GenericClassification(Classification):
 
     @classmethod
-    def is_fiction(cls, key):
-        if "Fiction" in key:
+    def scrub_identifier(cls, identifier):
+        return identifier.lower()
+
+    @classmethod
+    def scrub_name(cls, name):
+        return name.lower()
+
+    @classmethod
+    def classify(cls, subject):
+        identifier = cls.scrub_identifier(subject.identifier)
+        if subject.name:
+            name = cls.scrub_name(subject.name)
+        else:
+            name = identifier
+        return (cls.lane(identifier, name),
+                cls.audience(identifier, name),
+                cls.fiction(identifier, name))
+
+    @classmethod
+    def lane(cls, identifier, name):
+        return None
+
+    @classmethod
+    def is_fiction(cls, identifier, name):
+        if "Fiction" in name:
             return True
-        if "Nonfiction" in key:
+        if "Nonfiction" in name:
             return False
         return None
 
     @classmethod
-    def audience(cls, key):
-        if 'Juvenile' in key:
+    def audience(cls, identifier, name):
+        if 'Juvenile' in name:
             return cls.AUDIENCE_CHILDREN
-        elif 'Young Adult' in key:
+        elif 'Young Adult' in name:
             return cls.AUDIENCE_YOUNG_ADULT
         else:
             return cls.AUDIENCE_ADULT
-
-    @classmethod
-    def names(cls, key, name):
-        yield (key, name, cls.audience(key), 
-               cls.is_fiction(key))
 
 class OverdriveClassification(GenericClassification):
     pass
@@ -77,6 +122,18 @@ class OverdriveClassification(GenericClassification):
 class DeweyDecimalClassification(Classification):
 
     DEWEY = None
+
+    FICTION_CLASSIFICATIONS = (
+        800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827)
+
+    lane_for_identifier = dict()
+    for lane in LaneData.SELF_AND_SUBLANES:
+        for identifier in lane.DDC:
+            if isinstance(identifier, range):
+                for i in identifier:
+                    lane_for_identifier[i] = lane
+            else:
+                lane_for_identifier[identifier] = lane
 
     @classmethod
     def _load(cls):
@@ -89,132 +146,104 @@ class DeweyDecimalClassification(Classification):
         cls.DEWEY["FIC"] = "Juvenile Fiction"
 
     @classmethod
-    def is_fiction(cls, key):
-        """Is the given DDC classification likely to contain fiction?"""
-        if isinstance(key, int):
-            key = str(key).zfill(3)
+    def scrub_identifier(cls, identifier):
+        identifier = identifier.lower()
 
-        key = key.upper()
-        if key in ('E', 'FIC'):
+        if ddc.startswith('[') and ddc.endswith(']'):
+            # This is just bad data.
+            ddc = ddc[1:-1]
+
+        if ddc.startswith('c') or ddc.startswith('a'):
+            # A work from our Canadian neighbors or our Australian
+            # friends. It's all the same to us!
+            ddc = ddc[1:]
+        elif ddc.startswith("nz"):
+            # A work from the good people of New Zealand.
+            ddc = ddc[2:]
+
+        # Trim everything after the first period.
+        if '.' in identifier:
+            identifier = identifier.split('.')[0]
+        return identifier
+
+    @classmethod
+    def is_fiction(cls, identifier, name):
+        """Is the given DDC classification likely to contain fiction?"""
+        if isinstance(identifier, int):
+            identifier = str(identifier).zfill(3)
+
+        if identifier in ('e', 'fic'):
             # Juvenile fiction
             return True
-        elif key == 'B':
-            # Biography
+
+        if identifier == 'j':
+            # Juvenile non-fiction
             return False
 
-        if key.startswith('J'):
-            key = key[1:]
-
-        if key.startswith('F'):
+        if identifier.startswith('f'):
             # Adult fiction
             return True
 
-        if '.' in key:
-            key = key.split('.')[0]
+        if identifier == 'b':
+            # Biography
+            return False
+
+        if identifier == 'y':
+            # Inconsistently used for young adult fiction and
+            # young adult nonfiction.
+            return None
+
+        if identifier.startswith('y') or identifier.startswith('j'):
+            # Young adult/children's literature--not necessarily fiction
+            identifier = identifier[1:]
 
         try:
-            key = int(key)
+            identifier = int(identifier)
         except Exception, e:
             return False
-        if key in (800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827):
+        if identifier in cls.FICTION_CLASSIFICATIONS:
             return True
-        if key >= 830 and key <= 899:
+        if identifier >= 830 and identifier <= 899:
             # TODO: make this less of a catch-all.
             return True
 
         return False
 
     @classmethod
-    def lookup(cls, key):
-        """Do a direct key-value lookup."""
-        if not cls.DEWEY:
-            cls._load()
-        return cls.DEWEY.get(key.upper(), None)
+    def audience(cls, identifier, name):
+        if identifier in ('e', 'fic'):
+            # Juvenile fiction
+            return cls.AUDIENCE_CHILDREN
+
+        if identifier.startswith('j'):
+            return cls.AUDIENCE_CHILDREN
+
+        if identifier.startswith('y'):
+            return cls.AUDIENCE_YOUNG_ADULT
+
+        return cls.AUDIENCE_ADULT
 
     @classmethod
-    def names(cls, ddc, name):
-        """Yield increasingly more specific classifications for the given number.
+    def lane(cls, identifier, name):
 
-        Yields 4-tuples:
-         (code, human_readable_name, audience, fiction).
-        """
-        audience = None
-        is_fiction = None
-        ddc = ddc.upper()
+        if identifier in ('e', 'fic', 'j', 'b', 'y'):
+            identifiers = [identifier]
+        else:
+            # Strip off everything except the three-digit number.
+            identifier = identifier[-3:]
+            try:
+                # Turn a three-digit number into a top-level code.
+                identifier = int(identifier)
+                identifiers = [identifier, identifier / 100 * 100]
+            except ValueError, e:
+                # Oh well, try a lookup, maybe it'll work. (Probably not.)
+                identifiers = [identifier]
 
-        if ddc.startswith('[') and ddc.endswith(']'):
-            ddc = ddc[1:-1]
-
-        if ddc.startswith('C') or ddc.startswith('A'):
-            # Indicates a Canadian or Australian work. It doesnt'
-            # matter to us.
-            ddc = ddc[1:]
-        elif ddc.startswith("NZ"):
-            # New Zealand.
-            ddc = ddc[2:]
-
-        audience = cls.AUDIENCE_ADULT
-        if ddc == 'J':
-            yield (ddc, cls.lookup(ddc), cls.AUDIENCE_CHILDREN, False)
-            return
-        if ddc.startswith('J'):
-            audience = cls.AUDIENCE_CHILDREN
-            new_ddc = ddc[1:]
-            yield (ddc, cls.lookup(new_ddc), cls.AUDIENCE_CHILDREN,
-                   cls.is_fiction(new_ddc))
-            ddc = new_ddc
-
-        if ddc.startswith('Y'):
-            audience = cls.AUDIENCE_YOUNG_ADULT
-            new_ddc = ddc[1:]
-            yield (ddc, cls.lookup(new_ddc), cls.AUDIENCE_YOUNG_ADULT,
-                   cls.is_fiction(new_ddc))
-            ddc = new_ddc
-
-        if ddc in ('E', 'FIC'):
-            audience = cls.AUDIENCE_CHILDREN
-            yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
-            return
-
-        if ddc == 'B':
-            yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
-            return
-        elif ddc.startswith("F"):
-            audience = cls.AUDIENCE_ADULT
-            is_fiction = True
-            ddc = ddc[1:]
-
-        if not ddc:
-            yield (None, None, audience, is_fiction)
-            return
-
-        # At this point we should only have dotted-number
-        # classifications left.
-
-        parts = ddc.split(".")
-
-        # First get the top-level classification
-        try:
-            first_part = int(parts[0])
-        except Exception, e:
-            yield (None, None, audience, is_fiction)
-            return
-        top_level = str(first_part / 100 * 100)
-        yield (top_level, cls.lookup(top_level), audience,
-               cls.is_fiction(top_level))
-
-        # Now go one set of dots at a time.
-        working_ddc = ''
-        for i, part in enumerate(parts):
-            if not working_ddc and i == 0 and part == top_level:
-                continue
-            if working_ddc:
-                working_ddc += '.'
-            working_ddc += parts[i]
-            value = cls.lookup(working_ddc)
-            if value:
-                yield (working_ddc, value, audience, 
-                       cls.is_fiction(working_ddc))
+        for identifier in identifiers:
+            if identifier in self.lane_for_identifier:
+                return self.lane_for_identifier[identifier]
+        return None
+    
 
 class LCCClassification(Classification):
 
@@ -228,15 +257,15 @@ class LCCClassification(Classification):
             pkgutil.get_data("resources", "lcc_one_level.json"))
 
     @classmethod
-    def lookup(cls, key):
-        """Do a direct key-value lookup."""
+    def lookup(cls, identifier):
+        """Do a direct identifier-value lookup."""
         if not cls.LCC:
             cls._load()
-        return cls.LCC.get(key.upper(), None)
+        return cls.LCC.get(identifier.upper(), None)
 
     @classmethod
-    def is_fiction(cls, key):
-        return key.upper() in cls.FICTION
+    def is_fiction(cls, identifier):
+        return identifier.upper() in cls.FICTION
 
     @classmethod
     def names(cls, lcc, name):

@@ -22,6 +22,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import (
     aliased,
     backref,
+    joinedload,
 )
 from sqlalchemy.orm.exc import (
     NoResultFound
@@ -589,7 +590,7 @@ class WorkIdentifier(Base):
         return resource, new
 
     def classify(self, data_source, subject_type, subject_identifier,
-                 subject_value=None, weight=1):
+                 subject_name=None, weight=1):
         """Classify this WorkIdentifier under a Subject.
 
         :param type: Classification scheme; one of the constants from Subject.
@@ -604,20 +605,23 @@ class WorkIdentifier(Base):
                     information.
         """
         _db = Session.object_session(self)
-        # Turn the subject type and identifier into a series of
-        # Subject objects. Some of them may be newly created.
+        # Turn the subject type and identifier into a Subject.
         classifications = []
-        for subject, is_new_subject in Subject.unfold(
-                _db, subject_type, subject_identifier, subject_value):
-            classification, new_classification = get_one_or_create(
-                _db, Classification,
-                work_identifier=self,
-                subject=subject,
-                data_source_id=data_source.id)
-            classification.weight = weight
-            self.classifications.append(classification)
-            classifications.append(classification)
-        return classifications
+        subject, is_new = Subject.lookup(
+            _db, subject_type, subject_identifier, subject_name)
+        if is_new:
+            print repr(subject)
+
+        # Use a Classification to connect the WorkIdentifier to the
+        # Subject.
+        classification, is_new = get_one_or_create(
+            _db, Classification,
+            work_identifier=self,
+            subject=subject,
+            data_source_id=data_source.id)
+        classification.weight = weight
+        self.classifications.append(classification)
+        return classification
 
     @classmethod
     def resources_for_identifier_ids(self, _db, identifier_ids, rel=None):
@@ -626,6 +630,12 @@ class WorkIdentifier(Base):
         if rel:
             resources = resources.filter(Resource.rel==rel)
         return resources
+
+    @classmethod
+    def classifications_for_identifier_ids(self, _db, identifier_ids):
+        classifications = _db.query(Classification).filter(
+                Classification.work_identifier_id.in_(identifier_ids))
+        return classifications.options(joinedload('subject'))
 
     IDEAL_COVER_ASPECT_RATIO = 2.0/3
     IDEAL_IMAGE_HEIGHT = 240
@@ -740,6 +750,15 @@ class WorkIdentifier(Base):
             if not champion or r.quality > champion.quality:
                 champion = r
         return champion, summaries
+
+    @classmethod
+    def derive_lane(cls, _db, identifier_data, identifier_ids):
+        classifications = cls.classifications_for_identifier_ids(
+            _db, identifier_ids)
+        for classification in classifications:
+            subject = classification.subject
+            name, fiction = subject.evaluate()
+            set_trace()
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -1296,10 +1315,6 @@ class WorkRecord(Base):
                 if similarity >= threshold:
                     yield candidate
 
-    def classifications(self):
-        if not self.subjects:
-            return None
-
     @property
     def best_open_access_link(self):
         """Find the best open-access Resource for this LicensePool."""
@@ -1560,7 +1575,6 @@ class Work(Base):
         all_work_records = set(self.all_workrecords(recursion_level=1).all())
         all_work_records = all_work_records.union(license_pool_work_records)
 
-        subject_data = dict()
         authors = Counter()
         languages = Counter()
         image_links = Counter()
@@ -1591,7 +1605,7 @@ class Work(Base):
         title_counter = Counter()
         author_counter = Counter()
         language_counter = Counter()
-        # Go through all work records to see which titles, authors,
+        # Go through all work records to see which titles, authors
         # and languages are most common.
         for wr in all_work_records:
             if wr.title in usable_titles:
@@ -1602,13 +1616,7 @@ class Work(Base):
             if wr.language in usable_languages:
                 language_counter[wr.language] += 1
 
-            # Add this record's subject data to the running
-            # classification.
-            if wr.subjects:
-                subject_data = Classification.classify(
-                    wr.subjects, subject_data)
-
-        return (title_counter, author_counter, language_counter, subject_data)
+        return (title_counter, author_counter, language_counter)
 
     def all_cover_images(self):
         _db = Session.object_session(self)
@@ -1647,7 +1655,7 @@ class Work(Base):
 
     def calculate_presentation(self):
 
-        titles, authors, languages, subjects = (
+        titles, authors, languages = (
             self.gather_presentation_information())
 
         if titles:
@@ -1658,8 +1666,8 @@ class Work(Base):
             author = authors.most_common(1)[0][0]
             self.authors = author.display_name or author.name
 
-        # Find all related IDs that might have associated resources,
-        # along with 
+        # Find all related IDs that might have associated resources
+        # or classifications.
         _db = Session.object_session(self)
         primary_identifier_ids = [
             x.primary_identifier.id for x in self.work_records]
@@ -1667,7 +1675,8 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        set_trace()
+        self.fiction, self.audience, self.lane = WorkIdentifier.derive_lane(
+            _db, data, flattened_data)
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
         self.cover, covers = WorkIdentifier.evaluate_cover_quality(
@@ -1694,16 +1703,12 @@ class Work(Base):
         if licensed_pools:
             set_trace()
             self.quality *= (50 * len(licensed_pools))
-            
 
         self.subjects = subjects
         if 'audience' in self.subjects:
             self.audience = Lane.most_common(self.subjects['audience'])
         else:
             self.audience = Classification.AUDIENCE_ADULT
-
-        self.fiction, self.lane = Lane.best_match(
-            self.subjects)
 
         # Now that everything's calculated, print it out.
         if True:
@@ -1972,26 +1977,41 @@ class Subject(Base):
         OVERDRIVE : classification.OverdriveClassification,
     }
 
+    def __repr__(self):
+        if self.name:
+            name = u" (%s)" % self.name
+        else:
+            name = u""
+        a = u"[%s:%s%s]" % (self.type, self.identifier, name)
+        return a.encode("utf8")
+
     @classmethod
-    def unfold(cls, _db, subject_type, subject_identifier, subject_name):
-        """Turn a subject type and identifier into one or more Subjects."""
+    def lookup(cls, _db, type, identifier, name):
+        """Turn a subject type and identifier into a Subject."""
+        classifier = cls.classifiers.get(
+            type, classification.GenericClassification)
+        subject, new = get_one_or_create(
+            _db, Subject, type=type,
+            identifier=identifier,
+            create_method_kwargs=dict(
+                name=name,
+            )
+        )
+        if name and not subject.name:
+            # We just discovered the name of a subject that previously
+            # had only an ID.
+            subject.name = name
+        return subject, new
+
+    def evaluate(self):
+        if self.locked or (self.lane and self.fiction and self.audience):
+            return self.lane, self.fiction, self.audience
         classifier = cls.classifiers.get(
             subject_type, classification.GenericClassification)
-        for identifier, name, audience, fiction in classifier.names(
-                subject_identifier, subject_name):
-            subject, new = get_one_or_create(
-                _db, Subject, type=subject_type,
-                identifier=identifier,
-                create_method_kwargs=dict(
-                    name=name,
-                )
-            )
-            if (subject_name and not subject.name
-                and subject.identifier==subject_identifier):
-                # We just discovered the name of a subject that previously
-                # had only an ID.
-                subject.name = subject_name
-            yield subject, new
+        names = classifier.names(subject.identifier)
+        if not names:
+            return None
+        return names[0]
 
 class Classification(Base):
     """The assignment of a WorkIdentifier to a Subject."""

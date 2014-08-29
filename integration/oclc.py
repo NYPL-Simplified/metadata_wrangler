@@ -954,9 +954,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
         classifications = []
         for subject_type, subject_ids in edition['subjects'].items():
             for subject_id in subject_ids:
-                new_classes = oclc_number.classify(
+                new_class = oclc_number.classify(
                     self.oclc_linked_data, subject_type, subject_id)
-                classifications.extend(new_classes)
+                classifications.append(new_class)
 
         # Create new ISBNs associated with the OCLC
         # number. This will help us get metadata from other
@@ -1021,8 +1021,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         ld_wr = None
         return ld_wr, new_isbns_for_this_oclc_number, description_resources, classifications
 
-    SEEN_TAGS = set([])
-
     def info_for(self, work_identifier):
         for data in self.graphs_for(work_identifier):
             subgraph = oclc_linked_data.graph(data)
@@ -1041,6 +1039,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     # These tags indicate that the record as a whole is useless 
     # for our purposes.
+    #
+    # However, they are not reliably assigned to records that are
+    # actually useless, so we treat them the same as POINTLESS_TAGS.
     TAGS_FOR_UNUSABLE_RECORDS = set([
         'audiobook', 'audio book', 'sound recording', 'compact disc',
         'talking book', 'books on cd', 'audiocassettes', 'playaway',
@@ -1112,10 +1113,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         elif Subject.TAG in subjects:
             del subjects[Subject.TAG]
 
-        for tag in subjects.get(Subject.TAG, []):
-            if not tag in self.SEEN_TAGS:
-                print tag
-                self.SEEN_TAGS.add(tag)
         # Something interesting has to come out of this
         # work--something we couldn't get from another source--or
         # there's no point.
