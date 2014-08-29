@@ -79,7 +79,7 @@ def first_half_subset(pg_id, archive, archive_item):
     but not the entirety of Project Gutenberg."""
     return int(pg_id) < 20000
 
-subset = very_small_subset
+subset = None
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

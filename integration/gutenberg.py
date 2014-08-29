@@ -345,7 +345,7 @@ class GutenbergRDFExtractor(object):
                 value = cls._value(g, (subject, cls.rdf.value, None))
                 vocabulary = cls._value(g, (subject, cls.dcam.memberOf, None))
                 vocabulary = Subject.by_uri[str(vocabulary)]
-                identifier.classify(source, vocabulary, value, 1)
+                identifier.classify(source, vocabulary, value)
 
 
         # If there is a description, turn it into a Resource.

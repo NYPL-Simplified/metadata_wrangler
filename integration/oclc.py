@@ -70,6 +70,10 @@ class ldq(object):
         if isinstance(vs, basestring):
             yield vs
             return
+        if isinstance(vs, dict) and '@value' in vs:
+            yield vs['@value']
+            return
+            
         for v in vs:
             if isinstance(v, basestring):
                 yield v
@@ -173,16 +177,25 @@ class OCLCLinkedData(object):
                 repository.extend(ldq.values(values))
         return examples
 
+    URI_TO_SUBJECT_TYPE = {
+        re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
+        re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
+        re.compile("http://id.loc.gov/authorities/subjects/sh([^/]+)") : Subject.LCSH,
+    }
+
+    ACCEPTABLE_TYPES = 'schema:Topic', 'schema:Place', 'schema:Person', 'schema:Organization', 'schema:Event'
+
     @classmethod
-    def extract_useful_data(cls, book):
+    def extract_useful_data(cls, subgraph, book):
         titles = []
         descriptions = []
+        subjects = collections.defaultdict(set)
         publisher_uris = []
         creator_uris = []
         publication_dates = []
         example_uris = []
 
-        no_value = (None, None, titles, descriptions, creator_uris,
+        no_value = (None, None, titles, descriptions, subjects, creator_uris,
                     publisher_uris, publication_dates, example_uris)
 
         if not book:
@@ -215,8 +228,52 @@ class OCLCLinkedData(object):
             repository.extend(ldq.values(
                 ldq.restrict_to_language(values, 'en')))
 
-        return (id_type, id, titles, descriptions, creator_uris, publisher_uris,
-                publication_dates, example_uris)
+        genres = book.get('schema:genre', [])
+        genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
+        subjects[Subject.TAG] = set(genres)
+
+        internal_lookups = []
+        for uri in book.get('about', []):
+            if not isinstance(uri, basestring):
+                continue
+            for r, subject_type in cls.URI_TO_SUBJECT_TYPE.items():
+                m = r.match(uri)
+                if m:
+                    subjects[subject_type].add(m.groups()[0])
+                    break
+            else:
+                # Try an internal lookup.
+                internal_lookups.append(uri)
+
+        results = OCLCLinkedData.internal_lookup(subgraph, internal_lookups)
+        for result in results:
+            if 'schema:name' in result:
+                name = result['schema:name']
+            else:
+                print "WEIRD INTERNAL LOOKUP: %r" % result
+                continue
+            use_type = None
+            if 'rdf:type' in result:
+                types = result.get('rdf:type', [])
+                if isinstance(types, dict):
+                    types = [types]
+                for rdf_type in types:
+                    if '@id' in rdf_type:
+                        type_id = rdf_type['@id']
+                    if type_id in cls.ACCEPTABLE_TYPES:
+                        use_type = type_id
+                        break
+                    elif type_id == 'schema:Intangible':
+                        use_type = Subject.TAG
+                        break
+                    print type_id, result
+                    
+            if use_type:
+                for value in ldq.values(name):
+                    subjects[use_type].add(value)
+
+        return (id_type, id, titles, descriptions, subjects, creator_uris,
+                publisher_uris, publication_dates, example_uris)
 
     @classmethod
     def internal_lookup(cls, graph, uris):
@@ -647,28 +704,6 @@ class OCLCXMLParser(XMLParser):
         title, authors_and_roles, language = result
 
 
-        # Get the most popular Dewey and LCC classification for this
-        # work.
-        subjects = {}
-        for tag_name, subject_type in (
-                ("ddc", Subject.DDC),
-                ("lcc", Subject.LCC)):
-            tag = cls._xpath1(
-                work_tag,
-                "//oclc:%s/oclc:mostPopular" % tag_name)
-            if tag is not None:
-                id = tag.get('nsfa') or tag.get('sfa')
-                weight = int(tag.get('holdings'))
-                WorkRecord._add_subject(subjects, subject_type, id, weight=weight)
-
-        # Find FAST subjects for the work.
-        for heading in cls._xpath(
-                work_tag, "//oclc:fast//oclc:heading"):
-            id = heading.get('ident')
-            weight = int(heading.get('heldby'))
-            value = heading.text
-            WorkRecord._add_subject(subjects, Subject.FAST, id, value, weight=weight)
-
         # Record some extra OCLC-specific information
         extra = {
             OCLC.EDITION_COUNT : work_tag.get('editions'),
@@ -690,10 +725,32 @@ class OCLCXMLParser(XMLParser):
             create_method_kwargs=dict(
                 title=title,
                 language=language,
-                subjects=subjects,
                 extra=extra,
             )
         )
+
+        # Get the most popular Dewey and LCC classification for this
+        # work.
+        for tag_name, subject_type in (
+                ("ddc", Subject.DDC),
+                ("lcc", Subject.LCC)):
+            tag = cls._xpath1(
+                work_tag,
+                "//oclc:%s/oclc:mostPopular" % tag_name)
+            if tag is not None:
+                id = tag.get('nsfa') or tag.get('sfa')
+                weight = int(tag.get('holdings'))
+                identifier.classify(
+                    data_source, subject_type, id, weight=weight)
+
+        # Find FAST subjects for the work.
+        for heading in cls._xpath(
+                work_tag, "//oclc:fast//oclc:heading"):
+            id = heading.get('ident')
+            weight = int(heading.get('heldby'))
+            value = heading.text
+            identifier.classify(
+                data_source, Subject.FAST, id, value, weight)
 
         # Associate the authors with the WorkRecord.
         for contributor, roles in authors_and_roles:
@@ -723,16 +780,6 @@ class OCLCXMLParser(XMLParser):
 
         title, authors_and_roles, language = result
 
-        subjects = {}
-        for subject_type, oclc_code in (
-                (Subject.LCC, "050"),
-                (Subject.DDC, "082")):
-            classification = cls._xpath1(edition_tag,
-                "oclc:classifications/oclc:class[@tag=%s]" % oclc_code)
-            if classification is not None:
-                value = classification.get("nsfa") or classification.get('sfa')
-                WorkRecord._add_subject(subjects, subject_type, value)
-
         # Add a couple extra bits of OCLC-specific information.
         extra = {
             OCLC.HOLDING_COUNT : edition_tag.get('holdings'),
@@ -745,9 +792,10 @@ class OCLCXMLParser(XMLParser):
         )
 
         # Create a WorkRecord for source + identifier
+        data_source = DataSource.lookup(_db, DataSource.OCLC)
         edition_record, new = get_one_or_create(
             _db, WorkRecord,
-            data_source=DataSource.lookup(_db, DataSource.OCLC),
+            data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
                 title=title,
@@ -756,6 +804,16 @@ class OCLCXMLParser(XMLParser):
                 extra=extra,
             )
         )
+
+        subjects = {}
+        for subject_type, oclc_code in (
+                (Subject.LCC, "050"),
+                (Subject.DDC, "082")):
+            classification = cls._xpath1(edition_tag,
+                "oclc:classifications/oclc:class[@tag=%s]" % oclc_code)
+            if classification is not None:
+                value = classification.get("nsfa") or classification.get('sfa')
+                identifier.classify(data_source, subject_type, value)
 
         # Associated each contributor with the new record.
         for author, roles in authors_and_roles:
@@ -850,7 +908,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_descriptions = 0
             print u"%s (%s)" % (wr.title, repr(oclc_work).decode("utf8"))
             for edition in self.info_for(oclc_work):
-                workrecord, isbns, descriptions = self.process_edition(oclc_work, edition)
+                workrecord, isbns, descriptions, subjects = self.process_edition(oclc_work, edition)
                 if workrecord:
                     new_records += 1
                     print "", workrecord.publisher, len(isbns), len(descriptions)
@@ -888,6 +946,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.db, edition['oclc_id_type'],
             edition['oclc_id'])
 
+        # Associate classifications with the OCLC number.
+        classifications = []
+        for subject_type, subject_ids in edition['subjects'].items():
+            for subject_id in subject_ids:
+                new_classes = oclc_number.classify(
+                    self.oclc_linked_data, subject_type, subject_id)
+                classifications.extend(new_classes)
+
         # Create new ISBNs associated with the OCLC
         # number. This will help us get metadata from other
         # sources that use ISBN as input.
@@ -904,25 +970,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # redundant.
         if (len(new_isbns_for_this_oclc_number) == 0
             and not len(edition['descriptions'])):
-            return None, [], []
-
-        # Create a WorkRecord for OCLC+LD's view of this OCLC
-        # number.
-        #
-        # n.b. we don't really need to do this. It clutters up
-        # the database and the only semi-useful piece of information
-        # kept here is the publisher.
-        #
-        #ld_wr, new = get_one_or_create(
-        #    self.db, WorkRecord,
-        #    data_source=self.oclc_linked_data,
-        #    primary_identifier=oclc_number,
-        #    create_method_kwargs = dict(
-        #        title=title,
-        #        publisher=publisher,
-        #        published=publication_date,
-        #    )
-        #)
+            return None, [], [], []
 
         # Identify the OCLC Number with the OCLC Work.
         w = oclc_work.primarily_identifies
@@ -967,8 +1015,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
             description_resources.append(description_resource)
 
         ld_wr = None
-        return ld_wr, new_isbns_for_this_oclc_number, description_resources
+        return ld_wr, new_isbns_for_this_oclc_number, description_resources, classifications
 
+    SEEN_TAGS = set([])
 
     def info_for(self, work_identifier):
         for data in self.graphs_for(work_identifier):
@@ -977,6 +1026,22 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
                     yield info
+
+    TAG_BLACKLIST = set([
+        'audiobook', 'audio book', 'large type', 'large print',
+        'sound recording', 'compact disc', 'talking book',
+        '(binding)', 'movable books', 'electronic books',
+    ])
+
+    def fix_tag(self, tag):
+        if tag.endswith('.'):
+            tag = tag[:-1]
+        if tag in self.TAG_BLACKLIST:
+            return None
+        l = tag.lower()
+        if any([x in l for x in self.TAG_BLACKLIST]):
+            return None
+        return tag
 
     def info_for_book_graph(self, subgraph, book):
         isbns = set([])
@@ -997,10 +1062,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
          oclc_id,
          titles,
          descriptions,
+         subjects,
          creator_uris,
          publisher_uris,
          publication_dates,
-         example_uris) = OCLCLinkedData.extract_useful_data(book)
+         example_uris) = OCLCLinkedData.extract_useful_data(subgraph, book)
 
         example_graphs = OCLCLinkedData.internal_lookup(
             subgraph, example_uris)
@@ -1013,10 +1079,25 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 if isbn:
                     isbns.add(isbn)
 
+        # Consolidate subjects and apply a blacklist.
+        tags = set()
+        for tag in subjects.get(Subject.TAG, []):
+            fixed = self.fix_tag(tag)
+            if fixed:
+                tags.add(fixed)
+        if tags:
+            subjects[Subject.TAG] = tags
+        elif Subject.TAG in subjects:
+            del subjects[Subject.TAG]
+
+        for tag in subjects.get(Subject.TAG, []):
+            if not tag in self.SEEN_TAGS:
+                print tag
+                self.SEEN_TAGS.add(tag)
         # Something interesting has to come out of this
         # work--something we couldn't get from another source--or
         # there's no point.
-        if not isbns and not descriptions:
+        if not isbns and not descriptions and not subjects:
             return None
 
         publishers = OCLCLinkedData.internal_lookup(
@@ -1054,6 +1135,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             oclc_id=oclc_id,
             titles=titles,
             descriptions=descriptions,
+            subjects=subjects,
             creator_viafs=creator_viafs,
             publishers=publisher_names,
             publication_dates=publication_dates,

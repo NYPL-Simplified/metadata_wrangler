@@ -47,7 +47,7 @@ class Classification(object):
         return dict(audience=audience, fiction=fiction, codes=codes,
                     names=names)
 
-class OverdriveClassification(Classification):
+class GenericClassification(Classification):
 
     @classmethod
     def is_fiction(cls, key):
@@ -60,17 +60,19 @@ class OverdriveClassification(Classification):
     @classmethod
     def audience(cls, key):
         if 'Juvenile' in key:
-            return cls.AUDIENCE_JUVENILE
+            return cls.AUDIENCE_CHILDREN
         elif 'Young Adult' in key:
             return cls.AUDIENCE_YOUNG_ADULT
         else:
             return cls.AUDIENCE_ADULT
 
     @classmethod
-    def names(cls, key):
-        yield (key, key, cls.audience(key), 
+    def names(cls, key, name):
+        yield (key, name, cls.audience(key), 
                cls.is_fiction(key))
 
+class OverdriveClassification(GenericClassification):
+    pass
 
 class DeweyDecimalClassification(Classification):
 
@@ -110,7 +112,10 @@ class DeweyDecimalClassification(Classification):
         if '.' in key:
             key = key.split('.')[0]
 
-        key = int(key)
+        try:
+            key = int(key)
+        except Exception, e:
+            return False
         if key in (800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827):
             return True
         if key >= 830 and key <= 899:
@@ -127,7 +132,7 @@ class DeweyDecimalClassification(Classification):
         return cls.DEWEY.get(key.upper(), None)
 
     @classmethod
-    def names(cls, ddc):
+    def names(cls, ddc, name):
         """Yield increasingly more specific classifications for the given number.
 
         Yields 4-tuples:
@@ -153,14 +158,23 @@ class DeweyDecimalClassification(Classification):
             return
         if ddc.startswith('J'):
             audience = cls.AUDIENCE_CHILDREN
-            ddc = ddc[1:]
-            # TODO argh
-            is_fiction = False
+            new_ddc = ddc[1:]
+            yield (ddc, cls.lookup(new_ddc), cls.AUDIENCE_CHILDREN,
+                   cls.is_fiction(new_ddc))
+            ddc = new_ddc
+
+        if ddc.startswith('Y'):
+            audience = cls.AUDIENCE_YOUNG_ADULT
+            new_ddc = ddc[1:]
+            yield (ddc, cls.lookup(new_ddc), cls.AUDIENCE_YOUNG_ADULT,
+                   cls.is_fiction(new_ddc))
+            ddc = new_ddc
 
         if ddc in ('E', 'FIC'):
             audience = cls.AUDIENCE_CHILDREN
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
             return
+
         if ddc == 'B':
             yield (ddc, cls.lookup(ddc), audience, cls.is_fiction(ddc))
             return
@@ -182,7 +196,8 @@ class DeweyDecimalClassification(Classification):
         try:
             first_part = int(parts[0])
         except Exception, e:
-            set_trace()
+            yield (None, None, audience, is_fiction)
+            return
         top_level = str(first_part / 100 * 100)
         yield (top_level, cls.lookup(top_level), audience,
                cls.is_fiction(top_level))
@@ -223,7 +238,7 @@ class LCCClassification(Classification):
         return key.upper() in cls.FICTION
 
     @classmethod
-    def names(cls, lcc):
+    def names(cls, lcc, name):
         """Yield increasingly more specific classifications for the given number.
 
         Yields 4-tuples:
@@ -265,6 +280,8 @@ class LCSHClassification(Classification):
 
     @classmethod
     def is_fiction(cls, name):
+        if name is None:
+            return None
         name = name.lower()
         for i in cls.NONFICTION_INDICATORS:
             if i in name:
@@ -276,6 +293,8 @@ class LCSHClassification(Classification):
 
     @classmethod
     def audience(cls, name):
+        if name is None:
+            return None
         name = name.lower()
         for i in cls.JUVENILE_INDICATORS:
             if i in name:
@@ -283,9 +302,17 @@ class LCSHClassification(Classification):
         return None
         
     @classmethod
-    def names(cls, lcsh):
+    def names(cls, lcsh, name):
         for name in cls.split(lcsh):
             yield (name, name, cls.audience(name), cls.is_fiction(name))
 
 class FASTClassification(LCSHClassification):
     """By and large, LCSH rules also apply to FAST."""
+
+    @classmethod
+    def names(cls, fast_id, fast_name):
+        # Since FAST classifications have IDs associated with them,
+        # don't try to split them into parts the way we do with LCSH.
+        # We don't know what the IDs are! TODO: But mabye we could
+        # have that information available?
+        yield (fast_id, fast_name, cls.audience(fast_name), cls.is_fiction(fast_name))

@@ -588,7 +588,8 @@ class WorkIdentifier(Base):
             resource.set_content(content, media_type)
         return resource, new
 
-    def classify(self, data_source, subject_type, subject_identifier, weight):
+    def classify(self, data_source, subject_type, subject_identifier,
+                 subject_value=None, weight=1):
         """Classify this WorkIdentifier under a Subject.
 
         :param type: Classification scheme; one of the constants from Subject.
@@ -605,8 +606,9 @@ class WorkIdentifier(Base):
         _db = Session.object_session(self)
         # Turn the subject type and identifier into a series of
         # Subject objects. Some of them may be newly created.
-        for subject, new_subject in Subject.unfold(
-                _db, subject_type, subject_identifier):
+        classifications = []
+        for subject, is_new_subject in Subject.unfold(
+                _db, subject_type, subject_identifier, subject_value):
             classification, new_classification = get_one_or_create(
                 _db, Classification,
                 work_identifier=self,
@@ -614,6 +616,8 @@ class WorkIdentifier(Base):
                 data_source_id=data_source.id)
             classification.weight = weight
             self.classifications.append(classification)
+            classifications.append(classification)
+        return classifications
 
     @classmethod
     def resources_for_identifier_ids(self, _db, identifier_ids, rel=None):
@@ -1915,6 +1919,10 @@ class Subject(Base):
     OVERDRIVE = "Overdrive"   # Overdrive's classification system
     FAST = "FAST"
     TAG = "tag"   # Folksonomic tags.
+    TOPIC = "schema:Topic"
+    PLACE = "schema:Place"
+    PERSON = "schema:Person"
+    ORGANIZATION = "schema:Organization"
 
     by_uri = {
         "http://purl.org/dc/terms/LCC" : LCC,
@@ -1947,6 +1955,10 @@ class Subject(Base):
     # Each Subject may claim affinity with one Lane.
     lane_id = Column(Integer, ForeignKey('lanes.id'), index=True)
 
+    # A locked Subject has been reviewed by a human and software will
+    # not mess with it without permission.
+    locked = Column(Boolean, default=False, index=True)
+
     # One Subject may participate in many Classifications.
     classifications = relationship(
         "Classification", backref="subject"
@@ -1961,19 +1973,24 @@ class Subject(Base):
     }
 
     @classmethod
-    def unfold(cls, _db, subject_type, subject_identifier):
+    def unfold(cls, _db, subject_type, subject_identifier, subject_name):
         """Turn a subject type and identifier into one or more Subjects."""
-        classifier = cls.classifiers[subject_type]
+        classifier = cls.classifiers.get(
+            subject_type, classification.GenericClassification)
         for identifier, name, audience, fiction in classifier.names(
-                subject_identifier):
+                subject_identifier, subject_name):
             subject, new = get_one_or_create(
                 _db, Subject, type=subject_type,
                 identifier=identifier,
                 create_method_kwargs=dict(
                     name=name,
-                    audience=audience,
-                    fiction=fiction)
+                )
             )
+            if (subject_name and not subject.name
+                and subject.identifier==subject_identifier):
+                # We just discovered the name of a subject that previously
+                # had only an ID.
+                subject.name = subject_name
             yield subject, new
 
 class Classification(Base):
