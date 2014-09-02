@@ -56,7 +56,7 @@ from sqlalchemy import (
 )
 
 import classification
-from lane import Lane
+from lane import LaneData
 from util import (
     LanguageCodes,
     MetadataSimilarity,
@@ -1378,7 +1378,7 @@ class Work(Base):
         TODO: Current implementation is incredibly bad and does
         a direct database search using ILIKE.
         """
-        if isinstance(lane, Lane):
+        if isinstance(lane, LaneData):
             lane = lane.name
 
         if isisntance(languages, basestring):
@@ -1404,7 +1404,7 @@ class Work(Base):
         Bring the quality criteria as low as necessary to fill a feed
         of the given size, but not below `quality_min_rock_bottom`.
         """
-        if isinstance(lane, Lane):
+        if isinstance(lane, LaneData):
             lane = lane.name
         if not isinstance(languages, list):
             languages = [languages]
@@ -1706,7 +1706,7 @@ class Work(Base):
 
         self.subjects = subjects
         if 'audience' in self.subjects:
-            self.audience = Lane.most_common(self.subjects['audience'])
+            self.audience = LaneData.most_common(self.subjects['audience'])
         else:
             self.audience = Classification.AUDIENCE_ADULT
 
@@ -1969,11 +1969,11 @@ class Subject(Base):
         "Classification", backref="subject"
     )
 
-    classifiers = {
+    classification.Classification.classifiers = {
         DDC : classification.DeweyDecimalClassification,
         LCC : classification.LCCClassification,
-        LCSH : classification.LCSHClassification,
-        FAST : classification.FASTClassification,
+        LCSH : classification.KeywordBasedClassification,
+        FAST : classification.KeywordBasedClassification,
         OVERDRIVE : classification.OverdriveClassification,
     }
 
@@ -2032,7 +2032,7 @@ class WorkFeed(object):
     """Identify a certain page in a certain feed."""
 
     def __init__(self, languages, lane, order_by):
-        if isinstance(lane, type) and issubclass(lane, Lane):
+        if isinstance(lane, type) and issubclass(lane, LaneData):
             self.lane = lane.name
         else:
             self.lane = lane
