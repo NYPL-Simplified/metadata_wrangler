@@ -240,6 +240,9 @@ class DataSource(Base):
     # One DataSource can provide many Resources.
     resources = relationship("Resource", backref="data_source")
 
+    # One DataSource can provide many Classifications.
+    classifications = relationship("Classification", backref="data_source")
+
 
     @classmethod
     def lookup(cls, _db, name):
@@ -753,12 +756,46 @@ class WorkIdentifier(Base):
 
     @classmethod
     def derive_lane(cls, _db, identifier_data, identifier_ids):
+        import lane
+        from classification import Classification as ExtClassification
         classifications = cls.classifications_for_identifier_ids(
             _db, identifier_ids)
+        fiction_s = Counter()
+        lane_s = Counter()
+        audience_s = Counter()
         for classification in classifications:
             subject = classification.subject
-            name, fiction = subject.evaluate()
-            set_trace()
+            if (not subject.fiction and not subject.lane
+                and not subject.audience):
+                continue
+            weight = classification.scaled_weight
+            fiction_s[subject.fiction] += weight
+            audience_s[subject.audience] += weight
+            if subject.lane:
+                lane_s[subject.lane] += weight
+        if fiction_s[True] > fiction_s[False]:
+            default_lane = lane.Fiction
+        elif fiction_s[False] > fiction_s[True]:
+            default_lane = lane.Nonfiction
+        else:
+            default_lane = lane.Unclassified
+        unmarked = audience_s[None]
+        audience = ExtClassification.AUDIENCE_ADULT
+
+        if audience_s[ExtClassification.AUDIENCE_YOUNG_ADULT] > unmarked:
+            audience = ExtClassification.AUDIENCE_YOUNG_ADULT
+        elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
+            audience = ExtClassification.AUDIENCE_CHILDREN
+
+        lanes = lane_s.most_common()
+        if lanes:
+            the_lane = lanes[0][0]
+        else:
+            the_lane = default_lane
+
+        if the_lane:
+            the_lane = Lane.lookup(_db, the_lane)
+        return the_lane, audience
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -1655,6 +1692,8 @@ class Work(Base):
 
     def calculate_presentation(self):
 
+        from classification import Classification as ExtClassification
+
         titles, authors, languages = (
             self.gather_presentation_information())
 
@@ -1675,7 +1714,7 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        self.fiction, self.audience, self.lane = WorkIdentifier.derive_lane(
+        self.lane, self.audience = WorkIdentifier.derive_lane(
             _db, data, flattened_data)
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
@@ -1683,7 +1722,8 @@ class Work(Base):
             _db, data, flattened_data)
 
         if self.summary:
-            print "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
+            o = "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
+            print o.encode("utf8")
         if self.cover:
             print self.cover.mirrored_path
 
@@ -1704,22 +1744,15 @@ class Work(Base):
             set_trace()
             self.quality *= (50 * len(licensed_pools))
 
-        self.subjects = subjects
-        if 'audience' in self.subjects:
-            self.audience = LaneData.most_common(self.subjects['audience'])
-        else:
-            self.audience = Classification.AUDIENCE_ADULT
-
         # Now that everything's calculated, print it out.
         if True:
             t = u"%s (by %s)" % (self.title, self.authors)
             print t.encode("utf8")
             print " language=%s" % self.language
             print " quality=%s" % self.quality
-            print " %(lane)s f=%(fiction)s, a=%(audience)s, %(subjects)r" % (
-                dict(lane=self.lane, fiction=self.fiction,
-                     audience=self.audience,
-                     subjects=self.subjects.get('names',{})))
+            print " %(lane)s a=%(audience)s" % (
+                dict(lane=self.lane.name, 
+                     audience=self.audience))
             if self.summary:
                 d = " Description (%.2f) %s" % (
                     self.summary.quality, self.summary.content)
@@ -2025,15 +2058,6 @@ class Subject(Base):
             subject.name = name
         return subject, new
 
-    def evaluate(self):
-        if self.locked or (self.lane and self.fiction and self.audience):
-            return self.lane, self.fiction, self.audience
-        classifier = cls.classifiers.get(
-            subject_type, classification.GenericClassification)
-        names = classifier.names(subject.identifier)
-        if not names:
-            return None
-        return names[0]
 
 class Classification(Base):
     """The assignment of a WorkIdentifier to a Subject."""
@@ -2046,6 +2070,15 @@ class Classification(Base):
 
     # How much weight the data source gives to this classification.
     weight = Column(Integer)
+
+    @property
+    def scaled_weight(self):
+        weight = self.weight
+        if self.data_source.name == DataSource.OCLC_LINKED_DATA:
+            weight = weight / 10.0
+        elif self.data_source.name == DataSource.OVERDRIVE:
+            weight = weight * 50
+        return weight
 
 # Non-database objects.
 

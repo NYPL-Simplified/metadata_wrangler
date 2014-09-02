@@ -17,9 +17,16 @@ from model import production_session
 if __name__ == '__main__':
     session = production_session()
 
-    print "Recalculating lanes for all works."
+    force = False
+    if len(sys.argv) > 1 and sys.argv[1] == 'force':
+        force = True
+
+    print "Recalculating lanes for all works, force=%r" % force
     i = 0
-    for work in session.query(Work).filter(Work.lane==None):
+    q = session.query(Work)
+    if not force:
+        q = q.filter(Work.lane==None)
+    for work in q:
         work.calculate_presentation()
         if not work.title:
             set_trace()
