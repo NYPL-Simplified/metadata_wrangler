@@ -17,25 +17,32 @@ class AssignSubjectsToLanes(object):
         self._db = _db
 
     def run(self, force=False):
-        from model import Subject
+        from model import (
+            Lane,
+            Subject,
+        )
         q = self._db.query(Subject).filter(Subject.locked==False)
         if not force:
             q = q.filter(Subject.lane==None)
+        counter = 0
         for subject in q:
             classifier = Classification.classifiers.get(
                 subject.type, None)
             if not classifier:
                 continue
-            lane, audience, fiction = classifier.classify(subject)
-            print subject, lane, audience, fiction
-            set_trace()
-            if lane:
+            lanedata, audience, fiction = classifier.classify(subject)
+            if lanedata:
+                lane = Lane.lookup(self._db, lanedata)
                 subject.lane = lane
             if audience:
                 subject.audience = audience
             if fiction:
                 subject.fiction = fiction
-
+            if lanedata or audience or fiction:
+                print subject
+            counter += 1
+            if not counter % 100:
+                self._db.commit()
 
 class Classification(object):
 
@@ -157,6 +164,9 @@ class DeweyDecimalClassification(Classification):
     FICTION = set([800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827])
 
     LANES = {
+        lane.Humor : set(
+            [817, 827, 837, 847, 857, 867, 877, 887]
+        ),
         lane.History : set(
             range(930, 941) + [900, 904, 909, 950, 960, 970, 980, 990]
         ),
@@ -195,17 +205,17 @@ class DeweyDecimalClassification(Classification):
 
         identifier = identifier.lower()
 
-        if ddc.startswith('[') and ddc.endswith(']'):
+        if identifier.startswith('[') and identifier.endswith(']'):
             # This is just bad data.
-            ddc = ddc[1:-1]
+            identifier = identifier[1:-1]
 
-        if ddc.startswith('c') or ddc.startswith('a'):
+        if identifier.startswith('c') or identifier.startswith('a'):
             # A work from our Canadian neighbors or our Australian
             # friends.
-            ddc = ddc[1:]
-        elif ddc.startswith("nz"):
+            identifier = identifier[1:]
+        elif identifier.startswith("nz"):
             # A work from the good people of New Zealand.
-            ddc = ddc[2:]
+            identifier = identifier[2:]
 
         # Trim everything after the first period. We don't know how to
         # deal with it.
@@ -270,9 +280,7 @@ class DeweyDecimalClassification(Classification):
     @classmethod
     def lane(cls, identifier, name):
 
-        if identifier in ('e', 'fic', 'j', 'b', 'y'):
-            identifiers = [identifier]
-        else:
+        if identifier not in ('e', 'fic', 'j', 'b', 'y'):
             # Strip off everything except the three-digit number.
             identifier = identifier[-3:]
             try:
@@ -281,11 +289,10 @@ class DeweyDecimalClassification(Classification):
                 identifiers = [identifier, identifier / 100 * 100]
             except ValueError, e:
                 # Oh well, try a lookup, maybe it'll work. (Probably not.)
-                identifiers = [identifier]
-
-        for identifier in identifiers:
-            if identifier in cls.lane_for_identifier:
-                return cls.lane_for_identifier[identifier]
+                pass
+        for lane, identifiers in cls.LANES.items():
+            if identifier in identifiers:
+                return lane
         return None
     
 
@@ -313,6 +320,11 @@ class LCCClassification(Classification):
         lane.Philosophy : (
             [],
             set(["B", "BC", "BD"]),
+        ),
+
+        lane.Reference : (
+            [],
+            set(["AE", "AG", "AI", "AY"])
         ),
 
         lane.Religion : (
@@ -379,7 +391,10 @@ class KeywordBasedClassification(Classification):
 
     """Classify a book based on keywords."""
     
-    FICTION_INDICATORS = match_kw("fiction", "stories", "tales", "literature")
+    FICTION_INDICATORS = match_kw(
+        "fiction", "stories", "tales", "literature",
+        "bildungsromans",
+    )
     NONFICTION_INDICATORS = match_kw(
         "history", "biography", "histories", "biographies", "autobiography",
         "autobiographies")
@@ -517,9 +532,7 @@ class KeywordBasedClassification(Classification):
     def lane(cls, identifier, name):
         match_against = [name]
         for lane, keywords in cls.LANES.items():
-            print keywords.pattern, name, keywords.search(name)
             if keywords.search(name):
-                print
                 return lane
         return None
 

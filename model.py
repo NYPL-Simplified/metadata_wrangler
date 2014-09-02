@@ -1914,6 +1914,13 @@ class Lane(Base):
     # One Lane may group together many Works.
     works = relationship("Work", backref="lane")
 
+    @classmethod
+    def lookup(cls, _db, lanedata):
+        lane, new = get_one_or_create(
+            _db, Lane,
+            name=lanedata.name)
+        return lane
+
 class Subject(Base):
     """A subject under which books might be classified."""
 
@@ -1979,10 +1986,25 @@ class Subject(Base):
 
     def __repr__(self):
         if self.name:
-            name = u" (%s)" % self.name
+            name = u' ("%s")' % self.name
         else:
             name = u""
-        a = u"[%s:%s%s]" % (self.type, self.identifier, name)
+        if self.audience:
+            audience = " audience=%s" % self.audience
+        else:
+            audience = ""
+        if self.fiction:
+            fiction = " (Fiction)"
+        elif self.fiction == False:
+            fiction = " (Nonfiction)"
+        else:
+            fiction = ""
+        if self.lane:
+            lane = ' lane="%s"' % self.lane.name
+        else:
+            lane = ""
+        a = u'[%s:%s%s%s%s%s]' % (
+            self.type, self.identifier, name, fiction, audience, lane)
         return a.encode("utf8")
 
     @classmethod
