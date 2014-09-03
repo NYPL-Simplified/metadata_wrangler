@@ -16,7 +16,7 @@ from model import (
     DataSource,
     LicensePool,
     Resource,
-    SubjectType,
+    Subject,
     WorkIdentifier,
     WorkRecord,
 )
@@ -145,7 +145,6 @@ class OverdriveAPI(object):
         Update the corresponding WorkRecord appropriately.
         """
         cache_key = overdrive_id + ".json"
-        set_trace()
         if self.bibliographic_cache.exists(cache_key):
             raw = self.bibliographic_cache.open(cache_key).read()
             return json.loads(raw)
@@ -335,7 +334,7 @@ class OverdriveCirculationMonitor(Monitor):
                     )
                 )
             _db.commit()
-
+        print "Processed %d books total." % i
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
@@ -397,9 +396,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         languages = [
             LanguageCodes.two_to_three.get(l['code'], l['code'])
-            for l in info['languages']
+            for l in info.get('languages', [])
         ]
-        if 'eng' in languages:
+        if 'eng' in languages or not languages:
             wr.language = 'eng'
         else:
             wr.language = sorted(languages)[0]
@@ -419,10 +418,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             if 'bioText' in creator:
                 contributor.extra = dict(description=creator['bioText'])
 
-        subjects = {}
-        for i in info['subjects']:
-            WorkRecord._add_subject(subjects, SubjectType.OVERDRIVE, i['value'])
-        wr.subjects = subjects
+        for i in info.get('subjects', []):
+            c = identifier.classify(input_source, Subject.OVERDRIVE, i['value'])
+            print c.subject
 
         extra = dict()
         for inkey, outkey in (

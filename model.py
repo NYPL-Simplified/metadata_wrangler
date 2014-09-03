@@ -2048,8 +2048,8 @@ class Subject(Base):
     @classmethod
     def lookup(cls, _db, type, identifier, name):
         """Turn a subject type and identifier into a Subject."""
-        classifier = cls.classifiers.get(
-            type, classification.GenericClassification)
+        classifier = classification.Classification.classifiers.get(
+            type, classification.Classification)
         subject, new = get_one_or_create(
             _db, Subject, type=type,
             identifier=identifier,

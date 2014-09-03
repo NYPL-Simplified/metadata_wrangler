@@ -177,6 +177,7 @@ class Classification(object):
     AUDIENCE_YOUNG_ADULT = "Young Adult"
     AUDIENCE_ADULT = "Adult"
 
+    # TODO: This is currently set in model.py in the Subject class.
     classifiers = dict()
 
     @classmethod
