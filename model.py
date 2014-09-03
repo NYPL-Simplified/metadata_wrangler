@@ -30,6 +30,9 @@ from sqlalchemy.orm.exc import (
 from sqlalchemy.ext.mutable import (
     MutableDict,
 )
+from sqlalchemy.ext.associationproxy import (
+    association_proxy,
+)
 from sqlalchemy.sql.functions import func
 from sqlalchemy.sql.expression import (
     and_,
@@ -754,7 +757,7 @@ class WorkIdentifier(Base):
         return champion, summaries
 
     @classmethod
-    def derive_genre(cls, _db, identifier_data, identifier_ids):
+    def derive_genres(cls, _db, identifier_data, identifier_ids):
         from classification import (
             Classification as ExtClassification,
             Fiction,
@@ -778,11 +781,11 @@ class WorkIdentifier(Base):
             if subject.genre:
                 genre_s[subject.genre] += weight
         if fiction_s[True] > fiction_s[False]:
-            default_genre = Fiction
+            fiction = True
         elif fiction_s[False] > fiction_s[True]:
-            default_genre = Nonfiction
+            fiction = False
         else:
-            default_genre = Unclassified
+            fiction = None
         unmarked = audience_s[None]
         audience = ExtClassification.AUDIENCE_ADULT
 
@@ -791,15 +794,18 @@ class WorkIdentifier(Base):
         elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
             audience = ExtClassification.AUDIENCE_CHILDREN
 
-        genres = genre_s.most_common()
-        if genres:
-            the_genre = genres[0][0]
-        else:
-            the_genre = default_genre
+        genres = []
+        popular = genre_s.most_common(5)
+        if popular:
+            most_popular, top_popularity = popular[0]
+            cutoff = top_popularity * 0.8
+            # Get all genres that are 80% as popular as the 
+            # most popular genre. Limit of of 5 genres.
+            for g, score in popular:
+                if score >= cutoff:
+                    genres.append(Genre.lookup(_db,g))
 
-        if the_genre:
-            the_genre = Genre.lookup(_db, the_genre)
-        return the_genre, audience
+        return genres, fiction, audience
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -1374,6 +1380,23 @@ class WorkRecord(Base):
         return best
 
 
+
+class WorkGenre(Base):
+    """An assignment of a genre to a work."""
+
+    __tablename__ = 'work_genre'
+    id = Column(Integer, primary_key=True)
+    genre_id = Column(Integer, ForeignKey('genres.id'), index=True)
+    work_id = Column(Integer, ForeignKey('works.id'), index=True)
+
+
+    @classmethod
+    def from_genre(cls, genre):
+        wg = WorkGenre()
+        wg.genre = genre
+        return wg
+
+
 class Work(Base):
 
     __tablename__ = 'works'
@@ -1388,6 +1411,11 @@ class Work(Base):
     # A single Work may be built of many Contributions
     contributions = relationship("WorkContribution", backref="work")
 
+    # One Work may participate in many WorkGenre assignments.
+    genres = association_proxy('work_genres', 'genre',
+                               creator=WorkGenre.from_genre)
+    work_genres = relationship("WorkGenre", backref="work")
+
     # A Work may be merged into one other Work.
     was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
     was_merged_into = relationship("Work", remote_side = [id])
@@ -1397,15 +1425,14 @@ class Work(Base):
     language = Column(Unicode, index=True)
     summary_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_summary_id'), index=True)
     audience = Column(Unicode, index=True)
-    subjects = Column(MutableDict.as_mutable(JSON), default={})
+    fiction = Column(Boolean, index=True)
 
     cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
-    genre_id = Column(Integer, ForeignKey('genres.id'), index=True)
     quality = Column(Float, index=True)
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.authors, self.genre, self.language,
+            self.id, self.title, self.authors, ", ".join([g.name for g in self.genre]), self.language,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
     @property
@@ -1718,12 +1745,16 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        self.genre, self.audience = WorkIdentifier.derive_genre(
+        genres, self.fiction, self.audience = WorkIdentifier.derive_genres(
             _db, data, flattened_data)
-        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
-            _db, data, flattened_data)
-        self.cover, covers = WorkIdentifier.evaluate_cover_quality(
-            _db, data, flattened_data)
+        self.genres = genres
+        # TODO: commented out for speed in testing classifications
+        #self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
+        #    _db, data, flattened_data)
+        #self.cover, covers = WorkIdentifier.evaluate_cover_quality(
+        #    _db, data, flattened_data)
+        covers = []
+        summaries = []
 
         if self.summary:
             o = "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
@@ -1755,7 +1786,7 @@ class Work(Base):
             print " language=%s" % self.language
             print " quality=%s" % self.quality
             print " %(genre)s a=%(audience)s" % (
-                dict(genre=self.genre.name, 
+                dict(genre=", ".join(g.name for g in self.genres), 
                      audience=self.audience))
             if self.summary:
                 d = " Description (%.2f) %s" % (
@@ -1940,7 +1971,10 @@ class Resource(Base):
 
 
 class Genre(Base):
-    """A subject-matter classification for a book."""
+    """A subject-matter classification for a book.
+
+    Much, much more general than Classification.
+    """
     __tablename__ = 'genres'
     id = Column(Integer, primary_key=True)
     name = Column(Unicode)
@@ -1948,8 +1982,10 @@ class Genre(Base):
     # One Genre may have affinity with many Subjects.
     subjects = relationship("Subject", backref="genre")
 
-    # One Genre may group together many Works.
-    works = relationship("Work", backref="genre")
+    # One Genre may participate in many WorkGenre assignments.
+    works = association_proxy('work_genres', 'work')
+
+    work_genres = relationship("WorkGenre", backref="genre")
 
     @classmethod
     def lookup(cls, _db, genredata):
@@ -2037,8 +2073,8 @@ class Subject(Base):
             fiction = " (Nonfiction)"
         else:
             fiction = ""
-        if self.genre:
-            genre = ' genre="%s"' % self.genre.name
+        if self.genres:
+            genre = ' genre="%s"' % ", ".join(g.name for g in self.genres)
         else:
             genre = ""
         a = u'[%s:%s%s%s%s%s]' % (

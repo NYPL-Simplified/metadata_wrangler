@@ -23,120 +23,176 @@ class GenreData(object):
             for l in sl.self_and_subgenres(nemesis):
                 yield l
 
-class Unclassified(GenreData):
-    name = "Unclassified"
-    subgenres = set([])
-GenreData.subgenres.add(Unclassified)
+genre_structure = {
+    "Art, Architecture, & Design" : [
+        "Architecture",
+        "Art",
+        "Criticism & Theory",
+        "Design",
+        "Fashion",
+        "Art History",
+        "Photography",
+    ],
+    "Biography & Memoir" : [],
+    "Business & Economics" : [
+        "Economics",
+        "Management & Leadership",
+        "Personal Finance & Investing",
+        "Real Estate",
+    ],
+    # UNUSED: Children
+    "Classics & Poetry" : [
+        "Classics",
+        "Poetry",
+    ],
+    "Crafts, Cooking & Garden" : [
+        "Antiques & Collectibles",
+        "Bartending & Cocktails",
+        "Cooking",
+        "Crafts, Hobbies, & Games",
+        "Gardening",
+        "Health & Diet",
+        "House & Home",
+        "Pets",
+        "Vegetarian & Vegan",
+    ],
+    "Crime, Thrillers & Mystery" : [
+        "Action & Adventure",
+        "Espionage",
+        "Hard Boiled",
+        "Legal Thrillers",
+        "Military Thrillers",
+        "Mystery",
+        "Police Procedurals",
+        "Supernatural Thrillers",
+        "Thrillers",
+        "True Crime",
+        "Women Detectives",
+    ],
+    "Criticism & Philosophy" : [
+        "Language Arts & Disciplines",
+        "Literary Criticism",
+        "Philosophy",
+    ],
+    # Not included: Fiction General
+    "Graphic Novels & Comics" : [
+        "Literary",
+        "Manga",
+        "Superhero",
+    ],
+    "Historical Fiction" : [],
+    "History" : [
+        "Africa",
+        "Ancient",
+        "Asia",
+        "Civil War",
+        "Europe",
+        "Latin America",
+        "Medieval",
+        "Middle East",
+        "Military History",
+        "Modern",
+        "Renaissance",
+        "United States",
+        "World",
+    ],
+    "Humor & Entertainment" : [
+        "Dance",
+        "Drama",
+        "Film & TV",
+        "Humor",
+        "Music",
+        "Performing Arts",
+    ],
+    "Literary Fiction" : ["Literary Collections"],
+    "Parenting & Family" : [
+        "Education",
+        "Family & Relationships",
+        "Parenting",
+    ],
+    "Politics & Current Events" : [
+        "Political Science",
+    ],
+    "Reference" : [
+        "Dictionaries",
+        "Encyclopedias",
+        "Foreign Language Study",
+        "Law",
+        "Study Aids",
+    ],
+    "Religion & Spirituality" : [
+        "Body, Mind, & Spirit",
+        "Buddhism",
+        "Christianity",
+        "Hinduism",
+        "Islam",
+        "Judaism",
+        "New Age",
+        "Religious Fiction",
+    ],
+    "Romance & Erotica" : [
+        "Contemporary Romance",
+        "Erotica",
+        "Historical Romance",
+        "Paranormal Romance",
+        "Regency Romance",
+        "Romance",
+        "Suspense Romance",
 
-class Humor(GenreData):
-    name = "Humor"
-    subgenres = set([])
-GenreData.subgenres.add(Humor)
+    ],
+    "Science Fiction & Fantasy" : [
+        "Epic Fantasy",
+        "Fantasy",
+        "Horror",
+        "Military",
+        "Movies/Gaming",
+        "Science Fiction",
+        "Space Opera",
+        "Urban Fantasy",
+    ],
+    "Science, Technology, & Nature" : [
+        "Computers",
+        "Mathematics",
+        "Medical",
+        "Nature",
+        "Psychology",
+        "Science",
+        "Social Science",
+        "Technology & Engineering",
+    ],
+    "Self-Help" : [],
+    "Travel, Adventure & Sports" : [
+        "Sports",
+        "Transportation",
+        "Travel",
+    ],
+    "African-American" : [],
+    # Not included: Young Adult.
+}
 
-class FineArts(GenreData):
-    name = "Fine Arts"
-    subgenres = set([])
-GenreData.subgenres.add(FineArts)
+class GenreData(object):
+    def __init__(self, name, subgenres, storage, parent=None):
+        self.name = name
+        self.parent = parent
+        self.subgenres = []
+        storage[self.name] = self
+        for sub in subgenres:
+            self.subgenres.append(GenreData(sub, [], storage, self))
 
-class Poetry(GenreData):
-    name = "Poetry"
-    subgenres = set([])
-FineArts.subgenres.add(Poetry)
+genres = dict()
+for genre, subgenres in genre_structure.items():
+    GenreData(genre, subgenres, genres)
 
-class Drama(GenreData):
-    name = "Drama"
-    subgenres = set([])
-FineArts.subgenres.add(Drama)
-
-class Nonfiction(GenreData):
-    name = "Nonfiction"
-    subgenres = set()
-GenreData.subgenres.add(Nonfiction)
-
-class Travel(GenreData):
-    name = "Travel"
-    subgenres = set([])
-Nonfiction.subgenres.add(Travel)
-
-class History(Nonfiction):
-    name = "History"    
-    subgenres = set([])
-Nonfiction.subgenres.add(History)
-
-class Biography(Nonfiction):
-    name = "Biography"
-    subgenres = set([])
-Nonfiction.subgenres.add(Biography)
-
-class Reference(Nonfiction):
-    name = "Reference"
-    subgenres = set([])
-Nonfiction.subgenres.add(Reference)
-
-class Philosophy(Nonfiction):
-    name = "Philosophy"
-    subgenres = set([])
-Nonfiction.subgenres.add(Philosophy)
-
-class Religion(Nonfiction):
-    name = "Religion"
-    subgenres = set([])
-Nonfiction.subgenres.add(Religion)
-
-class Science(Nonfiction):
-    name = "Science"
-    subgenres = set([])
-Nonfiction.subgenres.add(Science)
-
-class Cooking(Nonfiction):
-    name = "Cooking"
-    subgenres = set([])
-Nonfiction.subgenres.add(Cooking)
-
-class Fiction(GenreData):
-    name = "Fiction"
-    subgenres = set()
-GenreData.subgenres.add(Fiction)
-
-class Adventure(GenreData):
-    name = "Adventure"
-    subgenres = set([])
-Fiction.subgenres.add(Adventure)
-
-class Romance(Fiction):
-    name = "Romance"
-    subgenres = set([])
-Fiction.subgenres.add(Romance)
-
-class Fantasy(Fiction):
-    name = "Fantasy"
-    subgenres = set([])
-Fiction.subgenres.add(Fantasy)
-
-class ScienceFiction(Fiction):
-    name = "Science Fiction"
-    subgenres = set([])
-Fiction.subgenres.add(ScienceFiction)
-
-class Mystery(Fiction):
-    name = "Mystery"
-    subgenres = set([])
-Fiction.subgenres.add(Mystery)
-
-class Horror(Fiction):
-    name = "Horror"
-    subgenres = set([])
-Fiction.subgenres.add(Horror)
-
-class Periodicals(Fiction):
-    name = "Periodicals"
-    subgenres = set([])
-GenreData.subgenres.add(Periodicals)
-
-# A work that's considered to be fiction will never be filed under
-# nonfiction, and vice versa.
-Fiction.nemesis = Nonfiction
-Nonfiction.nemesis = Fiction
+# Now make a bunch of constants
+Biography = genres['Biography & Memoir']
+Cooking = genres["Cooking"]
+Family = genres["Family & Relationships"]
+History = genres["History"]
+Mystery = genres["Mystery"]
+Politics = genres["Politics & Current Events"]
+Romance = genres["Romance"]
+Religion = genres['Religion']
+AfricanAmerican = genres["African-American"]
 
 class AssignSubjectsToGenres(object):
 
@@ -245,24 +301,87 @@ class Classification(object):
 
 class OverdriveClassification(Classification):
 
+    # Any classification that includes the string "Fiction" will be
+    # counted as fiction. This is just the leftovers.
     FICTION = set([
-        "Juvenile Fiction",
-        "Young Adult Fiction",
-        ])
-
-    JUVENILE = set([
-        "Juvenile Fiction",
-        ])
-
-    YOUNG_ADULT = set([
-        "Young Adult Fiction",
+        "Short Stories",
+        "Fantasy",
+        "Horror",
+        "Mystery",
+        "Romance",
+        "Western",
+        "Suspense",
+        "Thriller",
+        "Science Fiction & Fantasy",
         ])
 
     GENRES = {
-        History : set(["History"]),
-        Biography : set(["Biography & Autobiography"]),
-        Romance : set(["Romance"]),
-        Mystery : set(["Mystery"]),
+        AfricanAmerican : [
+            "African American Fiction",
+            "African American Nonfiction",
+            "Urban Fiction",
+        ],
+        AntiquesAndCollectibles : "Antiques",
+        Biography : "Biography & Autobiography",
+        Business : ["Business", "Marketing & Sales"],
+        Christianity : ["Christian Fiction", "Christian Nonfiction"],
+        Computers : "Computer Technology",
+        Cooking : "Cooking & Food",
+        Erotica : "Erotic Literature",
+        Family : "Family & Relationships",
+        Fantasy : "Fantasy",,
+        Health : "Health & Fitness",
+        HistoricalFiction : "Historical Fiction",
+        History : "History",
+        Horror : "Horror",
+        Humor : ["Humor (Fiction)", "Humor (Nonfiction)"],
+        Mystery : "Mystery",
+        Politics : ["Politics", "Current Events"],
+        Religion : "Religion & Spirituality",
+        Romance : "Romance",
+        Science : ["Science", "Physics", "Chemistry"],
+        ScienceFiction : "Science Fiction",
+        ScienceFictionAndFantasy : "Science Fiction & Fantasy",
+        SelfHelp : "Self-Improvement",
+        SocialScience : "Sociology",
+        Suspense : "Suspense",
+        Thriller : "Thriller",
+        Travel : ["Travel", "Travel Literature"],
+        Reference : "Reference",
+        PersonalFinance : "Finance",
+        Business : "Careers",
+        MilitaryHistory : "Military",
+        PerformingArts : "Performing Arts",
+        Art : "Art",
+        Sports : "Sports & Recreations",
+        CraftsHobbiesGames : ["Crafts", "Games"],
+        Nature : "Nature",
+        LiteraryCriticism : ["Literary Criticism", "Criticism"],
+        Education : "Education",
+        NewAge : "New Age",
+        Music : "Music",
+        TrueCrime : "True Crime",
+        HouseAndHome : "Home Design & Décor",
+        Philosophy : "Philosophy",
+        Psychology : "Psychology",
+        LanguageArts : ["Language Arts", "Grammar & Language Usage"],
+        Drama : "Drama",
+        Poetry : "Poetry",
+        Medical : "Medical",
+        Pets : "Pets",
+        StudyAids : "Study Aids & Workbooks",
+        Gardening : "Gardening",
+        ForeignLanguageStudy : "Foreign Language Study",
+        Comics : "Comic and Graphic Books",
+        Mathematics : "Mathematics",
+        Architecture : "Architecture",
+        Technology : "Technology",
+        Photography : "Photography",
+        Law : "Law",
+        SelfHelp : "Self Help",
+        Transportation : "Transportation",
+        Management : "Management",
+        LiteraryCollections : "Literary Anthologies",
     }
 
     @classmethod
@@ -270,19 +389,26 @@ class OverdriveClassification(Classification):
         return identifier
 
     def fiction(cls, identifier):
-        return identifier in cls.FICTION
+        if (identifier in cls.FICTION
+            or "Fiction" in identifier
+            or "Literature" in identifier):
+            # "Literature" on Overdrive seems to be synonymous with fiction,
+            # but not necessarily "Literary Fiction".
+            return True
+        return False
 
     def audience(cls, identifier):
-        if identifier in cls.JUVENILE:
+        if ("Juvenile" in identifier or "Picture Book" in identifier
+            or "Beginning Reader" in identifier):
             return cls.AUDIENCE_CHILDREN
-        elif identifier in cls.YOUNG_ADULT:
+        elif "Young Adult" in identifier:
             return cls.AUDIENCE_YOUNG_ADULT
-        return None
+        return cls.ADULT
 
     def genre(cls, identifier):
         for l, v in cls.GENRES.items():
             if identifier in v:
-                return l
+                return v
         return None
 
 

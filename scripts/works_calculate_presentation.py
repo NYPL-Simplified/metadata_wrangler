@@ -8,9 +8,9 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
 from model import (
-    LicensePool,
     SessionManager,
     Work,
+    WorkGenre,
 )
 from model import production_session
 
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     i = 0
     q = session.query(Work)
     if not force:
-        q = q.filter(Work.genre==None)
+        q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None)
     for work in q:
         work.calculate_presentation()
         if not work.title:

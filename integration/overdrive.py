@@ -420,7 +420,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         for i in info.get('subjects', []):
             c = identifier.classify(input_source, Subject.OVERDRIVE, i['value'])
-            print c.subject
 
         extra = dict()
         for inkey, outkey in (
