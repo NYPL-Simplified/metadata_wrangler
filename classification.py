@@ -7,38 +7,165 @@ from collections import (
 from nose.tools import set_trace
 import re
 
-from util import MetadataSimilarity
+class GenreData(object):
+    subgenres = set([])
+    LCC = []
+    DDC = []
+    OVERDRIVE = []
+    name = None
 
-import lane
+    @classmethod
+    def self_and_subgenres(cls, nemesis=None):
+        yield cls
+        for sl in cls.subgenres:
+            if sl is nemesis:
+                continue
+            for l in sl.self_and_subgenres(nemesis):
+                yield l
 
-class AssignSubjectsToLanes(object):
+class Unclassified(GenreData):
+    name = "Unclassified"
+    subgenres = set([])
+GenreData.subgenres.add(Unclassified)
+
+class Humor(GenreData):
+    name = "Humor"
+    subgenres = set([])
+GenreData.subgenres.add(Humor)
+
+class FineArts(GenreData):
+    name = "Fine Arts"
+    subgenres = set([])
+GenreData.subgenres.add(FineArts)
+
+class Poetry(GenreData):
+    name = "Poetry"
+    subgenres = set([])
+FineArts.subgenres.add(Poetry)
+
+class Drama(GenreData):
+    name = "Drama"
+    subgenres = set([])
+FineArts.subgenres.add(Drama)
+
+class Nonfiction(GenreData):
+    name = "Nonfiction"
+    subgenres = set()
+GenreData.subgenres.add(Nonfiction)
+
+class Travel(GenreData):
+    name = "Travel"
+    subgenres = set([])
+Nonfiction.subgenres.add(Travel)
+
+class History(Nonfiction):
+    name = "History"    
+    subgenres = set([])
+Nonfiction.subgenres.add(History)
+
+class Biography(Nonfiction):
+    name = "Biography"
+    subgenres = set([])
+Nonfiction.subgenres.add(Biography)
+
+class Reference(Nonfiction):
+    name = "Reference"
+    subgenres = set([])
+Nonfiction.subgenres.add(Reference)
+
+class Philosophy(Nonfiction):
+    name = "Philosophy"
+    subgenres = set([])
+Nonfiction.subgenres.add(Philosophy)
+
+class Religion(Nonfiction):
+    name = "Religion"
+    subgenres = set([])
+Nonfiction.subgenres.add(Religion)
+
+class Science(Nonfiction):
+    name = "Science"
+    subgenres = set([])
+Nonfiction.subgenres.add(Science)
+
+class Cooking(Nonfiction):
+    name = "Cooking"
+    subgenres = set([])
+Nonfiction.subgenres.add(Cooking)
+
+class Fiction(GenreData):
+    name = "Fiction"
+    subgenres = set()
+GenreData.subgenres.add(Fiction)
+
+class Adventure(GenreData):
+    name = "Adventure"
+    subgenres = set([])
+Fiction.subgenres.add(Adventure)
+
+class Romance(Fiction):
+    name = "Romance"
+    subgenres = set([])
+Fiction.subgenres.add(Romance)
+
+class Fantasy(Fiction):
+    name = "Fantasy"
+    subgenres = set([])
+Fiction.subgenres.add(Fantasy)
+
+class ScienceFiction(Fiction):
+    name = "Science Fiction"
+    subgenres = set([])
+Fiction.subgenres.add(ScienceFiction)
+
+class Mystery(Fiction):
+    name = "Mystery"
+    subgenres = set([])
+Fiction.subgenres.add(Mystery)
+
+class Horror(Fiction):
+    name = "Horror"
+    subgenres = set([])
+Fiction.subgenres.add(Horror)
+
+class Periodicals(Fiction):
+    name = "Periodicals"
+    subgenres = set([])
+GenreData.subgenres.add(Periodicals)
+
+# A work that's considered to be fiction will never be filed under
+# nonfiction, and vice versa.
+Fiction.nemesis = Nonfiction
+Nonfiction.nemesis = Fiction
+
+class AssignSubjectsToGenres(object):
 
     def __init__(self, _db):
         self._db = _db
 
     def run(self, force=False):
         from model import (
-            Lane,
+            Genre,
             Subject,
         )
         q = self._db.query(Subject).filter(Subject.locked==False)
         if not force:
-            q = q.filter(Subject.lane==None)
+            q = q.filter(Subject.genre==None)
         counter = 0
         for subject in q:
             classifier = Classification.classifiers.get(
                 subject.type, None)
             if not classifier:
                 continue
-            lanedata, audience, fiction = classifier.classify(subject)
-            if lanedata:
-                lane = Lane.lookup(self._db, lanedata)
-                subject.lane = lane
+            genredata, audience, fiction = classifier.classify(subject)
+            if genredata:
+                genre = Genre.lookup(self._db, genredata)
+                subject.genre = genre
             if audience:
                 subject.audience = audience
             if fiction:
                 subject.fiction = fiction
-            if lanedata or audience or fiction:
+            if genredata or audience or fiction:
                 print subject
             counter += 1
             if not counter % 100:
@@ -59,7 +186,7 @@ class Classification(object):
 
     @classmethod
     def classify(cls, subject):
-        """Try to determine lane, audience, and fiction status
+        """Try to determine genre, audience, and fiction status
         for the given Subject.
         """
         identifier = cls.scrub_identifier(subject.identifier)
@@ -67,7 +194,7 @@ class Classification(object):
             name = cls.scrub_name(subject.name)
         else:
             name = identifier
-        return (cls.lane(identifier, name),
+        return (cls.genre(identifier, name),
                 cls.audience(identifier, name),
                 cls.is_fiction(identifier, name))
 
@@ -86,8 +213,8 @@ class Classification(object):
         return name.lower()
 
     @classmethod
-    def lane(cls, identifier, name):
-        """Is this identifier associated with a particular Lane?"""
+    def genre(cls, identifier, name):
+        """Is this identifier associated with a particular Genre?"""
         return None
 
     @classmethod
@@ -130,11 +257,11 @@ class OverdriveClassification(Classification):
         "Young Adult Fiction",
         ])
 
-    LANES = {
-        lane.History : set(["History"]),
-        lane.Biography : set(["Biography & Autobiography"]),
-        lane.Romance : set(["Romance"]),
-        lane.Mystery : set(["Mystery"]),
+    GENRES = {
+        History : set(["History"]),
+        Biography : set(["Biography & Autobiography"]),
+        Romance : set(["Romance"]),
+        Mystery : set(["Mystery"]),
     }
 
     @classmethod
@@ -151,8 +278,8 @@ class OverdriveClassification(Classification):
             return cls.AUDIENCE_YOUNG_ADULT
         return None
 
-    def lane(cls, identifier):
-        for l, v in cls.LANES.items():
+    def genre(cls, identifier):
+        for l, v in cls.GENRES.items():
             if identifier in v:
                 return l
         return None
@@ -163,20 +290,20 @@ class DeweyDecimalClassification(Classification):
     NAMES = None
     FICTION = set([800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827])
 
-    LANES = {
-        lane.Humor : set(
+    GENRES = {
+        Humor : set(
             [817, 827, 837, 847, 857, 867, 877, 887]
         ),
-        lane.History : set(
+        History : set(
             range(930, 941) + [900, 904, 909, 950, 960, 970, 980, 990]
         ),
-        lane.Biography : set(
+        Biography : set(
             [920, "B"]
         ),
-        lane.Philosophy : set(
+        Philosophy : set(
             range(140, 150) + range(180, 201) + [100, 101]
         ),
-        lane.Religion : set(
+        Religion : set(
             range(200,300)
         ),
     }
@@ -278,7 +405,7 @@ class DeweyDecimalClassification(Classification):
         return cls.AUDIENCE_ADULT
 
     @classmethod
-    def lane(cls, identifier, name):
+    def genre(cls, identifier, name):
 
         if identifier not in ('e', 'fic', 'j', 'b', 'y'):
             # Strip off everything except the three-digit number.
@@ -290,9 +417,9 @@ class DeweyDecimalClassification(Classification):
             except ValueError, e:
                 # Oh well, try a lookup, maybe it'll work. (Probably not.)
                 pass
-        for lane, identifiers in cls.LANES.items():
+        for genre, identifiers in cls.GENRES.items():
             if identifier in identifiers:
-                return lane
+                return genre
         return None
     
 
@@ -302,32 +429,32 @@ class LCCClassification(Classification):
     FICTION = set(["P", "PN", "PQ", "PR", "PS", "PT", "PZ"])
     JUVENILE = set(["PZ"])
 
-    LANES = {
-        lane.Cooking : (
+    GENRES = {
+        Cooking : (
             [], set(["TX"])
         ),
 
-        lane.FineArts : (
+        FineArts : (
             [re.compile("[MN].*")],
             [],
         ),
 
-        lane.History : (
+        History : (
             [re.compile("[CDEF].*")],
             set(["AZ", "KBR", "LA"]),
         ),
 
-        lane.Philosophy : (
+        Philosophy : (
             [],
             set(["B", "BC", "BD"]),
         ),
 
-        lane.Reference : (
+        Reference : (
             [],
             set(["AE", "AG", "AI", "AY"])
         ),
 
-        lane.Religion : (
+        Religion : (
             [],
             set([
                 "KB", "KBM", "KBP", "KBR", "KBU",
@@ -336,7 +463,7 @@ class LCCClassification(Classification):
             ])
         ),
 
-        lane.Science: (
+        Science: (
             [re.compile("[QRS].*"), re.compile("T[A-P].*")],
             [],
         ),
@@ -363,13 +490,13 @@ class LCCClassification(Classification):
         return identifier in cls.FICTION
 
     @classmethod
-    def lane(cls, identifier, name):
-        for lane, (res, strings) in cls.LANES.items():
+    def genre(cls, identifier, name):
+        for genre, (res, strings) in cls.GENRES.items():
             if identifier in strings:
-                return lane
+                return genre
             for r in res:
                 if r.match(identifier):
-                    return lane
+                    return genre
         return None
 
     @classmethod
@@ -401,43 +528,43 @@ class KeywordBasedClassification(Classification):
     JUVENILE_INDICATORS = match_kw("for children", "children's", "juvenile")
     YOUNG_ADULT_INDICATORS = match_kw("young adult", "ya")
 
-    LANES = {
-        lane.Adventure : match_kw(
+    GENRES = {
+        Adventure : match_kw(
             "adventure",
             "western stories",
             "adventurers",
             "sea stories",
             "war stories",
         ),
-        lane.Biography : match_kw(
+        Biography : match_kw(
             "autobiographies",
             "autobiography",
             "biographies",
             "biography",
         ),
-        lane.Cooking : match_kw(
+        Cooking : match_kw(
             "baking",
             "cookbook",
             "cooking",
             "food",
             "home economics",
         ),
-        lane.Drama : match_kw(
+        Drama : match_kw(
             "drama",
             "plays",
         ),
-        lane.Fantasy : match_kw(
+        Fantasy : match_kw(
             "fantasy",
         ),
-        lane.History : match_kw(
+        History : match_kw(
             "histories",
             "history",
         ),
-        lane.Horror : match_kw(
+        Horror : match_kw(
             "ghost stories",
             "horror",
         ),
-        lane.Humor : match_kw(
+        Humor : match_kw(
             "comedies",
             "comedy",
             "humor",
@@ -445,31 +572,31 @@ class KeywordBasedClassification(Classification):
             "satire",
             "wit",
         ),
-        lane.Mystery : match_kw(
+        Mystery : match_kw(
             "crime",
             "detective",
             "murder",
             "mystery",
             "mysteries",
         ),
-        lane.Periodicals : match_kw(
+        Periodicals : match_kw(
             "periodicals",
         ),
-        lane.Philosophy : match_kw(
+        Philosophy : match_kw(
             "philosophy",
             "political science",
         ),
-        lane.Poetry : match_kw(
+        Poetry : match_kw(
             "poetry",
         ),
-        lane.Reference : match_kw(
+        Reference : match_kw(
             "catalogs",
             "dictionaries",
             "encyclopedias",
             "handbooks",
             "manuals",
         ),
-        lane.Religion : match_kw(
+        Religion : match_kw(
             "bible",
             "christianity",
             "church",
@@ -482,12 +609,12 @@ class KeywordBasedClassification(Classification):
             "theology",
             'biblical',
         ),
-        lane.Romance : match_kw(
+        Romance : match_kw(
             "love stories",
             "romance",
             "romances",
         ),
-        lane.Science : match_kw(
+        Science : match_kw(
             "aeronautics",
             "evolution",
             "mathematics",
@@ -495,10 +622,10 @@ class KeywordBasedClassification(Classification):
             "natural history",
             "science",
         ),
-        lane.ScienceFiction : match_kw(
+        ScienceFiction : match_kw(
             "science fiction",
         ),
-        lane.Travel : match_kw(
+        Travel : match_kw(
             "discovery",
             "exploration",
             "travel",
@@ -529,11 +656,11 @@ class KeywordBasedClassification(Classification):
         return None
 
     @classmethod
-    def lane(cls, identifier, name):
+    def genre(cls, identifier, name):
         match_against = [name]
-        for lane, keywords in cls.LANES.items():
+        for genre, keywords in cls.GENRES.items():
             if keywords.search(name):
-                return lane
+                return genre
         return None
 
 class LCSHClassification(KeywordBasedClassification):

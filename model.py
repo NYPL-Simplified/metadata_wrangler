@@ -56,7 +56,6 @@ from sqlalchemy import (
 )
 
 import classification
-from lane import LaneData
 from util import (
     LanguageCodes,
     MetadataSimilarity,
@@ -755,30 +754,35 @@ class WorkIdentifier(Base):
         return champion, summaries
 
     @classmethod
-    def derive_lane(cls, _db, identifier_data, identifier_ids):
-        import lane
-        from classification import Classification as ExtClassification
+    def derive_genre(cls, _db, identifier_data, identifier_ids):
+        from classification import (
+            Classification as ExtClassification,
+            Fiction,
+            Nonfiction,
+            Unclassified,
+        )
+
         classifications = cls.classifications_for_identifier_ids(
             _db, identifier_ids)
         fiction_s = Counter()
-        lane_s = Counter()
+        genre_s = Counter()
         audience_s = Counter()
         for classification in classifications:
             subject = classification.subject
-            if (not subject.fiction and not subject.lane
+            if (not subject.fiction and not subject.genre
                 and not subject.audience):
                 continue
             weight = classification.scaled_weight
             fiction_s[subject.fiction] += weight
             audience_s[subject.audience] += weight
-            if subject.lane:
-                lane_s[subject.lane] += weight
+            if subject.genre:
+                genre_s[subject.genre] += weight
         if fiction_s[True] > fiction_s[False]:
-            default_lane = lane.Fiction
+            default_genre = Fiction
         elif fiction_s[False] > fiction_s[True]:
-            default_lane = lane.Nonfiction
+            default_genre = Nonfiction
         else:
-            default_lane = lane.Unclassified
+            default_genre = Unclassified
         unmarked = audience_s[None]
         audience = ExtClassification.AUDIENCE_ADULT
 
@@ -787,15 +791,15 @@ class WorkIdentifier(Base):
         elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
             audience = ExtClassification.AUDIENCE_CHILDREN
 
-        lanes = lane_s.most_common()
-        if lanes:
-            the_lane = lanes[0][0]
+        genres = genre_s.most_common()
+        if genres:
+            the_genre = genres[0][0]
         else:
-            the_lane = default_lane
+            the_genre = default_genre
 
-        if the_lane:
-            the_lane = Lane.lookup(_db, the_lane)
-        return the_lane, audience
+        if the_genre:
+            the_genre = Genre.lookup(_db, the_genre)
+        return the_genre, audience
 
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
@@ -1396,12 +1400,12 @@ class Work(Base):
     subjects = Column(MutableDict.as_mutable(JSON), default={})
 
     cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
-    lane_id = Column(Integer, ForeignKey('lanes.id'), index=True)
+    genre_id = Column(Integer, ForeignKey('genres.id'), index=True)
     quality = Column(Float, index=True)
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.authors, self.lane, self.language,
+            self.id, self.title, self.authors, self.genre, self.language,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
     @property
@@ -1409,14 +1413,14 @@ class Work(Base):
         return LanguageCodes.three_to_two.get(self.language, self.language)
 
     @classmethod
-    def search(cls, _db, query, languages, lane=None):
+    def search(cls, _db, query, languages, genre=None):
         """Find works that match a search query.
         
         TODO: Current implementation is incredibly bad and does
         a direct database search using ILIKE.
         """
-        if isinstance(lane, LaneData):
-            lane = lane.name
+        if isinstance(genre, classification.GenreData):
+            genre = genre.name
 
         if isisntance(languages, basestring):
             languages = [languages]
@@ -1427,22 +1431,22 @@ class Work(Base):
             or_(Work.title.ilike(k),
                 Work.authors.ilike(k)))
         
-        if lane:
-            q = q.filter(Work.lane==lane)
+        if genre:
+            q = q.filter(Work.genre==genre)
         q = q.order_by(Work.quality.desc())
         return q
 
     @classmethod
     def quality_sample(
-            cls, _db, languages, lane, quality_min_start,
+            cls, _db, languages, genre, quality_min_start,
             quality_min_rock_bottom, target_size):
         """Get randomly selected Works that meet minimum quality criteria.
 
         Bring the quality criteria as low as necessary to fill a feed
         of the given size, but not below `quality_min_rock_bottom`.
         """
-        if isinstance(lane, LaneData):
-            lane = lane.name
+        if isinstance(genre, classification.GenreData):
+            genre = genre.name
         if not isinstance(languages, list):
             languages = [languages]
         quality_min = quality_min_start
@@ -1454,7 +1458,7 @@ class Work(Base):
             # TODO: If the work has multiple languages, in_ will not work.
             query = _db.query(Work).filter(
                 Work.language.in_(languages),
-                Work.lane==lane,
+                Work.genre==genre,
                 Work.quality >= quality_min,
                 Work.was_merged_into == None,
             )
@@ -1714,7 +1718,7 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        self.lane, self.audience = WorkIdentifier.derive_lane(
+        self.genre, self.audience = WorkIdentifier.derive_genre(
             _db, data, flattened_data)
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
@@ -1750,8 +1754,8 @@ class Work(Base):
             print t.encode("utf8")
             print " language=%s" % self.language
             print " quality=%s" % self.quality
-            print " %(lane)s a=%(audience)s" % (
-                dict(lane=self.lane.name, 
+            print " %(genre)s a=%(audience)s" % (
+                dict(genre=self.genre.name, 
                      audience=self.audience))
             if self.summary:
                 d = " Description (%.2f) %s" % (
@@ -1935,24 +1939,25 @@ class Resource(Base):
         self.quality = total_quality / float(total_weight)
 
 
-class Lane(Base):
-    """A grouping of like books."""
-    __tablename__ = 'lanes'
+class Genre(Base):
+    """A subject-matter classification for a book."""
+    __tablename__ = 'genres'
     id = Column(Integer, primary_key=True)
     name = Column(Unicode)
 
-    # One Lane may have affinity with many Subjects.
-    subjects = relationship("Subject", backref="lane")
+    # One Genre may have affinity with many Subjects.
+    subjects = relationship("Subject", backref="genre")
 
-    # One Lane may group together many Works.
-    works = relationship("Work", backref="lane")
+    # One Genre may group together many Works.
+    works = relationship("Work", backref="genre")
 
     @classmethod
-    def lookup(cls, _db, lanedata):
-        lane, new = get_one_or_create(
-            _db, Lane,
-            name=lanedata.name)
-        return lane
+    def lookup(cls, _db, genredata):
+        genre, new = get_one_or_create(
+            _db, Genre,
+            name=genredata.name)
+        return genre
+
 
 class Subject(Base):
     """A subject under which books might be classified."""
@@ -1997,8 +2002,8 @@ class Subject(Base):
         Enum("Adult", "Young Adult", "Children", name="audience"),
         default=None)
 
-    # Each Subject may claim affinity with one Lane.
-    lane_id = Column(Integer, ForeignKey('lanes.id'), index=True)
+    # Each Subject may claim affinity with one Genre.
+    genre_id = Column(Integer, ForeignKey('genres.id'), index=True)
 
     # A locked Subject has been reviewed by a human and software will
     # not mess with it without permission.
@@ -2032,12 +2037,12 @@ class Subject(Base):
             fiction = " (Nonfiction)"
         else:
             fiction = ""
-        if self.lane:
-            lane = ' lane="%s"' % self.lane.name
+        if self.genre:
+            genre = ' genre="%s"' % self.genre.name
         else:
-            lane = ""
+            genre = ""
         a = u'[%s:%s%s%s%s%s]' % (
-            self.type, self.identifier, name, fiction, audience, lane)
+            self.type, self.identifier, name, fiction, audience, genre)
         return a.encode("utf8")
 
     @classmethod
@@ -2086,11 +2091,11 @@ class WorkFeed(object):
 
     """Identify a certain page in a certain feed."""
 
-    def __init__(self, languages, lane, order_by):
-        if isinstance(lane, type) and issubclass(lane, LaneData):
-            self.lane = lane.name
+    def __init__(self, languages, genre, order_by):
+        if isinstance(genre, type) and issubclass(genre, classification.GenreData):
+            self.genre = genre.name
         else:
-            self.lane = lane
+            self.genre = genre
         if isinstance(languages, basestring):
             languages = [languages]
         self.languages = languages
@@ -2108,7 +2113,7 @@ class WorkFeed(object):
 
         query = _db.query(Work).filter(
             Work.language.in_(self.languages),
-            Work.lane==self.lane,
+            Work.genre==self.genre,
             Work.was_merged_into == None,
         )
 

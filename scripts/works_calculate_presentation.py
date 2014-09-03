@@ -21,11 +21,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'force':
         force = True
 
-    print "Recalculating lanes for all works, force=%r" % force
+    print "Recalculating presentation for all works, force=%r" % force
     i = 0
     q = session.query(Work)
     if not force:
-        q = q.filter(Work.lane==None)
+        q = q.filter(Work.genre==None)
     for work in q:
         work.calculate_presentation()
         if not work.title:
