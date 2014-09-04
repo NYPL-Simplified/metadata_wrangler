@@ -1,3 +1,4 @@
+# encoding: utf-8
 import json
 import pkgutil
 from collections import (
@@ -171,28 +172,30 @@ genre_structure = {
 }
 
 class GenreData(object):
-    def __init__(self, name, subgenres, storage, parent=None):
+    def __init__(self, name, subgenres, parent=None):
         self.name = name
         self.parent = parent
         self.subgenres = []
-        storage[self.name] = self
         for sub in subgenres:
-            self.subgenres.append(GenreData(sub, [], storage, self))
+            self.subgenres.append(GenreData(sub, [], self))
+
+    @property
+    def variable_name(self):
+        return self.name.replace("-", "_").replace(", & ", "_").replace(", ", "_").replace(" & ", "_").replace(" ", "_")
 
 genres = dict()
-for genre, subgenres in genre_structure.items():
-    GenreData(genre, subgenres, genres)
-
-# Now make a bunch of constants
-Biography = genres['Biography & Memoir']
-Cooking = genres["Cooking"]
-Family = genres["Family & Relationships"]
-History = genres["History"]
-Mystery = genres["Mystery"]
-Politics = genres["Politics & Current Events"]
-Romance = genres["Romance"]
-Religion = genres['Religion']
-AfricanAmerican = genres["African-American"]
+namespace = globals()
+for name, subgenres in genre_structure.items():
+    genre = GenreData(name, subgenres, genres)
+    genres[genre.name] = genre
+    namespace[genre.variable_name] = genre
+    print genre.variable_name
+    for sub in genre.subgenres:
+        if sub.name in genres:
+            raise ValueError("Duplicate genre name! %s" % sub.name)
+        genres[sub.name] = sub
+        namespace[sub.variable_name] = sub
+        print "", sub.variable_name
 
 class AssignSubjectsToGenres(object):
 
@@ -316,72 +319,70 @@ class OverdriveClassification(Classification):
         ])
 
     GENRES = {
-        AfricanAmerican : [
+        African_American : [
             "African American Fiction",
             "African American Nonfiction",
             "Urban Fiction",
         ],
-        AntiquesAndCollectibles : "Antiques",
-        Biography : "Biography & Autobiography",
-        Business : ["Business", "Marketing & Sales"],
+        Antiques_Collectibles : "Antiques",
+        Biography_Memoir : "Biography & Autobiography",
+        Business_Economics : ["Business", "Marketing & Sales", "Careers"],
         Christianity : ["Christian Fiction", "Christian Nonfiction"],
         Computers : "Computer Technology",
         Cooking : "Cooking & Food",
         Erotica : "Erotic Literature",
-        Family : "Family & Relationships",
-        Fantasy : "Fantasy",,
-        Health : "Health & Fitness",
-        HistoricalFiction : "Historical Fiction",
+        Parenting_Family : "Family & Relationships",
+        Fantasy : "Fantasy",
+        Health_Diet : "Health & Fitness",
+        Historical_Fiction : "Historical Fiction",
         History : "History",
         Horror : "Horror",
         Humor : ["Humor (Fiction)", "Humor (Nonfiction)"],
         Mystery : "Mystery",
-        Politics : ["Politics", "Current Events"],
-        Religion : "Religion & Spirituality",
+        Politics_Current_Events : ["Politics", "Current Events"],
+        Religion_Spirituality : "Religion & Spirituality",
         Romance : "Romance",
         Science : ["Science", "Physics", "Chemistry"],
-        ScienceFiction : "Science Fiction",
-        ScienceFictionAndFantasy : "Science Fiction & Fantasy",
-        SelfHelp : "Self-Improvement",
-        SocialScience : "Sociology",
-        Suspense : "Suspense",
-        Thriller : "Thriller",
+        Science_Fiction : "Science Fiction",
+        Science_Fiction_Fantasy : "Science Fiction & Fantasy",
+        Self_Help : ["Self-Improvement", "Self-Help"],
+        Social_Science : "Sociology",
+        Thrillers : ["Suspense", "Thriller"],
         Travel : ["Travel", "Travel Literature"],
         Reference : "Reference",
-        PersonalFinance : "Finance",
-        Business : "Careers",
-        MilitaryHistory : "Military",
-        PerformingArts : "Performing Arts",
+        Personal_Finance_Investing : "Finance",
+        Military_History : "Military",
+        Performing_Arts : "Performing Arts",
         Art : "Art",
         Sports : "Sports & Recreations",
-        CraftsHobbiesGames : ["Crafts", "Games"],
+        Crafts_Hobbies_Games : ["Crafts", "Games"],
         Nature : "Nature",
-        LiteraryCriticism : ["Literary Criticism", "Criticism"],
+        Literary_Criticism : ["Literary Criticism", "Criticism"],
         Education : "Education",
-        NewAge : "New Age",
+        New_Age : "New Age",
         Music : "Music",
-        TrueCrime : "True Crime",
-        HouseAndHome : "Home Design & Décor",
+        True_Crime : "True Crime",
+        House_Home : "Home Design & Décor",
         Philosophy : "Philosophy",
         Psychology : "Psychology",
-        LanguageArts : ["Language Arts", "Grammar & Language Usage"],
+        Language_Arts_Disciplines : [
+            "Language Arts", "Grammar & Language Usage"],
         Drama : "Drama",
         Poetry : "Poetry",
         Medical : "Medical",
         Pets : "Pets",
-        StudyAids : "Study Aids & Workbooks",
+        Study_Aids : "Study Aids & Workbooks",
         Gardening : "Gardening",
-        ForeignLanguageStudy : "Foreign Language Study",
-        Comics : "Comic and Graphic Books",
+        Foreign_Language_Study : "Foreign Language Study",
+        Graphic_Novels_Comics : "Comic and Graphic Books",
         Mathematics : "Mathematics",
         Architecture : "Architecture",
-        Technology : "Technology",
+        Technology_Engineering : "Technology",
         Photography : "Photography",
         Law : "Law",
-        SelfHelp : "Self Help",
         Transportation : "Transportation",
-        Management : "Management",
-        LiteraryCollections : "Literary Anthologies",
+        Management_Leadership : "Management",
+        Literary_Collections : "Literary Anthologies",
     }
 
     @classmethod
