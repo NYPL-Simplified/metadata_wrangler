@@ -760,9 +760,6 @@ class WorkIdentifier(Base):
     def derive_genres(cls, _db, identifier_data, identifier_ids):
         from classification import (
             Classification as ExtClassification,
-            Fiction,
-            Nonfiction,
-            Unclassified,
         )
 
         classifications = cls.classifications_for_identifier_ids(
@@ -1749,10 +1746,10 @@ class Work(Base):
             _db, data, flattened_data)
         self.genres = genres
         # TODO: commented out for speed in testing classifications
-        #self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
-        #    _db, data, flattened_data)
-        #self.cover, covers = WorkIdentifier.evaluate_cover_quality(
-        #    _db, data, flattened_data)
+        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
+            _db, data, flattened_data)
+        self.cover, covers = WorkIdentifier.evaluate_cover_quality(
+            _db, data, flattened_data)
         covers = []
         summaries = []
 
@@ -1776,7 +1773,6 @@ class Work(Base):
             if not x.open_access
         ]
         if licensed_pools:
-            set_trace()
             self.quality *= (50 * len(licensed_pools))
 
         # Now that everything's calculated, print it out.
