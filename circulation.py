@@ -21,7 +21,6 @@ from model import (
     WorkFeed,
     WorkRecord,
     )
-from lane import Lane, Unclassified
 from opensearch import OpenSearchDocument
 from opds import (
     E,

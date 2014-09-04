@@ -25,7 +25,7 @@ if __name__ == '__main__':
     i = 0
     q = session.query(Work)
     if not force:
-        q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None)
+        q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None).filter(Work.fiction==None).filter(Work.audience==None)
     for work in q:
         work.calculate_presentation()
         if not work.title:

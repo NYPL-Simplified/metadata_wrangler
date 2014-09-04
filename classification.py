@@ -226,7 +226,7 @@ class AssignSubjectsToGenres(object):
                 continue
             genredata, audience, fiction = classifier.classify(subject)
             if genredata:
-                genre = Genre.lookup(self._db, genredata)
+                genre, was_new = Genre.lookup(self._db, genredata.name, True)
                 subject.genre = genre
             if audience:
                 subject.audience = audience

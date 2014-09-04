@@ -23,8 +23,6 @@ from model import (
     )
 from flask import request, url_for
 
-from lane import Lane, Unclassified
-
 ATOM_NAMESPACE = atom_ns = 'http://www.w3.org/2005/Atom'
 app_ns = 'http://www.w3.org/2007/app'
 xhtml_ns = 'http://www.w3.org/1999/xhtml'
@@ -111,9 +109,6 @@ class OPDSFeed(AtomFeed):
 
     @classmethod
     def lane_url(cls, lane, order=None):
-        if isinstance(lane, Lane):
-            lane = lane.name
-
         return url_for('feed', lane=lane, order=order, _external=True)
 
 class AcquisitionFeed(OPDSFeed):
@@ -136,9 +131,6 @@ class AcquisitionFeed(OPDSFeed):
 
     @classmethod
     def featured(cls, _db, languages, lane):
-        if isinstance(lane, Lane):
-            lane = lane.name
-
         url = cls.lane_url(lane)
         links = []
         feed_size = 20

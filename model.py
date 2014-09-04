@@ -10,6 +10,7 @@ from nose.tools import set_trace
 import random
 import re
 
+import numpy
 from PIL import Image
 
 from sqlalchemy.engine.url import URL
@@ -800,7 +801,9 @@ class WorkIdentifier(Base):
             # most popular genre. Limit of of 5 genres.
             for g, score in popular:
                 if score >= cutoff:
-                    genres.append(Genre.lookup(_db,g))
+                    if not isinstance(g, Genre):
+                        g = Genre.lookup(_db, g)
+                    genres.append(g)
 
         return genres, fiction, audience
 
@@ -1469,8 +1472,8 @@ class Work(Base):
         Bring the quality criteria as low as necessary to fill a feed
         of the given size, but not below `quality_min_rock_bottom`.
         """
-        if isinstance(genre, classification.GenreData):
-            genre = genre.name
+        if isinstance(genre, basestring):
+            genre, ignore = Genre.lookup(_db, genre)
         if not isinstance(languages, list):
             languages = [languages]
         quality_min = quality_min_start
@@ -1479,10 +1482,9 @@ class Work(Base):
         while (quality_min >= quality_min_rock_bottom
                and len(results) < target_size):
             remaining = target_size - len(results)
-            # TODO: If the work has multiple languages, in_ will not work.
-            query = _db.query(Work).filter(
+            query = _db.query(Work).join(Work.work_genres).filter(
                 Work.language.in_(languages),
-                Work.genre==genre,
+                WorkGenre.genre==genre,
                 Work.quality >= quality_min,
                 Work.was_merged_into == None,
             )
@@ -1720,8 +1722,6 @@ class Work(Base):
 
     def calculate_presentation(self):
 
-        from classification import Classification as ExtClassification
-
         titles, authors, languages = (
             self.gather_presentation_information())
 
@@ -1774,6 +1774,15 @@ class Work(Base):
         ]
         if licensed_pools:
             self.quality *= (50 * len(licensed_pools))
+
+        # Scale Overdrive content by popularity.
+        popularities = WorkIdentifier.resources_for_identifier_ids(
+            _db, flattened_data, Resource.POPULARITY)
+        popularities = popularities.filter(
+            Resource.content != None).all()
+        if popularities:
+            avg_popularity = numpy.mean([int(x.content) for x in popularities])
+            self.quality *= (avg_popularity/100.0)
 
         # Now that everything's calculated, print it out.
         if True:
@@ -1984,11 +1993,16 @@ class Genre(Base):
     work_genres = relationship("WorkGenre", backref="genre")
 
     @classmethod
-    def lookup(cls, _db, genredata):
-        genre, new = get_one_or_create(
-            _db, Genre,
-            name=genredata.name)
-        return genre
+    def lookup(cls, _db, name, autocreate=False):
+        if autocreate:
+            m = get_one_or_create
+        else:
+            m = get_one
+        result = m(_db, Genre, name=name)
+        if isinstance(result, tuple):
+            return result
+        else:
+            return result, False
 
 
 class Subject(Base):
@@ -2128,7 +2142,7 @@ class WorkFeed(object):
     """Identify a certain page in a certain feed."""
 
     def __init__(self, languages, genre, order_by):
-        if isinstance(genre, type) and issubclass(genre, classification.GenreData):
+        if isinstance(genre, type) and isinstance(genre, Genre):
             self.genre = genre.name
         else:
             self.genre = genre
@@ -2149,7 +2163,7 @@ class WorkFeed(object):
 
         query = _db.query(Work).filter(
             Work.language.in_(self.languages),
-            Work.genre==self.genre,
+            self.genre in Work.genres,
             Work.was_merged_into == None,
         )
 
