@@ -276,7 +276,7 @@ class OverdriveRepresentationExtractor(object):
                 creator = product['primaryCreator']
                 if creator.get('role') == 'Author':
                     data['author_name'] = creator.get('name')
-            links = product['links']
+            links = product.get('links', [])
             if 'availability' in links:
                 link = links['availability']['href']
                 data['availability_link'] = OverdriveAPI.make_link_safe(link)
@@ -287,7 +287,7 @@ class OverdriveRepresentationExtractor(object):
 
     @classmethod
     def link(self, page, rel):
-        if rel in page['links']:
+        if 'links' in page and rel in page['links']:
             raw_link = page['links'][rel]['href']
             link = OverdriveAPI.make_link_safe(raw_link)
         else:

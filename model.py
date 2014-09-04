@@ -1432,7 +1432,7 @@ class Work(Base):
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.authors, ", ".join([g.name for g in self.genre]), self.language,
+            self.id, self.title, self.authors, ", ".join([g.name for g in self.genres]), self.language,
             len(self.work_records), len(self.license_pools))).encode("utf8")
 
     @property
@@ -2045,6 +2045,10 @@ class Subject(Base):
     # not mess with it without permission.
     locked = Column(Boolean, default=False, index=True)
 
+    # A checked Subject has been reviewed by software and will
+    # not be checked again unless forced.
+    checked = Column(Boolean, default=False, index=True)
+
     # One Subject may participate in many Classifications.
     classifications = relationship(
         "Classification", backref="subject"
@@ -2074,7 +2078,7 @@ class Subject(Base):
         else:
             fiction = ""
         if self.genre:
-            genre = ' genre="%s"' % self.genre
+            genre = ' genre="%s"' % self.genre.name
         else:
             genre = ""
         a = u'[%s:%s%s%s%s%s]' % (

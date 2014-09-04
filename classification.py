@@ -3,6 +3,9 @@
 # SQL to find commonly used DDC classifications
 # select count(workrecords.id) as c, subjects.identifier from workrecords join workidentifiers on workrecords.primary_identifier_id=workidentifiers.id join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.type = 'DDC' and not subjects.identifier like '8%' group by subjects.identifier order by c desc;
 
+# SQL to find commonly used classifications not assigned to a genre 
+# select count(workidentifiers.id) as c, subjects.type, substr(subjects.identifier, 0, 20) as i, substr(subjects.name, 0, 20) as n from workidentifiers join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.genre_id is null and subjects.fiction is null group by subjects.type, i, n order by c desc;
+
 import json
 import pkgutil
 from collections import (
@@ -11,6 +14,7 @@ from collections import (
 )
 from nose.tools import set_trace
 import re
+from sqlalchemy.sql.expression import and_
 
 class GenreData(object):
     subgenres = set([])
@@ -194,13 +198,11 @@ for name, subgenres in genre_structure.items():
     genre = GenreData(name, subgenres, genres)
     genres[genre.name] = genre
     namespace[genre.variable_name] = genre
-    print genre.variable_name
     for sub in genre.subgenres:
         if sub.name in genres:
             raise ValueError("Duplicate genre name! %s" % sub.name)
         genres[sub.name] = sub
         namespace[sub.variable_name] = sub
-        print "", sub.variable_name
 
 class AssignSubjectsToGenres(object):
 
@@ -214,9 +216,10 @@ class AssignSubjectsToGenres(object):
         )
         q = self._db.query(Subject).filter(Subject.locked==False)
         if not force:
-            q = q.filter(Subject.genre==None)
+            q = q.filter(Subject.checked==False)
         counter = 0
         for subject in q:
+            subject.checked = True
             classifier = Classification.classifiers.get(
                 subject.type, None)
             if not classifier:
@@ -233,6 +236,7 @@ class AssignSubjectsToGenres(object):
                 print subject
             counter += 1
             if not counter % 100:
+                print "!", counter
                 self._db.commit()
 
 class Classification(object):
@@ -324,77 +328,75 @@ class OverdriveClassification(Classification):
         ])
 
     GENRES = {
-        African_American : [
-            "African American Fiction",
-            "African American Nonfiction",
-            "Urban Fiction",
-        ],
+        African_American : ["African American Fiction", "African American Nonfiction", "Urban Fiction", ],
         Antiques_Collectibles : "Antiques",
+        Architecture : "Architecture",
+        Art : "Art",
         Biography_Memoir : "Biography & Autobiography",
         Business_Economics : ["Business", "Marketing & Sales", "Careers"],
         Christianity : ["Christian Fiction", "Christian Nonfiction"],
         Computers : "Computer Technology",
         Cooking : "Cooking & Food",
+        Crafts_Hobbies_Games : ["Crafts", "Games"],
+        Drama : "Drama",
+        Education : "Education",
         Erotica : "Erotic Literature",
-        Parenting_Family : "Family & Relationships",
         Fantasy : "Fantasy",
+        Foreign_Language_Study : "Foreign Language Study",
+        Gardening : "Gardening",
+        Graphic_Novels_Comics : "Comic and Graphic Books",
         Health_Diet : "Health & Fitness",
         Historical_Fiction : "Historical Fiction",
         History : "History",
         Horror : "Horror",
+        House_Home : u"Home Design & Décor",
         Humor : ["Humor (Fiction)", "Humor (Nonfiction)"],
+        Humor_Entertainment : "Entertainment",
+        Judaism : "Judaica",
+        Language_Arts_Disciplines : ["Language Arts", "Grammar & Language Usage"],
+        Law : "Law",
+        Literary_Collections : "Literary Anthologies",
+        Literary_Criticism : ["Literary Criticism", "Criticism"],
+        Management_Leadership : "Management",
+        Mathematics : "Mathematics",
+        Medical : "Medical",
+        Military_History : "Military",
+        Music : "Music",
         Mystery : "Mystery",
+        Nature : "Nature",
+        New_Age : "New Age",
+        Parenting_Family : "Family & Relationships",
+        Performing_Arts : "Performing Arts",
+        Personal_Finance_Investing : "Finance",
+        Pets : "Pets",
+        Philosophy : ["Philosophy", "Ethics"],
+        Photography : "Photography",
+        Poetry : "Poetry",
         Politics_Current_Events : ["Politics", "Current Events"],
+        Psychology : ["Psychology", "Psychiatry", "Psychiatry & Psychology"],
+        Reference : "Reference",
         Religion_Spirituality : "Religion & Spirituality",
         Romance : "Romance",
         Science : ["Science", "Physics", "Chemistry"],
         Science_Fiction : "Science Fiction",
         Science_Fiction_Fantasy : "Science Fiction & Fantasy",
-        Self_Help : ["Self-Improvement", "Self-Help"],
+        Self_Help : ["Self-Improvement", "Self-Help", "Self Help"],
         Social_Science : "Sociology",
-        Thrillers : ["Suspense", "Thriller"],
-        Travel : ["Travel", "Travel Literature"],
-        Reference : "Reference",
-        Personal_Finance_Investing : "Finance",
-        Military_History : "Military",
-        Performing_Arts : "Performing Arts",
-        Art : "Art",
         Sports : "Sports & Recreations",
-        Crafts_Hobbies_Games : ["Crafts", "Games"],
-        Nature : "Nature",
-        Literary_Criticism : ["Literary Criticism", "Criticism"],
-        Education : "Education",
-        New_Age : "New Age",
-        Music : "Music",
-        True_Crime : "True Crime",
-        House_Home : "Home Design & Décor",
-        Philosophy : "Philosophy",
-        Psychology : "Psychology",
-        Language_Arts_Disciplines : [
-            "Language Arts", "Grammar & Language Usage"],
-        Drama : "Drama",
-        Poetry : "Poetry",
-        Medical : "Medical",
-        Pets : "Pets",
         Study_Aids : "Study Aids & Workbooks",
-        Gardening : "Gardening",
-        Foreign_Language_Study : "Foreign Language Study",
-        Graphic_Novels_Comics : "Comic and Graphic Books",
-        Mathematics : "Mathematics",
-        Architecture : "Architecture",
-        Technology_Engineering : "Technology",
-        Photography : "Photography",
-        Law : "Law",
+        Technology_Engineering : ["Technology", "Engineering"],
+        Thrillers : ["Suspense", "Thriller"],
         Transportation : "Transportation",
-        Management_Leadership : "Management",
-        Literary_Collections : "Literary Anthologies",
+        Travel : ["Travel", "Travel Literature"],
+        True_Crime : "True Crime",
     }
 
     @classmethod
     def scrub_identifier(cls, identifier):
         return identifier
 
-    def fiction(cls, identifier):
+    @classmethod
+    def is_fiction(cls, identifier, name):
         if (identifier in cls.FICTION
             or "Fiction" in identifier
             or "Literature" in identifier):
@@ -403,26 +405,28 @@ class OverdriveClassification(Classification):
             return True
         return False
 
-    def audience(cls, identifier):
+    @classmethod
+    def audience(cls, identifier, name):
         if ("Juvenile" in identifier or "Picture Book" in identifier
             or "Beginning Reader" in identifier):
             return cls.AUDIENCE_CHILDREN
         elif "Young Adult" in identifier:
             return cls.AUDIENCE_YOUNG_ADULT
-        return cls.ADULT
+        return cls.AUDIENCE_ADULT
 
-    def genre(cls, identifier):
+    @classmethod
+    def genre(cls, identifier, name):
         for l, v in cls.GENRES.items():
-            if identifier in v:
-                return v
+            if identifier == v or (isinstance(v, list) and identifier in v):
+                return l
         return None
 
 
 class DeweyDecimalClassification(Classification):
 
     NAMES = None
-    FICTION = [813, 823, 833, 843, 853, 863, 873, 883, "FIC", "E", "F"]
-    NONFICTION = ["J", "B"]
+    FICTION = set([813, 823, 833, 843, 853, 863, 873, 883, "FIC", "E", "F"])
+    NONFICTION = set(["J", "B"])
 
     # 791.4572 and 791.4372 is for recordings. 741.59 is for comic
     #  adaptations? This is a good sign that a workidentifier should
@@ -510,6 +514,10 @@ class DeweyDecimalClassification(Classification):
         # deal with it.
         if '.' in identifier:
             identifier = identifier.split('.')[0]
+        try:
+            identifier = int(identifier)
+        except ValueError:
+            pass
         return identifier
 
     @classmethod
@@ -520,17 +528,19 @@ class DeweyDecimalClassification(Classification):
             # young adult nonfiction.
             return None
 
-        if identifier.startswith('Y') or identifier.startswith('J'):
+        if (isinstance(identifier, basestring) and (
+                identifier.startswith('Y') or identifier.startswith('J'))):
             # Young adult/children's literature--not necessarily fiction
             identifier = identifier[1:]
+            try:
+                identifier = int(identifier)
+            except ValueError:
+                pass
 
-        for s in cls.FICTION:
-            if identifier.startswith(s):
-                return True
-
-        for s in cls.NONFICTION:
-            if identifier.startswith(s):
-                return False
+        if identifier in cls.FICTION:
+            return True
+        if identifier in cls.NONFICTION:
+            return False
 
         # TODO: Make NONFICTION more comprehensive and return None
         # if not in there.
@@ -542,29 +552,18 @@ class DeweyDecimalClassification(Classification):
             # Juvenile fiction
             return cls.AUDIENCE_CHILDREN
 
-        if identifier.startswith('j'):
+        if isinstance(identifier, basestring) and identifier.startswith('j'):
             return cls.AUDIENCE_CHILDREN
 
-        if identifier.startswith('y'):
+        if isinstance(identifier, basestring) and identifier.startswith('y'):
             return cls.AUDIENCE_YOUNG_ADULT
 
         return cls.AUDIENCE_ADULT
 
     @classmethod
     def genre(cls, identifier, name):
-
-        if identifier not in ('e', 'fic', 'j', 'b', 'y'):
-            # Strip off everything except the three-digit number.
-            identifier = identifier[-3:]
-            try:
-                # Turn a three-digit number into a top-level code.
-                identifier = int(identifier)
-                identifiers = [identifier, identifier / 100 * 100]
-            except ValueError, e:
-                # Oh well, try a lookup, maybe it'll work. (Probably not.)
-                pass
         for genre, identifiers in cls.GENRES.items():
-            if identifier in identifiers:
+            if identifier == identifiers or identifier in identifiers:
                 return genre
         return None
     
@@ -665,7 +664,7 @@ class LCCClassification(Classification):
             for s in strings:
                 if identifier.startswith(s):
                     return genre
-        for genre, prefix in cls.LEFTOVERS:
+        for prefix, genre in cls.LEFTOVERS.items():
             if identifier.startswith(prefix):
                 return genre
         return None
@@ -696,8 +695,21 @@ class KeywordBasedClassification(Classification):
     NONFICTION_INDICATORS = match_kw(
         "history", "biography", "histories", "biographies", "autobiography",
         "autobiographies")
-    JUVENILE_INDICATORS = match_kw("for children", "children's", "juvenile")
+    JUVENILE_INDICATORS = match_kw(
+        "for children", "children's", "juvenile",
+        "nursery rhymes")
     YOUNG_ADULT_INDICATORS = match_kw("young adult", "ya")
+
+    # These identifiers indicate that the string "children" or
+    # "juvenile" in the identifier does not actually mean the work is
+    # _for_ children.
+    JUVENILE_BLACKLIST = set([
+        "military participation",
+        "children's accidents",
+        "children's voices",
+        "juvenile delinquency",
+        "children's television workshop",
+    ])
 
     GENRES = {
         # Adventure : match_kw(
@@ -760,6 +772,9 @@ class KeywordBasedClassification(Classification):
         Poetry : match_kw(
             "poetry",
         ),
+        Political_Science : match_kw(
+            "politics", "goverment",
+        ),
         Reference : match_kw(
             "catalogs",
             "dictionaries",
@@ -768,28 +783,42 @@ class KeywordBasedClassification(Classification):
             "manuals",
         ),
         Religion_Spirituality : match_kw(
-            "bible",
-            "christianity",
-            "church",
-            "islam",
-            "judaism",
             "religion",
             "religious",
+        ),
+        Christianity : match_kw(
+            "bible",
             "sermons",
             "theological",
             "theology",
             'biblical',
+            "christianity",
+            "church",
+        ),
+        Islam : match_kw('islam'),
+        Judaism : match_kw('judaism'),
+        Erotica : match_kw(
+            'erotic',
         ),
         Romance : match_kw(
             "love stories",
             "romance",
             "romances",
         ),
+        Medical : match_kw("medicine", "medical"),
+        Mathematics : match_kw("mathematics"),
+        Computers : match_kw(
+            "computer",
+            "software",
+        ),
+        Military_History : match_kw(
+            "military science",
+            "warfare",
+            "military",
+        ),
         Science : match_kw(
             "aeronautics",
             "evolution",
-            "mathematics",
-            "medicine",
             "natural history",
             "science",
         ),
@@ -821,10 +850,18 @@ class KeywordBasedClassification(Classification):
         if name is None:
             return None
         if cls.JUVENILE_INDICATORS.search(name):
-            return cls.AUDIENCE_CHILDREN
-        if cls.YOUNG_ADULT_INDICATORS.search(name):
-            return cls.AUDIENCE_YOUNG_ADULT
-        return None
+            use = cls.AUDIENCE_CHILDREN
+        elif cls.YOUNG_ADULT_INDICATORS.search(name):
+            use = cls.AUDIENCE_YOUNG_ADULT
+        else:
+            return None
+
+        # It may be for kids, or it may be about kids, e.g. "juvenile
+        # delinquency".
+        for i in cls.JUVENILE_BLACKLIST:
+            if i in name:
+                return None
+        return use
 
     @classmethod
     def genre(cls, identifier, name):
