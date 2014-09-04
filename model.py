@@ -2073,8 +2073,8 @@ class Subject(Base):
             fiction = " (Nonfiction)"
         else:
             fiction = ""
-        if self.genres:
-            genre = ' genre="%s"' % ", ".join(g.name for g in self.genres)
+        if self.genre:
+            genre = ' genre="%s"' % self.genre
         else:
             genre = ""
         a = u'[%s:%s%s%s%s%s]' % (

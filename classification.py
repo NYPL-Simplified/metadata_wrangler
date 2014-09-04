@@ -1,4 +1,8 @@
 # encoding: utf-8
+
+# SQL to find commonly used DDC classifications
+# select count(workrecords.id) as c, subjects.identifier from workrecords join workidentifiers on workrecords.primary_identifier_id=workidentifiers.id join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.type = 'DDC' and not subjects.identifier like '8%' group by subjects.identifier order by c desc;
+
 import json
 import pkgutil
 from collections import (
@@ -28,7 +32,7 @@ genre_structure = {
     "Art, Architecture, & Design" : [
         "Architecture",
         "Art",
-        "Criticism & Theory",
+        "Art Criticism & Theory",
         "Design",
         "Fashion",
         "Art History",
@@ -83,19 +87,19 @@ genre_structure = {
     ],
     "Historical Fiction" : [],
     "History" : [
-        "Africa",
-        "Ancient",
-        "Asia",
-        "Civil War",
-        "Europe",
-        "Latin America",
-        "Medieval",
-        "Middle East",
+        "African History",
+        "Ancient History",
+        "Asian History",
+        "Civil War History",
+        "European History",
+        "Latin American History",
+        "Medieval History",
+        "Middle East History",
         "Military History",
-        "Modern",
-        "Renaissance",
-        "United States",
-        "World",
+        "Modern History",
+        "Renaissance History",
+        "United States History",
+        "World History",
     ],
     "Humor & Entertainment" : [
         "Dance",
@@ -111,6 +115,7 @@ genre_structure = {
         "Family & Relationships",
         "Parenting",
     ],
+    "Periodicals" : [],
     "Politics & Current Events" : [
         "Political Science",
     ],
@@ -416,24 +421,53 @@ class OverdriveClassification(Classification):
 class DeweyDecimalClassification(Classification):
 
     NAMES = None
-    FICTION = set([800, 810, 811, 812, 813, 817, 820, 821, 822, 823, 827])
+    FICTION = [813, 823, 833, 843, 853, 863, 873, 883, "FIC", "E", "F"]
+    NONFICTION = ["J", "B"]
+
+    # 791.4572 and 791.4372 is for recordings. 741.59 is for comic
+    #  adaptations? This is a good sign that a workidentifier should
+    #  not be considered, actually.
+    # 398 - Folklore
+    # 428.6 - Primers, Readers, i.e. collections of stories
+    # 700 - Arts - full of distinctions
 
     GENRES = {
-        Humor : set(
-            [817, 827, 837, 847, 857, 867, 877, 887]
-        ),
-        History : set(
-            range(930, 941) + [900, 904, 909, 950, 960, 970, 980, 990]
-        ),
-        Biography : set(
-            [920, "B"]
-        ),
-        Philosophy : set(
-            range(140, 150) + range(180, 201) + [100, 101]
-        ),
-        Religion : set(
-            range(200,300)
-        ),
+        African_History : [range(960, 970)],
+        Architecture : [range(710, 720), range(720, 730)],
+        Art : [range(700, 710), range(730, 770), 774, 776],
+        Asian_History : [range(950, 960), 995, 996, 997],
+        Biography_Memoir : ["B", 920],
+        Business_Economics : [range(330, 340)],
+        Christianity : [range(220, 230), range(230, 290)],
+        Cooking : [range(640, 642)],
+        Crafts_Hobbies_Games : [790, 793, 794, 795],
+        Drama : [812, 822, 832, 842, 852, 862, 872, 882],
+        European_History : [range(940, 950)],
+        History : [900],
+        Islam : [297],
+        Judaism : [296],
+        Language_Arts_Disciplines : [range(410, 430)],
+        Latin_American_History : [range(981, 990)],
+        Law : [range(340, 350)],
+        Management_Leadership : [658],        
+        Mathematics : [range(510, 520)],
+        Medical : [range(610, 620),],
+        Military_History : [range(355, 360)],
+        Music : [range(780, 789)],
+        Periodicals : [range(50, 60), 105, 205, 304, 405, 505, 605, 705, 805, 905],
+        Philosophy : [range(160, 200)],
+        Photography : [771, 772, 773, 775, 778, 779],
+        Poetry : [811, 821, 831, 841, 851, 861, 871, 874, 881, 884],
+        Political_Science : [range(320, 330), range(351, 355)],
+        Psychology : [range(150, 160)],
+        Reference : [range(10, 20), range(30, 40), 103, 203, 303, 403, 503, 603, 703, 803, 903],
+        Religion_Spirituality : [range(200, 220), 290, 292, 293, 294, 295, 299,],
+        Science : [500, 501, 502, range(506, 510), range(520, 530), range(530, 540), range(540, 550), range(550, 560), range(560, 570), range(570, 580), range(580, 590), range(590, 600),],
+        Sports : [range(796, 800)],
+        Technology_Engineering : [600, 601, 602, 604, range(606, 610), range(610, 640), range(660, 670), range(670, 680), range(681, 690), range(690, 700),],
+        Travel : [range(910, 920)],
+        United_States_History : [range(973,980)],
+        World_History : [909],
     }
 
     @classmethod
@@ -458,17 +492,17 @@ class DeweyDecimalClassification(Classification):
         if isinstance(identifier, int):
             identifier = str(identifier).zfill(3)
 
-        identifier = identifier.lower()
+        identifier = identifier.upper()
 
         if identifier.startswith('[') and identifier.endswith(']'):
             # This is just bad data.
             identifier = identifier[1:-1]
 
-        if identifier.startswith('c') or identifier.startswith('a'):
+        if identifier.startswith('C') or identifier.startswith('A'):
             # A work from our Canadian neighbors or our Australian
             # friends.
             identifier = identifier[1:]
-        elif identifier.startswith("nz"):
+        elif identifier.startswith("NZ"):
             # A work from the good people of New Zealand.
             identifier = identifier[2:]
 
@@ -481,41 +515,25 @@ class DeweyDecimalClassification(Classification):
     @classmethod
     def is_fiction(cls, identifier, name):
         """Is the given DDC classification likely to contain fiction?"""
-        if identifier in ('e', 'fic'):
-            # Juvenile fiction
-            return True
-
-        if identifier == 'j':
-            # Juvenile non-fiction
-            return False
-
-        if identifier.startswith('f'):
-            # Adult fiction
-            return True
-
-        if identifier == 'b':
-            # Biography
-            return False
-
-        if identifier == 'y':
+        if identifier == 'Y':
             # Inconsistently used for young adult fiction and
             # young adult nonfiction.
             return None
 
-        if identifier.startswith('y') or identifier.startswith('j'):
+        if identifier.startswith('Y') or identifier.startswith('J'):
             # Young adult/children's literature--not necessarily fiction
             identifier = identifier[1:]
 
-        try:
-            identifier = int(identifier)
-        except Exception, e:
-            return False
-        if identifier in cls.FICTION:
-            return True
-        if identifier >= 830 and identifier <= 899:
-            # TODO: make this less of a catch-all.
-            return True
+        for s in cls.FICTION:
+            if identifier.startswith(s):
+                return True
 
+        for s in cls.NONFICTION:
+            if identifier.startswith(s):
+                return False
+
+        # TODO: Make NONFICTION more comprehensive and return None
+        # if not in there.
         return False
 
     @classmethod
@@ -558,44 +576,70 @@ class LCCClassification(Classification):
     JUVENILE = set(["PZ"])
 
     GENRES = {
-        Cooking : (
-            [], set(["TX"])
-        ),
 
-        FineArts : (
-            [re.compile("[MN].*")],
-            [],
-        ),
-
-        History : (
-            [re.compile("[CDEF].*")],
-            set(["AZ", "KBR", "LA"]),
-        ),
-
-        Philosophy : (
-            [],
-            set(["B", "BC", "BD"]),
-        ),
-
-        Reference : (
-            [],
-            set(["AE", "AG", "AI", "AY"])
-        ),
-
-        Religion : (
-            [],
-            set([
-                "KB", "KBM", "KBP", "KBR", "KBU",
-                "BL", "BM", "BP", "BQ", "BR", "BS", "BT", "BV",
-                "BX",
-            ])
-        ),
-
-        Science: (
-            [re.compile("[QRS].*"), re.compile("T[A-P].*")],
-            [],
-        ),
+        # Unclassified/complicated stuff.
+        # "America": E11-E143
+        # Ancient_History: D51-D90
+        # Angling: SH401-SH691
+        # Civil_War_History: E456-E655
+        # Folklore: GR
+        # Geography: leftovers of G
+        # Islam: BP1-BP253
+        # Latin_American_History: F1201-F3799
+        # Manners and customs: GT
+        # Medieval History: D111-D203
+        # Military_History: D25-D27
+        # Modern_History: ???
+        # Renaissance_History: D219-D234 (1435-1648, so roughly)
+        # Sports: GV557-1198.995
+        # TODO: E and F are actually "the Americas".
+        # United_States_History is E151-E909, F1-F975 but not E456-E655
+        African_History : ["DT"],
+        Ancient_History : ["DE"],
+        Architecture : ["NA"],
+        Art_Criticism_Theory : ["BH"],
+        Asian_History : ["DS", "DU"],
+        Biography_Memoir : ["CT"],
+        Business_Economics : ["HB", "HC", "HF", "HJ"],      
+        Christianity : ["BR", "BS", "BT", "BV", "BX"],
+        Cooking : ["TX"],
+        Crafts_Hobbies_Games : ["TT", "GV"],
+        Education : ["L"],
+        European_History : ["DA", "DAW", "DB", "DD", "DF", "DG", "DH", "DJ", "DK", "DL", "DP", "DQ", "DR"],
+        Islam : ["BP"],
+        Judaism : ["BM"],
+        Language_Arts_Disciplines : ["Z"],
+        Mathematics : ["QA", "HA", "GA"],
+        Medical: ["QM", "R"],
+        Military_History: ["U", "V"],
+        Music: ["M"],
+        Parenting_Family : ["HQ"],
+        Periodicals : ["AP", "AN"],
+        Philosophy : ["BC", "BD", "BJ"],
+        Photography: ["TR"],
+        Political_Science : ["J", "HX"],
+        Psychology : ["BF"],
+        Reference : ["AE", "AG", "AI"],
+        Religion_Spirituality : ["BL", "BQ"],
+        Science : ["QB", "QC", "QD", "QE", "QH", "QK", "QL", "QR", "CC", "GB", "GC", "QP"],
+        Social_Science : ["HD", "HE", "HF", "HM", "HN", "HS", "HT", "HV", "GN", "GF"],
+        Sports: ["SK"],
+        World_History : ["CB"],
     }
+
+    LEFTOVERS = dict(
+        B=Philosophy,
+        T=Technology_Engineering,
+        Q=Science,
+        S=Science,
+        H=Social_Science,
+        D=History,
+        N=Art,
+        L=Education,
+        E=United_States_History,
+        F=United_States_History,
+        BP=Religion_Spirituality,
+    )
 
     NAMES = {}
     @classmethod
@@ -605,9 +649,7 @@ class LCCClassification(Classification):
 
     @classmethod
     def scrub_identifier(cls, identifier):
-        # We don't currently have an understanding of anything
-        # beyond the first two characters of an LCC identifier.
-        return identifier[:2].upper()
+        return identifier.upper()
 
     @classmethod
     def name_for(cls, identifier):
@@ -615,21 +657,22 @@ class LCCClassification(Classification):
 
     @classmethod
     def is_fiction(cls, identifier, name):
-        return identifier in cls.FICTION
+        return identifier.startswith("P")
 
     @classmethod
     def genre(cls, identifier, name):
-        for genre, (res, strings) in cls.GENRES.items():
-            if identifier in strings:
-                return genre
-            for r in res:
-                if r.match(identifier):
+        for genre, strings in cls.GENRES.items():
+            for s in strings:
+                if identifier.startswith(s):
                     return genre
+        for genre, prefix in cls.LEFTOVERS:
+            if identifier.startswith(prefix):
+                return genre
         return None
 
     @classmethod
     def audience(cls, identifier, name):
-        if identifier in cls.JUVENILE:
+        if identifier.startswith("PZ"):
             return cls.AUDIENCE_CHILDREN
         # Everything else is implicitly for adults.
         return cls.AUDIENCE_ADULT
@@ -657,14 +700,14 @@ class KeywordBasedClassification(Classification):
     YOUNG_ADULT_INDICATORS = match_kw("young adult", "ya")
 
     GENRES = {
-        Adventure : match_kw(
-            "adventure",
-            "western stories",
-            "adventurers",
-            "sea stories",
-            "war stories",
-        ),
-        Biography : match_kw(
+        # Adventure : match_kw(
+        #     "adventure",
+        #     "western stories",
+        #     "adventurers",
+        #     "sea stories",
+        #     "war stories",
+        # ),
+        Biography_Memoir : match_kw(
             "autobiographies",
             "autobiography",
             "biographies",
@@ -724,7 +767,7 @@ class KeywordBasedClassification(Classification):
             "handbooks",
             "manuals",
         ),
-        Religion : match_kw(
+        Religion_Spirituality : match_kw(
             "bible",
             "christianity",
             "church",
@@ -750,7 +793,7 @@ class KeywordBasedClassification(Classification):
             "natural history",
             "science",
         ),
-        ScienceFiction : match_kw(
+        Science_Fiction : match_kw(
             "science fiction",
         ),
         Travel : match_kw(
