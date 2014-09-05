@@ -757,56 +757,6 @@ class WorkIdentifier(Base):
                 champion = r
         return champion, summaries
 
-    @classmethod
-    def derive_genres(cls, _db, identifier_data, identifier_ids):
-        from classification import (
-            Classification as ExtClassification,
-        )
-
-        classifications = cls.classifications_for_identifier_ids(
-            _db, identifier_ids)
-        fiction_s = Counter()
-        genre_s = Counter()
-        audience_s = Counter()
-        for classification in classifications:
-            subject = classification.subject
-            if (not subject.fiction and not subject.genre
-                and not subject.audience):
-                continue
-            weight = classification.scaled_weight
-            fiction_s[subject.fiction] += weight
-            audience_s[subject.audience] += weight
-            if subject.genre:
-                genre_s[subject.genre] += weight
-        if fiction_s[True] > fiction_s[False]:
-            fiction = True
-        elif fiction_s[False] > fiction_s[True]:
-            fiction = False
-        else:
-            fiction = None
-        unmarked = audience_s[None]
-        audience = ExtClassification.AUDIENCE_ADULT
-
-        if audience_s[ExtClassification.AUDIENCE_YOUNG_ADULT] > unmarked:
-            audience = ExtClassification.AUDIENCE_YOUNG_ADULT
-        elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
-            audience = ExtClassification.AUDIENCE_CHILDREN
-
-        genres = []
-        popular = genre_s.most_common(5)
-        if popular:
-            most_popular, top_popularity = popular[0]
-            cutoff = top_popularity * 0.8
-            # Get all genres that are 80% as popular as the 
-            # most popular genre. Limit of of 5 genres.
-            for g, score in popular:
-                if score >= cutoff:
-                    if not isinstance(g, Genre):
-                        g = Genre.lookup(_db, g)
-                    genres.append(g)
-
-        return genres, fiction, audience
-
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
     __tablename__ = 'contributors'
@@ -1384,17 +1334,20 @@ class WorkRecord(Base):
 class WorkGenre(Base):
     """An assignment of a genre to a work."""
 
-    __tablename__ = 'work_genre'
+    __tablename__ = 'workgenres'
     id = Column(Integer, primary_key=True)
     genre_id = Column(Integer, ForeignKey('genres.id'), index=True)
     work_id = Column(Integer, ForeignKey('works.id'), index=True)
-
+    affinity = Column(Float, index=True, default=0)
 
     @classmethod
     def from_genre(cls, genre):
         wg = WorkGenre()
         wg.genre = genre
         return wg
+
+    def __repr__(self):
+        return "%s (%d%%)" % (self.genre.name, self.affinity*100)
 
 
 class Work(Base):
@@ -1719,7 +1672,6 @@ class Work(Base):
                                           DataSource.THREEM)
             )
 
-        set_trace()
         return WorkIdentifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.IMAGE).filter(
                 mirrored_or_embeddable).order_by(
@@ -1759,9 +1711,8 @@ class Work(Base):
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
 
-        genres, self.fiction, self.audience = WorkIdentifier.derive_genres(
-            _db, data, flattened_data)
-        self.genres = genres
+        workgenres, self.fiction, self.audience = self.assign_genres(
+            data, flattened_data)
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
         self.cover, covers = WorkIdentifier.evaluate_cover_quality(
@@ -1806,14 +1757,83 @@ class Work(Base):
             print t.encode("utf8")
             print " language=%s" % self.language
             print " quality=%s" % self.quality
-            print " %(genre)s a=%(audience)s" % (
-                dict(genre=", ".join(g.name for g in self.genres), 
+            if self.fiction:
+                fiction = "Fiction"
+            elif self.fiction == False:
+                fiction = "Nonfiction"
+            else:
+                fiction = "???"
+            print " %(fiction)s a=%(audience)s" % (
+                dict(fiction=fiction,
                      audience=self.audience))
+            print " " + ", ".join(repr(wg) for wg in self.work_genres)
             if self.summary:
                 d = " Description (%.2f) %s" % (
-                    self.summary.quality, self.summary.content)
+                    self.summary.quality, self.summary.content[:100])
                 print d.encode("utf8")
             print
+
+    def assign_genres(self, identifier_data, identifier_ids, cutoff=0.15):
+        from classification import (
+            Classification as ExtClassification,
+        )
+
+        _db = Session.object_session(self)
+
+        classifications = WorkIdentifier.classifications_for_identifier_ids(
+            _db, identifier_ids)
+        fiction_s = Counter()
+        genre_s = Counter()
+        audience_s = Counter()
+        for classification in classifications:
+            subject = classification.subject
+            if (not subject.fiction and not subject.genre
+                and not subject.audience):
+                continue
+            weight = classification.scaled_weight
+            fiction_s[subject.fiction] += weight
+            audience_s[subject.audience] += weight
+            if subject.genre:
+                genre_s[subject.genre] += weight
+        if fiction_s[True] > fiction_s[False]:
+            fiction = True
+        elif fiction_s[False] > fiction_s[True]:
+            fiction = False
+        else:
+            fiction = None
+        unmarked = audience_s[None]
+        audience = ExtClassification.AUDIENCE_ADULT
+
+        if audience_s[ExtClassification.AUDIENCE_YOUNG_ADULT] > unmarked:
+            audience = ExtClassification.AUDIENCE_YOUNG_ADULT
+        elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
+            audience = ExtClassification.AUDIENCE_CHILDREN
+
+        # Clear any previous genre assignments.
+        for i in self.work_genres:
+            _db.delete(i)
+        self.work_genres = []
+
+        total_weight = float(sum(genre_s.values()))
+        workgenres = []
+
+        # First, strip out the stragglers.
+        for g, score in genre_s.items():
+            affinity = score / total_weight
+            if affinity < cutoff:
+                total_weight -= score
+                del genre_s[g]
+
+        for g, score in genre_s.items():
+            affinity = score / total_weight
+            if not isinstance(g, Genre):
+                g = Genre.lookup(_db, g)
+            wg, ignore = get_one_or_create(
+                _db, WorkGenre, work=self, genre=g)
+            wg.affinity = score/total_weight
+            workgenres.append(wg)
+
+        return workgenres, fiction, audience
 
 
 class Resource(Base):
