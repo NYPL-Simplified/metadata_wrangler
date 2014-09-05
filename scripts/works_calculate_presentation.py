@@ -8,11 +8,13 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
 from model import (
+    DataSource,
     LicensePool,
     SessionManager,
     Work,
     WorkGenre,
     WorkIdentifier,
+    WorkRecord,
 )
 from model import production_session
 
@@ -20,8 +22,13 @@ if __name__ == '__main__':
     session = production_session()
 
     force = False
-    if len(sys.argv) > 1 and sys.argv[1] == 'force':
-        force = True
+    works_from_source = None
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'force':
+            force = True
+        else:
+            works_from_source = DataSource.lookup(session, sys.argv[1])
+            force = True
 
     if len(sys.argv) == 4:
         source, type, id = sys.argv[1:]
@@ -34,10 +41,20 @@ if __name__ == '__main__':
         print "Recalculating presentation for %s" % work
         work.calculate_presentation()
     else:
-        print "Recalculating presentation for all works, force=%r" % force
+        if works_from_source:
+            which_works = works_from_source.name
+        else:
+            which_works = "all"
+
+        print "Recalculating presentation for %s works, force=%r" % (
+            which_works, force)
         i = 0
         q = session.query(Work)
-        if not force:
+        if force:
+            if works_from_source:
+                q = q.outerjoin(WorkRecord).filter(
+                    WorkRecord.data_source==works_from_source)
+        else:
             q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None).filter(Work.fiction==None).filter(Work.audience==None)
         for work in q:
             work.calculate_presentation()
