@@ -250,15 +250,12 @@ class AcquisitionFeed(OPDSFeed):
 class NavigationFeed(OPDSFeed):
 
     @classmethod
-    def main_feed(self, parent_lane):
+    def main_feed(self, genres):
         feed = NavigationFeed(
             "Navigation feed",
             url=url_for('navigation_feed', _external=True))
 
-        for lane in sorted(parent_lane.self_and_sublanes(), key=lambda x: x.name):
-            if not lane.name:
-                continue
-            lane = lane.name
+        for genre in genres:
             links = []
 
             for title, order, rel in [
@@ -267,7 +264,7 @@ class NavigationFeed(OPDSFeed):
             ]:
                 link = E.link(
                     type=self.ACQUISITION_FEED_TYPE,
-                    href=self.lane_url(lane, order),
+                    href=self.lane_url(genre, order),
                     rel=rel,
                     title=title,
                 )
@@ -275,9 +272,9 @@ class NavigationFeed(OPDSFeed):
 
             feed.feed.append(
                 E.entry(
-                    E.id("tag:%s" % (lane)),
-                    E.title(lane),
-                    E.link(href=self.lane_url(lane)),
+                    E.id("tag:%s" % (genre)),
+                    E.title(genre),
+                    E.link(href=self.lane_url(genre)),
                     E.updated(_strftime(datetime.datetime.utcnow())),
                     *links
                 )

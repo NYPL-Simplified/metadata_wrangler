@@ -124,7 +124,11 @@ def index():
 @app.route('/lanes/')
 def navigation_feed():
     languages = languages_for_request()
-    feed = NavigationFeed.main_feed(Lane)
+    feed = NavigationFeed.main_feed(
+        ["Fiction", "Biography & Memoir", "Mystery", "Nonfiction",
+         "Fantasy", "Science Fiction", "Historical Fiction",
+         "Cooking", "Romance", "Science", "Self-Help",
+         "Graphic Novels & Comics", "Reference", "Young Adult", "Children"])
 
     feed.add_link(
         rel="search", 

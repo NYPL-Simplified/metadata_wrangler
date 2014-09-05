@@ -1399,9 +1399,6 @@ class Work(Base):
         TODO: Current implementation is incredibly bad and does
         a direct database search using ILIKE.
         """
-        if isinstance(genre, basestring):
-            genre, ignore = Genre.lookup(_db, genre)
-
         if isinstance(languages, basestring):
             languages = [languages]
 
@@ -1462,21 +1459,33 @@ class Work(Base):
     DEFAULT_FICTION_RESTRICTION="default"
 
     @classmethod
-    def restrict_to_genre(cls, _db, q, genre, obey_fiction_boundary=True):
+    def restrict_to_genre(cls, _db, q, genre, audience=None, 
+                          obey_fiction_boundary=True):
         """Restrict a query on Work so that it only picks up Works from a
         given genre.
         """
+        from classification import (
+            Classification as ExtClassification,
+        )
+        audience = audience or ExtClassification.AUDIENCE_ADULT
         fiction = None
         if genre in (Genre.FICTION_GENRE, Genre.NONFICTION_GENRE):
             fiction = (genre == Genre.FICTION_GENRE)
             genre = None
             q = q.outerjoin(Work.work_genres)
+            q = q.filter(WorkGenre.genre==genre)
+        elif genre in (
+                ExtClassification.AUDIENCE_CHILDREN,
+                ExtClassification.AUDIENCE_YOUNG_ADULT):
+            audience = genre
+            genre = None
         else:
             if isinstance(genre, basestring):
                 genre, ignore = Genre.lookup(_db, genre)
             fiction = genre.default_fiction
             q = q.join(Work.work_genres)
-        q = q.filter(WorkGenre.genre==genre)
+            q = q.filter(WorkGenre.genre==genre)
+        q = q.filter(Work.audience==audience)
         if fiction is not None and obey_fiction_boundary:
             q = q.filter(Work.fiction==fiction)
 
@@ -1943,8 +1952,12 @@ class Resource(Base):
 
     @property
     def final_url(self):
-        if not self.mirrored_path:
-            return self.href
+        
+        if self.mirrored_path:
+            url = self.mirrored_path
+        else:
+            url = self.href
+        url = url.replace("{", "%7B").replace("}", "%7D")
         return self.mirrored_path % dict(
             content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
             gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
