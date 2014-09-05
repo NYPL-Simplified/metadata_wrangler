@@ -1407,9 +1407,8 @@ class Work(Base):
 
         k = "%" + query + "%"
         q = _db.query(Work)
-        
         if genre:
-            q = Work.restrict_to_genre(q, genre, ignore_fiction_default=True)
+            q = Work.restrict_to_genre(_db, q, genre, obey_fiction_boundary=False)
 
         q = q.filter(
             Work.language.in_(languages),
@@ -1427,8 +1426,6 @@ class Work(Base):
         Bring the quality criteria as low as necessary to fill a feed
         of the given size, but not below `quality_min_rock_bottom`.
         """
-        if isinstance(genre, basestring):
-            genre, ignore = Genre.lookup(_db, genre)
         if not isinstance(languages, list):
             languages = [languages]
         quality_min = quality_min_start
@@ -1438,7 +1435,7 @@ class Work(Base):
                and len(results) < target_size):
             remaining = target_size - len(results)
             query = _db.query(Work)
-            query = Work.restrict_to_genre(query, genre)
+            query = Work.restrict_to_genre(_db, query, genre)
             query = query.filter(
                 Work.language.in_(languages),
                 Work.quality >= quality_min,
@@ -1462,18 +1459,27 @@ class Work(Base):
                 quality_min = quality_min_rock_bottom
         return results
 
+    DEFAULT_FICTION_RESTRICTION="default"
+
     @classmethod
-    def restrict_to_genre(self, q, genre, ignore_fiction_default=False):
+    def restrict_to_genre(cls, _db, q, genre, obey_fiction_boundary=True):
         """Restrict a query on Work so that it only picks up Works from a
         given genre.
         """
-        q = q.join(Work.work_genres)
+        fiction = None
+        if genre in (Genre.FICTION_GENRE, Genre.NONFICTION_GENRE):
+            fiction = (genre == Genre.FICTION_GENRE)
+            genre = None
+            q = q.outerjoin(Work.work_genres)
+        else:
+            if isinstance(genre, basestring):
+                genre, ignore = Genre.lookup(_db, genre)
+            fiction = genre.default_fiction
+            q = q.join(Work.work_genres)
         q = q.filter(WorkGenre.genre==genre)
-        if not ignore_fiction_default:
-            if genre.default_fiction:
-                q = q.filter(Work.fiction==True)
-            elif genre.default_fiction == False:
-                q = q.filter(Work.fiction==False)
+        if fiction is not None and obey_fiction_boundary:
+            q = q.filter(Work.fiction==fiction)
+
         return q
 
     def all_workrecords(self, recursion_level=3):
@@ -1824,6 +1830,7 @@ class Work(Base):
                 total_weight -= score
                 del genre_s[g]
 
+        # Assign WorkGenre objects to the remainder.
         for g, score in genre_s.items():
             affinity = score / total_weight
             if not isinstance(g, Genre):
@@ -2030,6 +2037,11 @@ class Genre(Base):
 
     work_genres = relationship("WorkGenre", backref="genre")
 
+    # These aren't officially genres, but they do serve as genre-like
+    # ways of slicing up the dataset.
+    FICTION_GENRE = "Fiction"
+    NONFICTION_GENRE = "Nonfiction"
+
     @classmethod
     def lookup(cls, _db, name, autocreate=False):
         if autocreate:
@@ -2187,9 +2199,6 @@ class WorkFeed(object):
     """Identify a certain page in a certain feed."""
 
     def __init__(self, _db, languages, genre, order_by):
-        if isinstance(genre, basestring):
-            genre, ignore = Genre.lookup(_db, genre)
-        self.genre = genre
         if isinstance(languages, basestring):
             languages = [languages]
         self.languages = languages
@@ -2207,7 +2216,7 @@ class WorkFeed(object):
 
         query = _db.query(Work)
         if self.genre:
-            query = Work.restrict_to_genre(query, self.genre)
+            query = Work.restrict_to_genre(_db, query, self.genre)
 
         query = query.filter(
             Work.language.in_(self.languages),

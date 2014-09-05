@@ -211,6 +211,11 @@ class AcquisitionFeed(OPDSFeed):
 
         tag = "tag:work:%s" % work.id
 
+        genre = ", ".join(repr(wg) for wg in work.work_genres)
+        if genre:
+            qualities.append(("Genre", genre))
+
+
         if work.summary:
             summary = work.summary.content
             qualities.append(("Summary quality", work.summary.quality))
@@ -218,7 +223,10 @@ class AcquisitionFeed(OPDSFeed):
             summary = ""
         summary += "<ul>"
         for name, value in qualities:
-            summary += "<li>%s: %.1f</li>" % (name, value)
+            if isinstance(value, basestring):
+                summary += "<li>%s: %s</li>" % (name, value)
+            else:
+                summary += "<li>%s: %.1f</li>" % (name, value)
         summary += "</ul>"
 
         entry = E.entry(
