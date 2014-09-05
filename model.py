@@ -1029,7 +1029,7 @@ class Contributor(Base):
                 display_name = parts[1] + " " + parts[0]
                 if len(parts) > 2:
                     # There's a leftover bit.
-                    if parts[2] in ('Mrs.', 'Mrs'):
+                    if parts[2] in ('Mrs.', 'Mrs', 'Sir'):
                         # "Jones, Bob, Mrs."
                         #  => "Mrs. Bob Jones"
                         display_name = parts[2] + " " + display_name
@@ -1900,6 +1900,8 @@ class Resource(Base):
 
     @property
     def final_url(self):
+        if not self.mirrored_path:
+            return self.href
         return self.mirrored_path % dict(
             content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
             gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
