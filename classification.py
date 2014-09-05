@@ -257,12 +257,14 @@ class AssignSubjectsToGenres(object):
     def __init__(self, _db):
         self._db = _db
 
-    def run(self, force=False):
+    def run(self, type_restriction=None, force=False):
         from model import (
             Genre,
             Subject,
         )
         q = self._db.query(Subject).filter(Subject.locked==False)
+        if type_restriction:
+            q = q.filter(Subject.type==type_restriction)
         if not force:
             q = q.filter(Subject.checked==False)
         counter = 0
@@ -278,7 +280,7 @@ class AssignSubjectsToGenres(object):
                 subject.genre = genre
             if audience:
                 subject.audience = audience
-            if fiction:
+            if fiction is not None:
                 subject.fiction = fiction
             if genredata or audience or fiction:
                 print subject
@@ -590,8 +592,9 @@ class DeweyDecimalClassification(Classification):
         if identifier in cls.NONFICTION:
             return False
 
-        # TODO: Make NONFICTION more comprehensive and return None
-        # if not in there.
+        # TODO: Make NONFICTION more comprehensive and return None if
+        # not in there, instead of always returning False. Or maybe
+        # returning False is fine here, who knows.
         return False
 
     @classmethod

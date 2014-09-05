@@ -11,6 +11,12 @@ from model import production_session
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         force = False
+        type_restriction=None
     else:
-        force = (sys.argv[1] == 'force')
-    AssignSubjectsToGenres(production_session()).run(force)
+        force = True
+        if sys.argv[1] == 'force':
+            type_restriction = None
+        else:
+            type_restriction = sys.argv[1]
+
+    AssignSubjectsToGenres(production_session()).run(type_restriction, force)

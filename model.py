@@ -1762,7 +1762,6 @@ class Work(Base):
         genres, self.fiction, self.audience = WorkIdentifier.derive_genres(
             _db, data, flattened_data)
         self.genres = genres
-        # TODO: commented out for speed in testing classifications
         self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
             _db, data, flattened_data)
         self.cover, covers = WorkIdentifier.evaluate_cover_quality(
