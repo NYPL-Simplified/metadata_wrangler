@@ -204,6 +204,54 @@ for name, subgenres in genre_structure.items():
         genres[sub.name] = sub
         namespace[sub.variable_name] = sub
 
+# Some of the genres should contain fiction by default; others should
+# contain nonfiction by default.
+fiction_genredata = set([
+    Crime_Thrillers_Mystery,
+    Historical_Fiction,
+    Literary_Fiction,
+    Romance_Erotica,
+    Science_Fiction_Fantasy,
+])
+nonfiction_genredata = set([
+    Art_Architecture_Design,
+    Biography_Memoir,
+    Business_Economics, 
+    Crafts_Cooking_Garden,
+    Criticism_Philosophy,
+    History,
+    Humor_Entertainment,
+    Parenting_Family,
+    Politics_Current_Events,
+    Reference,
+    Religion_Spirituality,
+    Science_Technology_Nature,
+    Self_Help,
+    Travel_Adventure_Sports,
+])
+
+fiction_genres = set([])
+nonfiction_genres = set([])
+
+# The subgenres of fiction are fiction (with rare exceptions).
+nonfiction_subgenres_of_fiction = [True_Crime]
+for genre in list(fiction_genredata):
+    fiction_genres.add(genre.name)
+    for subgenre in genre.subgenres:
+        if subgenre not in nonfiction_subgenres_of_fiction:
+            fiction_genres.add(subgenre.name)
+
+# Similarly for nonfiction.
+fiction_subgenres_of_nonfiction = [Religious_Fiction]
+for genre in list(nonfiction_genredata):
+    nonfiction_genres.add(genre.name)
+    for subgenre in genre.subgenres:
+        if subgenre not in fiction_subgenres_of_nonfiction:
+            nonfiction_genres.add(subgenre.name)
+
+# Humor includes both fiction and nonfiction.
+nonfiction_genres.remove(Humor.name)
+
 class AssignSubjectsToGenres(object):
 
     def __init__(self, _db):

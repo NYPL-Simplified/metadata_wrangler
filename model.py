@@ -1446,20 +1446,22 @@ class Work(Base):
         TODO: Current implementation is incredibly bad and does
         a direct database search using ILIKE.
         """
-        if isinstance(genre, classification.GenreData):
-            genre = genre.name
+        if isinstance(genre, basestring):
+            genre, ignore = Genre.lookup(_db, genre)
 
-        if isisntance(languages, basestring):
+        if isinstance(languages, basestring):
             languages = [languages]
 
         k = "%" + query + "%"
-        q = _db.query(Work).filter(
+        q = _db.query(Work)
+        
+        if genre:
+            q = Work.restrict_to_genre(q, genre, ignore_fiction_default=True)
+
+        q = q.filter(
             Work.language.in_(languages),
             or_(Work.title.ilike(k),
                 Work.authors.ilike(k)))
-        
-        if genre:
-            q = q.filter(Work.genre==genre)
         q = q.order_by(Work.quality.desc())
         return q
 
@@ -1482,12 +1484,14 @@ class Work(Base):
         while (quality_min >= quality_min_rock_bottom
                and len(results) < target_size):
             remaining = target_size - len(results)
-            query = _db.query(Work).join(Work.work_genres).filter(
+            query = _db.query(Work)
+            query = Work.restrict_to_genre(query, genre)
+            query = query.filter(
                 Work.language.in_(languages),
-                WorkGenre.genre==genre,
                 Work.quality >= quality_min,
                 Work.was_merged_into == None,
             )
+
             if previous_quality_min is not None:
                 query = query.filter(
                     Work.quality < previous_quality_min)
@@ -1505,6 +1509,19 @@ class Work(Base):
                 quality_min = quality_min_rock_bottom
         return results
 
+    @classmethod
+    def restrict_to_genre(self, q, genre, ignore_fiction_default=False):
+        """Restrict a query on Work so that it only picks up Works from a
+        given genre.
+        """
+        q = q.join(Work.work_genres)
+        q = q.filter(WorkGenre.genre==genre)
+        if not ignore_fiction_default:
+            if genre.default_fiction:
+                q = q.filter(Work.fiction==True)
+            elif genre.default_fiction == False:
+                q = q.filter(Work.fiction==False)
+        return q
 
     def all_workrecords(self, recursion_level=3):
         """All WorkRecords identified by a WorkIdentifier equivalent to 
@@ -2006,6 +2023,13 @@ class Genre(Base):
         else:
             return result, False
 
+    @property
+    def default_fiction(self):
+        if self.name in classification.nonfiction_genres:
+            return False
+        elif self.name in classification.fiction_genres:
+            return True
+        return None
 
 class Subject(Base):
     """A subject under which books might be classified."""
@@ -2143,11 +2167,10 @@ class WorkFeed(object):
 
     """Identify a certain page in a certain feed."""
 
-    def __init__(self, languages, genre, order_by):
-        if isinstance(genre, type) and isinstance(genre, Genre):
-            self.genre = genre.name
-        else:
-            self.genre = genre
+    def __init__(self, _db, languages, genre, order_by):
+        if isinstance(genre, basestring):
+            genre, ignore = Genre.lookup(_db, genre)
+        self.genre = genre
         if isinstance(languages, basestring):
             languages = [languages]
         self.languages = languages
@@ -2163,9 +2186,12 @@ class WorkFeed(object):
     def page_query(self, _db, last_work_seen, page_size):
         """A page of works."""
 
-        query = _db.query(Work).filter(
+        query = _db.query(Work)
+        if self.genre:
+            query = Work.restrict_to_genre(query, self.genre)
+
+        query = query.filter(
             Work.language.in_(self.languages),
-            self.genre in Work.genres,
             Work.was_merged_into == None,
         )
 
