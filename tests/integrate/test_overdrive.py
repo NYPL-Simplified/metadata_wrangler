@@ -147,7 +147,8 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(u"Rüping, Andreas", author.name)
         eq_("Andreas R&#252;ping", author.display_name)
         eq_(set(["Computer Technology", "Nonfiction"]),
-            set([x['id'] for x in wr.subjects['Overdrive']]))
+            set([c.subject.identifier
+                 for c in wr.primary_identifier.classifications]))
 
         # Related IDs.
         equivalents = [x.output for x in wr.primary_identifier.equivalencies]
@@ -172,7 +173,7 @@ class TestOverdriveAPI(DatabaseTest):
         assert len(short_description.content) < len(long_description.content)
 
         image = [x for x in resources if x.rel==Resource.IMAGE][0]
-        eq_('http://images.contentreserve.com/ImageType-100/0128-1/{3896665D-9D81-4CAC-BD43-FFC5066DE1F5}Img100.jpg', image.href)
+        eq_('http://images.contentreserve.com/ImageType-100/0128-1/%7B3896665D-9D81-4CAC-BD43-FFC5066DE1F5%7DImg100.jpg', image.href)
 
         popularity = [x for x in resources if x.rel==Resource.POPULARITY][0]
         eq_("2", popularity.content)
