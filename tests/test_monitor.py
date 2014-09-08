@@ -16,7 +16,7 @@ class DummyMonitor(Monitor):
         self.run_records = []
         self.cleanup_records = []
 
-    def run_once(self, start, cutoff):
+    def run_once(self, _db, start, cutoff):
         self.original_timestamp = start
         self.run_records.append(True)
         self.stop_running = True

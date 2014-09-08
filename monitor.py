@@ -39,7 +39,7 @@ class Monitor(object):
                 time.sleep(to_sleep)
                 start = cutoff
 
-    def run_once(self):
+    def run_once(self, _db, start, cutoff):
         raise NotImplementedError()
 
     def cleanup(self):

@@ -171,7 +171,7 @@ class TestMetadataSimilarity(object):
 
     def test_identical_titles_are_identical(self):
         t = u"a !@#$@#%& the #FDUSG($E% N%SDAMF_) and #$MI# asdff \N{SNOWMAN}"
-        eq_(1, MetadataSimilarity.title_similarity, t, t)
+        eq_(1, MetadataSimilarity.title_similarity(t, t))
 
     def test_title_similarity(self):
         """Demonstrate how the title similarity algorithm works in common
