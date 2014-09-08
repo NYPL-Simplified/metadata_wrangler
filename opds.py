@@ -59,9 +59,11 @@ class URLRewriter(object):
         parsed = urlparse(url)
         if parsed.hostname in ('www.gutenberg.org', 'gutenberg.org'):
             return cls._rewrite_gutenberg(parsed)
-        else:
+        elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
                               gutenberg_illustrated_mirror=cls.GUTENBERG_MIRROR_HOST)
+        else:
+            return url
 
     @classmethod
     def _rewrite_gutenberg(cls, parsed):

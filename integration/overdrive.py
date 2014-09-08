@@ -249,6 +249,8 @@ class OverdriveAPI(object):
         query_string = parts[3]
         query_string = query_string.replace("+", "%2B")
         query_string = query_string.replace(":", "%3A")
+        query_string = query_string.replace("{", "%7B")
+        query_string = query_string.replace("}", "%7D")
         parts[3] = query_string
         return urlparse.urlunsplit(tuple(parts))
             
@@ -485,7 +487,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
-            href = link['href']
+            href = OverdriveAPI.make_link_safe(link['href'])
             media_type = link['type']
             identifier.add_resource(Resource.IMAGE, href, input_source,
                                     license_pool, media_type)

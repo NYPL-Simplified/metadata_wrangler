@@ -1957,8 +1957,7 @@ class Resource(Base):
             url = self.mirrored_path
         else:
             url = self.href
-        url = url.replace("{", "%7B").replace("}", "%7D")
-        return self.mirrored_path % dict(
+        return url % dict(
             content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
             gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
 )
@@ -2214,6 +2213,7 @@ class WorkFeed(object):
     def __init__(self, _db, languages, genre, order_by):
         if isinstance(languages, basestring):
             languages = [languages]
+        self.genre = genre
         self.languages = languages
         if not isinstance(order_by, list):
             order_by = [order_by]
@@ -2228,8 +2228,7 @@ class WorkFeed(object):
         """A page of works."""
 
         query = _db.query(Work)
-        if self.genre:
-            query = Work.restrict_to_genre(_db, query, self.genre)
+        query = Work.restrict_to_genre(_db, query, self.genre)
 
         query = query.filter(
             Work.language.in_(self.languages),
