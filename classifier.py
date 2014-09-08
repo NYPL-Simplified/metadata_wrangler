@@ -248,7 +248,7 @@ class Classifier(object):
     @classmethod
     def lookup(cls, scheme):
         """Look up a classifier for a classification scheme."""
-        return cls.classifiers.get(scheme, Classifier)
+        return cls.classifiers.get(scheme, None)
 
     @classmethod
     def name_for(cls, identifier):
@@ -426,7 +426,17 @@ class OverdriveClassifier(Classifier):
 
 class DeweyDecimalClassifier(Classifier):
 
-    NAMES = None
+    NAMES = json.loads(
+        pkgutil.get_data("resources", "dewey_1000.json"))
+
+    # Add some other values commonly found in MARC records.
+    NAMES["B"] = "Biography"
+    NAMES["E"] = "Juvenile Fiction"
+    NAMES["F"] = "Fiction"
+    NAMES["FIC"] = "Juvenile Fiction"
+    NAMES["J"] = "Juvenile Nonfiction"
+    NAMES["Y"] = "Young Adult"
+
     FICTION = set([813, 823, 833, 843, 853, 863, 873, 883, "FIC", "E", "F"])
     NONFICTION = set(["J", "B"])
 
@@ -475,19 +485,6 @@ class DeweyDecimalClassifier(Classifier):
         United_States_History : [range(973,980)],
         World_History : [909],
     }
-
-    @classmethod
-    def _load(cls):
-        cls.NAMES = json.loads(
-            pkgutil.get_data("resources", "dewey_1000.json"))
-
-        # Add some other values commonly found in MARC records.
-        cls.DEWEY["B"] = "Biography"
-        cls.DEWEY["E"] = "Juvenile Fiction"
-        cls.DEWEY["F"] = "Fiction"
-        cls.DEWEY["FIC"] = "Juvenile Fiction"
-        cls.DEWEY["J"] = "Juvenile Nonfiction"
-        cls.DEWEY["Y"] = "Young Adult"
 
     @classmethod
     def name_for(cls, identifier):
@@ -551,14 +548,14 @@ class DeweyDecimalClassifier(Classifier):
 
     @classmethod
     def audience(cls, identifier, name):
-        if identifier in ('e', 'fic'):
+        if identifier in ('E', 'FIC'):
             # Juvenile fiction
             return cls.AUDIENCE_CHILDREN
 
-        if isinstance(identifier, basestring) and identifier.startswith('j'):
+        if isinstance(identifier, basestring) and identifier.startswith('J'):
             return cls.AUDIENCE_CHILDREN
 
-        if isinstance(identifier, basestring) and identifier.startswith('y'):
+        if isinstance(identifier, basestring) and identifier.startswith('Y'):
             return cls.AUDIENCE_YOUNG_ADULT
 
         return cls.AUDIENCE_ADULT
@@ -574,7 +571,7 @@ class DeweyDecimalClassifier(Classifier):
 class LCCClassifier(Classifier):
 
     TOP_LEVEL = re.compile("^([A-Z]{1,2})")
-    FICTION = set(["P", "PN", "PQ", "PR", "PS", "PT", "PZ"])
+    FICTION = set(["PN", "PQ", "PR", "PS", "PT", "PZ"])
     JUVENILE = set(["PZ"])
 
     GENRES = {
@@ -643,11 +640,8 @@ class LCCClassifier(Classifier):
         BP=Religion_Spirituality,
     )
 
-    NAMES = {}
-    @classmethod
-    def _load(cls):
-        cls.NAMES = json.loads(
-            pkgutil.get_data("resources", "lcc_one_level.json"))
+    NAMES = json.loads(
+        pkgutil.get_data("resources", "lcc_one_level.json"))
 
     @classmethod
     def scrub_identifier(cls, identifier):
@@ -659,7 +653,14 @@ class LCCClassifier(Classifier):
 
     @classmethod
     def is_fiction(cls, identifier, name):
-        return identifier.startswith("P")
+        if identifier == 'P':
+            return True
+        if not identifier.startswith('P'):
+            return False
+        for i in cls.FICTION:
+            if identifier.startswith(i):
+                return True
+        return False
 
     @classmethod
     def genre(cls, identifier, name):
