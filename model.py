@@ -59,7 +59,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-import classification
+from classifier import Classifier
 from util import (
     LanguageCodes,
     MetadataSimilarity,
@@ -1464,10 +1464,7 @@ class Work(Base):
         """Restrict a query on Work so that it only picks up Works from a
         given genre.
         """
-        from classification import (
-            Classification as ExtClassification,
-        )
-        audience = audience or ExtClassification.AUDIENCE_ADULT
+        audience = audience or Classifier.AUDIENCE_ADULT
         fiction = None
         if genre in (Genre.FICTION_GENRE, Genre.NONFICTION_GENRE):
             fiction = (genre == Genre.FICTION_GENRE)
@@ -1475,8 +1472,8 @@ class Work(Base):
             q = q.outerjoin(Work.work_genres)
             q = q.filter(WorkGenre.genre==genre)
         elif genre in (
-                ExtClassification.AUDIENCE_CHILDREN,
-                ExtClassification.AUDIENCE_YOUNG_ADULT):
+                Classifier.AUDIENCE_CHILDREN,
+                Classifier.AUDIENCE_YOUNG_ADULT):
             audience = genre
             genre = None
         else:
@@ -1789,10 +1786,6 @@ class Work(Base):
             print
 
     def assign_genres(self, identifier_data, identifier_ids, cutoff=0.15):
-        from classification import (
-            Classification as ExtClassification,
-        )
-
         _db = Session.object_session(self)
 
         classifications = WorkIdentifier.classifications_for_identifier_ids(
@@ -1817,12 +1810,12 @@ class Work(Base):
         else:
             fiction = None
         unmarked = audience_s[None]
-        audience = ExtClassification.AUDIENCE_ADULT
+        audience = Classifier.AUDIENCE_ADULT
 
-        if audience_s[ExtClassification.AUDIENCE_YOUNG_ADULT] > unmarked:
-            audience = ExtClassification.AUDIENCE_YOUNG_ADULT
-        elif audience_s[ExtClassification.AUDIENCE_CHILDREN] > unmarked:
-            audience = ExtClassification.AUDIENCE_CHILDREN
+        if audience_s[Classifier.AUDIENCE_YOUNG_ADULT] > unmarked:
+            audience = Classifier.AUDIENCE_YOUNG_ADULT
+        elif audience_s[Classifier.AUDIENCE_CHILDREN] > unmarked:
+            audience = Classifier.AUDIENCE_CHILDREN
 
         # Clear any previous genre assignments.
         for i in self.work_genres:
@@ -2078,11 +2071,10 @@ class Subject(Base):
     """A subject under which books might be classified."""
 
     # Types of subjects.
-    LCC = "LCC"   # Library of Congress Classification
-    LCSH = "LCSH" # Library of Congress Subject Headings
-    DDC = "DDC"   # Dewey Decimal Classification
-    OVERDRIVE = "Overdrive"   # Overdrive's classification system
-    FAST = "FAST"
+    LCC = Classifier.LCC              # Library of Congress Classification
+    LCSH = Classifier.LCSH            # Library of Congress Subject Headings
+    DDC = Classifier.DDC              # Dewey Decimal Classification
+    OVERDRIVE = Classifier.OVERDRIVE  # Overdrive's classification system
     TAG = "tag"   # Folksonomic tags.
     TOPIC = "schema:Topic"
     PLACE = "schema:Place"
@@ -2133,14 +2125,6 @@ class Subject(Base):
         "Classification", backref="subject"
     )
 
-    classification.Classification.classifiers = {
-        DDC : classification.DeweyDecimalClassification,
-        LCC : classification.LCCClassification,
-        LCSH : classification.KeywordBasedClassification,
-        FAST : classification.KeywordBasedClassification,
-        OVERDRIVE : classification.OverdriveClassification,
-    }
-
     def __repr__(self):
         if self.name:
             name = u' ("%s")' % self.name
@@ -2167,8 +2151,7 @@ class Subject(Base):
     @classmethod
     def lookup(cls, _db, type, identifier, name):
         """Turn a subject type and identifier into a Subject."""
-        classifier = classification.Classification.classifiers.get(
-            type, classification.Classification)
+        classifier = Classifier.lookup(type)
         subject, new = get_one_or_create(
             _db, Subject, type=type,
             identifier=identifier,
@@ -2181,6 +2164,47 @@ class Subject(Base):
             # had only an ID.
             subject.name = name
         return subject, new
+
+    @classmethod
+    def assign_to_genres(cls, _db, type_restriction=None, force=False,
+                         batch_size=1000):
+        """Find subjects that have not been checked yet, assign each a
+        genre/audience/fiction status if possible, and mark each as
+        checked.
+
+        :param type_restriction: Only consider subjects of the given type.
+        :param force: Assign a genre to all subjects not just the ones that
+                      have been checked.
+        :param batch_size: Perform a database commit every time this many
+                           subjects have been checked.
+        """
+        q = _db.query(Subject).filter(Subject.locked==False)
+
+        if type_restriction:
+            q = q.filter(Subject.type==type_restriction)
+
+        if not force:
+            q = q.filter(Subject.checked==False)
+
+        counter = 0
+        for subject in q:
+            subject.checked = True
+            classifier = Classification.classifiers.get(subject.type, None)
+            if not classifier:
+                continue
+            genredata, audience, fiction = classifier.classify(subject)
+            if genredata:
+                genre, was_new = Genre.lookup(_db, genredata.name, True)
+                subject.genre = genre
+            if audience:
+                subject.audience = audience
+            if fiction is not None:
+                subject.fiction = fiction
+            if genredata or audience or fiction:
+                print subject
+            counter += 1
+            if not counter % batch_size:
+                _db.commit()
 
 
 class Classification(Base):

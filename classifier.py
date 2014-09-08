@@ -16,22 +16,18 @@ from nose.tools import set_trace
 import re
 from sqlalchemy.sql.expression import and_
 
-class GenreData(object):
-    subgenres = set([])
-    LCC = []
-    DDC = []
-    OVERDRIVE = []
-    name = None
-
-    @classmethod
-    def self_and_subgenres(cls, nemesis=None):
-        yield cls
-        for sl in cls.subgenres:
-            if sl is nemesis:
-                continue
-            for l in sl.self_and_subgenres(nemesis):
-                yield l
-
+# This is the large-scale structure of our classification system,
+# taken from Zola. 
+#
+# "Children" and "Young Adult" are not here--they are the 'audience' facet
+# of a genre.
+#
+# "Fiction" is not here--it's a seprate facet.
+#
+# If the name of a genre is a 2-tuple, the second item in the tuple is
+# whether or not the genre contains fiction by default. If the name of
+# a genre is a string, the genre inherits the default fiction status
+# of its parent, or (if a top-level genre) is nonfiction by default.
 genre_structure = {
     "Art, Architecture, & Design" : [
         "Architecture",
@@ -49,8 +45,7 @@ genre_structure = {
         "Personal Finance & Investing",
         "Real Estate",
     ],
-    # UNUSED: Children
-    "Classics & Poetry" : [
+    ("Classics & Poetry", None) : [
         "Classics",
         "Poetry",
     ],
@@ -65,7 +60,7 @@ genre_structure = {
         "Pets",
         "Vegetarian & Vegan",
     ],
-    "Crime, Thrillers & Mystery" : [
+    ("Crime, Thrillers & Mystery", True) : [
         "Action & Adventure",
         "Espionage",
         "Hard Boiled",
@@ -75,7 +70,7 @@ genre_structure = {
         "Police Procedurals",
         "Supernatural Thrillers",
         "Thrillers",
-        "True Crime",
+        ("True Crime", False),
         "Women Detectives",
     ],
     "Criticism & Philosophy" : [
@@ -83,13 +78,12 @@ genre_structure = {
         "Literary Criticism",
         "Philosophy",
     ],
-    # Not included: Fiction General
-    "Graphic Novels & Comics" : [
+    ("Graphic Novels & Comics", True) : [
         "Literary",
         "Manga",
         "Superhero",
     ],
-    "Historical Fiction" : [],
+    ("Historical Fiction", True) : [],
     "History" : [
         "African History",
         "Ancient History",
@@ -109,11 +103,11 @@ genre_structure = {
         "Dance",
         "Drama",
         "Film & TV",
-        "Humor",
+        ("Humor", None),
         "Music",
         "Performing Arts",
     ],
-    "Literary Fiction" : ["Literary Collections"],
+    ("Literary Fiction", True) : ["Literary Collections"],
     "Parenting & Family" : [
         "Education",
         "Family & Relationships",
@@ -138,9 +132,9 @@ genre_structure = {
         "Islam",
         "Judaism",
         "New Age",
-        "Religious Fiction",
+        ("Religious Fiction", True),
     ],
-    "Romance & Erotica" : [
+    ("Romance & Erotica", True) : [
         "Contemporary Romance",
         "Erotica",
         "Historical Romance",
@@ -150,7 +144,7 @@ genre_structure = {
         "Suspense Romance",
 
     ],
-    "Science Fiction & Fantasy" : [
+    ("Science Fiction & Fantasy", True) : [
         "Epic Fantasy",
         "Fantasy",
         "Horror",
@@ -176,127 +170,85 @@ genre_structure = {
         "Transportation",
         "Travel",
     ],
-    "African-American" : [],
-    # Not included: Young Adult.
+    ("African-American", None) : [],
+    ("LGBT", None) : [],
 }
 
 class GenreData(object):
-    def __init__(self, name, subgenres, parent=None):
+    def __init__(self, name, is_fiction, parent=None):
         self.name = name
         self.parent = parent
+        self.is_fiction = is_fiction
         self.subgenres = []
-        for sub in subgenres:
-            self.subgenres.append(GenreData(sub, [], self))
 
     @property
     def variable_name(self):
         return self.name.replace("-", "_").replace(", & ", "_").replace(", ", "_").replace(" & ", "_").replace(" ", "_")
 
+    @classmethod
+    def populate(cls, namespace, genres, source):
+        """Create a GenreData object for every genre and subgenre in the given
+        dictionary.
+        """
+        for name, subgenres in source.items():
+            # Nonfiction is the default, because genres of
+            # nonfiction outnumber genres of fiction.
+            default_to_fiction=False
+            cls.add_genre(
+                namespace, genres, name, subgenres, default_to_fiction, None)
+
+    @classmethod
+    def add_genre(cls, namespace, genres, name, subgenres, default_to_fiction,
+                  parent):
+        """Create a GenreData object. Add it to a dictionary and a namespace.
+        """
+        if isinstance(name, tuple):
+            name, default_to_fiction = name
+        if name in genres:
+            raise ValueError("Duplicate genre name! %s" % name)
+
+        # Create the GenreData object.
+        genre_data = GenreData(name, default_to_fiction)
+
+        # Add the genre to the given dictionary, keyed on name.
+        genres[genre_data.name] = genre_data
+
+        # Convert the name to a Python-safe variable name,
+        # and add it to the given namespace.
+        namespace[genre_data.variable_name] = genre_data
+
+        # Do the same for subgenres.
+        for sub in subgenres:
+            cls.add_genre(namespace, genres, sub, [], default_to_fiction,
+                          genre_data)
+
 genres = dict()
-namespace = globals()
-for name, subgenres in genre_structure.items():
-    genre = GenreData(name, subgenres, genres)
-    genres[genre.name] = genre
-    namespace[genre.variable_name] = genre
-    for sub in genre.subgenres:
-        if sub.name in genres:
-            raise ValueError("Duplicate genre name! %s" % sub.name)
-        genres[sub.name] = sub
-        namespace[sub.variable_name] = sub
+GenreData.populate(globals(), genres, genre_structure)
 
-# Some of the genres should contain fiction by default; others should
-# contain nonfiction by default.
-fiction_genredata = set([
-    Crime_Thrillers_Mystery,
-    Historical_Fiction,
-    Literary_Fiction,
-    Romance_Erotica,
-    Science_Fiction_Fantasy,
-])
-nonfiction_genredata = set([
-    Art_Architecture_Design,
-    Biography_Memoir,
-    Business_Economics, 
-    Crafts_Cooking_Garden,
-    Criticism_Philosophy,
-    History,
-    Humor_Entertainment,
-    Parenting_Family,
-    Politics_Current_Events,
-    Reference,
-    Religion_Spirituality,
-    Science_Technology_Nature,
-    Self_Help,
-    Travel_Adventure_Sports,
-])
+class Classifier(object):
 
-fiction_genres = set([])
-nonfiction_genres = set([])
-
-# The subgenres of fiction are fiction (with rare exceptions).
-nonfiction_subgenres_of_fiction = [True_Crime]
-for genre in list(fiction_genredata):
-    fiction_genres.add(genre.name)
-    for subgenre in genre.subgenres:
-        if subgenre not in nonfiction_subgenres_of_fiction:
-            fiction_genres.add(subgenre.name)
-
-# Similarly for nonfiction.
-fiction_subgenres_of_nonfiction = [Religious_Fiction]
-for genre in list(nonfiction_genredata):
-    nonfiction_genres.add(genre.name)
-    for subgenre in genre.subgenres:
-        if subgenre not in fiction_subgenres_of_nonfiction:
-            nonfiction_genres.add(subgenre.name)
-
-# Humor includes both fiction and nonfiction.
-nonfiction_genres.remove(Humor.name)
-
-class AssignSubjectsToGenres(object):
-
-    def __init__(self, _db):
-        self._db = _db
-
-    def run(self, type_restriction=None, force=False):
-        from model import (
-            Genre,
-            Subject,
-        )
-        q = self._db.query(Subject).filter(Subject.locked==False)
-        if type_restriction:
-            q = q.filter(Subject.type==type_restriction)
-        if not force:
-            q = q.filter(Subject.checked==False)
-        counter = 0
-        for subject in q:
-            subject.checked = True
-            classifier = Classification.classifiers.get(
-                subject.type, None)
-            if not classifier:
-                continue
-            genredata, audience, fiction = classifier.classify(subject)
-            if genredata:
-                genre, was_new = Genre.lookup(self._db, genredata.name, True)
-                subject.genre = genre
-            if audience:
-                subject.audience = audience
-            if fiction is not None:
-                subject.fiction = fiction
-            if genredata or audience or fiction:
-                print subject
-            counter += 1
-            if not counter % 100:
-                print "!", counter
-                self._db.commit()
-
-class Classification(object):
+    """Turn an external classification into an internal genre, an
+    audience, and a fiction status.
+    """
 
     AUDIENCE_CHILDREN = "Children"
     AUDIENCE_YOUNG_ADULT = "Young Adult"
     AUDIENCE_ADULT = "Adult"
 
+    # Classification schemes with associated classifiers.
+    LCC = "LCC"
+    LCSH = "LCSH"
+    DDC = "DDC"
+    OVERDRIVE = "Overdrive"
+    FAST = "FAST"
+
     # TODO: This is currently set in model.py in the Subject class.
     classifiers = dict()
+
+    @classmethod
+    def lookup(cls, scheme):
+        """Look up a classifier for a classification scheme."""
+        return cls.classifiers.get(scheme, Classifier)
 
     @classmethod
     def name_for(cls, identifier):
@@ -361,7 +313,7 @@ class Classification(object):
         return None
 
 
-class OverdriveClassification(Classification):
+class OverdriveClassifier(Classifier):
 
     # Any classification that includes the string "Fiction" will be
     # counted as fiction. This is just the leftovers.
@@ -472,7 +424,7 @@ class OverdriveClassification(Classification):
         return None
 
 
-class DeweyDecimalClassification(Classification):
+class DeweyDecimalClassifier(Classifier):
 
     NAMES = None
     FICTION = set([813, 823, 833, 843, 853, 863, 873, 883, "FIC", "E", "F"])
@@ -619,7 +571,7 @@ class DeweyDecimalClassification(Classification):
         return None
     
 
-class LCCClassification(Classification):
+class LCCClassifier(Classifier):
 
     TOP_LEVEL = re.compile("^([A-Z]{1,2})")
     FICTION = set(["P", "PN", "PQ", "PR", "PS", "PT", "PZ"])
@@ -735,7 +687,7 @@ def match_kw(*l):
     with_boundaries = r'\b(%s)\b' % any_keyword
     return re.compile(with_boundaries, re.I)
 
-class KeywordBasedClassification(Classification):
+class KeywordBasedClassifier(Classifier):
 
     """Classify a book based on keywords."""
     
@@ -922,8 +874,15 @@ class KeywordBasedClassification(Classification):
                 return genre
         return None
 
-class LCSHClassification(KeywordBasedClassification):
+class LCSHClassifier(KeywordBasedClassifier):
     pass
 
-class FASTClassification(KeywordBasedClassification):
+class FASTClassifier(KeywordBasedClassifier):
     pass
+
+# Make a dictionary of classification schemes to classifiers.
+Classifier.classifiers[Classifier.DDC] = DeweyDecimalClassifier
+Classifier.classifiers[Classifier.LCC] = LCCClassifier
+Classifier.classifiers[Classifier.FAST] = FASTClassifier
+Classifier.classifiers[Classifier.LCSH] = LCSHClassifier
+Classifier.classifiers[Classifier.OVERDRIVE] = OverdriveClassifier

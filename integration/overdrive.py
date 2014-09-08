@@ -318,6 +318,7 @@ class OverdriveCirculationMonitor(Monitor):
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
+        i = 0
         for i, book in enumerate(self.source.recently_changed_ids(start, cutoff)):
             if i > 0 and not i % 50:
                 print " %s processed" % i
