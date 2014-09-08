@@ -626,7 +626,6 @@ class WorkIdentifier(Base):
             subject=subject,
             data_source_id=data_source.id)
         classification.weight = weight
-        self.classifications.append(classification)
         return classification
 
     @classmethod
@@ -2073,6 +2072,7 @@ class Subject(Base):
     # Types of subjects.
     LCC = Classifier.LCC              # Library of Congress Classification
     LCSH = Classifier.LCSH            # Library of Congress Subject Headings
+    FAST = Classifier.FAST
     DDC = Classifier.DDC              # Dewey Decimal Classification
     OVERDRIVE = Classifier.OVERDRIVE  # Overdrive's classification system
     TAG = "tag"   # Folksonomic tags.

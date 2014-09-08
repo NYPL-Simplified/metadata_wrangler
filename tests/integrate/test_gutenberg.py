@@ -8,7 +8,7 @@ from model import (
     Contributor,
     DataSource,
     Resource,
-    SubjectType,
+    Subject,
     WorkIdentifier,
     WorkRecord,
     get_one_or_create,
@@ -102,16 +102,21 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         eq_("Smith, Joseph, Jr.", a2.name)
         eq_(["Smith, Joseph"], a2.aliases)
 
+        classifications = book.primary_identifier.classifications
+        eq_(3, len(classifications))
+
         # The book has a LCC classification...
-        subjects = book.subjects
-        [lcc] = subjects[SubjectType.LCC]
-        eq_("BX", lcc['id'])
+        [lcc] = [x.subject for x in classifications
+                 if x.subject.type == Subject.LCC]
+        eq_("BX", lcc.identifier)
 
         # ...and two LCSH classifications
-        lcsh = subjects[SubjectType.LCSH]
+        lcsh = [x.subject for x in classifications
+                 if x.subject.type == Subject.LCSH]
         eq_([u'Church of Jesus Christ of Latter-day Saints -- Sacred books',
              u'Mormon Church -- Sacred books'], 
-            sorted(x['id'] for x in lcsh))
+            sorted(x.identifier for x in lcsh))
+
 
     def test_unicode_characters_in_title(self):
         fh = StringIO.StringIO(pkgutil.get_data(
