@@ -9,7 +9,7 @@ from nose.tools import set_trace, eq_
 
 from model import (
     Contributor,
-    SubjectType,
+    Subject,
     WorkIdentifier,
     WorkRecord,
     )
@@ -176,17 +176,20 @@ class TestParser(DatabaseTest):
         # a language specified.
         eq_(None, work.language)
 
-        [ws] = work.subjects[SubjectType.DDC]
-        eq_("813.3", ws['id'])
-        eq_(21183, ws['weight'])
+        classifications = work.primary_identifier.classifications
+        [[subject, weight]] = [(c.subject, c.weight) for c in classifications
+                             if c.subject.type == Subject.DDC]
+        eq_("813.3", subject.identifier)
+        eq_(21183, weight)
 
-        [ws] = work.subjects[SubjectType.LCC]
-        eq_("PS2384", ws['id'])
-        eq_(22460, ws['weight'])
+        [[subject, weight]] = [(c.subject, c.weight) for c in classifications
+                        if c.subject.type == Subject.LCC]
+        eq_("PS2384", subject.identifier)
+        eq_(22460, weight)
 
         fast = sorted(
-            [(x['value'], x['id'], x['weight'])
-             for x in work.subjects[SubjectType.FAST]])
+            [(c.subject.name, c.subject.identifier, c.weight)
+             for c in classifications if c.subject.type == Subject.FAST])
 
         expect = [
             ('Ahab, Captain (Fictitious character)', '801923', 29933),
