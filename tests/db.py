@@ -14,6 +14,7 @@ from model import (
     Work,
     get_one_or_create
 )
+from classifier import Classifier
 from tests import DBInfo
 
 
@@ -66,18 +67,24 @@ class DatabaseTest(object):
         return wr
 
     def _work(self, title=None, authors=None, genre=None, language=None,
-              with_license_pool=False, quality=100):
+              audience=None, fiction=True, with_license_pool=False, quality=100):
         language = language or "eng"
         title = title or self._str
         genre = genre or self._str
+        audience = audience or Classifier.AUDIENCE_ADULT
+        if fiction is None:
+            fiction = True
         wr = self._workrecord(with_license_pool=with_license_pool)
         if with_license_pool:
             wr, pool = wr
         work, ignore = get_one_or_create(
             self._db, Work, create_method_kwargs=dict(
                 title=title, language=language,
+                audience=audience,
+                fiction=fiction,
                 authors=authors, quality=quality), id=self._id)
-        genre, ignore = Genre.lookup(self._db, genre, autocreate=True)
+        if not isinstance(genre, Genre):
+            genre, ignore = Genre.lookup(self._db, genre, autocreate=True)
         work.genres = [genre]
         if with_license_pool:
             work.license_pools.append(pool)

@@ -16,6 +16,7 @@ from model import (
     CoverageProvider,
     CoverageRecord,
     DataSource,
+    Genre,
     LicensePool,
     Timestamp,
     Work,
@@ -25,7 +26,8 @@ from model import (
     get_one_or_create,
 )
 
-from lane import Fiction
+import classifier
+from classifier import Classifier
 
 from tests.db import (
     DatabaseTest,
@@ -408,6 +410,11 @@ class TestLicensePool(DatabaseTest):
 
 class TestWork(DatabaseTest):
 
+    def setup(self):
+        super(TestWork, self).setup()
+        self.romance, ignore = Genre.lookup(self._db, classifier.Romance_Erotica)
+        self.sf, ignore = Genre.lookup(self._db, classifier.Science_Fiction)
+
     def test_calculate_presentation(self):
 
         gutenberg_source = DataSource.GUTENBERG
@@ -449,68 +456,67 @@ class TestWork(DatabaseTest):
         # to be fixed.
         eq_("Bob", work.authors)
 
-    def test_quality_sample_quality_filter(self):
+    def test_quality_sample_genre_filter(self):
 
         english = "eng"
-        lane = "Fiction"
+        genre = self.romance
 
         # Here's a high-quality work.
         w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, language=english, lane=lane), id=1)
+            quality=100, language=english, genres=[genre]), id=1)
 
         # Here's a medium-quality-work.
         w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=10, language=english, lane=lane), id=2)
+            quality=10, language=english, genres=[genre]), id=2)
 
         # Here's a low-quality work.
         w3, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=1, language=english, lane=lane), id=3)
+            quality=1, language=english, genres=[genre]), id=3)
 
         # Here's a work of abysmal quality.
         w4, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=0, language=english, lane=lane), id=4)
+            quality=0, language=english, genres=[genre]), id=4)
 
         # We want two works of quality at least 200, but we'll settle
         # for quality 50. Even that is too much to ask, and we end up with
         # only one work that fits the criteria.
-        eq_([w1], Work.quality_sample(self._db, english, lane, 200, 50, 2))
+        eq_([w1], Work.quality_sample(self._db, english, genre, 200, 50, 2))
 
         # We want two works of quality at least 50, but we'll settle
         # for quality 10. This gives us the 100 and the 10.
-        eq_([w1, w2], Work.quality_sample(self._db, english, lane, 50, 10, 2))
+        eq_([w1, w2], Work.quality_sample(self._db, english, genre, 50, 10, 2))
 
         # We want ten works of quality at least one, but less than
         # zero. This gives us everything except the zero.
         eq_(set([w1, w2, w3]), set(Work.quality_sample(
-            self._db, english, lane, 1, 0.000001, 10)))
+            self._db, english, genre, 1, 0.000001, 10)))
 
         # We want ten works of quality of at least 50, nothing less.
         # We only get one work.
-        eq_([w1], Work.quality_sample(self._db, english, lane, 50, 50, 10))
+        eq_([w1], Work.quality_sample(self._db, english, genre, 50, 50, 10))
 
 
     def test_quality_sample_language_filter(self):
-        w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, language="eng", lane="Fiction"), id=1)
+        w1 = self._work(genre=self.romance)
+        w1.quality = 100
+        w2 = self._work(language="spa", genre=self.romance)
+        w2.quality = 100
 
-        w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, language="spa", lane="Fiction"), id=2)
+        eq_([w1], Work.quality_sample(self._db, "eng", self.romance, 0, 0, 2))
+        eq_([w2], Work.quality_sample(self._db, "spa", self.romance, 0, 0, 2))
+        eq_([], Work.quality_sample(self._db, "fre", self.romance, 0, 0, 2))
+        eq_(set([w1, w2]), set(
+            Work.quality_sample(self._db, ["eng", "spa"], self.romance, 0, 0, 2)))
 
-        eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
-        eq_([w2], Work.quality_sample(self._db, "spa", "Fiction", 0, 0, 2))
-        eq_([], Work.quality_sample(self._db, "fre", "Fiction", 0, 0, 2))
-        eq_(set([w1, w2]), set(Work.quality_sample(self._db, ["eng", "spa"], "Fiction", 0, 0, 2)))
+    def test_quality_sample_genre_filter(self):
+        w1 = self._work(genre=self.romance)
+        w1.quality = 100
+        w2 = self._work(language="spa", genre=self.sf)
+        w2.quality = 100
 
-    def test_quality_sample_lane_filter(self):
-        w1, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=100, language="eng", lane="Fiction"), id=1)
-
-        w2, ignore = get_one_or_create(self._db, Work, create_method_kwargs=dict(
-            quality=10, language="eng", lane="Nonfiction"), id=2)
-
-        eq_([w1], Work.quality_sample(self._db, "eng", "Fiction", 0, 0, 2))
-        eq_([w2], Work.quality_sample(self._db, "eng", "Nonfiction", 0, 0, 2))
-        eq_([], Work.quality_sample(self._db, "eng", "Drama", 0, 0, 2))
+        eq_([w1], Work.quality_sample(self._db, "eng", self.romance, 0, 0, 2))
+        eq_([w2], Work.quality_sample(self._db, "spa", self.sf, 0, 0, 2))
+        eq_([], Work.quality_sample(self._db, "eng", Genre.lookup(self._db, classifier.Drama)[0], 0, 0, 2))
 
 
 class TestCirculationEvent(DatabaseTest):
@@ -880,38 +886,51 @@ class TestLoans(DatabaseTest):
 
 class TestWorkFeed(DatabaseTest):
 
+    def setup(self):
+        super(TestWorkFeed, self).setup()
+        self.romance, ignore = Genre.lookup(
+            self._db, classifier.Romance_Erotica)
+
     def test_setup(self):
-        by_author = WorkFeed("eng", Fiction, Work.authors)
+        by_author = WorkFeed("eng", self.romance, order_by=Work.authors)
 
         eq_(["eng"], by_author.languages)
-        eq_("Fiction", by_author.lane)
+        eq_([self.romance], by_author.genres)
+        eq_(Classifier.AUDIENCE_ADULT, by_author.audience)
+        eq_(Work.DEFAULT_FICTION_RESTRICTION, by_author.fiction)
+        eq_(True, by_author.include_subgenres)
         eq_([Work.authors, Work.title, Work.id], by_author.order_by)
 
-        by_title = WorkFeed(["eng", "spa"], "Fiction", Work.title)
+        by_title = WorkFeed(["eng", "spa"], self.romance, order_by=Work.title)
         eq_(["eng", "spa"], by_title.languages)
-        eq_("Fiction", by_title.lane)
+        eq_([self.romance], by_title.genres)
         eq_([Work.title, Work.authors, Work.id], by_title.order_by)
 
     def test_several_books_same_author(self):
         title = "The Title"
         author = "Author, The"
         language = ["eng"]
-        lane = "Fiction"
+        genre = self.romance
+        audience = Classifier.AUDIENCE_ADULT
 
         # We've got three works with the same author but different
         # titles, plus one with a different author and title.
-        w1 = self._work("Title B", author, lane, language, True)
-        w2 = self._work("Title A", author, lane, language, True)
-        w3 = self._work("Title C", author, lane, language, True)
-        w4 = self._work("Title D", "Author, Another", lane, language, True)
+        w1 = self._work("Title B", author, genre, language, audience, 
+                        with_license_pool=True)
+        w2 = self._work("Title A", author, genre, language, audience, 
+                        with_license_pool=True)
+        w3 = self._work("Title C", author, genre, language, audience, 
+                        with_license_pool=True)
+        w4 = self._work("Title D", "Author, Another", genre, language, 
+                        audience, with_license_pool=True)
 
         # Order them by title, and everything's fine.
-        feed = WorkFeed(language, lane, Work.title)
+        feed = WorkFeed(language, genre, order_by=Work.title)
         eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
         eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
 
         # Order them by author, and they're secondarily ordered by title.
-        feed = WorkFeed(language, lane, Work.authors)
+        feed = WorkFeed(language, genre, order_by=Work.authors)
         eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
         eq_([w3], feed.page_query(self._db, w1, 10).all())
 
@@ -920,22 +939,27 @@ class TestWorkFeed(DatabaseTest):
     def test_several_books_same_author(self):
         title = "The Title"
         language = "eng"
-        lane = "Fiction"
-
+        genre = self.romance
+        audience = Classifier.AUDIENCE_ADULT
+        
         # We've got three works with the same author but different
         # titles, plus one with a different author and title.
-        w1 = self._work(title, "Author B", lane, language, True)
-        w2 = self._work(title, "Author A", lane, language, True)
-        w3 = self._work(title, "Author C", lane, language, True)
-        w4 = self._work("Different title", "Author D", lane, language, True)
+        w1 = self._work(title, "Author B", genre, language, audience,
+                        with_license_pool=True)
+        w2 = self._work(title, "Author A", genre, language, audience, 
+                        with_license_pool=True)
+        w3 = self._work(title, "Author C", genre, language, audience, 
+                        with_license_pool=True)
+        w4 = self._work("Different title", "Author D", genre, language, 
+                        with_license_pool=True)
 
         # Order them by author, and everything's fine.
-        feed = WorkFeed(language, lane, Work.authors)
+        feed = WorkFeed(language, genre, order_by=Work.authors)
         eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
         eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
 
         # Order them by title, and they're secondarily ordered by author.
-        feed = WorkFeed(language, lane, Work.title)
+        feed = WorkFeed(language, genre, order_by=Work.title)
         eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
         eq_([w3], feed.page_query(self._db, w1, 10).all())
 
@@ -946,15 +970,18 @@ class TestWorkFeed(DatabaseTest):
         title = "The Title"
         author = "Author, The"
         language = "eng"
-        lane = "Fiction"
+        genre = self.romance
+        audience = Classifier.AUDIENCE_ADULT
 
         # We've got four works with the exact same title and author
         # string.
-        w1, w2, w3, w4 = [self._work(title, author, lane, language, True)
-                          for i in range(4)]
+        w1, w2, w3, w4 = [
+            self._work(title, author, genre, language, audience,
+                       with_license_pool=True)
+            for i in range(4)]
 
         # WorkFeed orders them by ID.
-        feed = WorkFeed(language, lane, Work.authors)
+        feed = WorkFeed(language, genre, order_by=Work.authors)
         query = feed.page_query(self._db, None, 10)
         eq_([w1, w2, w3, w4], query.all())
 
