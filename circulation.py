@@ -14,6 +14,8 @@ from model import (
     get_one_or_create,
     DataSource,
     production_session,
+    LaneList,
+    Lane,
     LicensePool,
     Patron,
     WorkIdentifier,
@@ -122,59 +124,15 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-class LaneList(object):
-
-    @classmethod
-    def from_description(self, description):
-        lanes = LaneList()
-        for lane_description in description:
-            if isinstance(lane_description, GenreData):
-                # This very simple lane is the default view for a genre.
-                genre = lane_description
-                lane = Lane(genre.name, [genre], True, genre.is_fiction,
-                            Classifier.AUDIENCE_ADULT)
-            else:
-                # A more complicated lane. Its description is a set of
-                # keyword arguments to the Lane constructor.
-                l = lane_description
-                lane = Lane(l['name'], l['genres'], 
-                            l.get('include_subgenres', True),
-                            l.get('fiction', None),
-                            l.get('audience', Classifier.AUDIENCE_ADULT))
-            lanes.add(lane)
-        return lanes
-
-    def __init__(self):
-        self.lanes = []
-        self.by_name = dict()
-
-    def __iter__(self):
-        return self.lanes.__iter__()
-
-    def add(self, lane):
-        self.lanes.append(lane)
-        if lane.name in self.by_name:
-            raise ValueError("Duplicate lane: %s" % lane.name)
-        self.by_name[lane.name] = lane
-
-
-class Lane(object):
-
-    def __init__(self, name, genres, include_subgenres, fiction, audience):
-        self.name = name
-        self.genres = genres
-        self.fiction = fiction
-        self.audience = audience
-        self.include_subgenres=include_subgenres
-
 global lanes
 lanes = LaneList.from_description(
+    db,
     [dict(name="Fiction",
           fiction=True,
           audience=genres.Classifier.AUDIENCE_ADULT,
           genres=[]),
      genres.Biography_Memoir,
-     genres.Mystery,
+     genres.Crime_Thrillers_Mystery,
      dict(name="Nonfiction",
           fiction=False,
           audience=genres.Classifier.AUDIENCE_ADULT,
@@ -192,12 +150,12 @@ lanes = LaneList.from_description(
      genres.Reference,
      dict(
          name="Young Adult",
-         fiction=Work.NO_VALUE,
+         fiction=Lane.BOTH_FICTION_AND_NONFICTION,
          audience=genres.Classifier.AUDIENCE_YOUNG_ADULT,
          genres=[]),
      dict(
          name="Children",
-         fiction=Work.NO_VALUE,
+         fiction=Lane.BOTH_FICTION_AND_NONFICTION,
          audience=genres.Classifier.AUDIENCE_CHILDREN,
          genres=[]),
  ]
@@ -232,7 +190,6 @@ def active_loans():
     feed = AcquisitionFeed.active_loans_for(flask.request.patron)
     return unicode(feed)
 
-
 @app.route('/lanes/<lane>')
 def feed(lane):
     languages = languages_for_request()
@@ -245,7 +202,7 @@ def feed(lane):
     search_link = dict(
         rel="search",
         type="application/opensearchdescription+xml",
-        href=url_for('lane_search', lane=lane, _external=True))
+        href=url_for('lane_search', lane=lane.name, _external=True))
 
     if order == 'recommended':
         feed = AcquisitionFeed.featured(db, languages, lane)
@@ -253,10 +210,10 @@ def feed(lane):
         return unicode(feed)
 
     if order == 'title':
-        feed = WorkFeed(languages, lane, Work.title)
+        feed = WorkFeed(lane, languages, Work.title)
         title = "%s: By title" % lane
     elif order == 'author':
-        feed = WorkFeed(languages, lane, Work.authors)
+        feed = WorkFeed(lane, languages, Work.authors)
         title = "%s: By author" % lane
     else:
         return "I don't know how to order a feed by '%s'" % order
@@ -306,8 +263,10 @@ def lane_search(lane):
         # Send the search form
         return OpenSearchDocument.for_lane(lane, this_url)
     # Run a search.
-    results = Work.search(db, query, languages, lane).limit(50)
-    info = OpenSearchDocument.search_info(lane)
+    lane = lanes.by_name[lane]
+
+    results = lane.search(languages, query).limit(50)
+    info = OpenSearchDocument.search_info(lane.name)
     opds_feed = AcquisitionFeed(
         db, info['name'], 
         this_url + "?q=" + urllib.quote(query),

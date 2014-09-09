@@ -136,9 +136,7 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(lane)
         links = []
         feed_size = 20
-        works = Work.quality_sample(_db, languages, lane.genres, 75, 1, 
-                                    feed_size, lane.include_subgenres,
-                                    lane.audience, lane.fiction)
+        works = lane.quality_sample(languages, 75, 1, feed_size)
         return AcquisitionFeed(
             _db, "%s: featured" % lane.name, url, works)
 

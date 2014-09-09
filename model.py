@@ -1382,6 +1382,8 @@ class Work(Base):
     was_merged_into = relationship("Work", remote_side = [id])
 
     title = Column(Unicode)
+    title_sort = Column(Unicode, index=True)
+    author_sort = Column(Unicode, index=True)
     authors = Column(Unicode, index=True)
     language = Column(Unicode, index=True)
     summary_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_summary_id'), index=True)
@@ -1391,9 +1393,6 @@ class Work(Base):
     cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
     quality = Column(Float, index=True)
 
-    DEFAULT_FICTION_RESTRICTION = object()
-    NO_VALUE = object()
-
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
             self.id, self.title, self.authors, ", ".join([g.name for g in self.genres]), self.language,
@@ -1402,146 +1401,6 @@ class Work(Base):
     @property
     def language_code(self):
         return LanguageCodes.three_to_two.get(self.language, self.language)
-
-    @classmethod
-    def search(cls, _db, query, languages, genre=None):
-        """Find works that match a search query.
-        
-        TODO: Current implementation is incredibly bad and does
-        a direct database search using ILIKE.
-        """
-        if isinstance(languages, basestring):
-            languages = [languages]
-
-        k = "%" + query + "%"
-        q = _db.query(Work)
-        if genre:
-            q = Work.restrict(_db, q, languages, [genre],
-                              obey_fiction_boundary=False)
-
-        q = q.filter(
-            or_(Work.title.ilike(k),
-                Work.authors.ilike(k)))
-        q = q.order_by(Work.quality.desc())
-        return q
-
-    @classmethod
-    def quality_sample(
-            cls, _db, languages, genres, quality_min_start,
-            quality_min_rock_bottom, target_size, include_subgenres=True,
-            audience=None, fiction=DEFAULT_FICTION_RESTRICTION):
-        """Get randomly selected Works that meet minimum quality criteria.
-
-        Bring the quality criteria as low as necessary to fill a feed
-        of the given size, but not below `quality_min_rock_bottom`.
-        """
-        if not isinstance(languages, list):
-            languages = [languages]
-        if not isinstance(genres, list):
-            genres = [genres]
-
-        quality_min = quality_min_start
-        previous_quality_min = None
-        results = []
-        while (quality_min >= quality_min_rock_bottom
-               and len(results) < target_size):
-            remaining = target_size - len(results)
-            query = _db.query(Work)
-            query = Work.restrict(_db, query, languages, genres, include_subgenres, audience, fiction)
-            query = query.filter(
-                Work.quality >= quality_min,
-            )
-
-            if previous_quality_min is not None:
-                query = query.filter(
-                    Work.quality < previous_quality_min)
-            query = query.order_by(func.random()).limit(remaining)
-            results.extend(query.all())
-
-            if quality_min == quality_min_rock_bottom:
-                # We can't lower the bar any more.
-                break
-
-            # Lower the bar, in case we didn't get enough results.
-            previous_quality_min = quality_min
-            quality_min *= 0.5
-            if quality_min < quality_min_rock_bottom:
-                quality_min = quality_min_rock_bottom
-        return results
-
-    @classmethod
-    def restrict(
-            cls, _db, q, languages, genres, include_subgenres=True,
-            audience=None, fiction=DEFAULT_FICTION_RESTRICTION):
-        """Restrict a query on Work to collect works that might go together on
-        a bookshelf or a book display.
-
-        That is, only get Works that:
-
-        * Are in one of the languages listed in `languages`.
-
-        * Are filed under of the genres listed in `genres` (or, if
-          `include_subgenres` is true, any of those genres'
-          subgenres).
-
-        * Are intended for the given audience (the default is 'Adult').
-
-        * Are fiction (if fiction is True), or nonfiction (if fiction
-          is false), or of the default fiction status for the genre
-          (if fiction==DEFAULT_FICTION_RESTRICTION and all genres have
-          the same default fiction status). If fiction==None, no fiction
-          restriction is applied.
-
-        """
-        audience = audience or Classifier.AUDIENCE_ADULT
-        if genres in (None, [], cls.NO_VALUE):
-            if fiction in (True, False):
-                # Find general fiction or general nonfiction (but not both).
-                # general fiction or nonfiction (but not both).
-                q = q.outerjoin(Work.work_genres)
-                q = q.filter(WorkGenre.genre==None)
-        else:
-            # Find works that are assigned to the given genres. This
-            # may also turn into a restriction on the fiction status.
-
-            use_default_fiction = (fiction == cls.DEFAULT_FICTION_RESTRICTION)
-            if use_default_fiction:
-                fiction = cls.NO_VALUE
-
-            initial_genres = genres
-            genres = []
-            for genre in initial_genres:
-                if isinstance(genre, basestring):
-                    genre, ignore = Genre.lookup(_db, genre)
-                elif isinstance(genre, GenreData):
-                    genre, ignore = Genre.lookup(_db, genre.name)
-                if include_subgenres:
-                    genres.extend(genre.self_and_subgenres)
-                else:
-                    genres.append(genre)
-
-                if use_default_fiction:
-                    if fiction is cls.NO_VALUE:
-                        fiction = genre.default_fiction
-                    elif fiction != genre.default_fiction:
-                        raise ValueError(
-                            "I was told to use the default fiction restriction, but the genres %r include contradictory fiction restrictions.")
-
-            q = q.join(Work.work_genres)
-            q = q.filter(WorkGenre.genre_id.in_([g.id for g in genres]))
-
-        if audience not in (None, cls.NO_VALUE):
-            q = q.filter(Work.audience==audience)
-
-        if fiction not in (None, cls.NO_VALUE):
-            q = q.filter(Work.fiction==fiction)
-
-        q = q.filter(
-            Work.language.in_(languages),
-            Work.was_merged_into == None,
-        )
-
-        return q
 
     def all_workrecords(self, recursion_level=3):
         """All WorkRecords identified by a WorkIdentifier equivalent to 
@@ -2097,10 +1956,10 @@ class Genre(Base):
 
     work_genres = relationship("WorkGenre", backref="genre")
 
-    # These aren't officially genres, but they do serve as genre-like
-    # ways of slicing up the dataset.
-    FICTION_GENRE = "Fiction"
-    NONFICTION_GENRE = "Nonfiction"
+    def __repr__(self):
+        return "<Genre %s (%d subjects, %d works, %d subcategories)>" % (
+            self.name, len(self.subjects), len(self.works),
+            len(classifier.genres[self.name].subgenres))
 
     @classmethod
     def lookup(cls, _db, name, autocreate=False):
@@ -2292,23 +2151,204 @@ class Classification(Base):
 
 # Non-database objects.
 
-class WorkFeed(object):
+class LaneList(object):
+    """A list of lanes such as you might see in an OPDS feed."""
 
+    @classmethod
+    def from_description(self, _db, description):
+        lanes = LaneList()
+        for lane_description in description:
+            if isinstance(lane_description, GenreData):
+                # This very simple lane is the default view for a genre.
+                genre = lane_description
+                lane = Lane(_db, genre.name, [genre], True, genre.is_fiction,
+                            Classifier.AUDIENCE_ADULT)
+            else:
+                # A more complicated lane. Its description is a bunch
+                # of arguments to the Lane constructor.
+                l = lane_description
+                lane = Lane(_db, l['name'], l.get('genres', []), 
+                            l.get('include_subgenres', True),
+                            l.get('fiction', Lane.FICTION_DEFAULT_FOR_GENRE),
+                            l.get('audience', Classifier.AUDIENCE_ADULT))
+            lanes.add(lane)
+        return lanes
+
+    def __init__(self):
+        self.lanes = []
+        self.by_name = dict()
+
+    def __iter__(self):
+        return self.lanes.__iter__()
+
+    def add(self, lane):
+        self.lanes.append(lane)
+        if lane.name in self.by_name:
+            raise ValueError("Duplicate lane: %s" % lane.name)
+        self.by_name[lane.name] = lane
+
+
+class Lane(object):
+
+    """A set of books that would go together in a display."""
+
+    BOTH_FICTION_AND_NONFICTION = "both fiction and nonfiction"
+    FICTION_DEFAULT_FOR_GENRE = "fiction default for genre"
+
+    def __init__(self, _db, name, genres, include_subgenres, fiction, audience):
+        self.name = name
+        self._db = _db
+        if not isinstance(genres, list):
+            genres = [genres]
+
+        # Turn names or GenreData objects into Genre objects. 
+        self.genres = []
+        for genre in genres:
+            if isinstance(genre, basestring):
+                genre, ignore = Genre.lookup(_db, genre)
+            elif isinstance(genre, GenreData):
+                genre, ignore = Genre.lookup(_db, genre.name)
+            self.genres.append(genre)
+
+        self.include_subgenres=include_subgenres
+        self.fiction = fiction
+        self.audience = audience
+
+    def search(self, languages, query):
+        """Find works in this lane that match a search query.
+        
+        TODO: Current implementation is incredibly bad and does
+        a direct database search using ILIKE.
+        """
+        if isinstance(languages, basestring):
+            languages = [languages]
+
+        k = "%" + query + "%"
+        q = self.works(languages=languages, fiction=None).filter(
+            or_(Work.title.ilike(k),
+                Work.authors.ilike(k)))
+        q = q.order_by(Work.quality.desc())
+        return q
+
+    def quality_sample(
+            self, languages, quality_min_start,
+            quality_min_rock_bottom, target_size):
+        """Randomly select Works from this Lane that meet minimum quality
+        criteria.
+
+        Bring the quality criteria as low as necessary to fill a feed
+        of the given size, but not below `quality_min_rock_bottom`.
+        """
+        if isinstance(languages, basestring):
+            languages = [languages]
+
+        quality_min = quality_min_start
+        previous_quality_min = None
+        results = []
+        while (quality_min >= quality_min_rock_bottom
+               and len(results) < target_size):
+            remaining = target_size - len(results)
+            query = self.works(languages=languages)
+            query = query.filter(
+                Work.quality >= quality_min,
+            )
+
+            if previous_quality_min is not None:
+                query = query.filter(
+                    Work.quality < previous_quality_min)
+            query = query.order_by(func.random()).limit(remaining)
+            results.extend(query.all())
+
+            if quality_min == quality_min_rock_bottom:
+                # We can't lower the bar any more.
+                break
+
+            # Lower the bar, in case we didn't get enough results.
+            previous_quality_min = quality_min
+            quality_min *= 0.5
+            if quality_min < quality_min_rock_bottom:
+                quality_min = quality_min_rock_bottom
+        return results
+
+    def works(self, languages, fiction=None):
+        """Find Works that will go together in this Lane.
+
+        Works will:
+
+        * Be in one of the languages listed in `languages`.
+
+        * Be filed under of the genres listed in `self.genres` (or, if
+          `self.include_subgenres` is True, any of those genres'
+          subgenres).
+
+        * Are intended for the audience in `self.audience`.
+
+        * Are fiction (if `self.fiction` is True), or nonfiction (if fiction
+          is false), or of the default fiction status for the genre
+          (if fiction==FICTION_DEFAULT_FOR_GENRE and all genres have
+          the same default fiction status). If fiction==None, no fiction
+          restriction is applied.
+
+        :param fiction: Override the fiction setting found in `self.fiction`.
+
+        """
+        audience = self.audience
+        fiction = fiction or self.fiction
+        q = self._db.query(Work)
+        if self.genres == None:
+            if fiction in (True, False):
+                # No genre plus a boolean value for `fiction` means
+                # fiction or nonfiction not associated with any genre.
+                q = q.outerjoin(Work.work_genres)
+                q = q.filter(WorkGenre.genre==None)
+        else:
+            # Find works that are assigned to the given genres. This
+            # may also turn into a restriction on the fiction status.
+            fiction_default_by_genre = (fiction == self.FICTION_DEFAULT_FOR_GENRE)
+            if fiction_default_by_genre:
+                # Unset `fiction`. We'll set it again when we find out
+                # whether we've got fiction or nonfiction genres.
+                fiction = None
+
+            genres = []
+            for genre in self.genres:
+                if self.include_subgenres:
+                    genres.extend(genre.self_and_subgenres)
+                else:
+                    genres.append(genre)
+
+                if fiction_default_by_genre:
+                    if fiction is None:
+                        fiction = genre.default_fiction
+                    elif fiction != genre.default_fiction:
+                        raise ValueError(
+                            "I was told to use the default fiction restriction, but the genres %r include contradictory fiction restrictions.")
+            if genres:
+                q = q.join(Work.work_genres)
+                q = q.filter(WorkGenre.genre_id.in_([g.id for g in genres]))
+
+        if self.audience != None:
+            q = q.filter(Work.audience==self.audience)
+
+        if fiction != self.BOTH_FICTION_AND_NONFICTION:
+            q = q.filter(Work.fiction==fiction)
+
+        q = q.filter(
+            Work.language.in_(languages),
+            Work.was_merged_into == None,
+        )
+        return q
+
+
+class WorkFeed(object):
+    
     """Identify a certain page in a certain feed."""
 
-    def __init__(self, languages, genres, include_subgenres=True,
-                 audience=None, fiction=Work.DEFAULT_FICTION_RESTRICTION,
-                 order_by=None):
+    def __init__(self, lane, languages, order_by=None):
         if isinstance(languages, basestring):
             languages = [languages]
         self.languages = languages
-        if isinstance(genres, list):
-            self.genres = genres
-        else:
-            self.genres = [genres]
-        self.audience = audience or Classifier.AUDIENCE_ADULT
-        self.fiction = fiction
-        self.include_subgenres = include_subgenres
+        self.lane = lane
         if not isinstance(order_by, list):
             order_by = [order_by]
         self.order_by = order_by
@@ -2321,10 +2361,7 @@ class WorkFeed(object):
     def page_query(self, _db, last_work_seen, page_size):
         """A page of works."""
 
-        query = _db.query(Work)
-        query = Work.restrict(
-            _db, query, self.languages, self.genres, self.include_subgenres,
-            self.audience, self.fiction)
+        query = self.lane.works(self.languages)
 
         if last_work_seen:
             # Only find works that show up after the last work seen.
