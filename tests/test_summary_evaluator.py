@@ -18,8 +18,8 @@ class TestSummaryEvaluator(object):
         eq_(s2, self._best(s1, s2))
 
     def test_four_sentences_is_better_than_five(self):
-        s1 = "Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence5."
-        s2 = "Sentence one. Sentence two. Sentence three. Sentence four."
+        s1 = "Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence 5."
+        s2 = "Sentence one. Sentence two. Sentence three.  Sentence four."
         eq_(s2, self._best(s1, s2))
 
     def test_shorter_is_better(self):

@@ -16,27 +16,11 @@ from model import (
     Work,
 )
 
-from lane import Lane
-
 from opds import (
     AcquisitionFeed,
     NavigationFeed,
     URLRewriter
 )
-
-class TopLevel(Lane):
-    name = "Toplevel"
-    sublanes = set([])
-
-class ParentLane(Lane):
-    name = "Parent"
-    sublanes = set([])    
-TopLevel.sublanes.add(ParentLane)
-
-class ChildLane(Lane):
-    name = "Child"
-    sublanes = set([])
-ParentLane.sublanes.add(ChildLane)
 
 class TestURLRewriter(object):
 
