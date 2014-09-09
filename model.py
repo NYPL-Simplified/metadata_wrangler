@@ -1391,6 +1391,9 @@ class Work(Base):
     cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
     quality = Column(Float, index=True)
 
+    DEFAULT_FICTION_RESTRICTION = object()
+    NO_VALUE = object()
+
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
             self.id, self.title, self.authors, ", ".join([g.name for g in self.genres]), self.language,
@@ -1424,8 +1427,9 @@ class Work(Base):
 
     @classmethod
     def quality_sample(
-            cls, _db, languages, genre, quality_min_start,
-            quality_min_rock_bottom, target_size):
+            cls, _db, languages, genres, quality_min_start,
+            quality_min_rock_bottom, target_size, include_subgenres=True,
+            audience=None, fiction=DEFAULT_FICTION_RESTRICTION):
         """Get randomly selected Works that meet minimum quality criteria.
 
         Bring the quality criteria as low as necessary to fill a feed
@@ -1433,6 +1437,9 @@ class Work(Base):
         """
         if not isinstance(languages, list):
             languages = [languages]
+        if not isinstance(genres, list):
+            genres = [genres]
+
         quality_min = quality_min_start
         previous_quality_min = None
         results = []
@@ -1440,7 +1447,7 @@ class Work(Base):
                and len(results) < target_size):
             remaining = target_size - len(results)
             query = _db.query(Work)
-            query = Work.restrict(_db, query, languages, [genre])
+            query = Work.restrict(_db, query, languages, genres, include_subgenres, audience, fiction)
             query = query.filter(
                 Work.quality >= quality_min,
             )
@@ -1461,9 +1468,6 @@ class Work(Base):
             if quality_min < quality_min_rock_bottom:
                 quality_min = quality_min_rock_bottom
         return results
-
-    DEFAULT_FICTION_RESTRICTION = object()
-    NO_VALUE = object()
 
     @classmethod
     def restrict(
@@ -1490,14 +1494,12 @@ class Work(Base):
 
         """
         audience = audience or Classifier.AUDIENCE_ADULT
-        if genres in (None, cls.NO_VALUE):
-            # Find works that are not assigned to any genre--that is,
-            # general fiction or nonfiction (but not both).
-            if fiction in (None, cls.NO_VALUE):
-                raise ValueError(
-                    "Neither `genre` nor `fiction` was specified")
-            q = q.outerjoin(Work.work_genres)
-            q = q.filter(WorkGenre.genre==None)
+        if genres in (None, [], cls.NO_VALUE):
+            if fiction in (True, False):
+                # Find general fiction or general nonfiction (but not both).
+                # general fiction or nonfiction (but not both).
+                q = q.outerjoin(Work.work_genres)
+                q = q.filter(WorkGenre.genre==None)
         else:
             # Find works that are assigned to the given genres. This
             # may also turn into a restriction on the fiction status.
@@ -1511,6 +1513,8 @@ class Work(Base):
             for genre in initial_genres:
                 if isinstance(genre, basestring):
                     genre, ignore = Genre.lookup(_db, genre)
+                elif isinstance(genre, GenreData):
+                    genre, ignore = Genre.lookup(_db, genre.name)
                 if include_subgenres:
                     genres.extend(genre.self_and_subgenres)
                 else:
@@ -2117,7 +2121,7 @@ class Genre(Base):
         _db = Session.object_session(self)
         genres = [self]
         for genre_data in classifier.genres[self.name].subgenres:
-            genres.append(self.lookup(_db, genre_data.name))
+            genres.append(self.lookup(_db, genre_data.name)[0])
         return genres
 
     @property

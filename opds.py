@@ -111,7 +111,7 @@ class OPDSFeed(AtomFeed):
 
     @classmethod
     def lane_url(cls, lane, order=None):
-        return url_for('feed', lane=lane, order=order, _external=True)
+        return url_for('feed', lane=lane.name, order=order, _external=True)
 
 class AcquisitionFeed(OPDSFeed):
 
@@ -136,9 +136,11 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(lane)
         links = []
         feed_size = 20
-        works = Work.quality_sample(_db, languages, lane, 75, 1, feed_size)
+        works = Work.quality_sample(_db, languages, lane.genres, 75, 1, 
+                                    feed_size, lane.include_subgenres,
+                                    lane.audience, lane.fiction)
         return AcquisitionFeed(
-            _db, "%s: featured" % lane, url, works)
+            _db, "%s: featured" % lane.name, url, works)
 
     @classmethod
     def active_loans_for(cls, patron):
@@ -252,12 +254,12 @@ class AcquisitionFeed(OPDSFeed):
 class NavigationFeed(OPDSFeed):
 
     @classmethod
-    def main_feed(self, genres):
+    def main_feed(self, lanes):
         feed = NavigationFeed(
             "Navigation feed",
             url=url_for('navigation_feed', _external=True))
 
-        for genre in genres:
+        for lane in lanes:
             links = []
 
             for title, order, rel in [
@@ -266,7 +268,7 @@ class NavigationFeed(OPDSFeed):
             ]:
                 link = E.link(
                     type=self.ACQUISITION_FEED_TYPE,
-                    href=self.lane_url(genre, order),
+                    href=self.lane_url(lane, order),
                     rel=rel,
                     title=title,
                 )
@@ -274,9 +276,9 @@ class NavigationFeed(OPDSFeed):
 
             feed.feed.append(
                 E.entry(
-                    E.id("tag:%s" % (genre)),
-                    E.title(genre),
-                    E.link(href=self.lane_url(genre)),
+                    E.id("tag:%s" % (lane.name)),
+                    E.title(lane.name),
+                    E.link(href=self.lane_url(lane)),
                     E.updated(_strftime(datetime.datetime.utcnow())),
                     *links
                 )

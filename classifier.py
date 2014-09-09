@@ -209,6 +209,8 @@ class GenreData(object):
 
         # Create the GenreData object.
         genre_data = GenreData(name, default_to_fiction)
+        if parent:
+            parent.subgenres.append(genre_data)
 
         # Add the genre to the given dictionary, keyed on name.
         genres[genre_data.name] = genre_data
