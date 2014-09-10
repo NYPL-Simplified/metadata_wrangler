@@ -67,6 +67,7 @@ from classifier import (
 from util import (
     LanguageCodes,
     MetadataSimilarity,
+    TitleProcessor,
 )
 from util.summary import SummaryEvaluator
 
@@ -1622,11 +1623,13 @@ class Work(Base):
 
         if titles:
             self.title = titles.most_common(1)[0][0]
+            self.sort_title = TitleProcessor.sort_title_for(self.title)
         if languages:
             self.language = languages.most_common(1)[0][0]
         if authors:
             author = authors.most_common(1)[0][0]
             self.authors = author.display_name or author.name
+            self.sort_author = author.name
 
         # Find all related IDs that might have associated resources
         # or classifications.

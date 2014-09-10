@@ -4,6 +4,7 @@ from nose.tools import eq_, set_trace
 from util import (
     LanguageCodes,
     MetadataSimilarity,
+    TitleProcessor,
 )
 
 class TestLanguageCodes(object):
@@ -314,3 +315,15 @@ class TestMetadataSimilarity(object):
 
     def test_author_similarity(self):
         eq_(1, MetadataSimilarity.author_similarity([], []))
+
+
+class TestTitleProcessor(object):
+    
+    def test_title_processor(self):
+        p = TitleProcessor.sort_title_for
+        eq_(None, p(None))
+        eq_("", p(""))
+        eq_("Little Prince, The", p("The Little Prince"))
+        eq_("Princess of Mars, A", p("A Princess of Mars"))
+        eq_("Unexpected Journey, An", p("An Unexpected Journey"))
+        eq_("Then This Happened", p("Then This Happened"))

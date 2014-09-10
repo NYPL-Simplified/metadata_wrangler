@@ -692,3 +692,17 @@ class MetadataSimilarity(object):
         """
         return cls._proportion(
             set([x.name for x in authors1]), set([x.name for x in authors2]))
+
+class TitleProcessor(object):
+
+    title_stopwords = ['The ', 'A ', 'An ']
+
+    @classmethod
+    def sort_title_for(cls, title):
+        if not title:
+            return title
+        for stopword in cls.title_stopwords:
+            if title.startswith(stopword):
+                title = title[len(stopword):] + ", " + stopword.strip()
+                break
+        return title

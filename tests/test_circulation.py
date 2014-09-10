@@ -18,6 +18,7 @@ from tests.db import (
 
 from model import (
     DataSource,
+    LaneList,
     Loan,
     Resource,
     WorkRecord,
@@ -67,7 +68,13 @@ class CirculationTest(DatabaseTest):
     def setup(self):
         super(CirculationTest, self).setup()
         circulation.app.config['TESTING'] = True
-        circulation.DataRepository.initialize(self._db)
+
+        self.lanes = LaneList.from_description(
+            self._db,
+            [dict(name="Fiction", fiction=True, genres=[]),
+             dict(name="Nonfiction", fiction=False, genres=[])])
+
+        circulation.Conf.initialize(self._db, self.lanes)
         self.circulation = circulation
         self.app = circulation.app
         self.client = circulation.app.test_client()
@@ -79,10 +86,12 @@ class CirculationTest(DatabaseTest):
         )
 
         self.english_2 = self._work(
-            "Totally American", "Uncle Sam", language="eng", fiction=False
+            "Totally American", "Uncle Sam", language="eng", fiction=False,
+            with_open_access_download=True
         )
         self.french_1 = self._work(
-            u"Très Français", "Marianne", language="fre", fiction=False
+            u"Très Français", "Marianne", language="fre", fiction=False,
+            with_open_access_download=True
         )
 
         self.valid_auth = 'Basic ' + base64.b64encode('200:2222')
@@ -109,12 +118,12 @@ class TestNavigationFeed(CirculationTest):
     def test_faceted_links(self):
         # Create some more books to force pagination.
         self.english_2 = self._work(
-            "Quite British 2: British Harder", "John Bull", "Fiction",
-            "eng", True
+            "Quite British 2: British Harder", "John Bull", language="eng",
+            fiction=True, with_open_access_download=True
         )
         self.english_3 = self._work(
-            "Quite British 3: Live Free Or Die British", "John Bull", "Fiction",
-            "eng", True
+            "Quite British 3: Live Free or Die British", "John Bull", 
+            language="eng", fiction=True, with_open_access_download=True
         )
 
         with self.app.test_request_context(
@@ -229,17 +238,20 @@ class TestCheckout(CirculationTest):
             # A loan has been created for this license pool.
             eq_(1, self._db.query(Loan).filter(Loan.license_pool==self.pool).count())
 
-    def test_checkout_fails_when_no_available_licenses(self):
-        pool = self.english_2.license_pools[0]
-        pool.open_access = False
-        work_record = pool.work_record()
-        data_source = work_record.data_source
-        identifier = work_record.primary_identifier
+    # TODO: We have disabled this functionality so that we can see what
+    # Overdrive books look like in the catalog.
 
-        with self.app.test_request_context(
-                "/", headers=dict(Authorization=self.valid_auth)):
-            response = circulation.checkout(
-                data_source.name, identifier.identifier)
-            eq_(404, response.status_code)
-            assert "Sorry, couldn't find an available license." in response.data
-        pool.open_access = True
+    # def test_checkout_fails_when_no_available_licenses(self):
+    #     pool = self.english_2.license_pools[0]
+    #     pool.open_access = False
+    #     work_record = pool.work_record()
+    #     data_source = work_record.data_source
+    #     identifier = work_record.primary_identifier
+
+    #     with self.app.test_request_context(
+    #             "/", headers=dict(Authorization=self.valid_auth)):
+    #         response = circulation.checkout(
+    #             data_source.name, identifier.identifier)
+    #         eq_(404, response.status_code)
+    #         assert "Sorry, couldn't find an available license." in response.data
+    #     pool.open_access = True

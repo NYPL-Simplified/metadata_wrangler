@@ -421,22 +421,25 @@ class TestWork(DatabaseTest):
 
         gutenberg_source = DataSource.GUTENBERG
 
+        [bob], ignore = Contributor.lookup(self._db, "Bitshifter, Bob")
+        bob.family_name, bob.display_name = bob.default_names()
+
         wr1, pool1 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
-        wr1.title = "Title 1"
-        wr1.add_contributor("Bob", Contributor.AUTHOR_ROLE)
+        wr1.title = "The 1st Title"
+        wr1.add_contributor(bob, Contributor.AUTHOR_ROLE)
 
         wr2, pool2 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
-        wr2.title = "Title 2"
-        wr2.add_contributor("Bob", Contributor.AUTHOR_ROLE)
-        wr2.add_contributor("Alice", Contributor.AUTHOR_ROLE)
+        wr2.title = "The 2nd Title"
+        wr2.add_contributor(bob, Contributor.AUTHOR_ROLE)
+        wr2.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
 
         wr3, pool3 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
-        wr3.title = "Title 2"
-        wr3.add_contributor("Bob", Contributor.AUTHOR_ROLE)
-        wr3.add_contributor("Alice", Contributor.AUTHOR_ROLE)
+        wr3.title = "The 2nd Title"
+        wr3.add_contributor(bob, Contributor.AUTHOR_ROLE)
+        wr3.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
 
         work = Work()
         for i in wr1, wr2, wr3:
@@ -448,7 +451,8 @@ class TestWork(DatabaseTest):
         # its associated WorkRecords.
         eq_(None, work.title)
         work.calculate_presentation()
-        eq_("Title 2", work.title)
+        eq_("The 2nd Title", work.title)
+        eq_("2nd Title, The", work.sort_title)
 
         # Bob was listed as an author for all three WorkRecords,
         # making him the most popular author, so he's listed as the
@@ -456,7 +460,8 @@ class TestWork(DatabaseTest):
         #
         # TODO: We currently can't handle multiple authors. This needs
         # to be fixed.
-        eq_("Bob", work.authors)
+        eq_("Bob Bitshifter", work.authors)
+        eq_("Bitshifter, Bob", work.sort_author)
 
 class TestLane(DatabaseTest):
 
