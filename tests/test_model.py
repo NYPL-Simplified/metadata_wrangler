@@ -919,6 +919,47 @@ class TestLane(DatabaseTest):
         eq_(True, fantasy_lane.include_subgenres)
 
 
+class TestLaneList(DatabaseTest):
+    
+    def test_from_description(self):
+        lanes = LaneList.from_description(
+            self._db,
+            [dict(name="Fiction",
+                  fiction=True,
+                  audience=Classifier.AUDIENCE_ADULT,
+                  genres=[]),
+             Fantasy,
+             dict(
+                 name="Young Adult",
+                 fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+                 audience=Classifier.AUDIENCE_YOUNG_ADULT,
+                 genres=[]),
+         ]
+        )
+
+        fantasy_genre, ignore = Genre.lookup(self._db, Fantasy.name)
+
+        fiction = lanes.by_name['Fiction']
+        young_adult = lanes.by_name['Young Adult']
+        fantasy = lanes.by_name['Fantasy'] 
+
+        eq_(set([fantasy, fiction, young_adult]), set(lanes.lanes))
+
+        eq_("Fiction", fiction.name)
+        eq_(Classifier.AUDIENCE_ADULT, fiction.audience)
+        eq_([], fiction.genres)
+        eq_(True, fiction.fiction)
+
+        eq_("Fantasy", fantasy.name)
+        eq_(Classifier.AUDIENCE_ADULT, fantasy.audience)
+        eq_([fantasy_genre], fantasy.genres)
+        eq_(True, fantasy.fiction)
+
+        eq_("Young Adult", young_adult.name)
+        eq_(Classifier.AUDIENCE_YOUNG_ADULT, young_adult.audience)
+        eq_([], young_adult.genres)
+        eq_(Lane.BOTH_FICTION_AND_NONFICTION, young_adult.fiction)
+
 class TestWorkFeed(DatabaseTest):
 
     def setup(self):
