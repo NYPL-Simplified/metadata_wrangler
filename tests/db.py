@@ -9,6 +9,7 @@ from model import (
     SessionManager,
     LicensePool,
     Patron,
+    Resource,
     WorkIdentifier,
     WorkRecord,
     Work,
@@ -56,25 +57,30 @@ class DatabaseTest(object):
 
     def _workrecord(self, data_source_name=DataSource.GUTENBERG,
                     identifier_type=WorkIdentifier.GUTENBERG_ID,
-                    with_license_pool=False):
+                    with_license_pool=False, with_open_access_download=False):
         id = self._str
         source = DataSource.lookup(self._db, data_source_name)
         wr = WorkRecord.for_foreign_id(
             self._db, source, identifier_type, id)[0]
-        if with_license_pool:
-            pool = self._licensepool(wr, data_source_name=data_source_name)
+        if with_license_pool or with_open_access_download:
+            pool = self._licensepool(wr, data_source_name=data_source_name,
+                                     with_open_access_download=with_open_access_download)                
             return wr, pool
         return wr
 
     def _work(self, title=None, authors=None, genre=None, language=None,
-              audience=None, fiction=True, with_license_pool=False, quality=100):
+              audience=None, fiction=True, with_license_pool=False, 
+              with_open_access_download=False, quality=100):
+        if with_open_access_download:
+            with_license_pool = True
         language = language or "eng"
         title = title or self._str
         genre = genre or self._str
         audience = audience or Classifier.AUDIENCE_ADULT
         if fiction is None:
             fiction = True
-        wr = self._workrecord(with_license_pool=with_license_pool)
+        wr = self._workrecord(with_license_pool=with_license_pool,
+                              with_open_access_download=with_open_access_download)
         if with_license_pool:
             wr, pool = wr
         work, ignore = get_one_or_create(
@@ -100,7 +106,8 @@ class DatabaseTest(object):
         return record
 
     def _licensepool(self, workrecord, open_access=True, 
-                     data_source_name=DataSource.GUTENBERG):
+                     data_source_name=DataSource.GUTENBERG,
+                     with_open_access_download=False):
         source = DataSource.lookup(self._db, data_source_name)
         if not workrecord:
             workrecord = self._workrecord(data_source_name)
@@ -110,4 +117,11 @@ class DatabaseTest(object):
             create_method_kwargs=dict(
                 open_access=open_access),
             identifier=workrecord.primary_identifier, data_source=source)
+
+        if with_open_access_download:
+            pool.open_access = True
+            pool.identifier.add_resource(
+                Resource.OPEN_ACCESS_DOWNLOAD, "http://foo.com/" + self._str,
+                source, pool, "application/epub+zip")
+
         return pool

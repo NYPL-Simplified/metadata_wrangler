@@ -174,6 +174,8 @@ class AcquisitionFeed(OPDSFeed):
                     if p.work_record().best_open_access_link:
                         open_access_license_pool = p
                 else:
+                    # TODO: It's OK to have a non-open-access license pool,
+                    # but the pool needs to have copies available.
                     active_license_pool = p
                     break
             if not active_license_pool:
