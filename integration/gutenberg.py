@@ -294,8 +294,12 @@ class GutenbergRDFExtractor(object):
         issued = cls._value(g, (uri, cls.dcterms.issued, None))
         issued = datetime.datetime.strptime(issued, cls.DATE_FORMAT).date()
 
-        summary = cls._value(g, (uri, cls.dcterms.description, None))
-        
+        # As far as I can tell, Gutenberg descriptions are 100%
+        # useless for our purposes. They should not be used, even if
+        # no other description is available.
+        # summary = cls._value(g, (uri, cls.dcterms.description, None))
+        summary = None
+
         publisher = cls._value(g, (uri, cls.dcterms.publisher, None))
 
         languages = []

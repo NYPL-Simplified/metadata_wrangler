@@ -59,13 +59,13 @@ if os.environ.get('TESTING') != "True":
         [dict(name="Fiction",
               fiction=True,
               audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=[]),
+              genres=None),
          genres.Biography_Memoir,
          genres.Crime_Thrillers_Mystery,
          dict(name="Nonfiction",
               fiction=False,
               audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=[]),
+              genres=None),
          genres.Fantasy,
          genres.Science_Fiction,
          genres.Historical_Fiction,
@@ -222,10 +222,10 @@ def feed(lane):
 
     if order == 'title':
         feed = WorkFeed(lane, languages, Work.title)
-        title = "%s: By title" % lane
+        title = "%s: By title" % lane.name
     elif order == 'author':
         feed = WorkFeed(lane, languages, Work.authors)
-        title = "%s: By author" % lane
+        title = "%s: By author" % lane.name
     else:
         return "I don't know how to order a feed by '%s'" % order
 

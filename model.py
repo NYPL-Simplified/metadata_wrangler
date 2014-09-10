@@ -2113,7 +2113,7 @@ class Subject(Base):
         counter = 0
         for subject in q:
             subject.checked = True
-            classifier = Classification.classifiers.get(subject.type, None)
+            classifier = Classifier.classifiers.get(subject.type, None)
             if not classifier:
                 continue
             genredata, audience, fiction = classifier.classify(subject)
@@ -2129,7 +2129,7 @@ class Subject(Base):
             counter += 1
             if not counter % batch_size:
                 _db.commit()
-
+        _db.commit()
 
 class Classification(Base):
     """The assignment of a WorkIdentifier to a Subject."""
@@ -2201,19 +2201,24 @@ class Lane(object):
     def __init__(self, _db, name, genres, include_subgenres, fiction, audience):
         self.name = name
         self._db = _db
-        if not isinstance(genres, list):
-            genres = [genres]
 
-        # Turn names or GenreData objects into Genre objects. 
-        self.genres = []
-        for genre in genres:
-            if isinstance(genre, basestring):
-                genre, ignore = Genre.lookup(_db, genre)
-            elif isinstance(genre, GenreData):
-                genre, ignore = Genre.lookup(_db, genre.name)
-            self.genres.append(genre)
-
-        self.include_subgenres=include_subgenres
+        if genres is None:
+            # We will only be considering works that are not
+            # classified under a genre.
+            self.genres = None
+            self.include_subgenres = None
+        else:
+            if not isinstance(genres, list):
+                genres = [genres]
+            # Turn names or GenreData objects into Genre objects. 
+            self.genres = []
+            for genre in genres:
+                if isinstance(genre, basestring):
+                    genre, ignore = Genre.lookup(_db, genre)
+                elif isinstance(genre, GenreData):
+                    genre, ignore = Genre.lookup(_db, genre.name)
+                self.genres.append(genre)
+            self.include_subgenres=include_subgenres
         self.fiction = fiction
         self.audience = audience
 
@@ -2298,7 +2303,7 @@ class Lane(object):
         audience = self.audience
         fiction = fiction or self.fiction
         q = self._db.query(Work)
-        if self.genres == None:
+        if self.genres is None:
             if fiction in (True, False):
                 # No genre plus a boolean value for `fiction` means
                 # fiction or nonfiction not associated with any genre.

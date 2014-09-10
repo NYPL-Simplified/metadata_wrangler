@@ -20,12 +20,15 @@ from model import production_session
 if __name__ == '__main__':
     session = production_session()
 
-    gutenberg_id = sys.argv[1]
-    gutenberg = DataSource.lookup(session, DataSource.GUTENBERG)
+    data_source_name = sys.argv[1]
+    identifier = sys.argv[2]
+    data_source = DataSource.lookup(session, data_source_name)
     wid, ignore = WorkIdentifier.for_foreign_id(
-        session, WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
+        session, data_source.primary_identifier_type, identifier, False)
     pool = session.query(LicensePool).filter(
-        LicensePool.data_source==gutenberg).filter(
+        LicensePool.data_source==data_source).filter(
             LicensePool.identifier==wid).one()
     pool.calculate_work()
+    work = pool.work
+    work.calculate_presentation()
     session.commit()

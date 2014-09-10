@@ -3,8 +3,8 @@ import site
 import sys
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
-from classification import (
-    AssignSubjectsToGenres,
+from model import (
+    Subject,
 )
 from model import production_session
 
@@ -19,4 +19,4 @@ if __name__ == '__main__':
         else:
             type_restriction = sys.argv[1]
 
-    AssignSubjectsToGenres(production_session()).run(type_restriction, force)
+    Subject.assign_to_genres(production_session(), type_restriction, force)
