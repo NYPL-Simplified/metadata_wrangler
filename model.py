@@ -1382,8 +1382,8 @@ class Work(Base):
     was_merged_into = relationship("Work", remote_side = [id])
 
     title = Column(Unicode)
-    title_sort = Column(Unicode, index=True)
-    author_sort = Column(Unicode, index=True)
+    sort_title = Column(Unicode, index=True)
+    sort_author = Column(Unicode, index=True)
     authors = Column(Unicode, index=True)
     language = Column(Unicode, index=True)
     summary_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_summary_id'), index=True)
