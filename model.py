@@ -2357,7 +2357,8 @@ class WorkFeed(object):
         self.order_by = order_by
         # In addition to the given order, we order by author,
         # then title, then work ID.
-        for i in (Work.authors, Work.title, Work.id):
+        for i in (Work.sort_author, Work.authors, Work.sort_title, Work.title, 
+                  Work.id):
             if i not in self.order_by:
                 self.order_by.append(i)
 
