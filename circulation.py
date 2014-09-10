@@ -1,5 +1,6 @@
 from functools import wraps
 from nose.tools import set_trace
+import os
 import sys
 
 from sqlalchemy.orm.exc import (
@@ -42,7 +43,52 @@ from classifier import (
 
 auth = authenticator()
 
-db = production_session()
+class DataRepository:
+    db = None
+    lanes = None
+
+    @classmethod
+    def initialize(cls, _db):
+        cls.db = _db
+        cls.lanes = LaneList.from_description(
+            cls.db,
+            [dict(name="Fiction",
+                  fiction=True,
+                  audience=genres.Classifier.AUDIENCE_ADULT,
+                  genres=[]),
+             genres.Biography_Memoir,
+             genres.Crime_Thrillers_Mystery,
+             dict(name="Nonfiction",
+                  fiction=False,
+                  audience=genres.Classifier.AUDIENCE_ADULT,
+                  genres=[]),
+             genres.Fantasy,
+             genres.Science_Fiction,
+             genres.Historical_Fiction,
+             genres.Cooking,
+             dict(name="Romance",
+                  genres=[genres.Romance_Erotica],
+              ),
+             genres.Science_Technology_Nature,
+             genres.Self_Help,
+             genres.Graphic_Novels_Comics,
+             genres.Reference,
+             dict(
+                 name="Young Adult",
+                 fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+                 audience=genres.Classifier.AUDIENCE_YOUNG_ADULT,
+                 genres=[]),
+             dict(
+                 name="Children",
+                 fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+                 audience=genres.Classifier.AUDIENCE_CHILDREN,
+                 genres=[]),
+         ]
+        )
+
+if os.environ.get('TESTING') != "True":
+    DataRepository.initialize(production_session())
+
 templates = Environment(loader=PackageLoader("templates", "."))
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -55,6 +101,7 @@ INVALID_CREDENTIALS_TITLE = "A valid library card barcode number and PIN are req
 EXPIRED_CREDENTIALS_PROBLEM = "http://library-simplified.com/problem/credentials-expired"
 EXPIRED_CREDENTIALS_TITLE = "Your library card has expired. You need to renew it."
 NO_AVAILABLE_LICENSE_PROBLEM = "http://library-simplified.com/problem/no-license"
+
 
 def problem(type, title, status, detail=None, instance=None, headers={}):
     """Create a Response that includes a Problem Detail Document."""
@@ -84,7 +131,7 @@ def authenticated_patron(barcode, pin):
 
     If there's no problem, return a Patron object.
     """
-    patron = auth.authenticated_patron(db, barcode, pin)
+    patron = auth.authenticated_patron(DataRepository.db, barcode, pin)
     if not patron:
         return (INVALID_CREDENTIALS_PROBLEM,
                 INVALID_CREDENTIALS_TITLE)
@@ -124,42 +171,6 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-global lanes
-lanes = LaneList.from_description(
-    db,
-    [dict(name="Fiction",
-          fiction=True,
-          audience=genres.Classifier.AUDIENCE_ADULT,
-          genres=[]),
-     genres.Biography_Memoir,
-     genres.Crime_Thrillers_Mystery,
-     dict(name="Nonfiction",
-          fiction=False,
-          audience=genres.Classifier.AUDIENCE_ADULT,
-          genres=[]),
-     genres.Fantasy,
-     genres.Science_Fiction,
-     genres.Historical_Fiction,
-     genres.Cooking,
-     dict(name="Romance",
-          genres=[genres.Romance_Erotica],
-      ),
-     genres.Science_Technology_Nature,
-     genres.Self_Help,
-     genres.Graphic_Novels_Comics,
-     genres.Reference,
-     dict(
-         name="Young Adult",
-         fiction=Lane.BOTH_FICTION_AND_NONFICTION,
-         audience=genres.Classifier.AUDIENCE_YOUNG_ADULT,
-         genres=[]),
-     dict(
-         name="Children",
-         fiction=Lane.BOTH_FICTION_AND_NONFICTION,
-         audience=genres.Classifier.AUDIENCE_CHILDREN,
-         genres=[]),
- ]
-)
 
 @app.route('/')
 def index():    
@@ -168,7 +179,7 @@ def index():
 @app.route('/lanes/')
 def navigation_feed():
     languages = languages_for_request()
-    feed = NavigationFeed.main_feed(lanes)
+    feed = NavigationFeed.main_feed(DataRepository.lanes)
 
     feed.add_link(
         rel="search", 
@@ -180,9 +191,7 @@ def navigation_feed():
     return unicode(feed)
 
 def lane_url(cls, lane, order=None):
-    if isinstance(lane, Lane):
-        lane = lane.name
-    return url_for('feed', lane=lane, order=order, _external=True)
+    return url_for('feed', lane=lane.name, order=order, _external=True)
 
 @app.route('/loans/')
 @requires_auth
@@ -197,7 +206,7 @@ def feed(lane):
     order = arg('order', 'recommended')
     last_seen_id = arg('last_seen', None)
 
-    lane = lanes.by_name[lane]
+    lane = DataRepository.lanes.by_name[lane]
 
     search_link = dict(
         rel="search",
@@ -205,7 +214,7 @@ def feed(lane):
         href=url_for('lane_search', lane=lane.name, _external=True))
 
     if order == 'recommended':
-        feed = AcquisitionFeed.featured(db, languages, lane)
+        feed = AcquisitionFeed.featured(DataRepository.db, languages, lane)
         feed.add_link(**search_link)
         return unicode(feed)
 
@@ -233,21 +242,21 @@ def feed(lane):
         except ValueError:
             return "Invalid work ID: %s" % last_id
         try:
-            last_work_seen = db.query(Work).filter(Work.id==last_id).one()
+            last_work_seen = DataRepository.db.query(Work).filter(Work.id==last_id).one()
         except NoResultFound:
             return "No such work id: %s" % last_id
 
-    this_url = url_for('feed', lane=lane, order=order, _external=True)
-    page = feed.page_query(db, last_work_seen, size).all()
+    this_url = url_for('feed', lane=lane.name, order=order, _external=True)
+    page = feed.page_query(DataRepository.db, last_work_seen, size).all()
     url_generator = lambda x : url_for(
-        'feed', lane=lane, order=x, _external=True)
+        'feed', lane=lane.name, order=x, _external=True)
 
-    opds_feed = AcquisitionFeed(db, title, this_url, page, url_generator)
+    opds_feed = AcquisitionFeed(DataRepository.db, title, this_url, page, url_generator)
     # Add a 'next' link if appropriate.
     if page and len(page) >= size:
         after = page[-1].id
         next_url = url_for(
-            'feed', lane=lane, order=order, after=after, _external=True)
+            'feed', lane=lane.name, order=order, after=after, _external=True)
         opds_feed.add_link(rel="next", href=next_url)
 
     opds_feed.add_link(**search_link)
@@ -258,17 +267,17 @@ def feed(lane):
 def lane_search(lane):
     languages = languages_for_request()
     query = flask.request.args.get('q')
-    this_url = url_for('lane_search', lane=lane, _external=True)
+    this_url = url_for('lane_search', lane=lane.name, _external=True)
     if not query:
         # Send the search form
         return OpenSearchDocument.for_lane(lane, this_url)
     # Run a search.
-    lane = lanes.by_name[lane]
+    lane = DataRepository.lanes.by_name[lane]
 
     results = lane.search(languages, query).limit(50)
     info = OpenSearchDocument.search_info(lane.name)
     opds_feed = AcquisitionFeed(
-        db, info['name'], 
+        DataRepository.db, info['name'], 
         this_url + "?q=" + urllib.quote(query),
         results)
     return unicode(opds_feed)
@@ -278,13 +287,13 @@ def lane_search(lane):
 def checkout(data_source, identifier):
 
     # Turn source + identifier into a LicensePool
-    source = DataSource.lookup(db, data_source)
+    source = DataSource.lookup(DataRepository.db, data_source)
     if source is None:
         return problem("No such data source!", 404)
     identifier_type = source.primary_identifier_type
 
     id_obj, ignore = WorkIdentifier.for_foreign_id(
-        db, identifier_type, identifier, autocreate=False)
+        DataRepository.db, identifier_type, identifier, autocreate=False)
     if not id_obj:
         # TODO
         return problem(
@@ -307,10 +316,10 @@ def checkout(data_source, identifier):
 
 @app.route('/gutenberg_tree/<gutenberg_id>')
 def gutenberg_tree(gutenberg_id):
-    source = DataSource.lookup(db, DataSource.GUTENBERG)
+    source = DataSource.lookup(DataRepository.db, DataSource.GUTENBERG)
     wid, ignore = WorkIdentifier.for_foreign_id(
-        db, WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
-    pool = db.query(LicensePool).filter(
+        DataRepository.db, WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
+    pool = DataRepository.db.query(LicensePool).filter(
         LicensePool.data_source==source).filter(
             LicensePool.identifier==wid).one()
     work = pool.work

@@ -4,6 +4,7 @@
 import base64
 import feedparser
 import json
+import os
 from integration.millenium_patron import DummyMilleniumPatronAPI
 
 from nose.tools import (
@@ -23,7 +24,9 @@ from model import (
 )
 
 from flask import url_for
+os.environ['TESTING'] = "True"
 import circulation
+del os.environ['TESTING']
 
 class AuthenticationTest(DatabaseTest):
 
@@ -64,37 +67,22 @@ class CirculationTest(DatabaseTest):
     def setup(self):
         super(CirculationTest, self).setup()
         circulation.app.config['TESTING'] = True
-        circulation.db = self._db
+        circulation.DataRepository.initialize(self._db)
         self.circulation = circulation
         self.app = circulation.app
         self.client = circulation.app.test_client()
 
         # Create two English books and a French book.
         self.english_1 = self._work(
-            "Quite British", "John Bull", "Fiction",
-            "eng", True
+            "Quite British", "John Bull", language="eng", fiction=True,
+            with_open_access_download=True
         )
-
-        # This is the only one of these books that can actually be
-        # checked out in the test. It's open access and there's a
-        # download link that points to an EPUB.
-        pool = self.english_1.license_pools[0]
-        pool.open_access = True
-        identifier = pool.work_record().primary_identifier
-        data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
-        identifier.add_resource(
-            Resource.OPEN_ACCESS_DOWNLOAD,
-            "http://direct-download.com/",
-            data_source,
-            license_pool=pool,
-            media_type="application/epub+zip")
 
         self.english_2 = self._work(
-            "Totally American", "Uncle Sam", "Nonfiction", "eng", True
+            "Totally American", "Uncle Sam", language="eng", fiction=False
         )
-        self.english_2.license_pools[0].open_access = True
         self.french_1 = self._work(
-            u"Très Français", "Marianne", "Nonfiction", "fre", True
+            u"Très Français", "Marianne", language="fre", fiction=False
         )
 
         self.valid_auth = 'Basic ' + base64.b64encode('200:2222')
@@ -236,7 +224,7 @@ class TestCheckout(CirculationTest):
 
             # We've been redirected to the download link.
             eq_(302, response.status_code)
-            eq_('http://direct-download.com/', response.headers['Location'])
+            assert response.headers['Location'].startswith("http://foo.com/")
 
             # A loan has been created for this license pool.
             eq_(1, self._db.query(Loan).filter(Loan.license_pool==self.pool).count())
