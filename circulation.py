@@ -269,12 +269,17 @@ def feed(lane):
 def lane_search(lane):
     languages = languages_for_request()
     query = flask.request.args.get('q')
+    if lane:
+        lane = Conf.lanes.by_name[lane]    
+    else:
+        # Create a synthetic Lane that includes absolutely everything.
+        lane = Lane.everything(Conf.db)
     this_url = url_for('lane_search', lane=lane.name, _external=True)
     if not query:
         # Send the search form
         return OpenSearchDocument.for_lane(lane, this_url)
     # Run a search.
-    lane = Conf.lanes.by_name[lane]
+    
 
     results = lane.search(languages, query).limit(50)
     info = OpenSearchDocument.search_info(lane.name)

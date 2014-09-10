@@ -2198,6 +2198,12 @@ class Lane(object):
     BOTH_FICTION_AND_NONFICTION = "both fiction and nonfiction"
     FICTION_DEFAULT_FOR_GENRE = "fiction default for genre"
 
+    @classmethod
+    def everything(cls, _db):
+        """Return a synthetic Lane that matches everything."""
+        return Lane(_db, "", [], True, Lane.BOTH_FICTION_AND_NONFICTION,
+                    None)
+
     def __init__(self, _db, name, genres, include_subgenres, fiction, audience):
         self.name = name
         self._db = _db
