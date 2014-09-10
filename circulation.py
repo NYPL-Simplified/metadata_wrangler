@@ -265,6 +265,7 @@ def feed(lane):
     return unicode(opds_feed)
 
 @app.route('/search', defaults=dict(lane=None))
+@app.route('/search/', defaults=dict(lane=None))
 @app.route('/search/<lane>')
 def lane_search(lane):
     languages = languages_for_request()
@@ -282,7 +283,7 @@ def lane_search(lane):
     
 
     results = lane.search(languages, query).limit(50)
-    info = OpenSearchDocument.search_info(lane.name)
+    info = OpenSearchDocument.search_info(lane)
     opds_feed = AcquisitionFeed(
         Conf.db, info['name'], 
         this_url + "?q=" + urllib.quote(query),

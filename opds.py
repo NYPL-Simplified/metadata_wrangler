@@ -50,9 +50,10 @@ class URLRewriter(object):
 
     epub_id = re.compile("/([0-9]+)")
 
-    GUTENBERG_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
+    GUTENBERG_ILLUSTRATED_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
+    GUTENBERG_MIRROR_HOST = "http://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
 
     @classmethod
     def rewrite(cls, url):
@@ -61,7 +62,7 @@ class URLRewriter(object):
             return cls._rewrite_gutenberg(parsed)
         elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
-                              gutenberg_illustrated_mirror=cls.GUTENBERG_MIRROR_HOST)
+                              gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST)
         else:
             return url
 
@@ -136,7 +137,7 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(lane)
         links = []
         feed_size = 20
-        works = lane.quality_sample(languages, 75, 1, feed_size)
+        works = lane.quality_sample(languages, 30, 1, feed_size)
         return AcquisitionFeed(
             _db, "%s: featured" % lane.name, url, works)
 

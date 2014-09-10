@@ -2393,9 +2393,10 @@ class WorkFeed(object):
                 # fields have the same value as the last work seen,
                 # and this next ordering field has a higher value.
                 new_value = getattr(last_work_seen, next_order_field.name)
-                clause = or_(clause,
-                             and_(base_and_clause, 
-                                  (next_order_field > new_value)))
+                if new_value != None:
+                    clause = or_(clause,
+                                 and_(base_and_clause, 
+                                      (next_order_field > new_value)))
                 base_and_clause = and_(base_and_clause,
                                        (next_order_field == new_value))
             query = query.filter(clause)
