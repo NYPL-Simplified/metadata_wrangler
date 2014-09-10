@@ -10,7 +10,6 @@ from nose.tools import set_trace
 import random
 import re
 
-import numpy
 from PIL import Image
 
 from sqlalchemy.engine.url import URL
@@ -1669,13 +1668,14 @@ class Work(Base):
             if not x.open_access
         ]
         if licensed_pools:
-            self.quality *= (50 * len(licensed_pools))
+            self.quality *= (20 * len(licensed_pools))
 
         # Scale Overdrive content by popularity.
         popularities = WorkIdentifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.POPULARITY)
         popularities = popularities.filter(
             Resource.content != None).all()
+        import numpy
         if popularities:
             avg_popularity = numpy.mean([int(x.content) for x in popularities])
             self.quality *= (avg_popularity/100.0)
