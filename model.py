@@ -9,8 +9,11 @@ import os
 from nose.tools import set_trace
 import random
 import re
+import time
 
-from PIL import Image
+from PIL import (
+    Image,
+)
 
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.declarative import declarative_base
@@ -1382,6 +1385,7 @@ class Work(Base):
     was_merged_into = relationship("Work", remote_side = [id])
 
     title = Column(Unicode)
+    subtitle = Column(Unicode)
     sort_title = Column(Unicode, index=True)
     sort_author = Column(Unicode, index=True)
     authors = Column(Unicode, index=True)
@@ -1879,7 +1883,7 @@ class Resource(Base):
         content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
         scaled_content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/CC",
         original_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Overdrive/",
-        scaled_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/Overdrive",
+        scaled_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive",
         gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     )
 
@@ -1987,8 +1991,10 @@ class Resource(Base):
                          ((self.voted_quality or 0) * votes_for_quality))
         self.quality = total_quality / float(total_weight)
 
-    def scale(self, destination_height, original_path_expansions, 
-              scaled_path_expansions, original_variable_to_scaled_variable):
+    def scale(self, destination_width, destination_height,
+              original_path_expansions, 
+              scaled_path_expansions, original_variable_to_scaled_variable,
+              force=False):
         """Create a scaled-down version of this resource."""
         if not self.is_image:
             raise ValueError(
@@ -1997,30 +2003,36 @@ class Resource(Base):
         if not self.mirrored:
             raise ValueError(
                 "Cannot scale down an image that has not been mirrored.")
-        path = self.local_path(original_path_expansions)
-        if not os.path.exists(path):
-            set_trace()
-        image = Image.open(path)
-        width, height = image.size
-        if height <= destination_height:
-            # We're good.
-            scaled_image = image
-            destination_width = width
-        else:
-            proportion = float(destination_height) / height
-            destination_width = int(width * proportion)
-            scaled_image = image.resize((destination_width, destination_height))
+
         scaled_path_template = self.mirrored_path % (
             original_variable_to_scaled_variable)
         scaled_path = scaled_path_template % scaled_path_expansions
+
+        if os.path.exists(scaled_path) and not force:
+            scaled_image = Image.open(path)
+        else:
+            path = self.local_path(original_path_expansions)
+            image = Image.open(path)
+            width, height = image.size
+
+            if height <= destination_height:
+                # The image doesn't need to be scaled; just save it.
+                scaled_image = image
+            else:
+                proportion = float(destination_height) / height
+                destination_width = int(width * proportion)
+                scaled_image = image.resize(
+                    (destination_width, destination_height), Image.ANTIALIAS)
+
+
+        # Save the scaled image.
         d, f = os.path.split(scaled_path)
         if not os.path.exists(d):
             os.makedirs(d)
         scaled_image.save(scaled_path)
         self.scaled = True
         self.scaled_path = scaled_path_template
-        self.scaled_width = destination_width
-        self.scaled_height = destination_height
+        self.scaled_width, self.scaled_height = scaled_image.size
 
         # TODO: We can also dump it to S3 at this point.
 
@@ -3063,7 +3075,7 @@ class ImageScaler(object):
             self.scaled_expansions[scaled] = mirror.scaled_image_directory(data_directory)
             self.original_variable_to_scaled_variable[original] = "%(" + scaled + ")s"
 
-    def run(self, destination_height, force):
+    def run(self, destination_width, destination_height, force):
         q = self._db.query(Resource).filter(
             Resource.rel==Resource.IMAGE).filter(
                 Resource.mirrored==True).filter(
@@ -3071,14 +3083,19 @@ class ImageScaler(object):
 
         if not force:
             q = q.filter(Resource.scaled==False)
-        resultset = q.limit(100).all()
+        total = 0
+        a = time.time()
+        resultset = q.limit(1000).all()
         while resultset:
             for r in resultset:
-                r.scale(destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable)
-                print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                                    r.local_scaled_path(self.scaled_expansions) 
-                                )
+                r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
+                #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                #                    r.local_scaled_path(self.scaled_expansions) 
+                #)
+                total += 1
             self._db.commit()
-            resultset = q.limit(100).all()
+            print total, time.time()-a
+            a = time.time()
+            resultset = q.limit(1000).all()
         self._db.commit()
 

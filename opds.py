@@ -17,6 +17,7 @@ from lxml import builder, etree
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
+    Resource,
     WorkIdentifier,
     WorkRecord,
     Work,
@@ -53,18 +54,21 @@ class URLRewriter(object):
     GUTENBERG_ILLUSTRATED_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
-    OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
+    SCALED_OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Overdrive/scaled"
     GUTENBERG_MIRROR_HOST = "http://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
 
     @classmethod
     def rewrite(cls, url):
+        if '%(original_overdrive_covers_mirror)s' in url:
+            # This is not mirrored; use the Content Reserve version.
+            return None
         parsed = urlparse(url)
         if parsed.hostname in ('www.gutenberg.org', 'gutenberg.org'):
             return cls._rewrite_gutenberg(parsed)
         elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
                               gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST,
-                              overdrive_image_mirror)
+                              scaled_overdrive_covers_mirror=cls.SCALED_OVERDRIVE_IMAGE_MIRROR_HOST)
         else:
             return url
 
@@ -203,18 +207,26 @@ class AcquisitionFeed(OPDSFeed):
 
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
+        full_url = None
+        thumbnail_url = None
         if work.cover:
-            if work.cover.mirrored_path:
-                url = URLRewriter.rewrite(work.cover.mirrored_path)
-            else:
-                url = URLRewriter.rewrite(work.cover.href)
-            links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
+            full_url = URLRewriter.rewrite(work.cover.href)
+            mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
+            if mirrored_url:
+                full_url = mirrored_url
+                
             qualities.append(("Cover quality", work.cover.quality))
+            if work.cover.scaled_path:
+                thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
-            url = host + urllib.quote(
-                    "/Gutenberg ID/%s.png" % identifier.identifier)
-            links.append(E.link(rel=self.FULL_IMAGE_REL, href=url))
+            full_url = host + urllib.quote(
+                "/Gutenberg ID/%s.png" % identifier.identifier)
+
+        if full_url:
+            links.append(E.link(rel=Resource.IMAGE, href=full_url))
+        if thumbnail_url:
+            links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
 
         tag = "tag:work:%s" % work.id
 

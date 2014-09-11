@@ -18,4 +18,4 @@ if __name__ == '__main__':
     force = (len(sys.argv) == 3 and sys.argv[2] == 'force')
     mirrors = [OverdriveCoverImageMirror, ContentCafeMirror]
     ImageScaler(production_session(), path, mirrors).run(
-        destination_height=300, force=force)
+        destination_width=200, destination_height=300, force=force)
