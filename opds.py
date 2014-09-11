@@ -225,6 +225,8 @@ class AcquisitionFeed(OPDSFeed):
 
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
+            if not thumbnail_url:
+                thumbnail_url = full_url
         if thumbnail_url:
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
 
