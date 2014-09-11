@@ -1814,12 +1814,23 @@ class Resource(Base):
     # The actual URL to the resource.
     href = Column(Unicode)
 
+    # The URL to a scaled-down version of the resource.
+    scaled_href = Column(Unicode)
+
     # Whether or not we have a local copy of the representation.
-    mirrored = Column(Boolean, index=True)
+    mirrored = Column(Boolean, default=False, index=True)
 
     # The path to our mirrored representation. This can be converted
-    # into a URL for serving to a client. TODO: how?
+    # into a URL for serving to a client.
     mirrored_path = Column(Unicode)
+
+    # Whether or not we have a local scaled copy of the
+    # representation.
+    scaled = Column(Boolean, default=False, index=True)
+
+    # The path to our scaled-down representation. This can be converted
+    # into a URL for serving to a client.
+    scaled_path = Column(Unicode)
 
     # The last time we tried to update the mirror.
     mirror_date = Column(DateTime, index=True)
@@ -1843,6 +1854,10 @@ class Resource(Base):
     image_height = Column(Integer, index=True)
     image_width = Column(Integer, index=True)
 
+    scaled_size = Column(Integer)
+    scaled_height = Column(Integer, index=True)
+    scaled_width = Column(Integer, index=True)
+
     # A calculated value for the quality of this resource, based on an
     # algorithmic treatment of its content.
     estimated_quality = Column(Float)
@@ -1860,17 +1875,47 @@ class Resource(Base):
     # human-entered quality value.
     quality = Column(Float, index=True)
 
+    URL_ROOTS = dict(
+        content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
+        scaled_content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/CC",
+        original_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Overdrive/",
+        scaled_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/Overdrive",
+        gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
+    )
+
     @property
-    def final_url(self):
+    def final_url(self):        
+        """URL to the full version of this resource.
         
+        This link will be served to the client.
+        """
         if self.mirrored_path:
             url = self.mirrored_path
         else:
             url = self.href
-        return url % dict(
-            content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
-            gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
-)
+        return url % self.URL_ROOTS
+
+    @property
+    def scaled_url(self):        
+        """URL to the scaled-down version of this resource.
+
+        This link will be served to the client.
+        """
+        if not self.scaled_path:
+            return self.final_url
+        return self.scaled_path % self.URL_ROOTS
+
+    def local_path(self, expansions):
+        """Path to the original representation on disk."""
+        return self.mirrored_path % expansions
+
+    def local_scaled_path(self, expansions):
+        """Path to the scaled representation on disk."""
+        return self.scaled_path % expansions
+
+    @property
+    def is_image(self):
+        return self.media_type and self.media_type.startswith("image/")
 
     def could_not_mirror(self):
         """We tried to mirror this resource and failed."""
@@ -1891,7 +1936,7 @@ class Resource(Base):
         self.content = content
         self.mirrored = True
         self.mirror_status = 200
-        self.media_type = media_type
+        self.media_type = media_type.lower()
         self.file_size = len(content)
 
     def mirrored_to(self, path, media_type, content=None):
@@ -1899,6 +1944,7 @@ class Resource(Base):
         self.mirrored = True
         self.mirrored_path = path
         self.mirror_status = 200
+        self.mirror_date = datetime.datetime.utcnow()
         if media_type:
             self.media_type = media_type
 
@@ -1909,7 +1955,7 @@ class Resource(Base):
         # variable expansion in it at this point.
         if content is not None:
             self.file_size = len(content)
-        if content and self.media_type.lower().startswith("image/"):
+        if content and self.is_image:
             # Try to load it into PIL and determine height and width.
             try:
                 image = Image.open(StringIO(content))
@@ -1941,6 +1987,42 @@ class Resource(Base):
                          ((self.voted_quality or 0) * votes_for_quality))
         self.quality = total_quality / float(total_weight)
 
+    def scale(self, destination_height, original_path_expansions, 
+              scaled_path_expansions, original_variable_to_scaled_variable):
+        """Create a scaled-down version of this resource."""
+        if not self.is_image:
+            raise ValueError(
+                "Cannot scale down non-image resource: type %s." 
+                % self.media_type)
+        if not self.mirrored:
+            raise ValueError(
+                "Cannot scale down an image that has not been mirrored.")
+        path = self.local_path(original_path_expansions)
+        if not os.path.exists(path):
+            set_trace()
+        image = Image.open(path)
+        width, height = image.size
+        if height <= destination_height:
+            # We're good.
+            scaled_image = image
+            destination_width = width
+        else:
+            proportion = float(destination_height) / height
+            destination_width = int(width * proportion)
+            scaled_image = image.resize((destination_width, destination_height))
+        scaled_path_template = self.mirrored_path % (
+            original_variable_to_scaled_variable)
+        scaled_path = scaled_path_template % scaled_path_expansions
+        d, f = os.path.split(scaled_path)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        scaled_image.save(scaled_path)
+        self.scaled = True
+        self.scaled_path = scaled_path_template
+        self.scaled_width = destination_width
+        self.scaled_height = destination_height
+
+        # TODO: We can also dump it to S3 at this point.
 
 class Genre(Base):
     """A subject-matter classification for a book.
@@ -2960,3 +3042,43 @@ class CoverageProvider(object):
 
     def process_work_record(self, work_record):
         raise NotImplementedError()
+
+class ImageScaler(object):
+
+    def __init__(self, db, data_directory, mirrors):
+        self._db = db
+        self.original_expansions = {}
+        self.scaled_expansions = {}
+        self.original_variable_to_scaled_variable = {}
+        self.data_source_ids = []
+
+        for mirror in mirrors:
+            original = mirror.ORIGINAL_PATH_VARIABLE
+            scaled = mirror.SCALED_PATH_VARIABLE
+            data_source_name = mirror.DATA_SOURCE
+            data_source = DataSource.lookup(self._db, data_source_name)
+            self.data_source_ids.append(data_source.id)
+            self.original_expansions[original] = mirror.data_directory(
+                data_directory)
+            self.scaled_expansions[scaled] = mirror.scaled_image_directory(data_directory)
+            self.original_variable_to_scaled_variable[original] = "%(" + scaled + ")s"
+
+    def run(self, destination_height, force):
+        q = self._db.query(Resource).filter(
+            Resource.rel==Resource.IMAGE).filter(
+                Resource.mirrored==True).filter(
+                    Resource.data_source_id.in_(self.data_source_ids))
+
+        if not force:
+            q = q.filter(Resource.scaled==False)
+        resultset = q.limit(100).all()
+        while resultset:
+            for r in resultset:
+                r.scale(destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable)
+                print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                                    r.local_scaled_path(self.scaled_expansions) 
+                                )
+            self._db.commit()
+            resultset = q.limit(100).all()
+        self._db.commit()
+

@@ -82,4 +82,4 @@ class FilesystemCache(object):
         f = open(filename, "w")
         f.write(value)
         f.close()
-    
+        return filename

@@ -53,6 +53,7 @@ class URLRewriter(object):
     GUTENBERG_ILLUSTRATED_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
+    OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
     GUTENBERG_MIRROR_HOST = "http://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
 
     @classmethod
@@ -62,7 +63,8 @@ class URLRewriter(object):
             return cls._rewrite_gutenberg(parsed)
         elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
-                              gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST)
+                              gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST,
+                              overdrive_image_mirror)
         else:
             return url
 

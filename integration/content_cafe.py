@@ -25,10 +25,24 @@ class ContentCafeMirror(object):
     REVIEW_DIR = "review"
     SUMMARY_DIR = "summary"
     AUTHOR_NOTES_DIR = "author_notes"
+    SCALED_SUBDIR = "scaled"
+
+    ORIGINAL_PATH_VARIABLE = "content_cafe_mirror"
+    SCALED_PATH_VARIABLE = "scaled_content_cafe_mirror"
+    DATA_SOURCE = DataSource.CONTENT_CAFE
+
+    @classmethod
+    def data_directory(cls, base_directory):
+        return os.path.join(base_directory, DataSource.CONTENT_CAFE)
+
+    @classmethod
+    def scaled_image_directory(self, base_data_directory):
+        return os.path.join(base_data_directory, DataSource.CONTENT_CAFE,
+                            self.SCALED_SUBDIR)
 
     def __init__(self, db, data_dir, userid, password):
         
-        self.base_cache_dir = os.path.join(data_dir, DataSource.CONTENT_CAFE)
+        self.base_cache_dir = self.data_directory(data_dir)
         for i in (self.COVER_DIR, self.REVIEW_DIR,
                   self.SUMMARY_DIR, self.AUTHOR_NOTES_DIR):
             p = os.path.join(self.base_cache_dir, i)
@@ -54,11 +68,12 @@ class ContentCafeMirror(object):
                 self.mirror_isbn(wi)
             self._db.commit()
             resultset = qu.limit(100).all()
+        self._db.commit()
 
     def _process_path(self, path):
         path = path.replace("%", "%%")
         path = path.replace(
-            self.base_cache_dir, "%(content_cafe_mirror)s", 1)
+            self.base_cache_dir, "%(" + self.PATH_VARIABLE + ")s", 1)
         return path
 
     def mirror_isbn(self, work_identifier):
