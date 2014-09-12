@@ -59,7 +59,7 @@ class URLRewriter(object):
 
     @classmethod
     def rewrite(cls, url):
-        if '%(original_overdrive_covers_mirror)s' in url:
+        if not url or '%(original_overdrive_covers_mirror)s' in url:
             # This is not mirrored; use the Content Reserve version.
             return None
         parsed = urlparse(url)
@@ -259,7 +259,7 @@ class AcquisitionFeed(OPDSFeed):
             E.updated(_strftime(datetime.datetime.utcnow())),
             *links
         )
-        
+        # print " ID %s TITLE %s AUTHORS %s" % (tag, work.title, work.authors)
         language = work.language_code
         if language:
             language_tag = E._makeelement("{%s}language" % dcterms_ns)
