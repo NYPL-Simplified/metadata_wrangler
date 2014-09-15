@@ -129,7 +129,6 @@ class OCLCLinkedData(object):
 
     def lookup(self, work_identifier):
         """Perform an OCLC Open Data lookup for the given identifier."""
-        print "LOOKUP %r" % work_identifier
         type = None
         identifier = None
         if isinstance(work_identifier, basestring):
@@ -145,13 +144,14 @@ class OCLCLinkedData(object):
         return self.lookup_by_identifier(type, identifier)
 
     def lookup_by_identifier(self, type, identifier):
-        print "LOOKUP BY IDENTIFIER %s %s" % (type, identifier)
         if type == WorkIdentifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
         elif type == WorkIdentifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
+        else:
+            set_trace()
 
         cache_key = self.cache_key(identifier, type)
         cached = False
@@ -169,7 +169,6 @@ class OCLCLinkedData(object):
 
     def oclc_number_for_isbn(self, isbn):
         """Find an OCLC Number for the given ISBN."""
-        print "LOOKUP BY ISBN %s" % isbn
         cache_key = self.cache_key(isbn, WorkIdentifier.ISBN)
         cached = False
         if self.cache.exists(cache_key):
@@ -991,11 +990,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             editions = 0
             for edition in self.info_for(original_identifier):
                 workrecord, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
-                set_trace()
                 if workrecord:
                     new_records += 1
                     print "", workrecord.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
+                for isbn in isbns:
+                    print "NEW ISBN: %s" % isbn
                 new_descriptions += len(descriptions)
 
             print "Total: %s editions, %s ISBNs, %s descriptions." % (
@@ -1106,7 +1106,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
             for book in oclc_linked_data.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
-                    set_trace()
                     yield info
 
     # These tags are useless for our purposes.
@@ -1244,31 +1243,29 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, work_identifier):
-        print work_identifier
         if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
-            data, cached = oclc_linked_data.lookup(work_identifier)
-            work_data = None
-            if work_identifier.type == WorkIdentifier.OCLC_WORK:
-                work_data = data
-            elif work_identifier.type == WorkIdentifier.ISBN:
-                work_data = list(oclc_linked_data.oclc_works_for_isbn(work_identifier.identifier))
-                set_trace()
+            if work_identifier.type == WorkIdentifier.ISBN:
+                work_data = list(oclc_linked_data.oclc_works_for_isbn(
+                    work_identifier.identifier))
+            elif work_identifier.type == WorkIdentifier.OCLC_WORK:
+                work_data, cached = oclc_linked_data.lookup(work_identifier)
+            else:
+                # Look up and yield a single edition.
+                edition_data, cached = oclc_linked_data.lookup(work_identifier)                
+                yield edition_data
+                work_data = None
 
             if work_data:
+                # We have one or more work graphs.
                 if not isinstance(work_data, list):
                     work_data = [work_data]
                 for data in work_data:
-                    # Turn the work data into a bunch of edition graphs.
+                    # Turn the work graph into a bunch of edition graphs.
                     graph = oclc_linked_data.graph(data)
                     examples = oclc_linked_data.extract_workexamples(graph)
                     for uri in examples:
-                        print "Looking up %s" % uri
-                        set_trace()
                         data, cached = oclc_linked_data.lookup(uri)
                         yield data
-            else:
-                # We have a single edition graph.
-                yield data
 
         else:
             # We got an identifier we can't handle. Turn it into a number
