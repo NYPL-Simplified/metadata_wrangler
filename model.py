@@ -1182,7 +1182,7 @@ class WorkRecord(Base):
 
     @classmethod
     def missing_coverage_from(
-            cls, _db, workrecord_data_source, coverage_data_source):
+            cls, _db, workrecord_data_sources, coverage_data_source):
         """Find WorkRecords from `workrecord_data_source` which have no
         CoverageRecord from `coverage_data_source`.
 
@@ -1196,12 +1196,13 @@ class WorkRecord(Base):
         have never been used as input to the OCLC Classify web
         service.
         """
+        workrecord_data_source_ids = [x.id for x in workrecord_data_sources]
         join_clause = ((WorkRecord.id==CoverageRecord.work_record_id) &
                        (CoverageRecord.data_source_id==coverage_data_source.id))
         
         q = _db.query(WorkRecord).outerjoin(
             CoverageRecord, join_clause).filter(
-                WorkRecord.data_source==workrecord_data_source)
+                WorkRecord.data_source_id.in_(workrecord_data_source_ids))
         q2 = q.filter(CoverageRecord.id==None)
         return q2
 
@@ -1940,7 +1941,9 @@ class Resource(Base):
         self.content = content
         self.mirrored = True
         self.mirror_status = 200
-        self.media_type = media_type.lower()
+        if media_type:
+            media_type = media_type.lower()
+        self.media_type = media_type
         self.file_size = len(content)
 
     def mirrored_to(self, path, media_type, content=None):
@@ -3005,18 +3008,18 @@ class CoverageProvider(object):
     doesn't get processed next time.
     """
 
-    def __init__(self, service_name, input_source, output_source,
+    def __init__(self, service_name, input_sources, output_source,
                  workset_size=100):
-        self._db = Session.object_session(input_source)
+        self._db = Session.object_session(output_source)
         self.service_name = service_name
-        self.input_source = input_source
+        self.input_sources = input_sources
         self.output_source = output_source
         self.workset_size = workset_size
 
     @property
     def workrecords_that_need_coverage(self):
         return WorkRecord.missing_coverage_from(
-            self._db, self.input_source, self.output_source)
+            self._db, self.input_sources, self.output_source)
 
     def run(self):
         remaining = True

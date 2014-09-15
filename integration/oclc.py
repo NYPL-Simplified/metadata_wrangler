@@ -85,15 +85,31 @@ class OCLCLinkedData(object):
 
     BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
     WORK_BASE_URL = 'http://experiment.worldcat.org/entity/work/data/%(id)s.jsonld'
+    ISBN_BASE_URL = 'http://www.worldcat.org/isbn/%(id)s'
     URL_ID_RE = re.compile('http://www.worldcat.org/([a-z]+)/([0-9]+)')
+
+    URI_WITH_OCLC_NUMBER = re.compile('^http://[^/]*worldcat.org/.*oclc/([0-9]+)$')
+    URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
+    URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
+
+    CAN_HANDLE = set([WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER,
+                      WorkIdentifier.ISBN])
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
             data_directory, DataSource.OCLC_LINKED_DATA, "cache")
         self.cache = FilesystemCache(self.cache_directory)
+        for identifier_type in self.CAN_HANDLE:
+            p = os.path.join(self.cache_directory, identifier_type)
+            if not os.path.exists(p):
+                os.makedirs(p)
 
     def cache_key(self, id, type):
-        return os.path.join(type, "%s.jsonld" % id)
+        if type == WorkIdentifier.ISBN:
+            extension = ".url"
+        else:
+            extension = ".jsonld"
+        return os.path.join(type, id + extension)
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
@@ -107,10 +123,13 @@ class OCLCLinkedData(object):
             raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
         return content
 
-    URI_WITH_OCLC_NUMBER = re.compile('http://www.worldcat.org/oclc/([0-9]+)')
+    def redirect_location(self, url):
+        """Make a request to OCLC Linked Data to see where it redirects."""
+        return requests.get(url, allow_redirects=False)
+
     def lookup(self, work_identifier):
         """Perform an OCLC Open Data lookup for the given identifier."""
-
+        print "LOOKUP %r" % work_identifier
         type = None
         identifier = None
         if isinstance(work_identifier, basestring):
@@ -118,22 +137,58 @@ class OCLCLinkedData(object):
             if match:
                 type = WorkIdentifier.OCLC_NUMBER
                 identifier = match.groups()[0]
+            else:
+                match = self.URI_WITH_ISBN.search(work_identifier)
+                if match:
+                    type = WorkIdentifier.ISBN
+                    identifier = match.groups()[0]
         else:
             type = work_identifier.type
             identifier = work_identifier.identifier
         if not type or not identifier:
-            return None
+            return None, None
         return self.lookup_by_identifier(type, identifier)
 
+    def find_oclc_for_isbn(self, isbn):
+        print "LOOKUP BY ISBN %s" % isbn
+        cache_key = self.cache_key(isbn, WorkIdentifier.ISBN)
+        cached = False
+        if self.cache.exists(cache_key):
+            cached = True
+            location = self.cache.open(cache_key).read()
+        else:
+            url = self.ISBN_BASE_URL % dict(id=isbn)
+            print "%s => %s" % (url, self.cache._filename(cache_key))
+            raw = self.redirect_location(url)
+            if not 'Location' in raw.headers:
+                raise IOError("Expected %s to redirect, but couldn't find location." % url)
+            location = raw.headers['Location']
+            self.cache.store(cache_key, location)
+
+        match = self.URI_WITH_OCLC_NUMBER.match(location)
+        if not match:
+            raise IOError("OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
+        oclc_number = match.groups()[0]
+        return oclc_number
+
     def lookup_by_identifier(self, type, identifier):
+        print "LOOKUP BY IDENTIFIER %s %s" % (type, identifier)
         if type == WorkIdentifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
         elif type == WorkIdentifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
+        elif type == WorkIdentifier.ISBN:
+            # First we need to look up the OCLC Number for this ISBN.
+            oclc_number = self.find_oclc_for_isbn(identifier)
 
-        cache_key = self.cache_key(identifier, foreign_type)
+            # Now we can retrieve the OCLC Linked Data document for that
+            # OCLC Number.
+            oclc_number_data, cached = self.lookup_by_identifier(
+                WorkIdentifier.OCLC_NUMBER, oclc_number)
+
+        cache_key = self.cache_key(identifier, type)
         cached = False
         if self.cache.exists(cache_key):
             cached = True
@@ -147,6 +202,24 @@ class OCLCLinkedData(object):
         data = jsonld.load_document(url)
         return data, cached
 
+    def works_for_isbn(self, isbn):
+        print "WORK FOR ISBN %s" % isbn
+        oclc_number_data, cached = self.lookup_by_identifier(isbn.type, isbn.identifier)
+
+        # This lets us figure out the OCLC Work ID.
+        set_trace()
+        graph = oclc_linked_data.graph(oclc_number_data)
+        works = oclc_linked_data.extract_works(graph)
+        for work_uri in works:
+            set_trace()
+            m = self.URI_WITH_OCLC_WORK_ID.match(work_uri)
+            if m:
+                work_id = m.groups()[0]
+                oclc_work_data, cached = self.lookup_by_identifier(
+                    WorkIdentifier.OCLC_WORK, work_id)
+                print " GOT A WORK"
+                yield oclc_work_data
+                
     @classmethod
     def graph(cls, raw_data):
         if not raw_data or not raw_data['document']:
@@ -177,6 +250,20 @@ class OCLCLinkedData(object):
                 values = book_graph.get(k, [])
                 repository.extend(ldq.values(values))
         return examples
+
+    @classmethod
+    def extract_works(cls, graph):
+        works = []
+        if not graph:
+            return works
+        for book_graph in cls.books(graph):
+            for k, repository in (
+                    ('schema:exampleOfWork', works),
+                    ('exampleOfWork', works),
+            ):
+                values = book_graph.get(k, [])
+                repository.extend(ldq.values(values))
+        return works
 
     URI_TO_SUBJECT_TYPE = {
         re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
@@ -896,36 +983,38 @@ class LinkedDataCoverageProvider(CoverageProvider):
     def __init__(self, db, data_directory):
         self.oclc = OCLCLinkedData(data_directory)
         self.db = db
-        oclc_classify = DataSource.lookup(db, DataSource.OCLC)
+        self.oclc_classify = DataSource.lookup(db, DataSource.OCLC)
+        self.overdrive = DataSource.lookup(db, DataSource.OVERDRIVE)
         self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-        self.coverage_provider = CoverageProvider(
-            "OCLC-LD lookup", oclc_classify, self.oclc_linked_data)
         super(LinkedDataCoverageProvider, self).__init__(
-            self.SERVICE_NAME, oclc_classify, self.oclc_linked_data,
+            self.SERVICE_NAME, [self.oclc_classify, self.overdrive],
+            self.oclc_linked_data,
             workset_size=3)
 
     def process_work_record(self, wr):
         try:
-            oclc_work = wr.primary_identifier
+            original_identifier = wr.primary_identifier
             new_records = 0
             new_isbns = 0
             new_descriptions = 0
-            print u"%s (%s)" % (wr.title, repr(oclc_work).decode("utf8"))
-            for edition in self.info_for(oclc_work):
-                workrecord, isbns, descriptions, subjects = self.process_edition(oclc_work, edition)
+            print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
+            editions = 0
+            for edition in self.info_for(original_identifier):
+                workrecord, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
+                set_trace()
                 if workrecord:
                     new_records += 1
                     print "", workrecord.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
                 new_descriptions += len(descriptions)
 
-            print "Total: %s ISBNs, %s descriptions." % (
-                new_isbns, new_descriptions)
+            print "Total: %s editions, %s ISBNs, %s descriptions." % (
+                editions, new_isbns, new_descriptions)
         except IOError, e:
             return False
         return True
 
-    def process_edition(self, oclc_work, edition):
+    def process_edition(self, original_identifier, edition):
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
@@ -977,26 +1066,26 @@ class LinkedDataCoverageProvider(CoverageProvider):
             return None, [], [], []
 
         # Identify the OCLC Number with the OCLC Work.
-        w = oclc_work.primarily_identifies
+        w = original_identifier.primarily_identifies
         if w:
             # How similar is the title of the edition to the title of
             # the work, and how much overlap is there between the
             # listed authors?
-            oclc_work_record = w[0]
+            original_identifier_record = w[0]
             if title:
                 title_strength = MetadataSimilarity.title_similarity(
-                    title, oclc_work_record.title)
+                    title, original_identifier_record.title)
             else:
                 title_strength = 0
-            oclc_work_viafs = set([c.viaf for c in oclc_work_record.contributors
+            original_identifier_viafs = set([c.viaf for c in original_identifier_record.contributors
                                    if c.viaf])
             author_strength = MetadataSimilarity._proportion(
-                oclc_work_viafs, set(edition['creator_viafs']))
+                original_identifier_viafs, set(edition['creator_viafs']))
             strength = (title_strength * 0.8) + (author_strength * 0.2)
         else:
             strength = 1
 
-        oclc_work.equivalent_to(
+        original_identifier.equivalent_to(
             self.oclc_linked_data, oclc_number, strength)
 
         # Associate all newly created ISBNs with the OCLC
@@ -1027,6 +1116,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             for book in oclc_linked_data.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
+                    set_trace()
                     yield info
 
     # These tags are useless for our purposes.
@@ -1164,9 +1254,35 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, work_identifier):
-        data, cached = oclc_linked_data.lookup(work_identifier)
-        graph = oclc_linked_data.graph(data)
-        examples = oclc_linked_data.extract_workexamples(graph)
-        for uri in examples:
-            data, cached = oclc_linked_data.lookup(uri)
-            yield data
+        print work_identifier
+        if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
+            data, cached = oclc_linked_data.lookup(work_identifier)
+            work_data = None
+            if work_identifier.type == WorkIdentifier.OCLC_WORK:
+                work_data = data
+            elif work_identifier.type == WorkIdentifier.ISBN:
+                work_data = list(oclc_linked_data.works_for_isbn(work_identifier))
+
+            if work_data:
+                if not isinstance(work_data, list):
+                    work_data = [work_data]
+                for data in work_data:
+                    # Turn the work data into a bunch of edition graphs.
+                    graph = oclc_linked_data.graph(data)
+                    examples = oclc_linked_data.extract_workexamples(graph)
+                    for uri in examples:
+                        print "Looking up %s" % uri
+                        set_trace()
+                        data, cached = oclc_linked_data.lookup(uri)
+                        yield data
+            else:
+                # We have a single edition graph.
+                yield data
+
+        else:
+            # We got an identifier we can't handle. Turn it into a number
+            # of identifiers we can handle.
+            for i in work_identifier.equivalencies:
+                if i.output.type in OCLCLinkedData.CAN_HANDLE:
+                    for graph in self.graphs_for(i.output):
+                        yield graph
