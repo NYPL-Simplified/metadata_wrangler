@@ -137,11 +137,6 @@ class OCLCLinkedData(object):
             if match:
                 type = WorkIdentifier.OCLC_NUMBER
                 identifier = match.groups()[0]
-            else:
-                match = self.URI_WITH_ISBN.search(work_identifier)
-                if match:
-                    type = WorkIdentifier.ISBN
-                    identifier = match.groups()[0]
         else:
             type = work_identifier.type
             identifier = work_identifier.identifier
@@ -149,7 +144,31 @@ class OCLCLinkedData(object):
             return None, None
         return self.lookup_by_identifier(type, identifier)
 
-    def find_oclc_for_isbn(self, isbn):
+    def lookup_by_identifier(self, type, identifier):
+        print "LOOKUP BY IDENTIFIER %s %s" % (type, identifier)
+        if type == WorkIdentifier.OCLC_WORK:
+            foreign_type = 'work'
+            url = self.WORK_BASE_URL
+        elif type == WorkIdentifier.OCLC_NUMBER:
+            foreign_type = "oclc"
+            url = self.BASE_URL
+
+        cache_key = self.cache_key(identifier, type)
+        cached = False
+        if self.cache.exists(cache_key):
+            cached = True
+        else:
+            url = url % dict(id=identifier, type=foreign_type)
+            print "%s => %s" % (url, self.cache._filename(cache_key))
+            raw = self.request(url) or ''
+            self.cache.store(cache_key, raw)
+        f = self.cache._filename(cache_key)
+        url = "file://" + f
+        data = jsonld.load_document(url)
+        return data, cached
+
+    def oclc_number_for_isbn(self, isbn):
+        """Find an OCLC Number for the given ISBN."""
         print "LOOKUP BY ISBN %s" % isbn
         cache_key = self.cache_key(isbn, WorkIdentifier.ISBN)
         cached = False
@@ -171,55 +190,26 @@ class OCLCLinkedData(object):
         oclc_number = match.groups()[0]
         return oclc_number
 
-    def lookup_by_identifier(self, type, identifier):
-        print "LOOKUP BY IDENTIFIER %s %s" % (type, identifier)
-        if type == WorkIdentifier.OCLC_WORK:
-            foreign_type = 'work'
-            url = self.WORK_BASE_URL
-        elif type == WorkIdentifier.OCLC_NUMBER:
-            foreign_type = "oclc"
-            url = self.BASE_URL
-        elif type == WorkIdentifier.ISBN:
-            # First we need to look up the OCLC Number for this ISBN.
-            oclc_number = self.find_oclc_for_isbn(identifier)
+    def oclc_works_for_isbn(self, isbn):
+        """Yield every OCLC Work graph for the given ISBN."""
+        # Find the OCLC Number for this ISBN.
+        oclc_number = self.oclc_number_for_isbn(isbn)
 
-            # Now we can retrieve the OCLC Linked Data document for that
-            # OCLC Number.
-            oclc_number_data, cached = self.lookup_by_identifier(
-                WorkIdentifier.OCLC_NUMBER, oclc_number)
+        # Retrieve the OCLC Linked Data document for that OCLC Number.
+        oclc_number_data, cached = self.lookup_by_identifier(
+            WorkIdentifier.OCLC_NUMBER, oclc_number)
 
-        cache_key = self.cache_key(identifier, type)
-        cached = False
-        if self.cache.exists(cache_key):
-            cached = True
-        else:
-            url = url % dict(id=identifier, type=foreign_type)
-            print "%s => %s" % (url, self.cache._filename(cache_key))
-            raw = self.request(url) or ''
-            self.cache.store(cache_key, raw)
-        f = self.cache._filename(cache_key)
-        url = "file://" + f
-        data = jsonld.load_document(url)
-        return data, cached
-
-    def works_for_isbn(self, isbn):
-        print "WORK FOR ISBN %s" % isbn
-        oclc_number_data, cached = self.lookup_by_identifier(isbn.type, isbn.identifier)
-
-        # This lets us figure out the OCLC Work ID.
-        set_trace()
+        # Look up every work referenced in that document and yield its data.
         graph = oclc_linked_data.graph(oclc_number_data)
         works = oclc_linked_data.extract_works(graph)
         for work_uri in works:
-            set_trace()
             m = self.URI_WITH_OCLC_WORK_ID.match(work_uri)
             if m:
                 work_id = m.groups()[0]
                 oclc_work_data, cached = self.lookup_by_identifier(
                     WorkIdentifier.OCLC_WORK, work_id)
-                print " GOT A WORK"
                 yield oclc_work_data
-                
+               
     @classmethod
     def graph(cls, raw_data):
         if not raw_data or not raw_data['document']:
@@ -1261,7 +1251,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
             if work_identifier.type == WorkIdentifier.OCLC_WORK:
                 work_data = data
             elif work_identifier.type == WorkIdentifier.ISBN:
-                work_data = list(oclc_linked_data.works_for_isbn(work_identifier))
+                work_data = list(oclc_linked_data.oclc_works_for_isbn(work_identifier.identifier))
+                set_trace()
 
             if work_data:
                 if not isinstance(work_data, list):
