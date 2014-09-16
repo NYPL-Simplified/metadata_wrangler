@@ -495,15 +495,25 @@ class WorkIdentifier(Base):
         precursors = defaultdict(list)
         successors = defaultdict(list)
 
+        if isinstance(identifier_ids[0], WorkIdentifier):
+            identifier_ids = [x.id for x in identifier_ids]
+
         seen_equivalency_ids = set([])
         this_round_ids = identifier_ids
         already_checked_ids = set()
         for distance in range(levels):
             next_round_ids = []
             already_checked_ids = already_checked_ids.union(this_round_ids)
+            # print "ROUND BEGINS"
+            #print "Finding equivalencies for:" 
+            #identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
+            #for identifier in identifiers:
+            #    print "", identifier
+
             equivalencies = Equivalency.for_identifiers(
                 _db, this_round_ids, seen_equivalency_ids)
             for e in equivalencies:
+                # print "%r => %r" % (e.input, e.output)
                 seen_equivalency_ids.add(e.id)
 
                 # Signal strength decreases monotonically, so
@@ -513,7 +523,7 @@ class WorkIdentifier(Base):
                 # I -> O becomes "I is a precursor of O with distance
                 # equal to the I->O strength."
                 if e.strength > threshold:
-                    # print "Strong signal: %r" % e
+                    #print "Strong signal: %r" % e
                     precursors[e.output_id].append((e.input_id, e.strength))
                     successors[e.input_id].append((e.output_id, e.strength))
                 else:
@@ -536,16 +546,26 @@ class WorkIdentifier(Base):
                         pass
 
                 if e.output_id not in already_checked_ids:
-                    # This is our first time encountering the output
-                    # ID of this Equivalency. We will use it as an
-                    # input ID in the next round.
+                    # This is our first time encountering the
+                    # WorkIdentifier that is the output of this
+                    # Equivalency. We will look at its equivalencies
+                    # in the next round.
                     next_round_ids.append(e.output_id)
+                if e.input_id not in already_checked_ids:
+                    # This is our first time encountering the
+                    # WorkIdentifier that is the input to this
+                    # Equivalency. We will look at its equivalencies
+                    # in the next round.
+                    next_round_ids.append(e.input_id)
             if not next_round_ids:
                 # We have achieved transitive closure. There
                 # are no more IDs to check.
+                #print "We have achieved transitive closure."
                 break
             #print "Finished round: %r" % this_round_ids
             #print "Next round: %r" % next_round_ids
+            #print "ROUND ENDS"
+            #print
             this_round_ids = next_round_ids
 
         # Now that we have a list of successor signals for each
@@ -575,6 +595,7 @@ class WorkIdentifier(Base):
                     num_votes += 1
                     new_strength = total_strength / num_votes
                     equivalents[id][precursor] = (new_strength, num_votes)
+        # print "Finally: %r" % equivalents
         return equivalents
 
     @classmethod
@@ -2754,7 +2775,6 @@ class LicensePool(Base):
         except NoResultFound, e:
             return None, False
         self.language = primary_work_record.language
-        set_trace()
         if primary_work_record.work is not None:
             # That was a freebie.
             #print "ALREADY CLAIMED: %s by %s" % (
@@ -3031,6 +3051,7 @@ class CoverageProvider(object):
     def run(self):
         remaining = True
         failures = set([])
+        print "%d records need coverage." % (self.workrecords_that_need_coverage.count())
         while remaining:
             successes = 0
             if len(failures) >= self.workset_size:
