@@ -401,6 +401,12 @@ class WorkIdentifier(Base):
         backref="input_identifiers",
     )
 
+    inbound_equivalencies = relationship(
+        "Equivalency",
+        primaryjoin=("WorkIdentifier.id==Equivalency.output_id"),
+        backref="output_identifiers",
+    )
+
     def __repr__(self):
         records = self.primarily_identifies
         if records and records[0].title:
@@ -2748,6 +2754,7 @@ class LicensePool(Base):
         except NoResultFound, e:
             return None, False
         self.language = primary_work_record.language
+        set_trace()
         if primary_work_record.work is not None:
             # That was a freebie.
             #print "ALREADY CLAIMED: %s by %s" % (

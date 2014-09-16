@@ -28,6 +28,7 @@ if __name__ == '__main__':
     pool = session.query(LicensePool).filter(
         LicensePool.data_source==data_source).filter(
             LicensePool.identifier==wid).one()
+    pool.work_record().work = None
     pool.calculate_work()
     work = pool.work
     work.calculate_presentation()

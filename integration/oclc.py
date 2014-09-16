@@ -176,7 +176,7 @@ class OCLCLinkedData(object):
             location = self.cache.open(cache_key).read()
         else:
             url = self.ISBN_BASE_URL % dict(id=isbn)
-            print "%s => %s" % (url, self.cache._filename(cache_key))
+            # print "%s => %s" % (url, self.cache._filename(cache_key))
             raw = self.redirect_location(url)
             if not 'Location' in raw.headers:
                 raise IOError("Expected %s to redirect, but couldn't find location." % url)
@@ -1001,6 +1001,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
             print "Total: %s editions, %s ISBNs, %s descriptions." % (
                 editions, new_isbns, new_descriptions)
         except IOError, e:
+            if ", but couldn't find location" in e.message:
+                # OCLC doesn't know about an ISBN.
+                return True
             return False
         return True
 
