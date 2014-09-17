@@ -13,9 +13,11 @@ from nose.tools import set_trace
 from model import (
     get_one_or_create,
     CirculationEvent,
+    CoverageProvider,
     DataSource,
     LicensePool,
     WorkIdentifier,
+    WorkRecord,
 )
 
 from integration import (
@@ -46,8 +48,9 @@ class ThreeMAPI(object):
         self.base_url = base_url
         self.event_cache = FilesystemCache(
             os.path.join(data_dir, "cache", "events"))
-        self.bibliographic_Cache = FilesystemCache(
+        self.bibliographic_cache = FilesystemCache(
             os.path.join(data_dir, "cache", "bibliographic"), 3)
+        self.item_list_parser = ItemListParser()
 
     def now(self):
         """Return the current GMT time in the format 3M expects."""
@@ -136,6 +139,21 @@ class ThreeMAPI(object):
             start += increment
             stop += increment
             #chunk = [x[LicensedWork.SOURCE_ID] for x in items[start:stop]]
+
+    def get_bibliographic_info_for(self, ids):
+        results = dict()
+        uncached_ids = set(ids)
+        for id in ids:
+            if self.bibliographic_cache.exists(id):
+                results[id] = self.bibliographic_cache.open(id).read()
+                uncached_ids.remove(id)
+
+        url = "/items/" + ",".join(map(str, uncached_ids))
+        response = self.request(url)
+        for (id, raw, cooked) in self.item_list_parser.parse(response):
+            self.bibliographic_cache.store(id, raw)
+            results[id] = cooked
+        return results
       
 class CirculationParser(XMLParser):
 
@@ -241,7 +259,7 @@ class ItemListParser(XMLParser):
                 if not Edition.LINKS in item:
                     item[Edition.LINKS] = {}
                 item[Edition.LINKS][relation] = [{Edition.LINK_TARGET:link}]
-        # We need to return an (ID, raw, cooked) 3-tuples
+        # We need to return an (ID, raw, cooked) 3-tuple
         return (item[Edition.SOURCE_ID],
               etree.tostring(tag),
               item)
@@ -294,7 +312,7 @@ class ThreeMCirculationMonitor(Monitor):
 
     This is where new books are given their LicensePools.  But the
     bibliographic data isn't inserted into those LicensePools until
-    the ThreeMCoverageProvider runs.
+    the ThreeMBibliographicMonitor runs.
     """
 
     def __init__(self, data_directory, default_start_time=None,
@@ -343,6 +361,10 @@ class ThreeMCirculationMonitor(Monitor):
         isbn, ignore = WorkIdentifier.for_foreign_id(
             _db, WorkIdentifier.ISBN, isbn)
 
+        # Create an empty WorkRecord for this LicensePool.
+        work_record, ignore = WorkRecord.for_foreign_id(
+            _db, data_source, WorkIdentifier.THREEM_ID, threem_id)
+
         # The ISBN and the 3M identifier are exactly equivalent.
         threem_identifier.equivalent_to(data_source, isbn, strength=1)
 
@@ -368,6 +390,34 @@ class ThreeMCirculationMonitor(Monitor):
                 )
             )
 
+
+class ThreeMBibliographicMonitor(CoverageProvider):
+    """Fill in bibliographic metadata for 3M records."""
+
+    def __init__(self, _db, data_directory,
+                 account_id=None, library_id=None, account_key=None):
+        path = os.path.join(data_directory, DataSource.THREEM)
+        self.source = ThreeMAPI(path, account_id, library_id, account_key)
+        self._db = _db
+        self.input_source = DataSource.lookup(_db, DataSource.THREEM)
+        self.output_source = DataSource.lookup(_db, DataSource.THREEM)
+        super(ThreeMBibliographicMonitor, self).__init__(
+            "3M Bibliographic Monitor",
+            self.input_source, self.output_source)
+        self.current_batch = []
+
+    def process_work_record(self, wr):
+        self.current_batch.append(wr)
+        if len(self.current_batch) == 25:
+            self.process_batch(self.current_batch)
+            self.current_batch = []
+
+    def process_batch(self, batch):
+        identifiers = [x.primary_identifier.identifier for x in batch]
+        for info in self.source.get_bibliographic_info_for(identifiers):
+            self.annotate_work_record_with_bibliographic_information(
+                self._db, wr, info, self.input_source
+            )
 
 # class ThreeMMetadataMonitor(MetadataMonitor):
 
