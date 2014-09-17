@@ -4,6 +4,7 @@ import sys
 import os
 import numpy
 import csv
+from csv import Dialect
 from textblob import TextBlob
 from collections import defaultdict
 
@@ -19,6 +20,14 @@ from model import (
     production_session
 )
 
+class WakaDialect(Dialect):
+    delimiter=","
+    doublequote = False
+    escapechar = "\\"
+    quotechar='"'
+    lineterminator="\r\n"
+    quoting=csv.QUOTE_NONNUMERIC
+
 class SubjectFinder(object):
 
     def __init__(self, db):
@@ -26,16 +35,19 @@ class SubjectFinder(object):
         self.overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
 
     def write(self, output_file):
-        out = csv.writer(open(output_file, "w"), quoting=csv.QUOTE_NONNUMERIC)
+        out = csv.writer(open(output_file, "w"), 
+                         dialect=WakaDialect)
         all_genres = set()
 
         c = 0
         for lp in self._db.query(LicensePool).filter(LicensePool.data_source==self.overdrive):
             work = lp.work
+            if not work:
+                continue
             if not work.genres:
                 continue
             ids = lp.identifier.equivalent_identifier_ids()
-            subjects = [x.subject for x in self._db.query(Classification).filter(Classification.work_identifier_id.in_(ids)).filter(Classification.data_source != self.overdrive)]
+            subjects = set([x.subject for x in self._db.query(Classification).filter(Classification.work_identifier_id.in_(ids)).filter(Classification.data_source != self.overdrive)])
             if not subjects:
                 continue
             all_subjects = []
@@ -50,7 +62,7 @@ class SubjectFinder(object):
                      work.fiction, work.audience, genre.name,
                      (";".join(all_subjects)).encode("utf8")])
             c += 1
-            if not c % 1000:
+            if not c % 100:
                 print c
 
         print "{%s}" % (",".join(sorted(all_genres)))
