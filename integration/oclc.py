@@ -159,7 +159,8 @@ class OCLCLinkedData(object):
             cached = True
         else:
             url = url % dict(id=identifier, type=foreign_type)
-            print "%s => %s" % (url, self.cache._filename(cache_key))
+            #print " %s => %s" % (url, self.cache._filename(cache_key))
+            print "", url
             raw = self.request(url) or ''
             self.cache.store(cache_key, raw)
         f = self.cache._filename(cache_key)
@@ -346,7 +347,7 @@ class OCLCLinkedData(object):
                     elif type_id == 'schema:Intangible':
                         use_type = Subject.TAG
                         break
-                    print type_id, result
+                    print "", type_id, result
                     
             if use_type:
                 for value in ldq.values(name):
@@ -995,7 +996,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     print "", workrecord.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
                 for isbn in isbns:
-                    print "NEW ISBN: %s" % isbn
+                    print " NEW ISBN: %s" % isbn
                 new_descriptions += len(descriptions)
 
             print "Total: %s editions, %s ISBNs, %s descriptions." % (
