@@ -1,3 +1,4 @@
+from nose.tools import set_trace
 import datetime
 import time
 
@@ -18,14 +19,14 @@ class Monitor(object):
 
     def run(self, _db):
         
-        timestamp, new = get_one_or_create(
+        self.timestamp, new = get_one_or_create(
             _db, Timestamp,
             service=self.service_name,
             create_method_kwargs=dict(
                 timestamp=self.default_start_time
             )
         )
-        start = timestamp.timestamp
+        start = self.timestamp.timestamp or self.default_start_time
 
         while not self.stop_running:
             cutoff = datetime.datetime.utcnow()
@@ -33,7 +34,7 @@ class Monitor(object):
             duration = datetime.datetime.utcnow() - cutoff
             to_sleep = self.interval_seconds-duration.seconds-1
             self.cleanup()
-            timestamp.timestamp = cutoff
+            self.timestamp.timestamp = cutoff
             _db.commit()
             if to_sleep > 0:
                 time.sleep(to_sleep)

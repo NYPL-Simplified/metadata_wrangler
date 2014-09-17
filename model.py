@@ -2905,7 +2905,7 @@ class CirculationEvent(Base):
     old_value = Column(Integer)
     delta = Column(Integer)
     new_value = Column(Integer)
-    foreign_patron_id = Column(Integer)
+    foreign_patron_id = Column(String)
 
     # A given license pool can only have one event of a given type for
     # a given patron at a given time.

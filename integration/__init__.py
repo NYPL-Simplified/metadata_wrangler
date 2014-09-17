@@ -33,7 +33,7 @@ class XMLParser(object):
     def process_all(self, xml, xpath, namespaces={}, handler=None):
         if not handler:
             handler = self.process_one
-        if isinstance(xml, str):
+        if isinstance(xml, basestring):
             root = etree.fromstring(xml)
         else:
             root = xml
