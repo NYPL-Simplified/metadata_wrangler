@@ -110,7 +110,7 @@ class TestNavigationFeed(CirculationTest):
             feed = feedparser.parse(response)
             links = feed['feed']['links']
             for expect_rel, expect_href_end in (
-                    ('search', '/search'), 
+                    ('search', '/search/'), 
                     ('http://opds-spec.org/shelf', '/loans/')):
                 link = [x for x in links if x['rel'] == expect_rel][0]
                 assert link['href'].endswith(expect_href_end)

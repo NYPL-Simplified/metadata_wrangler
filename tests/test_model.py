@@ -977,16 +977,17 @@ class TestWorkFeed(DatabaseTest):
             Classifier.AUDIENCE_ADULT)
 
     def test_setup(self):
-        by_author = WorkFeed(self.fantasy_lane, "eng", order_by=Work.authors)
+        by_author = WorkFeed(self.fantasy_lane, "eng", order_by=
+                             [Work.sort_author, Work.authors])
 
         eq_(["eng"], by_author.languages)
         eq_(self.fantasy_lane, by_author.lane)
-        eq_([Work.authors, Work.title, Work.id], by_author.order_by)
+        eq_([Work.sort_author, Work.authors, Work.sort_title, Work.title, Work.id], by_author.order_by)
 
         by_title = WorkFeed(self.fantasy_lane, ["eng", "spa"],
-                            order_by=Work.title)
+                            order_by=[Work.sort_title, Work.title])
         eq_(["eng", "spa"], by_title.languages)
-        eq_([Work.title, Work.authors, Work.id], by_title.order_by)
+        eq_([Work.sort_title, Work.title, Work.sort_author, Work.authors, Work.id], by_title.order_by)
 
     def test_several_books_same_author(self):
         title = "The Title"

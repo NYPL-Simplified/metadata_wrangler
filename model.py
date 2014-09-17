@@ -1223,6 +1223,8 @@ class WorkRecord(Base):
         have never been used as input to the OCLC Classify web
         service.
         """
+        if isinstance(workrecord_data_sources, DataSource):
+            workrecord_data_sources = [workrecord_data_sources]
         workrecord_data_source_ids = [x.id for x in workrecord_data_sources]
         join_clause = ((WorkRecord.id==CoverageRecord.work_record_id) &
                        (CoverageRecord.data_source_id==coverage_data_source.id))
@@ -2788,7 +2790,6 @@ class LicensePool(Base):
         # unclaimed.
         claimed, unclaimed = self.potential_works(
             final_threshold=record_similarity_threshold)
-        set_trace()
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
