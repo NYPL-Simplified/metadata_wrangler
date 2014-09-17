@@ -2788,6 +2788,7 @@ class LicensePool(Base):
         # unclaimed.
         claimed, unclaimed = self.potential_works(
             final_threshold=record_similarity_threshold)
+        set_trace()
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
         print "Calculating work for %r" % primary_work_record
@@ -3046,7 +3047,7 @@ class CoverageProvider(object):
     @property
     def workrecords_that_need_coverage(self):
         return WorkRecord.missing_coverage_from(
-            self._db, self.input_sources, self.output_source)
+            self._db, self.input_sources, self.output_source).order_by(func.random())
 
     def run(self):
         remaining = True
