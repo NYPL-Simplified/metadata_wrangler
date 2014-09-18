@@ -24,7 +24,8 @@ from model import (
 )
 
 from integration import (
-    FilesystemCache
+    FilesystemCache,
+    CoverImageMirror,
 )
 from monitor import Monitor
 from util import LanguageCodes
@@ -510,73 +511,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         return True
 
-class OverdriveCoverImageMirror(object):
+class OverdriveCoverImageMirror(CoverImageMirror):
     """Downloads images from Overdrive and writes them to disk."""
 
-    COVERS_DIR = "covers"
-    ORIGINAL_SUBDIR = "original"
-    SCALED_SUBDIR = "scaled"
     ORIGINAL_PATH_VARIABLE = "original_overdrive_covers_mirror"
     SCALED_PATH_VARIABLE = "scaled_overdrive_covers_mirror"
     DATA_SOURCE = DataSource.OVERDRIVE
-
-    @classmethod
-    def data_directory(self, base_data_directory):
-        return os.path.join(base_data_directory, OverdriveAPI.EVENT_SOURCE, 
-                            self.COVERS_DIR, self.ORIGINAL_SUBDIR)
-
-    @classmethod
-    def scaled_image_directory(self, base_data_directory):
-        return os.path.join(base_data_directory, OverdriveAPI.EVENT_SOURCE, 
-                            self.COVERS_DIR, self.SCALED_SUBDIR)
-
-    def __init__(self, db, data_directory):
-        self._db = db
-        self.data_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        self.original_subdir = self.data_directory(data_directory)
-        self.original_cache = FilesystemCache(self.original_subdir, 3)
-
-    def run(self):
-        """Mirror all image resources associated with Overdrive."""
-        q = self._db.query(Resource).filter(
-            Resource.rel==Resource.IMAGE).filter(
-                Resource.data_source==self.data_source).filter(
-                    Resource.mirror_date==None)
-        resultset = q.limit(100).all()
-        while resultset:
-            for resource in resultset:
-                self.mirror(resource)
-            self._db.commit()
-            resultset = q.limit(100).all()
-        self._db.commit()
-
-    types_for_image_extensions = { ".jpg" : "image/jpeg",
-                                   ".gif" : "image/gif",
-                                   ".png" : "image/png"}
-
-    def mirror(self, resource):
-
-        href = resource.href
-        extension = href[href.rindex('.'):]
-        filename = resource.work_identifier.identifier + extension
-        if self.original_cache.exists(filename):
-            content_type = self.types_for_image_extensions.get(
-                filename, "image/jpeg")
-            data = self.original_cache.open(filename).read()
-            location = self.original_cache._filename(filename)
-            network = False
-        else:
-            response = requests.get(resource.href)
-            if response.status_code != 200:
-                resource.could_not_mirror()
-                return
-            content_type = response.headers['Content-Type']
-            data = response.content
-            location = self.original_cache.store(filename, data)
-            network = True
-        path = "%(" + self.ORIGINAL_PATH_VARIABLE + ")s" + location[len(self.original_subdir):]
-        if network:
-            print "%s => %s" % (resource.href, path)
-        else:
-            print "CACHE %s" % path
-        resource.mirrored_to(path, content_type, data)

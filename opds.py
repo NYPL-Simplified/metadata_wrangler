@@ -55,6 +55,7 @@ class URLRewriter(object):
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
     SCALED_OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive"
+    SCALED_THREEM_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/3M"
     GUTENBERG_MIRROR_HOST = "http://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
 
     @classmethod
@@ -68,7 +69,9 @@ class URLRewriter(object):
         elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
                               gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST,
-                              scaled_overdrive_covers_mirror=cls.SCALED_OVERDRIVE_IMAGE_MIRROR_HOST)
+                              scaled_overdrive_covers_mirror=cls.SCALED_OVERDRIVE_IMAGE_MIRROR_HOST,
+                              scaled_threem_covers_mirror=cls.SCALED_THREEM_IMAGE_MIRROR_HOST,
+            )
         else:
             return url
 

@@ -1914,6 +1914,8 @@ class Resource(Base):
         scaled_content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/CC",
         original_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Overdrive/",
         scaled_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive",
+        original_threem_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/3M/",
+        scaled_threem_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/3M",
         gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     )
 

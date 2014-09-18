@@ -26,6 +26,7 @@ from model import (
 )
 
 from integration import (
+    CoverImageMirror,
     XMLParser,
     FilesystemCache,
 )
@@ -515,3 +516,14 @@ class ThreeMCirculationMonitor(Monitor):
             item[LicensePool.licenses_reserved],
             item[LicensePool.patrons_in_hold_queue])
         print "%r: %d owned, %d available, %d reserved, %d queued" % (pool.work_record(), pool.licenses_owned, pool.licenses_available, pool.licenses_reserved, pool.patrons_in_hold_queue)
+
+
+class ThreeMCoverImageMirror(CoverImageMirror):
+    """Downloads images from Overdrive and writes them to disk."""
+
+    ORIGINAL_PATH_VARIABLE = "original_threem_covers_mirror"
+    SCALED_PATH_VARIABLE = "scaled_threem_covers_mirror"
+    DATA_SOURCE = DataSource.THREEM
+
+    def filename_for(self, resource):
+        return resource.work_identifier.identifier + ".jpg"
