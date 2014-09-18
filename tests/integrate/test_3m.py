@@ -2,9 +2,13 @@ from nose.tools import set_trace, eq_
 import datetime
 import pkgutil
 from model import (
-    Edition,
-    Event,
-    LicensedWork,
+    CirculationEvent,
+    Contributor,
+    DataSource,
+    LicensePool,
+    Resource,
+    WorkIdentifier,
+    WorkRecord,
 )
 from integration.threem import (
     CirculationParser,
@@ -50,32 +54,27 @@ class Test3MEventParser(object):
         # Parsing the XML gives us two events.
         event1, event2 = EventParser().process_all(self.TWO_EVENTS)
 
-        # Events have been tagged as originating from 3M.
-        for i in event1, event2:
-            eq_(EventParser.EVENT_SOURCE, event1[Event.SOURCE])
+        (threem_id, isbn, patron_id, start_time, end_time,
+         internal_event_type) = event1
 
-        # Source ID, patron ID, and ISBN have bene picked up.
-        for k, prefix in (
-                (Event.PATRON_ID, "patronid"),
-                (Event.SOURCE_BOOK_ID, "theitem"),
-                (LicensedWork.ISBN, "900isbn")):
-            eq_(prefix + "1", event1[k])
-            eq_(prefix + "2", event2[k])
+        eq_("theitem1", threem_id)
+        eq_("900isbn1", isbn)
+        eq_("patronid1", patron_id)
+        eq_(CirculationEvent.CHECKIN, internal_event_type)
+        eq_(start_time, end_time)
 
-        # The event name has been translated.
-        eq_(Event.CHECKIN, event1[Event.EVENT_TYPE])
-        eq_(Event.CHECKOUT, event2[Event.EVENT_TYPE])
-
-        # The first event has no end time, since its start and end
-        # times were identical.
-        assert not Event.END_TIME in event1
-        assert Event.END_TIME in event2
+        (threem_id, isbn, patron_id, start_time, end_time,
+         internal_event_type) = event2
+        eq_("theitem2", threem_id)
+        eq_("900isbn2", isbn)
+        eq_("patronid2", patron_id)
+        eq_(CirculationEvent.CHECKOUT, internal_event_type)
 
         # Verify that start and end time were parsed correctly.
         correct_start = datetime.datetime(2014, 4, 3, 0, 0, 34)
         correct_end = datetime.datetime(2014, 4, 2, 23, 57, 37)
-        eq_(correct_start, event2[Event.START_TIME])
-        eq_(correct_end, event2[Event.END_TIME])
+        eq_(correct_start, start_time)
+        eq_(correct_end, end_time)
 
 
 class Test3MCirculationParser(object):
@@ -137,26 +136,32 @@ class Test3MCirculationParser(object):
     def test_parse_circulation_batch(self):
         event1, event2 = CirculationParser().process_all(
             self.TWO_CIRCULATION_STATUSES)
-        eq_(event1[LicensedWork.SOURCE_ID], 'item1')
-        eq_(event1[LicensedWork.ISBN], '900isbn1')
-        eq_(event1[LicensedWork.AVAILABLE], 0)
-        eq_(event1[LicensedWork.OWNED], 2)
-        eq_(event1[LicensedWork.RESERVES], 1)
-        eq_(event1[LicensedWork.CHECKOUTS], 1)
-        eq_(event1[LicensedWork.HOLDS], 0)
+
+        eq_('item1', event1[WorkIdentifier][WorkIdentifier.THREEM_ID])
+        eq_('900isbn1', event1[WorkIdentifier][WorkIdentifier.ISBN])
+        eq_(2, event1[LicensePool.licenses_owned])
+        eq_(0, event1[LicensePool.licenses_available])
+        eq_(1, event1[LicensePool.licenses_reserved])
+        eq_(0, event1[LicensePool.patrons_in_hold_queue])
+
+        eq_('item2', event2[WorkIdentifier][WorkIdentifier.THREEM_ID])
+        eq_('900isbn2', event2[WorkIdentifier][WorkIdentifier.ISBN])
+        eq_(1, event2[LicensePool.licenses_owned])
+        eq_(0, event2[LicensePool.licenses_available])
+        eq_(0, event2[LicensePool.licenses_reserved])
+        eq_(1, event2[LicensePool.patrons_in_hold_queue])
 
 
 class TestItemListParser(object):
 
     def text_parse_author_string(cls):
-        authors = ItemListParser.parse_author_string(
+        authors = ItemListParser.author_names_from_string(
             "Walsh, Jill Paton; Sayers, Dorothy L.")
-        eq_(authors, [dict(name="Walsh, Jill Paton"),
-                      dict(name="Sayers, Dorothy L.")])
+        eq_(authors, ["Walsh, Jill Paton", "Sayers, Dorothy L."])
 
     def test_item_list(cls):
         data = pkgutil.get_data(
-            "tests.integration",
+            "tests.integrate",
             "files/3m_item_metadata_list.xml")
         
         data = [(id, raw, cooked)
@@ -172,24 +177,24 @@ class TestItemListParser(object):
 
         assert raw.startswith("<Item")
 
-        eq_(id, cooked[Edition.SOURCE_ID])
-        eq_("The Incense Game", cooked[Edition.TITLE])
-        eq_("A Novel of Feudal Japan", cooked[Edition.SUBTITLE])
-        eq_("9781250015280", cooked[Edition.ISBN])
-        eq_([dict(name="Rowland, Laura Joh")], cooked[Edition.AUTHOR])
-        eq_("en", cooked[Edition.LANGUAGE])
-        eq_("St. Martin's Press", cooked[Edition.PUBLISHER])
-        eq_("1.2 MB", cooked[Edition.FILE_SIZE])
-        eq_("304", cooked[Edition.NUMBER_OF_PAGES])
-        eq_("2012-09-17", cooked[Edition.DATE_PUBLISHED])
+        eq_(id, cooked[WorkIdentifier][WorkIdentifier.THREEM_ID])
+        eq_("9781250015280", cooked[WorkIdentifier][WorkIdentifier.ISBN])
+        eq_("The Incense Game", cooked[WorkRecord.title])
+        eq_("A Novel of Feudal Japan", cooked[WorkRecord.subtitle])
+        eq_(["Rowland, Laura Joh"], cooked[Contributor])
+        eq_("eng", cooked[WorkRecord.language])
+        eq_("St. Martin's Press", cooked[WorkRecord.publisher])
+        eq_("1.2 MB", cooked['extra']['fileSize'])
+        eq_("304", cooked['extra']['numberOfPages'])
+        eq_(datetime.datetime(year=2012, month=9, day=17), cooked[WorkRecord.published])
 
-        assert cooked[Edition.SUMMARY][Edition.TEXT_VALUE].startswith(
-            "<b>Winner")
+        summary = cooked[Resource][Resource.DESCRIPTION]
+        assert summary.startswith("<b>Winner")
 
         # Check the links
 
-        l1 = cooked[Edition.LINKS][Edition.IMAGE][0]['href']
-        assert l1.startswith("http://ebook.3m.com/delivery")
+        image = cooked[Resource][Resource.IMAGE]
+        assert image.startswith("http://ebook.3m.com/delivery")
 
-        l2 = cooked[Edition.LINKS]['alternate'][0]['href']
-        assert l2.startswith("http://ebook.3m.com/library")
+        alternate = cooked[Resource]["alternate"]
+        assert image.startswith("http://ebook.3m.com/library")

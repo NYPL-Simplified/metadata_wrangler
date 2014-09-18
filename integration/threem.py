@@ -232,7 +232,8 @@ class ItemListParser(XMLParser):
             return self.text_of_optional_subtag(tag, threem_key)
         resources = dict()
         identifiers = dict()
-        item = { Resource : resources,  WorkIdentifier: identifiers }
+        item = { Resource : resources,  WorkIdentifier: identifiers,
+                 "extra": {} }
 
         identifiers[WorkIdentifier.THREEM_ID] = value("ItemId")
         identifiers[WorkIdentifier.ISBN] = value("ISBN13")
@@ -260,13 +261,15 @@ class ItemListParser(XMLParser):
             except ValueError, e:
                 pass
 
-        if not published_date:
-            set_trace()
         item[WorkRecord.published] = published_date
 
         resources[Resource.DESCRIPTION] = value("Description")
         resources[Resource.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
         resources["alternate"] = value("BookLinkURL").replace("&amp;", "&")
+
+        item['extra']['fileSize'] = value("Size")
+        item['extra']['numberOfPages'] = value("NumberOfPages")
+
         return identifiers[WorkIdentifier.THREEM_ID], etree.tostring(tag), item
 
 
@@ -458,6 +461,8 @@ class ThreeMBibliographicMonitor(CoverageProvider):
 
         for name in info[Contributor]:
             wr.add_contributor(name, Contributor.AUTHOR_ROLE)
+
+        wr.extra = info['extra']
 
         # Associate resources with the work record.
         for rel, value in info[Resource].items():
