@@ -308,7 +308,7 @@ class EventParser(XMLParser):
                 internal_event_type)
 
 
-class ThreeMCirculationMonitor(Monitor):
+class ThreeMEventMonitor(Monitor):
 
     """Maintain license pool for 3M titles.
 
@@ -320,7 +320,7 @@ class ThreeMCirculationMonitor(Monitor):
     def __init__(self, data_directory, default_start_time=None,
                  account_id=None, library_id=None, account_key=None):
         super(ThreeMCirculationMonitor, self).__init__(
-            "3M Circulation Monitor", default_start_time=default_start_time)
+            "3M Event Monitor", default_start_time=default_start_time)
         path = os.path.join(data_directory, DataSource.THREEM)
         if not os.path.exists(path):
             os.makedirs(path)
