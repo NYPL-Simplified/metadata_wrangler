@@ -10,6 +10,9 @@ from lxml import etree
 import json
 
 from nose.tools import set_trace
+
+from sqlalchemy import or_
+
 from model import (
     get_one_or_create,
     Contributor,
@@ -130,20 +133,14 @@ class ThreeMAPI(object):
         events = EventParser().process_all(data)
         return events
 
-    def get_circulation_for(self, items):
-        """Return circulation objects for the selected items."""
-        increment = 25
-        start = 0
-        stop = increment
-        #chunk = [x[LicensedWork.SOURCE_ID] for x in items[start:stop]]
-        while chunk:
-            url = "/circulation/items/" + ",".join(map(str, chunk))
-            data = self.request(url).text
-            for circ in CirculationParser().process_all(data):
+    def get_circulation_for(self, identifiers):
+        """Return circulation objects for the selected identifiers."""
+        url = "/circulation/items/" + ",".join(identifiers)
+        # We don't cache this data--it changes too frequently.
+        data = self.request(url)
+        for circ in CirculationParser().process_all(data):
+            if circ:
                 yield circ
-            start += increment
-            stop += increment
-            #chunk = [x[LicensedWork.SOURCE_ID] for x in items[start:stop]]
 
     def get_bibliographic_info_for(self, work_records):
         results = dict()
@@ -173,18 +170,7 @@ class ThreeMAPI(object):
       
 class CirculationParser(XMLParser):
 
-    """Parse 3M's circulation XML dialect into LicensedWork dictionaries."""
-
-    # Map our names to 3M's names.
-    # NAMES = {
-    #     LicensedWork.SOURCE_ID : "ItemId",
-    #     LicensedWork.ISBN : "ISBN13",
-    #     LicensedWork.OWNED : "TotalCopies",
-    #     LicensedWork.AVAILABLE : "AvailableCopies", 
-    #     LicensedWork.CHECKOUTS : "Checkouts", 
-    #     LicensedWork.HOLDS : "Holds",
-    #     LicensedWork.RESERVES : "Reserves",
-    # }
+    """Parse 3M's circulation XML dialect into something we can apply to a LicensePool."""
 
     def process_all(self, string):
         for i in super(CirculationParser, self).process_all(
@@ -192,31 +178,34 @@ class CirculationParser(XMLParser):
             yield i
 
     def process_one(self, tag, namespaces):
-        if not tag.xpath(self.NAMES[LicensedWork.SOURCE_ID]):
+        if not tag.xpath("ItemId"):
             # This happens for events associated with books
             # no longer in our collection.
             return None
 
-        item = LicensedWork()
+        def value(key):
+            return self.text_of_subtag(tag, key)
 
-        # Grab strings
-        for outkey in [LicensedWork.SOURCE_ID, LicensedWork.ISBN]:
-            inkey = self.NAMES[outkey]
-            value = self.text_of_subtag(tag, inkey)
-            item[outkey] = value
+        def intvalue(key):
+            return self.int_of_subtag(tag, key)
 
-        for outkey in LicensedWork.OWNED, LicensedWork.AVAILABLE:
-            inkey = self.NAMES[outkey]
-            value = self.int_of_subtag(tag, inkey)
-            item[outkey] = value
+        identifiers = {}
+        item = { WorkIdentifier : identifiers }
+
+        identifiers[WorkIdentifier.THREEM_ID] = value("ItemId")
+        identifiers[WorkIdentifier.ISBN] = value("ISBN13")
+        
+        item[LicensePool.licenses_owned] = intvalue("TotalCopies")
+        item[LicensePool.licenses_available] = intvalue("AvailableCopies")
 
         # Counts of patrons who have the book in a certain state.
-        for outkey in [LicensedWork.CHECKOUTS, LicensedWork.HOLDS,
-                  LicensedWork.RESERVES]:
-            inkey = self.NAMES[outkey]
-            t = tag.xpath(inkey)[0]
+        for threem_key, simplified_key in [
+                ("Holds", LicensePool.patrons_in_hold_queue),
+                ("Reserves", LicensePool.licenses_reserved)
+        ]:
+            t = tag.xpath(threem_key)[0]
             value = int(t.xpath("count(Patron)"))
-            item[outkey] = value
+            item[simplified_key] = value
 
         return item
 
@@ -323,16 +312,18 @@ class EventParser(XMLParser):
 
 class ThreeMEventMonitor(Monitor):
 
-    """Maintain license pool for 3M titles.
+    """Register CirculationEvents for 3M titles.
 
-    This is where new books are given their LicensePools.  But the
-    bibliographic data isn't inserted into those LicensePools until
-    the ThreeMBibliographicMonitor runs.
+    When a new book comes on the scene, we find out about it here and
+    we create a LicensePool.  But the bibliographic data isn't
+    inserted into those LicensePools until the
+    ThreeMBibliographicMonitor runs. And the circulation data isn't
+    associated with it until the ThreeMCirculationMonitor runs.
     """
 
     def __init__(self, data_directory, default_start_time=None,
                  account_id=None, library_id=None, account_key=None):
-        super(ThreeMCirculationMonitor, self).__init__(
+        super(ThreeMEventMonitor, self).__init__(
             "3M Event Monitor", default_start_time=default_start_time)
         path = os.path.join(data_directory, DataSource.THREEM)
         if not os.path.exists(path):
@@ -373,11 +364,15 @@ class ThreeMEventMonitor(Monitor):
         # Find or lookup the LicensePool for this event.
         license_pool, is_new = LicensePool.for_foreign_id(
             _db, data_source, WorkIdentifier.THREEM_ID, threem_id)
+
+        # Force the ThreeMCirculationMonitor to check on this book the
+        # next time it runs.
+        license_pool.last_checked = None
+
         threem_identifier = license_pool.identifier
         isbn, ignore = WorkIdentifier.for_foreign_id(
             _db, WorkIdentifier.ISBN, isbn)
 
-        # Create an empty WorkRecord for this LicensePool.
         work_record, ignore = WorkRecord.for_foreign_id(
             _db, data_source, WorkIdentifier.THREEM_ID, threem_id)
 
@@ -475,34 +470,48 @@ class ThreeMBibliographicMonitor(CoverageProvider):
                 content = None
             identifier.add_resource(rel, href, input_source, pool, media_type, content)
 
-# class ThreeMMetadataMonitor(MetadataMonitor):
 
-#     DEFAULT_BATCH_SIZE = 25
-#     URL_TEMPLATE = "/items/"
+class ThreeMCirculationMonitor(Monitor):
 
-#     def __init__(self, _db, data_directory):
-#         self.overdrive = OverdriveAPI(data_directory)
-#         self._db = _db
-#         self.input_source = DataSource.lookup(_db, DataSource.THREEM)
-#         self.output_source = DataSource.lookup(_db, DataSource.THREEM)
-#         self.source = ThreeMAPI(
-#             _creds.account_id, _creds.library_id, _creds.account_key)
-#         super(ThreeMCirculationMonitor, self).__init__(
-#             "3M Circulation Monitor", self.input_source, self.output_source)
+    MAX_STALE_TIME = datetime.timedelta(seconds=3600 * 24 * 30)
 
-#     def __init__(self, data_directory, batch_size=None):
-#         source = ThreeMAPI(
-#             _creds.account_id, _creds.library_id, _creds.account_key)
-#         circulation = ThreeMCirculationMonitor(data_directory).store
-#         metadata = FilesystemMetadataStore(circulation.data_directory)
-#         self.parser = ItemListParser()
-#         super(ThreeMMetadataMonitor, self).__init__(
-#             source, circulation, metadata, batch_size)
+    def __init__(self, data_directory, account_id=None, library_id=None, account_key=None):
+        super(ThreeMCirculationMonitor, self).__init__("3M Circulation Monitor")
+        path = os.path.join(data_directory, DataSource.THREEM)
+        self.source = ThreeMAPI(path, account_id, library_id, account_key)
 
-#     def retrieve_metadata_batch(self, ids):
-#         url = self.URL_TEMPLATE + ",".join(map(str, ids))
-#         response = self.source.request(url)
-#         raw = response.text
-#         for (id, raw, cooked) in self.parser.parse(response.text):
-#             self.metadata.store(id, raw, cooked)
+    def run_once(self, _db, start, cutoff):
+        stale_at = start - self.MAX_STALE_TIME
+        data_source = DataSource.lookup(_db, DataSource.THREEM)
+        clause = or_(LicensePool.last_checked==None,
+                    LicensePool.last_checked <= stale_at)
+        q = _db.query(LicensePool).filter(clause).filter(
+            LicensePool.data_source==data_source)
+        current_batch = []
+        for pool in q:
+            current_batch.append(pool)
+            if len(current_batch) == 25:
+                self.process_batch(_db, current_batch)
+                current_batch = []
+        if current_batch:
+            self.process_batch(current_batch)
 
+    def process_batch(self, _db, pools):
+        identifiers = []
+        pool_for_identifier = dict()
+        for p in pools:
+            pool_for_identifier[p.identifier.identifier] = p
+            identifiers.append(p.identifier.identifier)
+        for item in self.source.get_circulation_for(identifiers):
+            identifier = item[WorkIdentifier][WorkIdentifier.THREEM_ID]
+            pool = pool_for_identifier[identifier]
+            self.process_pool(_db, pool, item)
+        _db.commit()
+        
+    def process_pool(self, _db, pool, item):
+        pool.update_availability(
+            item[LicensePool.licenses_owned],
+            item[LicensePool.licenses_available],
+            item[LicensePool.licenses_reserved],
+            item[LicensePool.patrons_in_hold_queue])
+        print "%r: %d owned, %d available, %d reserved, %d queued" % (pool.work_record(), pool.licenses_owned, pool.licenses_available, pool.licenses_reserved, pool.patrons_in_hold_queue)
