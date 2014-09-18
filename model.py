@@ -3077,9 +3077,9 @@ class CoverageProvider(object):
                 else:
                     failures.add(record)
             # Commit this workset before moving on to the next one.
+            self.commit_workset()
             print "Workset processed with %d successes, %d failures." % (
-                successes, len(failures))
-            self._db.commit()
+                successes, len(failures))            
 
         # Now that we're done, update the timestamp
         Timestamp.stamp(self._db, self.service_name)
@@ -3087,6 +3087,9 @@ class CoverageProvider(object):
 
     def process_work_record(self, work_record):
         raise NotImplementedError()
+
+    def commit_workset(self):
+        self._db.commit()
 
 class ImageScaler(object):
 

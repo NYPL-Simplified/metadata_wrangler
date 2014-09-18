@@ -12,10 +12,12 @@ import json
 from nose.tools import set_trace
 from model import (
     get_one_or_create,
+    Contributor,
     CirculationEvent,
     CoverageProvider,
     DataSource,
     LicensePool,
+    Resource,
     WorkIdentifier,
     WorkRecord,
 )
@@ -25,6 +27,7 @@ from integration import (
     FilesystemCache,
 )
 from monitor import Monitor
+from util import LanguageCodes
 
 class ThreeMAPI(object):
 
@@ -142,19 +145,30 @@ class ThreeMAPI(object):
             stop += increment
             #chunk = [x[LicensedWork.SOURCE_ID] for x in items[start:stop]]
 
-    def get_bibliographic_info_for(self, ids):
+    def get_bibliographic_info_for(self, work_records):
         results = dict()
-        uncached_ids = set(ids)
-        for id in ids:
-            if self.bibliographic_cache.exists(id):
-                results[id] = self.bibliographic_cache.open(id).read()
-                uncached_ids.remove(id)
+        identifiers = []
+        wr_for_identifier = dict()
+        for wr in work_records:
+            identifier = wr.primary_identifier.identifier
+            identifiers.append(identifier)
+            wr_for_identifier[identifier] = wr
+        uncached = set(identifiers)
+        for identifier in identifiers:
+            if self.bibliographic_cache.exists(identifier):
+                wr = wr_for_identifier[identifier]
+                data = self.bibliographic_cache.open(identifier).read()
+                identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
+                results[identifier] = (wr, cooked)
+                uncached.remove(identifier)
 
-        url = "/items/" + ",".join(map(str, uncached_ids))
-        response = self.request(url)
-        for (id, raw, cooked) in self.item_list_parser.parse(response):
-            self.bibliographic_cache.store(id, raw)
-            results[id] = cooked
+        if uncached:
+            url = "/items/" + ",".join(uncached)
+            response = self.request(url)
+            for (identifier, raw, cooked) in self.item_list_parser.parse(response):
+                self.bibliographic_cache.store(identifier, raw)
+                wr = wr_for_identifier[identifier]
+                results[identifier] = (wr, cooked)
         return results
       
 class CirculationParser(XMLParser):
@@ -209,62 +223,61 @@ class CirculationParser(XMLParser):
 
 class ItemListParser(XMLParser):
 
-    # BASIC_FIELDS = {
-    #     Edition.SOURCE_ID : "ItemId",
-    #     Edition.TITLE: "Title",
-    #     Edition.SUBTITLE: "SubTitle",
-    #     Edition.ISBN: "ISBN13",
-    #     Edition.LANGUAGE : "Language",
-    #     Edition.PUBLISHER: "Publisher",
-    #     Edition.FILE_SIZE: "Size",
-    #     Edition.NUMBER_OF_PAGES: "NumberOfPages",
-    # }
+    DATE_FORMAT = "%Y-%m-%d"
+    YEAR_FORMAT = "%Y"
 
     def parse(self, xml):
         for i in self.process_all(xml, "//Item"):
             yield i
 
     @classmethod
-    def parse_author_string(cls, string):
-        authors = []
+    def author_names_from_string(cls, string):
+        if not string:
+            return
         for author in string.split(";"):
-            authors.append({Edition.NAME: author.strip()})
-        return authors
+            yield author.strip()
 
     def process_one(self, tag, namespaces):
-        item = dict()
-        for outkey, inkey in self.BASIC_FIELDS.items():
-            value = self.text_of_optional_subtag(tag, inkey)
-            if value:
-                item[outkey] = value
+        def value(threem_key):
+            return self.text_of_optional_subtag(tag, threem_key)
+        resources = dict()
+        identifiers = dict()
+        item = { Resource : resources,  WorkIdentifier: identifiers }
 
-        author_string = self.text_of_optional_subtag(tag, 'Authors')
-        item[Edition.AUTHOR] = self.parse_author_string(author_string)
+        identifiers[WorkIdentifier.THREEM_ID] = value("ItemId")
+        identifiers[WorkIdentifier.ISBN] = value("ISBN13")
 
-        summary = self.text_of_optional_subtag(tag, "Description")
-        if summary:
-            item[Edition.SUMMARY] = { 
-                Edition.TEXT_TYPE : "html",
-                Edition.TEXT_VALUE : summary
-            }
-        published = self.text_of_optional_subtag(tag, "PubDate")
+        item[WorkRecord.title] = value("Title")
+        item[WorkRecord.subtitle] = value("SubTitle")
+        item[WorkRecord.publisher] = value("Publisher")
+        language = value("Language")
+        language = LanguageCodes.two_to_three.get(language, language)
+        item[WorkRecord.language] = language
+
+        author_string = value('Authors')
+        item[Contributor] = list(self.author_names_from_string(author_string))
+
+        published_date = None
+        published = value("PubDate")
+        formats = [self.DATE_FORMAT, self.YEAR_FORMAT]
         if not published:
-            published = self.text_of_optional_subtag(tag, "PubYear")
-        if published:
-            item[Edition.DATE_PUBLISHED] = published
+            published = value("PubYear")
+            formats = [self.YEAR_FORMAT]
 
-        for inkey, relation in [
-                ("CoverLinkURL", Edition.IMAGE),
-                ("BookLinkURL", "alternate")]:
-            link = self.text_of_optional_subtag(tag, inkey)
-            if link:
-                if not Edition.LINKS in item:
-                    item[Edition.LINKS] = {}
-                item[Edition.LINKS][relation] = [{Edition.LINK_TARGET:link}]
-        # We need to return an (ID, raw, cooked) 3-tuple
-        return (item[Edition.SOURCE_ID],
-              etree.tostring(tag),
-              item)
+        for format in formats:
+            try:
+                published_date = datetime.datetime.strptime(published, format)
+            except ValueError, e:
+                pass
+
+        if not published_date:
+            set_trace()
+        item[WorkRecord.published] = published_date
+
+        resources[Resource.DESCRIPTION] = value("Description")
+        resources[Resource.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
+        resources["alternate"] = value("BookLinkURL").replace("&amp;", "&")
+        return identifiers[WorkIdentifier.THREEM_ID], etree.tostring(tag), item
 
 
 class EventParser(XMLParser):
@@ -414,13 +427,53 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         if len(self.current_batch) == 25:
             self.process_batch(self.current_batch)
             self.current_batch = []
+        return True
+
+    def commit_workset(self):
+        # Process any uncompleted batch.
+        self.process_batch(self.current_batch)
+        super(ThreeMBibliographicMonitor, self).commit_workset()
 
     def process_batch(self, batch):
-        identifiers = [x.primary_identifier.identifier for x in batch]
-        for info in self.source.get_bibliographic_info_for(identifiers):
+        for wr, info in self.source.get_bibliographic_info_for(
+                batch).values():
             self.annotate_work_record_with_bibliographic_information(
                 self._db, wr, info, self.input_source
             )
+            print wr
+
+    def annotate_work_record_with_bibliographic_information(
+            self, db, wr, info, input_source):
+
+        # ISBN and 3M ID were associated with the work record earlier,
+        # so don't bother doing it again.
+
+        pool = wr.license_pool
+        identifier = wr.primary_identifier
+
+        if not isinstance(info, dict):
+            set_trace()
+
+        wr.title = info[WorkRecord.title]
+        wr.subtitle = info[WorkRecord.subtitle]
+        wr.publisher = info[WorkRecord.publisher]
+        wr.language = info[WorkRecord.language]
+        wr.published = info[WorkRecord.published]
+
+        for name in info[Contributor]:
+            wr.add_contributor(name, Contributor.AUTHOR_ROLE)
+
+        # Associate resources with the work record.
+        for rel, value in info[Resource].items():
+            if rel == Resource.DESCRIPTION:
+                href = None
+                media_type = "text/html"
+                content = value
+            else:
+                href = value
+                media_type = None
+                content = None
+            identifier.add_resource(rel, href, input_source, pool, media_type, content)
 
 # class ThreeMMetadataMonitor(MetadataMonitor):
 
