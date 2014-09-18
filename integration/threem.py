@@ -500,7 +500,7 @@ class ThreeMCirculationMonitor(Monitor):
                 self.process_batch(_db, current_batch)
                 current_batch = []
         if current_batch:
-            self.process_batch(current_batch)
+            self.process_batch(_db, current_batch)
 
     def process_batch(self, _db, pools):
         identifiers = []
