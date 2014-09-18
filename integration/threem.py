@@ -353,6 +353,7 @@ class ThreeMCirculationMonitor(Monitor):
                     print i
                     _db.commit()
             self.timestamp.timestamp = cutoff
+        print "Handled %d events total" % i
 
     def handle_event(self, _db, data_source, threem_id, isbn, foreign_patron_id,
                      start_time, end_time, internal_event_type):
