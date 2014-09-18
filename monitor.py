@@ -38,7 +38,7 @@ class Monitor(object):
             _db.commit()
             if to_sleep > 0:
                 time.sleep(to_sleep)
-                start = cutoff
+            start = cutoff
 
     def run_once(self, _db, start, cutoff):
         raise NotImplementedError()

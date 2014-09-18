@@ -78,9 +78,8 @@ class ThreeMAPI(object):
         return signature, now
 
     def request(self, path, body=None, method="GET", cache=None, cache_key=None):
-        print cache_key
         if cache and cache.exists(cache_key):
-            print " Cached!"
+            print " Cached! %s" % cache_key
             return cache.open(cache_key).read()
         if not path.startswith("/"):
             path = "/" + path
@@ -89,7 +88,10 @@ class ThreeMAPI(object):
         url = urlparse.urljoin(self.base_url, path)
         headers = {}
         self.sign(method, headers, path)
-        print " <= %s" % url
+        if cache:
+            print " %s <= %s" % (cache_key, url)
+        else:
+            print url
         response = requests.request(method, url, data=body, headers=headers)
         data = response.text
         if cache:
