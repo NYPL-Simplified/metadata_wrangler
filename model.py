@@ -1997,9 +1997,9 @@ class Resource(Base):
             # Try to load it into PIL and determine height and width.
             try:
                 image = Image.open(StringIO(content))
+                self.image_width, self.image_height = image.size
             except IOError, e:
                 self.mirror_exception = "Content is not an image."
-            self.image_width, self.image_height = image.size
 
     def set_estimated_quality(self, estimated_quality):
         """Update the estimated quality."""
