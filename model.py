@@ -505,10 +505,10 @@ class WorkIdentifier(Base):
             next_round_ids = []
             already_checked_ids = already_checked_ids.union(this_round_ids)
             # print "ROUND BEGINS"
-            #print "Finding equivalencies for:" 
-            #identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
-            #for identifier in identifiers:
-            #    print "", identifier
+            # print "Finding equivalencies for:" 
+            # identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
+            # for identifier in identifiers:
+            #      print "", identifier
 
             equivalencies = Equivalency.for_identifiers(
                 _db, this_round_ids, seen_equivalency_ids)
@@ -523,11 +523,11 @@ class WorkIdentifier(Base):
                 # I -> O becomes "I is a precursor of O with distance
                 # equal to the I->O strength."
                 if e.strength > threshold:
-                    #print "Strong signal: %r" % e
+                    # print "Strong signal: %r" % e
                     precursors[e.output_id].append((e.input_id, e.strength))
                     successors[e.input_id].append((e.output_id, e.strength))
                 else:
-                    #print "Ignoring signal below threshold: %r" % e
+                    # print "Ignoring signal below threshold: %r" % e
                     pass
 
                 # A -> ... -> I -> O becomes "A is a precursor of O
@@ -540,9 +540,9 @@ class WorkIdentifier(Base):
                             (precursor_id, total_strength))
                         successors[precursor_id].append(
                             (e.output_id, total_strength))
-                        #print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
+                        # print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
                     else:
-                        #print "Not confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
+                        # print "Not confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
                         pass
 
                 if e.output_id not in already_checked_ids:
@@ -560,12 +560,12 @@ class WorkIdentifier(Base):
             if not next_round_ids:
                 # We have achieved transitive closure. There
                 # are no more IDs to check.
-                #print "We have achieved transitive closure."
+                # print "We have achieved transitive closure."
                 break
-            #print "Finished round: %r" % this_round_ids
-            #print "Next round: %r" % next_round_ids
-            #print "ROUND ENDS"
-            #print
+            # print "Finished round: %r" % this_round_ids
+            # print "Next round: %r" % next_round_ids
+            # print "ROUND ENDS"
+            # print
             this_round_ids = next_round_ids
 
         # Now that we have a list of successor signals for each
@@ -595,6 +595,27 @@ class WorkIdentifier(Base):
                     num_votes += 1
                     new_strength = total_strength / num_votes
                     equivalents[id][precursor] = (new_strength, num_votes)
+            for precursor, strength in precursors[id]:
+                if precursor in equivalents[id]:
+                    existing_strength, num_votes = equivalents[id][precursor]
+                else:
+                    existing_strength = 0.0
+                    num_votes = 0
+                total_strength = (existing_strength * num_votes) + strength
+                num_votes += 1
+                new_strength = total_strength / num_votes
+                equivalents[id][precursor] = (new_strength, num_votes)
+                for successor, successor_strength in successors[precursor]:
+                    if successor in equivalents[id]:
+                        existing_strength, num_votes = equivalents[id][successor]
+                    else:
+                        existing_strength = 0.0
+                        num_votes = 0
+                    total_strength = (existing_strength * num_votes) + successor_strength
+                    num_votes += 1
+                    new_strength = total_strength / num_votes
+                    equivalents[id][successor] = (new_strength, num_votes)
+
         # print "Finally: %r" % equivalents
         return equivalents
 
