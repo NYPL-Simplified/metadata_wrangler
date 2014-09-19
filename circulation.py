@@ -59,13 +59,13 @@ if os.environ.get('TESTING') != "True":
         [dict(name="Fiction",
               fiction=True,
               audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=None),
+              genres=Lane.UNCLASSIFIED),
          genres.Biography_Memoir,
          genres.Crime_Thrillers_Mystery,
          dict(name="Nonfiction",
               fiction=False,
               audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=None),
+              genres=Lane.UNCLASSIFIED),
          genres.Fantasy,
          genres.Science_Fiction,
          genres.Historical_Fiction,
@@ -87,6 +87,11 @@ if os.environ.get('TESTING') != "True":
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
              audience=genres.Classifier.AUDIENCE_CHILDREN,
              genres=[]),
+         dict(
+             name="Unclassified",
+             fiction=Lane.UNCLASSIFIED,
+             genres=Lane.UNCLASSIFIED,
+             audience=genres.Classifier.AUDIENCE_ADULT),
      ]
     )
     Conf.initialize(_db, lanes)

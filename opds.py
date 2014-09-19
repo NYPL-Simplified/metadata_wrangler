@@ -251,6 +251,7 @@ class AcquisitionFeed(OPDSFeed):
                 summary += "<li>%s: %s</li>" % (name, value)
             else:
                 summary += "<li>%s: %.1f</li>" % (name, value)
+        summary += "<li>License Source: %s</li>" % active_license_pool.data_source.name
         summary += "</ul>"
 
         entry = E.entry(

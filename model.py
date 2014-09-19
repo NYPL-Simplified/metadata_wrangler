@@ -2043,7 +2043,7 @@ class Resource(Base):
         scaled_path = scaled_path_template % scaled_path_expansions
 
         if os.path.exists(scaled_path) and not force:
-            scaled_image = Image.open(path)
+            scaled_image = Image.open(scaled_path)
         else:
             path = self.local_path(original_path_expansions)
             image = Image.open(path)
@@ -2055,18 +2055,25 @@ class Resource(Base):
             else:
                 proportion = float(destination_height) / height
                 destination_width = int(width * proportion)
-                scaled_image = image.resize(
-                    (destination_width, destination_height), Image.ANTIALIAS)
+                try:
+                    scaled_image = image.resize(
+                        (destination_width, destination_height), Image.ANTIALIAS)
+                except IOError, e:
+                    scaled_image = None
 
 
         # Save the scaled image.
-        d, f = os.path.split(scaled_path)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        scaled_image.save(scaled_path)
-        self.scaled = True
-        self.scaled_path = scaled_path_template
-        self.scaled_width, self.scaled_height = scaled_image.size
+        if scaled_image:
+            d, f = os.path.split(scaled_path)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            scaled_image.save(scaled_path)
+            self.scaled = True
+            self.scaled_path = scaled_path_template
+            self.scaled_width, self.scaled_height = scaled_image.size
+        else:
+            self.scaled_path = None
+            self.scaled = False
 
         # TODO: We can also dump it to S3 at this point.
 
@@ -2323,6 +2330,7 @@ class Lane(object):
 
     """A set of books that would go together in a display."""
 
+    UNCLASSIFIED = "unclassified"
     BOTH_FICTION_AND_NONFICTION = "both fiction and nonfiction"
     FICTION_DEFAULT_FOR_GENRE = "fiction default for genre"
 
@@ -2336,7 +2344,7 @@ class Lane(object):
         self.name = name
         self._db = _db
 
-        if genres is None:
+        if genres in (None, self.UNCLASSIFIED):
             # We will only be considering works that are not
             # classified under a genre.
             self.genres = None
@@ -2437,12 +2445,11 @@ class Lane(object):
         audience = self.audience
         fiction = fiction or self.fiction
         q = self._db.query(Work)
-        if self.genres is None:
-            if fiction in (True, False):
-                # No genre plus a boolean value for `fiction` means
-                # fiction or nonfiction not associated with any genre.
-                q = q.outerjoin(Work.work_genres)
-                q = q.filter(WorkGenre.genre==None)
+        if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
+            # No genre plus a boolean value for `fiction` means
+            # fiction or nonfiction not associated with any genre.
+            q = q.outerjoin(Work.work_genres)
+            q = q.filter(WorkGenre.genre==None)
         else:
             # Find works that are assigned to the given genres. This
             # may also turn into a restriction on the fiction status.
@@ -2472,7 +2479,9 @@ class Lane(object):
         if self.audience != None:
             q = q.filter(Work.audience==self.audience)
 
-        if fiction != self.BOTH_FICTION_AND_NONFICTION:
+        if fiction == self.UNCLASSIFIED:
+            q = q.filter(Work.fiction==None)
+        elif fiction != self.BOTH_FICTION_AND_NONFICTION:
             q = q.filter(Work.fiction==fiction)
 
         q = q.filter(
@@ -3122,18 +3131,18 @@ class ImageScaler(object):
         if not force:
             q = q.filter(Resource.scaled==False)
         total = 0
-        a = time.time()
-        resultset = q.limit(1000).all()
+        resultset = q.limit(100).all()
         while resultset:
+            a = time.time()
             for r in resultset:
                 r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
-                #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                #                    r.local_scaled_path(self.scaled_expansions) 
-                #)
+                print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                                    r.local_scaled_path(self.scaled_expansions) 
+                )
                 total += 1
             self._db.commit()
             print total, time.time()-a
             a = time.time()
-            resultset = q.limit(1000).all()
+            resultset = q.limit(100).all()
         self._db.commit()
 
