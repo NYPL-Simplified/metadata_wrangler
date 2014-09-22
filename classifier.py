@@ -1,5 +1,8 @@
 # encoding: utf-8
 
+# "literary history" != "history"
+# "Investigations -- nonfiction" != "Mystery"
+
 # SQL to find commonly used DDC classifications
 # select count(workrecords.id) as c, subjects.identifier from workrecords join workidentifiers on workrecords.primary_identifier_id=workidentifiers.id join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.type = 'DDC' and not subjects.identifier like '8%' group by subjects.identifier order by c desc;
 
@@ -243,6 +246,7 @@ class Classifier(object):
     DDC = "DDC"
     OVERDRIVE = "Overdrive"
     FAST = "FAST"
+    TAG = "tag"
 
     # TODO: This is currently set in model.py in the Subject class.
     classifiers = dict()
@@ -696,7 +700,7 @@ class KeywordBasedClassifier(Classifier):
     
     FICTION_INDICATORS = match_kw(
         "fiction", "stories", "tales", "literature",
-        "bildungsromans",
+        "bildungsromans", "fictitious",
     )
     NONFICTION_INDICATORS = match_kw(
         "history", "biography", "histories", "biographies", "autobiography",
@@ -730,7 +734,7 @@ class KeywordBasedClassifier(Classifier):
             "african american",
             "african-american",
             "african-americans",
-        )
+        ),
         Biography_Memoir : match_kw(
             "autobiographies",
             "autobiography",
@@ -790,7 +794,7 @@ class KeywordBasedClassifier(Classifier):
         ),
         Philosophy : match_kw(
             "philosophy",
-            "political science",
+
         ),
         Poetry : match_kw(
             "poetry",
@@ -817,6 +821,10 @@ class KeywordBasedClassifier(Classifier):
             'biblical',
             "christian",
             "christianity",
+            "catholic",
+            "protestant",
+            "catholicism",
+            "protestantism",
             "church",
         ),
         Islam : match_kw('islam'),
@@ -831,8 +839,6 @@ class KeywordBasedClassifier(Classifier):
             "love stories",
             "romance",
             "romances",
-            "romantic suspense",
-            "paranormal romance",
         ),
         Medical : match_kw("medicine", "medical"),
         Mathematics : match_kw("mathematics"),
@@ -855,7 +861,10 @@ class KeywordBasedClassifier(Classifier):
             "science fiction",
             "time travel",
         ),
-        Suspense : match_kw(
+        Paranormal_Romance : match_kw(
+            "paranormal romance",
+        ),
+        Suspense_Romance : match_kw(
             "romantic suspense",
         ),
         Travel : match_kw(
@@ -922,5 +931,5 @@ Classifier.classifiers[Classifier.DDC] = DeweyDecimalClassifier
 Classifier.classifiers[Classifier.LCC] = LCCClassifier
 Classifier.classifiers[Classifier.FAST] = FASTClassifier
 Classifier.classifiers[Classifier.LCSH] = LCSHClassifier
-Classifier.classifiers[Classifier.TAG] = TagClassifier
+Classifier.classifiers[Classifier.TAG] = TAGClassifier
 Classifier.classifiers[Classifier.OVERDRIVE] = OverdriveClassifier
