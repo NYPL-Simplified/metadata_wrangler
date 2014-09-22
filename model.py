@@ -494,6 +494,8 @@ class WorkIdentifier(Base):
 
         precursors = defaultdict(list)
         successors = defaultdict(list)
+        if not identifier_ids:
+            return {}
 
         if isinstance(identifier_ids[0], WorkIdentifier):
             identifier_ids = [x.id for x in identifier_ids]
@@ -804,12 +806,25 @@ class WorkIdentifier(Base):
 
         champion = None
         # Add each resource's content to the evaluator's corpus.
+        has_short_description = False
+        has_full_description = False
         for r in summaries:
-            evaluator.add(r.content)
+            if r.href=="tag:short":
+                has_short_description = True
+            elif r.href=="tag:full":
+                has_full_description = True
+            if has_full_description and has_short_description:
+                break
+
+        for r in summaries:
+            if not has_full_description or r.href != "tag:short":
+                evaluator.add(r.content)
         evaluator.ready()
 
         # Then have the evaluator rank each resource.
         for r in summaries:
+            if has_full_description and r.href == "tag:short":
+                continue
             quality = evaluator.score(r.content)
             r.set_estimated_quality(quality)
             if not champion or r.quality > champion.quality:

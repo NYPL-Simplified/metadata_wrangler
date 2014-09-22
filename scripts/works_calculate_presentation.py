@@ -26,9 +26,10 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         if sys.argv[1] == 'force':
             force = True
+            works_from_source = DataSource.lookup(session, sys.argv[2])
         else:
             works_from_source = DataSource.lookup(session, sys.argv[1])
-            force = True
+            force = False
 
     if len(sys.argv) == 4:
         source, type, id = sys.argv[1:]
@@ -50,12 +51,15 @@ if __name__ == '__main__':
             which_works, force)
         i = 0
         q = session.query(Work)
+        if works_from_source:
+            q = q.outerjoin(WorkRecord)
         if force:
-            if works_from_source:
-                q = q.outerjoin(WorkRecord).filter(
-                    WorkRecord.data_source==works_from_source)
-        else:
             q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None).filter(Work.fiction==None).filter(Work.audience==None)
+
+        if works_from_source:
+            q = q.filter(WorkRecord.data_source==works_from_source)
+
+        print "That's %d works." % q.count()
         for work in q:
             work.calculate_presentation()
             i += 1
