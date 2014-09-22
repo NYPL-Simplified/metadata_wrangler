@@ -851,6 +851,9 @@ class KeywordBasedClassifier(Classifier):
             "warfare",
             "military",
         ),
+        Nature : match_kw(
+            "nature",
+        ),
         Science : match_kw(
             "aeronautics",
             "evolution",
