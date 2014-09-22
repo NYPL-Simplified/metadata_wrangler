@@ -427,17 +427,20 @@ class TestWork(DatabaseTest):
         wr1, pool1 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr1.title = "The 1st Title"
+        wr1.title = "The 1st Subtitle"
         wr1.add_contributor(bob, Contributor.AUTHOR_ROLE)
 
         wr2, pool2 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr2.title = "The 2nd Title"
+        wr2.subtitle = "The 2nd Subtitle"
         wr2.add_contributor(bob, Contributor.AUTHOR_ROLE)
         wr2.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
 
         wr3, pool3 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr3.title = "The 2nd Title"
+        wr3.subtitle = "The 2nd Subtitle"
         wr3.add_contributor(bob, Contributor.AUTHOR_ROLE)
         wr3.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
 
@@ -452,6 +455,7 @@ class TestWork(DatabaseTest):
         eq_(None, work.title)
         work.calculate_presentation()
         eq_("The 2nd Title", work.title)
+        eq_("The 2nd Subtitle", work.subtitle)
         eq_("2nd Title, The", work.sort_title)
 
         # Bob was listed as an author for all three WorkRecords,

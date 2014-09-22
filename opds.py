@@ -29,12 +29,14 @@ app_ns = 'http://www.w3.org/2007/app'
 xhtml_ns = 'http://www.w3.org/1999/xhtml'
 dcterms_ns = 'http://purl.org/dc/terms/'
 opds_ns = 'http://opds-spec.org/2010/catalog'
+schema_ns = 'http://schema.org/'
 
 nsmap = {
     None: atom_ns,
     'app': app_ns,
     'dcterms' : dcterms_ns,
     'opds' : opds_ns,
+    'schema' : schema_ns,
 }
 
 def _strftime(d):
@@ -43,8 +45,11 @@ Format a date the way Atom likes it (RFC3339?)
 """
     return d.strftime('%Y-%m-%dT%H:%M:%SZ%z')
 
-E = builder.ElementMaker(typemap={datetime: lambda e, v: _strftime(v)},
-                         nsmap=nsmap)
+default_typemap = {datetime: lambda e, v: _strftime(v)}
+
+E = builder.ElementMaker(typemap=default_typemap, nsmap=nsmap)
+SCHEMA = builder.ElementMaker(
+    typemap=default_typemap, nsmap=nsmap, namespace="http://schema.org/")
 
 
 class URLRewriter(object):
@@ -54,7 +59,10 @@ class URLRewriter(object):
     GUTENBERG_ILLUSTRATED_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
+    SCALED_CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/CC"
+    ORIGINAL_OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Overdrive"
     SCALED_OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive"
+    ORIGINAL_THREEM_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/3M"
     SCALED_THREEM_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/3M"
     GUTENBERG_MIRROR_HOST = "http://s3.amazonaws.com/gutenberg-corpus.nypl.org/gutenberg-epub"
 
@@ -68,8 +76,11 @@ class URLRewriter(object):
             return cls._rewrite_gutenberg(parsed)
         elif "%(" in url:
             return url % dict(content_cafe_mirror=cls.CONTENT_CAFE_MIRROR_HOST,
+                              scaled_content_cafe_mirror=cls.SCALED_CONTENT_CAFE_MIRROR_HOST,
                               gutenberg_illustrated_mirror=cls.GUTENBERG_ILLUSTRATED_HOST,
+                              original_overdrive_covers_mirror=cls.ORIGINAL_OVERDRIVE_IMAGE_MIRROR_HOST,
                               scaled_overdrive_covers_mirror=cls.SCALED_OVERDRIVE_IMAGE_MIRROR_HOST,
+                              original_threem_covers_mirror=cls.ORIGINAL_THREEM_IMAGE_MIRROR_HOST,
                               scaled_threem_covers_mirror=cls.SCALED_THREEM_IMAGE_MIRROR_HOST,
             )
         else:
@@ -257,6 +268,7 @@ class AcquisitionFeed(OPDSFeed):
         entry = E.entry(
             E.id(tag),
             E.title(work.title),
+            SCHEMA.subtitle(work.subtitle or ''),
             E.author(E.name(work.authors or "")),
             E.summary(summary),
             E.link(href=checkout_url),

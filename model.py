@@ -1628,7 +1628,7 @@ class Work(Base):
         # and languages are most common.
         for wr in all_work_records:
             if wr.title in usable_titles:
-                title_counter[wr.title] += 1
+                title_counter[(wr.title, wr.subtitle)] += 1
             for a in wr.contributors:
                 if a in usable_authors:
                     author_counter[a] += 1
@@ -1677,7 +1677,7 @@ class Work(Base):
             self.gather_presentation_information())
 
         if titles:
-            self.title = titles.most_common(1)[0][0]
+            self.title, self.subtitle = titles.most_common(1)[0][0]
             self.sort_title = TitleProcessor.sort_title_for(self.title)
         if languages:
             self.language = languages.most_common(1)[0][0]
