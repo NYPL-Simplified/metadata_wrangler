@@ -725,6 +725,12 @@ class KeywordBasedClassifier(Classifier):
         #     "sea stories",
         #     "war stories",
         # ),
+        African_American : match_kw(
+            "african americans",
+            "african american",
+            "african-american",
+            "african-americans",
+        )
         Biography_Memoir : match_kw(
             "autobiographies",
             "autobiography",
@@ -744,6 +750,11 @@ class KeywordBasedClassifier(Classifier):
         ),
         Fantasy : match_kw(
             "fantasy",
+            "magic",
+            "wizards",
+            "fairies",
+            "witches",
+            "dragons",
         ),
         History : match_kw(
             "histories",
@@ -752,6 +763,9 @@ class KeywordBasedClassifier(Classifier):
         Horror : match_kw(
             "ghost stories",
             "horror",
+            "vampires",
+            "paranormal fiction",
+            "occult fiction",
         ),
         Humor : match_kw(
             "comedies",
@@ -767,6 +781,9 @@ class KeywordBasedClassifier(Classifier):
             "murder",
             "mystery",
             "mysteries",
+            "private investigators",
+            "holmes, sherlock",
+            "poirot, hercule",
         ),
         Periodicals : match_kw(
             "periodicals",
@@ -798,11 +815,15 @@ class KeywordBasedClassifier(Classifier):
             "theological",
             "theology",
             'biblical',
+            "christian",
             "christianity",
             "church",
         ),
         Islam : match_kw('islam'),
-        Judaism : match_kw('judaism'),
+        Judaism : match_kw(
+            'judaism',
+            # 'jews', # Unfortunately this is potentially very problematic.
+        ),
         Erotica : match_kw(
             'erotic',
         ),
@@ -810,6 +831,8 @@ class KeywordBasedClassifier(Classifier):
             "love stories",
             "romance",
             "romances",
+            "romantic suspense",
+            "paranormal romance",
         ),
         Medical : match_kw("medicine", "medical"),
         Mathematics : match_kw("mathematics"),
@@ -830,6 +853,10 @@ class KeywordBasedClassifier(Classifier):
         ),
         Science_Fiction : match_kw(
             "science fiction",
+            "time travel",
+        ),
+        Suspense : match_kw(
+            "romantic suspense",
         ),
         Travel : match_kw(
             "discovery",
@@ -837,6 +864,10 @@ class KeywordBasedClassifier(Classifier):
             "travel",
             "travels",
             "voyages",
+        ),
+        Women_Detectives : match_kw(
+            "women detectives",
+            "women private investigators",
         ),
         
     }
@@ -883,9 +914,13 @@ class LCSHClassifier(KeywordBasedClassifier):
 class FASTClassifier(KeywordBasedClassifier):
     pass
 
+class TAGClassifier(KeywordBasedClassifier):
+    pass
+
 # Make a dictionary of classification schemes to classifiers.
 Classifier.classifiers[Classifier.DDC] = DeweyDecimalClassifier
 Classifier.classifiers[Classifier.LCC] = LCCClassifier
 Classifier.classifiers[Classifier.FAST] = FASTClassifier
 Classifier.classifiers[Classifier.LCSH] = LCSHClassifier
+Classifier.classifiers[Classifier.TAG] = TagClassifier
 Classifier.classifiers[Classifier.OVERDRIVE] = OverdriveClassifier

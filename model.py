@@ -2247,6 +2247,18 @@ class Subject(Base):
         return subject, new
 
     @classmethod
+    def common_but_not_assigned_to_genre(cls, _db, min_occurances=1000, 
+                                         type_restriction=None):
+        q = _db.query(Subject).join(Classification).filter(Subject.genre==None)
+
+        if type_restriction:
+            q = q.filter(Subject.type==type_restriction)
+        q = q.group_by(Subject.id).having(
+            func.count(Subject.id) > min_occurances).order_by(
+            func.count(Classification.id).desc())
+        return q
+
+    @classmethod
     def assign_to_genres(cls, _db, type_restriction=None, force=False,
                          batch_size=1000):
         """Find subjects that have not been checked yet, assign each a
