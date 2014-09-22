@@ -982,7 +982,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # Overdrive data is more valuable for Mauricio's
         # project. Overdrive is the priority.
         super(LinkedDataCoverageProvider, self).__init__(
-            self.SERVICE_NAME, [self.oclc_classify, self.overdrive],
+            self.SERVICE_NAME, [self.overdrive],
+            #self.SERVICE_NAME, [self.oclc_classify, self.overdrive],
             self.oclc_linked_data,
             workset_size=3)
 

@@ -1429,7 +1429,8 @@ class Work(Base):
     # One Work may participate in many WorkGenre assignments.
     genres = association_proxy('work_genres', 'genre',
                                creator=WorkGenre.from_genre)
-    work_genres = relationship("WorkGenre", backref="work")
+    work_genres = relationship("WorkGenre", backref="work",
+                               cascade="all, delete-orphan")
 
     # A Work may be merged into one other Work.
     was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
