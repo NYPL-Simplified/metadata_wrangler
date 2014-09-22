@@ -1675,7 +1675,6 @@ class Work(Base):
 
         titles, authors, languages = (
             self.gather_presentation_information())
-
         if titles:
             self.title, self.subtitle = titles.most_common(1)[0][0]
             self.sort_title = TitleProcessor.sort_title_for(self.title)
@@ -2068,21 +2067,28 @@ class Resource(Base):
             scaled_image = Image.open(scaled_path)
         else:
             path = self.local_path(original_path_expansions)
-            image = Image.open(path)
-            width, height = image.size
+            try:
+                image = Image.open(path)
+                width, height = image.size
 
-            if height <= destination_height:
-                # The image doesn't need to be scaled; just save it.
-                scaled_image = image
-            else:
-                proportion = float(destination_height) / height
-                destination_width = int(width * proportion)
-                try:
-                    scaled_image = image.resize(
-                        (destination_width, destination_height), Image.ANTIALIAS)
-                except IOError, e:
-                    scaled_image = None
-
+                if height <= destination_height:
+                    # The image doesn't need to be scaled; just save it.
+                    scaled_image = image
+                else:
+                    proportion = float(destination_height) / height
+                    destination_width = int(width * proportion)
+                    try:
+                        scaled_image = image.resize(
+                            (destination_width, destination_height), 
+                            Image.ANTIALIAS)
+                    except IOError, e:
+                        # I'm not sure why, but sometimes just trying
+                        # it again works.
+                        scaled_image = image.resize(
+                            (destination_width, destination_height), 
+                            Image.ANTIALIAS)
+            except IOError, e:
+                scaled_image = None
 
         # Save the scaled image.
         if scaled_image:
@@ -3165,14 +3171,18 @@ class ImageScaler(object):
         if not force:
             q = q.filter(Resource.scaled==False)
         total = 0
+        print "Scaling %d images." % q.count()
         resultset = q.limit(100).all()
         while resultset:
             a = time.time()
             for r in resultset:
                 r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
-                print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                                    r.local_scaled_path(self.scaled_expansions) 
-                )
+                if not r.scaled_path:
+                    print "Could not scale %s" % r.href
+                else:
+                    print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                                        r.local_scaled_path(self.scaled_expansions) 
+                    )
                 total += 1
             self._db.commit()
             print total, time.time()-a
