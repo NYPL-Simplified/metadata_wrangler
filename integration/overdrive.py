@@ -450,7 +450,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     type_key = WorkIdentifier.ASIN
                 elif t == 'ISBN':
                     type_key = WorkIdentifier.ISBN
-                    v = isbnlib.to_isbn13(v)
+                    if len(v) == 10:
+                        v = isbnlib.to_isbn13(v)
                 elif t == 'DOI':
                     type_key = WorkIdentifier.DOI
                 elif t == 'UPC':

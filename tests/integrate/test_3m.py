@@ -197,4 +197,4 @@ class TestItemListParser(object):
         assert image.startswith("http://ebook.3m.com/delivery")
 
         alternate = cooked[Resource]["alternate"]
-        assert image.startswith("http://ebook.3m.com/library")
+        assert alternate.startswith("http://ebook.3m.com/library")
