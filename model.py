@@ -506,58 +506,6 @@ class WorkIdentifier(Base):
             # This is not a big deal, but it means we could be getting
             # more IDs by increasing the level.
             print "Leftover working set at level %d." % levels
-
-        set_trace()
-
-        # Now that we have a complete list of neighbor signals for
-        # each identifier ID, we can calculate the average strength of
-        # each signal that originates at one of the original working
-        # set.
-        for id in identifier_ids:
-            # Each ID is equivalent to itself.
-            equivalents[id][id].append((1, 1000000))
-            for successor, strength in successors[id]:
-                if successor in equivalents[id]:
-                    existing_strength, num_votes = equivalents[id][successor]
-                else:
-                    existing_strength = 0.0
-                    num_votes = 0
-                total_strength = (existing_strength * num_votes) + strength
-                num_votes += 1
-                new_strength = total_strength / num_votes
-                equivalents[id][successor] = (new_strength, num_votes)
-                for precursor, precursor_strength in precursors[successor]:
-                    if precursor in equivalents[id]:
-                        existing_strength, num_votes = equivalents[id][precursor]
-                    else:
-                        existing_strength = 0.0
-                        num_votes = 0
-                    total_strength = (existing_strength * num_votes) + precursor_strength
-                    num_votes += 1
-                    new_strength = total_strength / num_votes
-                    equivalents[id][precursor] = (new_strength, num_votes)
-            for precursor, strength in precursors[id]:
-                if precursor in equivalents[id]:
-                    existing_strength, num_votes = equivalents[id][precursor]
-                else:
-                    existing_strength = 0.0
-                    num_votes = 0
-                total_strength = (existing_strength * num_votes) + strength
-                num_votes += 1
-                new_strength = total_strength / num_votes
-                equivalents[id][precursor] = (new_strength, num_votes)
-                for successor, successor_strength in successors[precursor]:
-                    if successor in equivalents[id]:
-                        existing_strength, num_votes = equivalents[id][successor]
-                    else:
-                        existing_strength = 0.0
-                        num_votes = 0
-                    total_strength = (existing_strength * num_votes) + successor_strength
-                    num_votes += 1
-                    new_strength = total_strength / num_votes
-                    equivalents[id][successor] = (new_strength, num_votes)
-
-        # print "Finally: %r" % equivalents
         return equivalents
 
     @classmethod
@@ -571,10 +519,18 @@ class WorkIdentifier(Base):
                 equivalents[id][id].append((1, 1000000))
             return (working_set, set(), set(), equivalents)
 
+        if not working_set:
+            return working_set, seen_equivalency_ids, seen_identifier_ids
+
         # First make the recursive call.        
         (working_set, seen_equivalency_ids, seen_identifier_ids,
          equivalents) = cls._recursively_equivalent_identifier_ids(
              _db, original_working_set, working_set, levels-1, threshold)
+
+        if not working_set:
+            # We're done.
+            return (working_set, seen_equivalency_ids, seen_identifier_ids,
+                    equivalents)
 
         new_working_set = set()
         seen_identifier_ids = seen_identifier_ids.union(working_set)
@@ -598,8 +554,11 @@ class WorkIdentifier(Base):
             # equal to the I->O strength."
             if e.strength > threshold:
                 # print "Strong signal: %r" % e
-                equivalents[e.output_id][e.input_id].append([e.strength, e.votes])
-                equivalents[e.input_id][e.output_id].append([e.strength, e.votes])
+                
+                cls._update_equivalents(
+                    equivalents, e.output_id, e.input_id, e.strength, e.votes)
+                cls._update_equivalents(
+                    equivalents, e.input_id, e.output_id, e.strength, e.votes)
             else:
                 # print "Ignoring signal below threshold: %r" % e
                 pass
@@ -619,12 +578,47 @@ class WorkIdentifier(Base):
 
         print levels, sorted(new_working_set), len(seen_equivalency_ids), len(seen_identifier_ids), len(equivalents)
 
-        for i in _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(new_working_set)):
-            print i
+        if new_working_set:
+            for i in _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(new_working_set)):
+                print i
 
-        set_trace()
-        return (new_working_set, seen_equivalency_ids, seen_identifier_ids,
+        surviving_working_set = set()
+        for id in original_working_set:
+            for new_id in new_working_set:
+                for neighbor in list(equivalents[id]):
+                    if neighbor == id:
+                        continue
+                    if neighbor == new_id:
+                        # The new ID is directly adjacent to one of
+                        # the original working set.
+                        surviving_working_set.add(new_id)
+                        continue
+                    if new_id in equivalents[neighbor]:
+                        # The new ID is adjacent to an ID adjacent to
+                        # one of the original working set. But how
+                        # strong is the signal?
+                        o2n_weight, o2n_votes = equivalents[id][neighbor]
+                        n2new_weight, n2new_votes = equivalents[neighbor][new_id]
+                        new_weight = (o2n_weight * n2new_weight)
+                        if new_weight > threshold:
+                            equivalents[id][new_id] = (new_weight, o2n_votes + n2new_votes)
+                            surviving_working_set.add(new_id)
+
+        print "Pruned %d from working set" % len(surviving_working_set.intersection(new_working_set))
+        return (surviving_working_set, seen_equivalency_ids, seen_identifier_ids,
                 equivalents)
+
+    @classmethod
+    def _update_equivalents(original_working_set, equivalents, input_id,
+                            output_id, strength, votes):
+        if not equivalents[input_id][output_id]:
+            equivalents[input_id][output_id] = (strength, votes)
+        else:
+            old_strength, old_votes = equivalents[input_id][output_id]
+            total_strength = (old_strength * old_votes) + (strength * votes)
+            total_votes = (old_votes + votes)
+            new_strength = total_strength / total_votes
+            equivalents[input_id][output_id] = (new_strength, total_votes)
 
     @classmethod
     def recursively_equivalent_identifier_ids_flat(
