@@ -978,12 +978,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
         self.threem = DataSource.lookup(db, DataSource.THREEM)
         self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
 
-        # TODO: add 3M to the list. Not doing this right now because
-        # Overdrive data is more valuable for Mauricio's
-        # project. Overdrive is the priority.
         super(LinkedDataCoverageProvider, self).__init__(
-            self.SERVICE_NAME, [self.threem],
-            #self.SERVICE_NAME, [self.oclc_classify, self.overdrive],
+            self.SERVICE_NAME,
+            [self.threem, self.overdrive],
+            # [self.oclc_classify, self.overdrive, self.threem],
             self.oclc_linked_data,
             workset_size=3)
 
