@@ -704,7 +704,7 @@ class KeywordBasedClassifier(Classifier):
     )
     NONFICTION_INDICATORS = match_kw(
         "history", "biography", "histories", "biographies", "autobiography",
-        "autobiographies", "nonfiction")
+        "autobiographies")
     JUVENILE_INDICATORS = match_kw(
         "for children", "children's", "juvenile",
         "nursery rhymes")
@@ -763,9 +763,6 @@ class KeywordBasedClassifier(Classifier):
         History : match_kw(
             "histories",
             "history",
-        ),
-        Historical_Fiction : match_kw(
-            "historical fiction",
         ),
         Horror : match_kw(
             "ghost stories",
