@@ -980,8 +980,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME,
-            [self.threem, self.overdrive],
-            # [self.oclc_classify, self.overdrive, self.threem],
+            [self.oclc_classify, self.overdrive, self.threem],
             self.oclc_linked_data,
             workset_size=3)
 

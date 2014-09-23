@@ -2,6 +2,7 @@ import base64
 import datetime
 import os
 import json
+import isbnlib
 import requests
 import time
 import urlparse
@@ -449,6 +450,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     type_key = WorkIdentifier.ASIN
                 elif t == 'ISBN':
                     type_key = WorkIdentifier.ISBN
+                    v = isbnlib.to_isbn13(v)
                 elif t == 'DOI':
                     type_key = WorkIdentifier.DOI
                 elif t == 'UPC':

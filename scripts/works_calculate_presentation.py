@@ -53,7 +53,7 @@ if __name__ == '__main__':
         q = session.query(Work)
         if works_from_source:
             q = q.outerjoin(WorkRecord)
-        if force:
+        if not force:
             q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None).filter(Work.fiction==None).filter(Work.audience==None)
 
         if works_from_source:

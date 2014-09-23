@@ -359,7 +359,7 @@ class Equivalency(Base):
         """Find all Equivalencies for the given WorkIdentifiers."""
         if not workidentifiers:
             return []
-        if isinstance(workidentifiers[0], WorkIdentifier):
+        if isinstance(workidentifiers, list) and isinstance(workidentifiers[0], WorkIdentifier):
             workidentifiers = [x.id for x in workidentifiers]
         q = _db.query(Equivalency).distinct().filter(
             or_(Equivalency.input_id.in_(workidentifiers),
@@ -477,7 +477,7 @@ class WorkIdentifier(Base):
 
     @classmethod
     def recursively_equivalent_identifier_ids(
-            self, _db, identifier_ids, levels=5, threshold=0.50):
+            cls, _db, identifier_ids, levels=5, threshold=0.50):
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
         IDs at the given confidence threshold.
 
@@ -492,91 +492,30 @@ class WorkIdentifier(Base):
         of confidence) 2-tuples.
         """
 
-        precursors = defaultdict(list)
-        successors = defaultdict(list)
         if not identifier_ids:
             return {}
 
         if isinstance(identifier_ids[0], WorkIdentifier):
             identifier_ids = [x.id for x in identifier_ids]
 
-        seen_equivalency_ids = set([])
-        this_round_ids = identifier_ids
-        already_checked_ids = set()
-        for distance in range(levels):
-            next_round_ids = []
-            already_checked_ids = already_checked_ids.union(this_round_ids)
-            # print "ROUND BEGINS"
-            # print "Finding equivalencies for:" 
-            # identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
-            # for identifier in identifiers:
-            #      print "", identifier
+        (working_set, seen_equivalency_ids, seen_identifier_ids,
+         equivalents) = cls._recursively_equivalent_identifier_ids(
+            _db, identifier_ids, identifier_ids, levels, threshold)
 
-            equivalencies = Equivalency.for_identifiers(
-                _db, this_round_ids, seen_equivalency_ids)
-            for e in equivalencies:
-                # print "%r => %r" % (e.input, e.output)
-                seen_equivalency_ids.add(e.id)
+        if working_set:
+            # This is not a big deal, but it means we could be getting
+            # more IDs by increasing the level.
+            print "Leftover working set at level %d." % levels
 
-                # Signal strength decreases monotonically, so
-                # if it dips below the threshold, we can
-                # ignore it from this point on.
+        set_trace()
 
-                # I -> O becomes "I is a precursor of O with distance
-                # equal to the I->O strength."
-                if e.strength > threshold:
-                    # print "Strong signal: %r" % e
-                    precursors[e.output_id].append((e.input_id, e.strength))
-                    successors[e.input_id].append((e.output_id, e.strength))
-                else:
-                    # print "Ignoring signal below threshold: %r" % e
-                    pass
-
-                # A -> ... -> I -> O becomes "A is a precursor of O
-                # with strength equal to the A->I strength times the
-                # I->O strength."
-                for (precursor_id, precursor_strength) in precursors[e.input_id]:
-                    total_strength = precursor_strength * e.strength
-                    if total_strength >= threshold:
-                        precursors[e.output_id].append(
-                            (precursor_id, total_strength))
-                        successors[precursor_id].append(
-                            (e.output_id, total_strength))
-                        # print "Confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
-                    else:
-                        # print "Not confident in %.2f signal %d->\n%r" % (total_strength, e.input_id, e)
-                        pass
-
-                if e.output_id not in already_checked_ids:
-                    # This is our first time encountering the
-                    # WorkIdentifier that is the output of this
-                    # Equivalency. We will look at its equivalencies
-                    # in the next round.
-                    next_round_ids.append(e.output_id)
-                if e.input_id not in already_checked_ids:
-                    # This is our first time encountering the
-                    # WorkIdentifier that is the input to this
-                    # Equivalency. We will look at its equivalencies
-                    # in the next round.
-                    next_round_ids.append(e.input_id)
-            if not next_round_ids:
-                # We have achieved transitive closure. There
-                # are no more IDs to check.
-                # print "We have achieved transitive closure."
-                break
-            # print "Finished round: %r" % this_round_ids
-            # print "Next round: %r" % next_round_ids
-            # print "ROUND ENDS"
-            # print
-            this_round_ids = next_round_ids
-
-        # Now that we have a list of successor signals for each
-        # identifier ID, we can calculate the average strength of the
-        # signal.
-        equivalents = defaultdict(dict)
+        # Now that we have a complete list of neighbor signals for
+        # each identifier ID, we can calculate the average strength of
+        # each signal that originates at one of the original working
+        # set.
         for id in identifier_ids:
             # Each ID is equivalent to itself.
-            equivalents[id][id] = (1, 1000000)
+            equivalents[id][id].append((1, 1000000))
             for successor, strength in successors[id]:
                 if successor in equivalents[id]:
                     existing_strength, num_votes = equivalents[id][successor]
@@ -620,6 +559,72 @@ class WorkIdentifier(Base):
 
         # print "Finally: %r" % equivalents
         return equivalents
+
+    @classmethod
+    def _recursively_equivalent_identifier_ids(
+            cls, _db, original_working_set, working_set, levels, threshold):
+
+        if levels == 0:
+            equivalents = defaultdict(lambda : defaultdict(list))
+            for id in original_working_set:
+                # Every identifier is unshakeably equivalent to itself.
+                equivalents[id][id].append((1, 1000000))
+            return (working_set, set(), set(), equivalents)
+
+        # First make the recursive call.        
+        (working_set, seen_equivalency_ids, seen_identifier_ids,
+         equivalents) = cls._recursively_equivalent_identifier_ids(
+             _db, original_working_set, working_set, levels-1, threshold)
+
+        new_working_set = set()
+        seen_identifier_ids = seen_identifier_ids.union(working_set)
+        # print "ROUND BEGINS"
+        # print "Finding equivalencies for:" 
+        # identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
+        # for identifier in identifiers:
+        #      print "", identifier
+
+        equivalencies = Equivalency.for_identifiers(
+            _db, working_set, seen_equivalency_ids)
+        for e in equivalencies:
+            # print "%r => %r" % (e.input, e.output)
+            seen_equivalency_ids.add(e.id)
+
+            # Signal strength decreases monotonically, so
+            # if it dips below the threshold, we can
+            # ignore it from this point on.
+
+            # I -> O becomes "I is a precursor of O with distance
+            # equal to the I->O strength."
+            if e.strength > threshold:
+                # print "Strong signal: %r" % e
+                equivalents[e.output_id][e.input_id].append([e.strength, e.votes])
+                equivalents[e.input_id][e.output_id].append([e.strength, e.votes])
+            else:
+                # print "Ignoring signal below threshold: %r" % e
+                pass
+
+            if e.output_id not in seen_identifier_ids:
+                # This is our first time encountering the
+                # WorkIdentifier that is the output of this
+                # Equivalency. We will look at its equivalencies
+                # in the next round.
+                new_working_set.add(e.output_id)
+            if e.input_id not in seen_identifier_ids:
+                # This is our first time encountering the
+                # WorkIdentifier that is the input to this
+                # Equivalency. We will look at its equivalencies
+                # in the next round.
+                new_working_set.add(e.input_id)
+
+        print levels, sorted(new_working_set), len(seen_equivalency_ids), len(seen_identifier_ids), len(equivalents)
+
+        for i in _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(new_working_set)):
+            print i
+
+        set_trace()
+        return (new_working_set, seen_equivalency_ids, seen_identifier_ids,
+                equivalents)
 
     @classmethod
     def recursively_equivalent_identifier_ids_flat(
