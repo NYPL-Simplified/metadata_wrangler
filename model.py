@@ -477,7 +477,7 @@ class WorkIdentifier(Base):
 
     @classmethod
     def recursively_equivalent_identifier_ids(
-            cls, _db, identifier_ids, levels=5, threshold=0.50):
+            cls, _db, identifier_ids, levels=5, threshold=0.50, debug=False):
         """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
         IDs at the given confidence threshold.
 
@@ -500,17 +500,18 @@ class WorkIdentifier(Base):
 
         (working_set, seen_equivalency_ids, seen_identifier_ids,
          equivalents) = cls._recursively_equivalent_identifier_ids(
-            _db, identifier_ids, identifier_ids, levels, threshold)
+             _db, identifier_ids, identifier_ids, levels, threshold, debug)
 
-        if working_set:
+        if debug and working_set:
             # This is not a big deal, but it means we could be getting
             # more IDs by increasing the level.
             print "Leftover working set at level %d." % levels
+
         return equivalents
 
     @classmethod
     def _recursively_equivalent_identifier_ids(
-            cls, _db, original_working_set, working_set, levels, threshold):
+            cls, _db, original_working_set, working_set, levels, threshold, debug):
 
         if levels == 0:
             equivalents = defaultdict(lambda : defaultdict(list))
@@ -525,7 +526,7 @@ class WorkIdentifier(Base):
         # First make the recursive call.        
         (working_set, seen_equivalency_ids, seen_identifier_ids,
          equivalents) = cls._recursively_equivalent_identifier_ids(
-             _db, original_working_set, working_set, levels-1, threshold)
+             _db, original_working_set, working_set, levels-1, threshold, debug)
 
         if not working_set:
             # We're done.
@@ -534,16 +535,12 @@ class WorkIdentifier(Base):
 
         new_working_set = set()
         seen_identifier_ids = seen_identifier_ids.union(working_set)
-        # print "ROUND BEGINS"
-        # print "Finding equivalencies for:" 
-        # identifiers = _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(this_round_ids))
-        # for identifier in identifiers:
-        #      print "", identifier
 
         equivalencies = Equivalency.for_identifiers(
             _db, working_set, seen_equivalency_ids)
         for e in equivalencies:
-            # print "%r => %r" % (e.input, e.output)
+            if debug:
+                print "%r => %r" % (e.input, e.output)
             seen_equivalency_ids.add(e.id)
 
             # Signal strength decreases monotonically, so
@@ -553,15 +550,16 @@ class WorkIdentifier(Base):
             # I -> O becomes "I is a precursor of O with distance
             # equal to the I->O strength."
             if e.strength > threshold:
-                # print "Strong signal: %r" % e
+                if debug:
+                    print "Strong signal: %r" % e
                 
                 cls._update_equivalents(
                     equivalents, e.output_id, e.input_id, e.strength, e.votes)
                 cls._update_equivalents(
                     equivalents, e.input_id, e.output_id, e.strength, e.votes)
             else:
-                # print "Ignoring signal below threshold: %r" % e
-                pass
+                if debug:
+                    print "Ignoring signal below threshold: %r" % e
 
             if e.output_id not in seen_identifier_ids:
                 # This is our first time encountering the
@@ -576,11 +574,17 @@ class WorkIdentifier(Base):
                 # in the next round.
                 new_working_set.add(e.input_id)
 
-        print levels, sorted(new_working_set), len(seen_equivalency_ids), len(seen_identifier_ids), len(equivalents)
+        if debug:
+            print "At level %d."
+            print " New working set: %r" % sorted(new_working_set)
+            print " %d equivalencies seen so far." % len(seen_equivalency_ids)
+            print " %d identifiers seen so far." % len(seen_identifier_ids)
+            print " %d equivalents" % len(equivalents)
 
-        if new_working_set:
+        if debug and new_working_set:
+            print " Here's the new working set:",
             for i in _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(new_working_set)):
-                print i
+                print "", i
 
         surviving_working_set = set()
         for id in original_working_set:
@@ -604,7 +608,8 @@ class WorkIdentifier(Base):
                             equivalents[id][new_id] = (new_weight, o2n_votes + n2new_votes)
                             surviving_working_set.add(new_id)
 
-        print "Pruned %d from working set" % len(surviving_working_set.intersection(new_working_set))
+        if debug:
+            print "Pruned %d from working set" % len(surviving_working_set.intersection(new_working_set))
         return (surviving_working_set, seen_equivalency_ids, seen_identifier_ids,
                 equivalents)
 
@@ -1472,7 +1477,7 @@ class Work(Base):
     def language_code(self):
         return LanguageCodes.three_to_two.get(self.language, self.language)
 
-    def all_workrecords(self, recursion_level=3):
+    def all_workrecords(self, recursion_level=5):
         """All WorkRecords identified by a WorkIdentifier equivalent to 
         any of the primary identifiers of this Work's WorkRecords.
 
@@ -1605,7 +1610,7 @@ class Work(Base):
         license_pool_work_records = set(
             [p.work_record() for p in self.license_pools])
 
-        all_work_records = set(self.all_workrecords(recursion_level=1).all())
+        all_work_records = set(self.all_workrecords(recursion_level=5).all())
         all_work_records = all_work_records.union(license_pool_work_records)
 
         authors = Counter()
