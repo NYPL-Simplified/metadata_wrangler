@@ -39,6 +39,7 @@ class OverdriveAPI(object):
     LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
     EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
+    CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts",
 
     CRED_FILE = "oauth_cred.json"
     BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
@@ -104,7 +105,7 @@ class OverdriveAPI(object):
         headers['Authorization'] = "Basic %s" % auth
         return requests.post(url, payload, headers=headers)
 
-    def get_patron_token(self, barcode, pin):
+    def get_patron_access_token(self, barcode, pin):
         """Create an OAuth token for the given patron."""
         payload = dict(
             grant_type="password",
@@ -114,7 +115,21 @@ class OverdriveAPI(object):
                 self.website_id, "default")
         )
         response = self.token_post(patron_token_endpoint, payload)
-        return response.content
+        if response.status == 200:
+            access_token = response.json['access_token']
+        else:
+            access_token = None
+        return access_token, response
+
+    def checkout(self, patron_access_token, overdrive_id, format_type):
+        headers = dict(Authorization="Bearer %s" % patron_access_token)
+        headers["Content-Type"] = "application/json"
+        payload = dict(fields=[dict(name="reserveId", value=book_id),
+                               dict(name="formatType", value=format_type)])
+        payload = json.dumps(payload)
+        response = requests.post(
+            self.CHECKOUTS_ENDPOINT, headers=headers, data=payload)
+        return response
 
     def get_library(self):
         url = self.LIBRARY_ENDPOINT % dict(library_id=self.library_id)
@@ -240,6 +255,18 @@ class OverdriveAPI(object):
         availability_queue = (
             OverdriveRepresentationExtractor.availability_link_list(data))
         return availability_queue, next_link
+
+    @classmethod
+    def get_download_link(self, checkout_response, format, error_url):
+        link = None
+        for f in checkout_response['formats']:
+            if f.get('formatType') == format:
+                link = f['linkTemplates']['downloadLink']['href']
+                break
+        if link:
+            return link.replace("{errorpageurl}", error_url)
+        else:
+            return None
 
     @classmethod
     def make_link_safe(self, url):

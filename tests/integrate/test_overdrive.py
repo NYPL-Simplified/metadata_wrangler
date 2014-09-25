@@ -211,3 +211,13 @@ class TestOverdriveAPI(DatabaseTest):
         OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
             self._db, wr, info, input_source)
         eq_(wr.extra['awards'], [{"source":"The New York Times","value":"The New York Times Best Seller List"}])
+
+    def test_get_download_link(self):
+        data = json.loads(pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/checkout_response_locked_in_format.json"))
+        url = OverdriveAPI.get_download_link(
+            data, "ebook-epub-adobe", "http://foo.com/")
+        eq_("http://patron.api.overdrive.com/v1/patrons/me/checkouts/76C1B7D0-17F4-4C05-8397-C66C17411584/formats/ebook-epub-adobe/downloadlink?errorpageurl=http://foo.com/", url)
+        eq_(None, OverdriveAPI.get_download_link(
+            data, "no-such-format", "http://foo.com/"))
