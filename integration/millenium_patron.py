@@ -162,11 +162,20 @@ class DummyMilleniumPatronAPI(MilleniumPatronAPI):
     users = [user1, user2]
 
     def pintest(self, barcode, pin):
-        "A valid test PIN is the first character of the barcode repeated four times."
+        """A barcode that's 14 digits long is treated as valid,
+        no matter which PIN is used.
+
+        That's so real barcode/PIN combos can be passed through to
+        third parties.
+
+        Otherwise, valid test PIN is the first character of the barcode
+        repeated four times.
+
+        """
         u = self.dump(barcode)
         if 'ERRNUM' in u:
             return False
-        return pin == barcode[0] * 4
+        return len(barcode) == 14 or pin == barcode[0] * 4
 
     def dump(self, barcode):
         # We have a couple custom barcodes.
