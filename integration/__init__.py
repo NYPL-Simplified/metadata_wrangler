@@ -125,6 +125,7 @@ class CoverImageMirror(object):
             Resource.rel==Resource.IMAGE).filter(
                 Resource.data_source==self.data_source).filter(
                     Resource.mirror_date==None)
+        print "Mirroring %d images." % q.count()
         resultset = q.limit(100).all()
         while resultset:
             for resource in resultset:
@@ -141,9 +142,9 @@ class CoverImageMirror(object):
         href = resource.href
         extension = href[href.rindex('.'):]
         filename = resource.work_identifier.identifier + extension
+        return filename
 
     def mirror(self, resource):
-
         filename = self.filename_for(resource)
         if self.original_cache.exists(filename):
             content_type = self.types_for_image_extensions.get(

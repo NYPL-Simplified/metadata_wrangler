@@ -139,8 +139,17 @@ class AcquisitionFeed(OPDSFeed):
     def __init__(self, _db, title, url, works, facet_url_generator=None):
         super(AcquisitionFeed, self).__init__(title, url=url)
         lane_link = dict(rel="collection", href=url)
+        import time
+        first_time = time.time()
+        totals = []
         for work in works:
+            a = time.time()
             self.add_entry(work, lane_link)
+            totals.append(time.time()-a)
+
+        # import numpy
+        # print "Feed built in %.2f (mean %.2f, stdev %.2f)" % (
+        #    time.time()-first_time, numpy.mean(totals), numpy.std(totals))
 
         if facet_url_generator:
             for title, order, facet_group, in [
@@ -239,17 +248,13 @@ class AcquisitionFeed(OPDSFeed):
 
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
-            if not thumbnail_url:
-                thumbnail_url = full_url
         if thumbnail_url:
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
 
         tag = "tag:work:%s" % work.id
-
         genre = ", ".join(repr(wg) for wg in work.work_genres)
         if genre:
             qualities.append(("Genre", genre))
-
 
         if work.summary:
             summary = work.summary.content
@@ -267,14 +272,17 @@ class AcquisitionFeed(OPDSFeed):
 
         entry = E.entry(
             E.id(tag),
-            E.title(work.title),
-            SCHEMA.subtitle(work.subtitle or ''),
+            E.title(work.title))
+        if work.subtitle:
+            entry.extend([E.alternativeHeadline(work.subtitle)])
+
+        entry.extend([
             E.author(E.name(work.authors or "")),
             E.summary(summary),
             E.link(href=checkout_url),
             E.updated(_strftime(datetime.datetime.utcnow())),
-            *links
-        )
+        ])
+        entry.extend(links)
         # print " ID %s TITLE %s AUTHORS %s" % (tag, work.title, work.authors)
         language = work.language_code
         if language:

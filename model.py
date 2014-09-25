@@ -2139,7 +2139,8 @@ class Genre(Base):
     # One Genre may participate in many WorkGenre assignments.
     works = association_proxy('work_genres', 'work')
 
-    work_genres = relationship("WorkGenre", backref="genre")
+    work_genres = relationship("WorkGenre", backref="genre", 
+                               cascade="all, delete, delete-orphan")
 
     def __repr__(self):
         return "<Genre %s (%d subjects, %d works, %d subcategories)>" % (
@@ -2465,8 +2466,13 @@ class Lane(object):
             if previous_quality_min is not None:
                 query = query.filter(
                     Work.quality < previous_quality_min)
+            start = time.time()
             query = query.order_by(func.random()).limit(remaining)
+            #results.extend([x for x in query.all() if x.license_pools])
             results.extend(query.all())
+            print "Quality %.1f got %d results for %s in %.2fsec" % (
+                quality_min, len(results), self.name, time.time()-start
+                )
 
             if quality_min == quality_min_rock_bottom:
                 # We can't lower the bar any more.
@@ -2503,7 +2509,10 @@ class Lane(object):
         """
         audience = self.audience
         fiction = fiction or self.fiction
-        q = self._db.query(Work)
+        q = self._db.query(Work).options(
+            joinedload('license_pools', 'resources').joinedload('data_source'),
+            joinedload('work_genres')
+        )
         if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
             # No genre plus a boolean value for `fiction` means
             # fiction or nonfiction not associated with any genre.
