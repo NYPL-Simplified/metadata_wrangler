@@ -344,6 +344,7 @@ class OverdriveClassifier(Classifier):
         Business_Economics : ["Business", "Marketing & Sales", "Careers"],
         Christianity : ["Christian Fiction", "Christian Nonfiction"],
         Computers : "Computer Technology",
+        Classics : "Classic Literature",
         Cooking : "Cooking & Food",
         Crafts_Hobbies_Games : ["Crafts", "Games"],
         Drama : "Drama",
