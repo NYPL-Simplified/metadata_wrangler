@@ -4,7 +4,7 @@
 <h2>Work #{{work.id}} - {{work.title}}</h2>
 
 {% if work.cover %}
- <p><img src="{{work.cover.final_url}}"> ({{work.cover.quality}})</p>
+ <p><a href="{{work.cover.final_url}}"><img src="{{work.cover.scaled_url}}" alt="{{work.cover.quality}}"/></a>
 {% endif %}
 
 {% if work.summary %}
@@ -23,7 +23,7 @@
 
 {% for image in work.all_cover_images() %}
 {% if image.mirrored %}
-<img src="{{image.final_url}}" alt="{{image.quality}}"/>
+ <a href="{{image.final_url}}"><img src="{{image.scaled_url}}" alt="{{image.quality}}"/></a>
 {% endif %}
 {% endfor %}
 

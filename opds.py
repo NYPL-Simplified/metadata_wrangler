@@ -251,7 +251,9 @@ class AcquisitionFeed(OPDSFeed):
         if thumbnail_url:
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
 
-        tag = "tag:work:%s" % work.id
+        identifier = active_license_pool.identifier
+        tag = url_for("work", identifier_type=identifier.type,
+                      identifier=identifier.identifier, _external=True)
         genre = ", ".join(repr(wg) for wg in work.work_genres)
         if genre:
             qualities.append(("Genre", genre))

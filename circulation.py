@@ -327,13 +327,11 @@ def checkout(data_source, identifier):
     best_pool.loan_to(flask.request.patron)
     return redirect(URLRewriter.rewrite(best_link.href))
 
-@app.route('/gutenberg_tree/<gutenberg_id>')
-def gutenberg_tree(gutenberg_id):
-    source = DataSource.lookup(Conf.db, DataSource.GUTENBERG)
+@app.route('/work/<identifier_type>/<identifier>')
+def work(identifier_type, identifier):
     wid, ignore = WorkIdentifier.for_foreign_id(
-        Conf.db, WorkIdentifier.GUTENBERG_ID, gutenberg_id, False)
+        Conf.db, identifier_type, identifier, False)
     pool = Conf.db.query(LicensePool).filter(
-        LicensePool.data_source==source).filter(
             LicensePool.identifier==wid).one()
     work = pool.work
     template = templates.get_template('work_dump.html')

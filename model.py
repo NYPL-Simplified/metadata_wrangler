@@ -1663,19 +1663,9 @@ class Work(Base):
         data = WorkIdentifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
         flattened_data = WorkIdentifier.flatten_identifier_ids(data)
-        
-        # TODO: In the long run we don't want to trust embeddable
-        # images at all, without looking at them, but images from the
-        # same source as the licensed books are trustable for now.
-        mirrored_or_embeddable = or_(
-            Resource.mirrored==True,
-            Resource.data_source.name.in_(DataSource.OVERDRIVE, 
-                                          DataSource.THREEM)
-            )
-
         return WorkIdentifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.IMAGE).filter(
-                mirrored_or_embeddable).order_by(
+                Resource.mirrored==True).filter(Resource.scaled==True).order_by(
                 Resource.quality.desc())
 
     def all_descriptions(self):
@@ -1952,9 +1942,9 @@ class Resource(Base):
     URL_ROOTS = dict(
         content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/CC",
         scaled_content_cafe_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/CC",
-        original_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Overdrive/",
+        original_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Overdrive",
         scaled_overdrive_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive",
-        original_threem_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/3M/",
+        original_threem_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/3M",
         scaled_threem_covers_mirror="https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/3M",
         gutenberg_illustrated_mirror="https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
     )
