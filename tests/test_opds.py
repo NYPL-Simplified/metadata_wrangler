@@ -95,7 +95,7 @@ class TestOPDS(DatabaseTest):
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, by_author['type'])
 
     def test_acquisition_feed(self):
-        work = self._work(with_open_access_download=True, author="Alice")
+        work = self._work(with_open_access_download=True, authors="Alice")
 
         feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
                                [work])

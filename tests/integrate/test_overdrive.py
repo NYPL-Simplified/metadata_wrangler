@@ -143,7 +143,7 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(31, wr.published.day)
 
         # Author stuff
-        author = wr.authors[0]
+        author = wr.author_contributors[0]
         eq_(u"Rüping, Andreas", author.name)
         eq_("Andreas R&#252;ping", author.display_name)
         eq_(set(["Computer Technology", "Nonfiction"]),

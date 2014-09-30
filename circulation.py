@@ -226,10 +226,10 @@ def feed(lane):
         return unicode(feed)
 
     if order == 'title':
-        feed = WorkFeed(lane, languages, Work.title)
+        feed = WorkFeed(lane, languages, WorkRecord.title)
         title = "%s: By title" % lane.name
     elif order == 'author':
-        feed = WorkFeed(lane, languages, Work.authors)
+        feed = WorkFeed(lane, languages, WorkRecord.author)
         title = "%s: By author" % lane.name
     else:
         return "I don't know how to order a feed by '%s'" % order
