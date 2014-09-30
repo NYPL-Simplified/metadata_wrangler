@@ -231,14 +231,12 @@ class AcquisitionFeed(OPDSFeed):
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
         full_url = None
-        thumbnail_url = None
-        if work.cover:
-            full_url = URLRewriter.rewrite(work.cover.href)
+        if work.cover_full_url:
+            full_url = URLRewriter.rewrite(work.cover_full_url)
             mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
             if mirrored_url:
                 full_url = mirrored_url
                 
-            qualities.append(("Cover quality", work.cover.quality))
             if work.cover.scaled_path:
                 thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
@@ -248,7 +246,8 @@ class AcquisitionFeed(OPDSFeed):
 
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
-        if thumbnail_url:
+        if work.cover_thumbnail_url:
+            thumbnail_url = URLrewriter.rewrite(work.cover_thumbnail_url)
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
 
         identifier = active_license_pool.identifier
@@ -258,9 +257,10 @@ class AcquisitionFeed(OPDSFeed):
         if genre:
             qualities.append(("Genre", genre))
 
-        if work.summary:
-            summary = work.summary.content
-            qualities.append(("Summary quality", work.summary.quality))
+        if work.summary_text:
+            summary = work.summary_text
+            if work.summary:
+                qualities.append(("Summary quality", work.summary.quality))
         else:
             summary = ""
         summary += "<ul>"
@@ -279,7 +279,7 @@ class AcquisitionFeed(OPDSFeed):
             entry.extend([E.alternativeHeadline(work.subtitle)])
 
         entry.extend([
-            E.author(E.name(work.authors or "")),
+            E.author(E.name(work.author or "")),
             E.summary(summary),
             E.link(href=checkout_url),
             E.updated(_strftime(datetime.datetime.utcnow())),

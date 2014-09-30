@@ -1171,14 +1171,6 @@ class WorkRecord(Base):
     cover_full_url = Column(Unicode)
     cover_thumbnail_url = Column(Unicode)
 
-    summary_id = Column(
-        Integer, ForeignKey(
-            'resources.id', use_alter=True, name='fk_works_summary_id'),
-        index=True)
-    # This gives us a convenient place to store a cleaned-up version of
-    # the content of the summary Resource.
-    summary_text = Column(Unicode)
-
     # Information kept in here probably won't be used.
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
@@ -1251,7 +1243,10 @@ class WorkRecord(Base):
 
     def set_cover(self, resource):
         self.cover = resource
-        self.cover_full_url = resource.full_url
+        if resource.mirrored_path:
+            self.cover_full_url = resource.mirrored_path
+        else:
+            self.cover_full_url = resource.full_url
         self.cover_thumbnail_url = resource.thumbnail_url
 
     def equivalencies(self, _db):
@@ -1543,6 +1538,14 @@ class Work(Base):
     audience = Column(Unicode, index=True)
     fiction = Column(Boolean, index=True)
 
+    summary_id = Column(
+        Integer, ForeignKey(
+            'resources.id', use_alter=True, name='fk_works_summary_id'), 
+        index=True)
+    # This gives us a convenient place to store a cleaned-up version of
+    # the content of the summary Resource.
+    summary_text = Column(Unicode)
+
     # The estimated literary quality of this work.
     quality = Column(Float, index=True)
 
@@ -1598,6 +1601,14 @@ class Work(Base):
     @property
     def imprint(self):
         return self.primary_work_record.imprint
+
+    @property
+    def cover_full_url(self):
+        return self.primary_work_record.cover_full_url
+
+    @property
+    def cover_thumbnail_url(self):
+        return self.primary_work_record.cover_thumbnail_url
 
     def __repr__(self):
         return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
@@ -2004,10 +2015,10 @@ class Resource(Base):
         Integer, ForeignKey('datasources.id'), index=True)
 
     # Many WorkRecords may use this resource as their cover image.
-    cover_works = relationship("WorkRecord", backref="cover", foreign_keys=[WorkRecord.cover_id])
+    cover_workrecordss = relationship("WorkRecord", backref="cover", foreign_keys=[WorkRecord.cover_id])
 
-    # Many WorkRecords may use this resource as their summary.
-    summary_works = relationship("WorkRecord", backref="summary", foreign_keys=[WorkRecord.summary_id])
+    # Many Works may use this resource as their summary.
+    summary_works = relationship("Work", backref="summary", foreign_keys=[Work.summary_id])
 
     # The relation between the book identified by the WorkIdentifier
     # and the resource.
