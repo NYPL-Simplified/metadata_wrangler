@@ -10,6 +10,7 @@ from integration.overdrive import (
 )
 from model import (
     DataSource,
+    Measurement,
     Resource,
     WorkIdentifier,
 )
@@ -158,7 +159,7 @@ class TestOverdriveAPI(DatabaseTest):
 
         # Associated resources.
         resources = wr.primary_identifier.resources
-        eq_(4, len(resources))
+        eq_(3, len(resources))
         long_description = [
             x for x in resources if x.rel==Resource.DESCRIPTION
             and x.href=="tag:full"
@@ -175,12 +176,19 @@ class TestOverdriveAPI(DatabaseTest):
         image = [x for x in resources if x.rel==Resource.IMAGE][0]
         eq_('http://images.contentreserve.com/ImageType-100/0128-1/%7B3896665D-9D81-4CAC-BD43-FFC5066DE1F5%7DImg100.jpg', image.href)
 
-        popularity = [x for x in resources if x.rel==Resource.POPULARITY][0]
-        eq_("2", popularity.content)
+        measurements = wr.primary_identifier.measurements
+        popularity = [x for x in measurements
+                      if x.quantity_measured==Measurement.POPULARITY][0]
+        eq_(2, popularity.value)
+
+        rating = [x for x in measurements
+                  if x.quantity_measured==Measurement.RATING][0]
+        eq_(1, rating.value)
 
         # Un-schematized metadata.
+
         eq_("eBook", wr.extra['medium'])
-        eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.extra['sort_title'])
+        eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.sort_title)
 
 
     def test_annotate_work_record_with_sample(self):

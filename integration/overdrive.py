@@ -18,6 +18,7 @@ from model import (
     CoverageProvider,
     DataSource,
     LicensePool,
+    Measurement,
     Resource,
     Subject,
     WorkIdentifier,
@@ -394,6 +395,18 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         identifier.add_resource(
             rel, url, input_source, pool, media_type, value)
 
+    @classmethod
+    def _add_value_as_measurement(
+            cls, input_source, identifier, quantity_measured, value):
+        if isinstance(value, str):
+            value = value.decode("utf8")
+        elif isinstance(value, unicode):
+            pass
+
+        value = float(value)
+        identifier.add_measurement(
+            input_source, quantity_measured, value)
+
     DATE_FORMAT = "%Y-%m-%d"
 
     def process_work_record(self, wr):
@@ -455,11 +468,11 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         for i in info.get('subjects', []):
             c = identifier.classify(input_source, Subject.OVERDRIVE, i['value'])
 
+        wr.sort_title = info.get('sortTitle')
         extra = dict()
         for inkey, outkey in (
                 ('gradeLevels', 'grade_levels'),
                 ('mediaType', 'medium'),
-                ('sortTitle', 'sort_title'),
                 ('awards', 'awards'),
         ):
             if inkey in info:
@@ -508,16 +521,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                         license_pool, media_type)
                     resource.file_size = format['fileSize']
 
-        # Add resources: cover, descriptions, rating and popularity
-        if info['starRating']:
-            cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.RATING,
-                info['starRating'])
-
-        if info['popularity']:
-            cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.POPULARITY,
-                info['popularity'])
+        # Add resources: cover and descriptions
 
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
@@ -538,6 +542,17 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             cls._add_value_as_resource(
                 input_source, identifier, license_pool, Resource.DESCRIPTION, short,
                 "text/html", "tag:short")
+
+        # Add measurements: rating and popularity
+        if info['starRating'] is not None and info['starRating'] > 0:
+            cls._add_value_as_measurement(
+                input_source, identifier, Measurement.RATING,
+                info['starRating'])
+
+        if info['popularity']:
+            cls._add_value_as_measurement(
+                input_source, identifier, Measurement.POPULARITY,
+                info['popularity'])
 
         return True
 

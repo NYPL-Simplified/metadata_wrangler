@@ -255,6 +255,9 @@ class DataSource(Base):
     # One DataSource can provide many Resources.
     resources = relationship("Resource", backref="data_source")
 
+    # One DataSource can generate many Measurements.
+    measurements = relationship("Measurement", backref="data_source")
+
     # One DataSource can provide many Classifications.
     classifications = relationship("Classification", backref="data_source")
 
@@ -308,7 +311,7 @@ class CoverageRecord(Base):
     __tablename__ = 'coveragerecords'
 
     id = Column(Integer, primary_key=True)
-    workidentifier_id = Column(
+    work_identifier_id = Column(
         Integer, ForeignKey('workidentifiers.id'), index=True)
     data_source_id = Column(
         Integer, ForeignKey('datasources.id'), index=True)
@@ -432,6 +435,11 @@ class WorkIdentifier(Base):
     # One WorkIdentifier may serve to identify many Resources.
     resources = relationship(
         "Resource", backref="work_identifier"
+    )
+
+    # One WorkIdentifier may be the subject of many Measurements.
+    measurements = relationship(
+        "Measurement", backref="work_identifier"
     )
 
     # One WorkIdentifier may participate in many Classifications.
@@ -661,6 +669,28 @@ class WorkIdentifier(Base):
         if content:
             resource.set_content(content, media_type)
         return resource, new
+
+    def add_measurement(self, data_source, quantity_measured, value,
+                        weight=1, taken_at=None):
+        """Associate a new Measurement with this WorkIdentifier."""
+        _db = Session.object_session(self)
+
+        now = datetime.datetime.now()
+        taken_at = taken_at or now
+        # Is there an existing most recent measurement?
+        most_recent = get_one(
+            _db, Measurement, work_identifier=self,
+            data_source=data_source,
+            quantity_measured=quantity_measured,
+        )
+        if most_recent and most_recent.taken_at < taken_at:
+            most_recent.is_most_recent = False
+
+        return create(
+            _db, Measurement,
+            work_identifier=self, data_source=data_source,
+            quantity_measured=quantity_measured, taken_at=taken_at,
+            value=value, weight=weight, is_most_recent=True)[0]
 
     def classify(self, data_source, subject_type, subject_identifier,
                  subject_name=None, weight=1):
@@ -1306,7 +1336,7 @@ class WorkRecord(Base):
         if isinstance(workrecord_data_sources, DataSource):
             workrecord_data_sources = [workrecord_data_sources]
         workrecord_data_source_ids = [x.id for x in workrecord_data_sources]
-        join_clause = ((WorkRecord.primary_identifier_id==CoverageRecord.workidentifier_id) &
+        join_clause = ((WorkRecord.primary_identifier_id==CoverageRecord.work_identifier_id) &
                        (CoverageRecord.data_source_id==coverage_data_source.id))
         
         q = _db.query(WorkRecord).outerjoin(
@@ -1462,7 +1492,8 @@ class WorkRecord(Base):
         
 
     def calculate_presentation(self, debug=True):
-        self.sort_title = TitleProcessor.sort_title_for(self.title)
+        if not self.sort_title:
+            self.sort_title = TitleProcessor.sort_title_for(self.title)
         sort_names = []
         display_names = []
         for author in self.author_contributors:
@@ -1975,6 +2006,46 @@ class Work(Base):
         return workgenres, fiction, audience
 
 
+class Measurement(Base):
+    """A  measurement of some numeric quantity associated with a
+    WorkIdentifier.
+    """
+    __tablename__ = 'measurements'
+
+    # Some common measurement types
+    POPULARITY = "http://library-simplified.com/rel/popularity"
+    RATING = "http://schema.org/ratingValue"
+    DOWNLOADS = "https://schema.org/UserDownloads"
+
+    id = Column(Integer, primary_key=True)
+
+    # A Measurement is always associated with some WorkIdentifier.
+    workidentifier_id = Column(
+        Integer, ForeignKey('workidentifiers.id'), index=True)
+
+    # A Measurement always comes from some DataSource.
+    data_source_id = Column(
+        Integer, ForeignKey('datasources.id'), index=True)
+
+    # The quantity being measured.
+    quantity_measured = Column(Unicode, index=True)
+
+    # The measurement itself.
+    value = Column(Float)
+
+    # How much weight should be assigned this measurement, relative to
+    # other measurements of the same quantity from the same source.
+    weight = Column(Unicode, default=1)
+
+    # When the measurement was taken
+    taken_at = Column(DateTime, index=True)
+    
+    # True if this is the most recent measurement of this quantity for
+    # this WorkIdentifier.
+    #
+    is_most_recent = Column(Boolean, index=True)
+
+
 class Resource(Base):
     """An external resource that may be mirrored locally."""
 
@@ -1988,8 +2059,6 @@ class Resource(Base):
     SAMPLE = "http://opds-spec.org/acquisition/sample"
     ILLUSTRATION = "http://library-simplified.com/rel/illustration"
     REVIEW = "http://schema.org/Review"
-    RATING = "http://schema.org/reviewRating"
-    POPULARITY = "http://library-simplified.com/rel/popularity"
     DESCRIPTION = "http://schema.org/description"
     AUTHOR = "http://schema.org/author"
 

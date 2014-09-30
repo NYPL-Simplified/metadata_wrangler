@@ -20,6 +20,7 @@ from model import (
     Lane,
     LaneList,
     LicensePool,
+    Measurement,
     Timestamp,
     Work,
     WorkFeed,
@@ -1169,3 +1170,35 @@ class TestCoverageProvider(DatabaseTest):
         [timestamp] = self._db.query(Timestamp).all()
         eq_("Never successful", timestamp.service)
 
+
+class TestMeasurement(DatabaseTest):
+
+    def test_newer_measurement_displaces_earlier_measurement(self):
+        wi = self._workidentifier()
+        source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        m1 = wi.add_measurement(source, Measurement.DOWNLOADS, 10)
+        eq_(True, m1.is_most_recent)
+
+        m2 = wi.add_measurement(source, Measurement.DOWNLOADS, 11)
+        eq_(False, m1.is_most_recent)
+        eq_(True, m2.is_most_recent)
+
+        m3 = wi.add_measurement(source, Measurement.POPULARITY, 11)
+        eq_(True, m2.is_most_recent)
+        eq_(True, m3.is_most_recent)
+
+
+    def test_can_insert_measurement_after_the_fact(self):
+        
+        old = datetime.datetime(2011, 1, 1)
+        new = datetime.datetime(2012, 1, 1)
+
+        wi = self._workidentifier()
+        source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        m1 = wi.add_measurement(source, Measurement.DOWNLOADS, 10,
+                                taken_at=new)
+        eq_(True, m1.is_most_recent)
+
+        m2 = wi.add_measurement(source, Measurement.DOWNLOADS, 5,
+                                taken_at=old)
+        eq_(True, m1.is_most_recent)
