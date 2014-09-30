@@ -147,3 +147,12 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         book, new = GutenbergRDFExtractor.book_in(self._db, "0", fh)
         eq_(None, book)
         eq_(False, new)
+
+    def test_audio_book(self):
+        """An audio book is loaded with its medium set to AUDIO."""
+        fh = StringIO.StringIO(pkgutil.get_data(
+            "tests.integrate",
+            "files/gutenberg/pg28794.rdf"))
+        book, new = GutenbergRDFExtractor.book_in(self._db, "28794", fh)
+        eq_(WorkRecord.AUDIO_MEDIUM, book.medium)
+

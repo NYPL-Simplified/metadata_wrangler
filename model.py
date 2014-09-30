@@ -1577,8 +1577,13 @@ class Work(Base):
     # the content of the summary Resource.
     summary_text = Column(Unicode)
 
-    # The estimated literary quality of this work.
+    # The overall suitability of this work for unsolicited
+    # presentation to a patron. This is a calculated value taking both
+    # rating and popularity into account.
     quality = Column(Float, index=True)
+
+    # The overall rating given to this work.
+    rating = Column(Float, index=True)
 
     # The overall current popularity of this work.
     popularity = Column(Float, index=True)
@@ -2016,6 +2021,16 @@ class Measurement(Base):
     POPULARITY = "http://library-simplified.com/rel/popularity"
     RATING = "http://schema.org/ratingValue"
     DOWNLOADS = "https://schema.org/UserDownloads"
+
+    # If a book's popularity measurement is found between index n and
+    # index n+1 on this list, it is in the nth percentile for
+    # popularity and its 'popularity' value should be n * 0.01.
+    # 
+    # These values aare empirically determined and may change over
+    # time.
+    POPULARITY_PERCENTILES = {
+        DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805]
+    }
 
     id = Column(Integer, primary_key=True)
 
