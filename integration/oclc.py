@@ -109,7 +109,7 @@ class OCLCLinkedData(object):
             extension = ".url"
         else:
             extension = ".jsonld"
-        return os.path.join(type, id + extension)
+        return os.path.join(type, id[-4:], id + extension)
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
@@ -331,7 +331,7 @@ class OCLCLinkedData(object):
             if 'schema:name' in result:
                 name = result['schema:name']
             else:
-                print "WEIRD INTERNAL LOOKUP: %r" % result
+                # print "WEIRD INTERNAL LOOKUP: %r" % result
                 continue
             use_type = None
             if 'rdf:type' in result:
@@ -347,7 +347,7 @@ class OCLCLinkedData(object):
                     elif type_id == 'schema:Intangible':
                         use_type = Subject.TAG
                         break
-                    print "", type_id, result
+                    # print "", type_id, result
                     
             if use_type:
                 for value in ldq.values(name):
@@ -998,8 +998,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     new_records += 1
                     print "", workrecord.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
-                for isbn in isbns:
-                    print " NEW ISBN: %s" % isbn
+                #for isbn in isbns:
+                #    print " NEW ISBN: %s" % isbn
                 new_descriptions += len(descriptions)
 
             print "Total: %s editions, %s ISBNs, %s descriptions." % (
@@ -1078,6 +1078,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                                    if c.viaf])
             author_strength = MetadataSimilarity._proportion(
                 original_identifier_viafs, set(edition['creator_viafs']))
+            original_identifier_viafs, edition['creator_viafs'], author_strength
             strength = (title_strength * 0.8) + (author_strength * 0.2)
         else:
             strength = 1

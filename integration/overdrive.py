@@ -534,7 +534,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 input_source, identifier, license_pool, Resource.DESCRIPTION, full,
                 "text/html", "tag:full")
 
-        if short and short != full and not full.startswith(short):
+        if short and short != full and (not full or not full.startswith(short)):
             cls._add_value_as_resource(
                 input_source, identifier, license_pool, Resource.DESCRIPTION, short,
                 "text/html", "tag:short")

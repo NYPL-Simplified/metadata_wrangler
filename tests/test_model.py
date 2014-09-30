@@ -187,7 +187,7 @@ class TestContributor(DatabaseTest):
 
         # Bob's book is now associated with 'Robert', not the standalone
         # 'Bob' record.
-        eq_([robert], bobs_book.authors)
+        eq_([robert], bobs_book.author_contributors)
 
     def _names(self, in_name, out_family, out_display,
                default_display_name=None):
@@ -364,6 +364,42 @@ class TestWorkRecord(DatabaseTest):
         work.work_records.extend([gutenberg])
         eq_(4, work.all_workrecords().count())
 
+    def test_calculate_presentation_title(self):
+        wr = self._workrecord(title="The Foo")
+        wr.calculate_presentation()
+        eq_("Foo, The", wr.sort_title)
+
+        wr = self._workrecord(title="A Foo")
+        wr.calculate_presentation()
+        eq_("Foo, A", wr.sort_title)
+
+    def test_calculate_presentation_author(self):
+        bob, ignore = self._contributor(name="Bitshifter, Bob")
+        wr = self._workrecord()
+        wr.add_contributor(bob, Contributor.AUTHOR_ROLE)
+        wr.calculate_presentation()
+        eq_("Bitshifter, Bob", wr.author)
+        eq_("Bitshifter, Bob", wr.sort_author)
+
+        bob.display_name="Bob Bitshifter"
+        wr.calculate_presentation()
+        eq_("Bob Bitshifter", wr.author)
+        eq_("Bitshifter, Bob", wr.sort_author)
+
+        kelly, ignore = self._contributor(name="Accumulator, Kelly")
+        kelly.display_name = "Kelly Accumulator"
+        wr.add_contributor(kelly, Contributor.AUTHOR_ROLE)
+        wr.calculate_presentation()
+        eq_("Kelly Accumulator, Bob Bitshifter", wr.author)
+        eq_("Accumulator, Kelly ; Bitshifter, Bob", wr.sort_author)
+
+    def test_calculate_presentation_cover(self):
+        # TODO: Verify that a cover will be used even if it's some
+        # distance away along the identifier-equivalence line.
+
+        # TODO: Verify that a nearby cover takes precedence over a
+        # faraway cover.
+        pass
 
 class TestLicensePool(DatabaseTest):
 
@@ -408,7 +444,7 @@ class TestLicensePool(DatabaseTest):
         p2, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.OVERDRIVE, WorkIdentifier.OVERDRIVE_ID, "2")
 
-        work, ignore = get_one_or_create(self._db, Work, title="Foo")
+        work = self._work(title="Foo")
         p1.work = work
         
         assert p1 in work.license_pools
@@ -435,37 +471,33 @@ class TestWork(DatabaseTest):
         wr2.title = "The 2nd Title"
         wr2.subtitle = "The 2nd Subtitle"
         wr2.add_contributor(bob, Contributor.AUTHOR_ROLE)
-        wr2.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
+        [alice], ignore = Contributor.lookup(self._db, "Adder, Alice")
+        alice.family_name, alice.display_name = alice.default_names()
+        wr2.add_contributor(alice, Contributor.AUTHOR_ROLE)
 
         wr3, pool3 = self._workrecord(
             gutenberg_source, WorkIdentifier.GUTENBERG_ID, True)
         wr3.title = "The 2nd Title"
         wr3.subtitle = "The 2nd Subtitle"
         wr3.add_contributor(bob, Contributor.AUTHOR_ROLE)
-        wr3.add_contributor("Adder, Alice", Contributor.AUTHOR_ROLE)
+        wr3.add_contributor(alice, Contributor.AUTHOR_ROLE)
 
-        work = Work()
-        for i in wr1, wr2, wr3:
+        work = self._work(primary_work_record=wr2)
+        for i in wr1, wr3:
             work.work_records.append(i)
         for p in pool1, pool2, pool3:
             work.license_pools.append(p)
 
-        # The title of the Work is the most common title among
-        # its associated WorkRecords.
-        eq_(None, work.title)
         work.calculate_presentation()
+        # The title of the Work is the title of its primary work
+        # record.
         eq_("The 2nd Title", work.title)
         eq_("The 2nd Subtitle", work.subtitle)
-        eq_("2nd Title, The", work.sort_title)
 
-        # Bob was listed as an author for all three WorkRecords,
-        # making him the most popular author, so he's listed as the
-        # author of the work.
-        #
-        # TODO: We currently can't handle multiple authors. This needs
-        # to be fixed.
-        eq_("Bob Bitshifter", work.authors)
-        eq_("Bitshifter, Bob", work.sort_author)
+        # The author of the Work is the author of its primary work
+        # record.
+        eq_("Alice Adder, Bob Bitshifter", work.author)
+        eq_("Adder, Alice ; Bitshifter, Bob", work.sort_author)
 
 class TestLane(DatabaseTest):
 
@@ -817,8 +849,8 @@ class TestWorkConsolidation(DatabaseTest):
         for make_equivalent in wr3, wr1:
             wr4.primary_identifier.equivalent_to(
                 data_source, make_equivalent.primary_identifier, 1)
-        preexisting_work = Work()
-        preexisting_work.work_records.extend([wr1, wr2])
+        preexisting_work = self._work(primary_work_record=wr1)
+        preexisting_work.work_records.append(wr2)
 
         pool, ignore = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "4")
@@ -837,6 +869,7 @@ class TestWorkConsolidation(DatabaseTest):
         work1 = Work()
         work1.license_pools = [pool_1a]
         work1.work_records = [work_record_1a, work_record_1b]
+        work1.set_primary_work_record()
 
         # Here's a work with two license pools and one work record
         work_record_2a, pool_2a = self._workrecord(
@@ -847,6 +880,7 @@ class TestWorkConsolidation(DatabaseTest):
         work2 = Work()
         work2.license_pools = [pool_2a, pool_2b]
         work2.work_records = [work_record_2a]
+        work2.set_primary_work_record()
 
         self._db.commit()
 
@@ -865,7 +899,6 @@ class TestWorkConsolidation(DatabaseTest):
         eq_([], work2.work_records)
         eq_([], work2.license_pools)
 
-
         # The remaining Work has all three license pools.
         for p in pool_1a, pool_2a, pool_2b:
             assert p in work1.license_pools
@@ -873,10 +906,6 @@ class TestWorkConsolidation(DatabaseTest):
         # It has all three work records.
         for w in work_record_1a, work_record_1b, work_record_2a:
             assert w in work1.work_records
-
-        # Its presentation has been updated and its title now comes from
-        # one of the now-deleted Work's WorkRecords.
-        eq_("The only title in this whole test.", work1.title)
 
 
 class TestLoans(DatabaseTest):
@@ -982,22 +1011,27 @@ class TestWorkFeed(DatabaseTest):
 
     def test_setup(self):
         by_author = WorkFeed(self.fantasy_lane, "eng", order_by=
-                             [Work.sort_author, Work.authors])
+                             [WorkRecord.sort_author, WorkRecord.author])
 
         eq_(["eng"], by_author.languages)
         eq_(self.fantasy_lane, by_author.lane)
-        eq_([Work.sort_author, Work.authors, Work.sort_title, Work.title, Work.id], by_author.order_by)
+        eq_([WorkRecord.sort_author, WorkRecord.author,
+             WorkRecord.sort_title, WorkRecord.title, WorkRecord.id],
+            by_author.order_by)
 
         by_title = WorkFeed(self.fantasy_lane, ["eng", "spa"],
-                            order_by=[Work.sort_title, Work.title])
+                            order_by=[WorkRecord.sort_title, WorkRecord.title])
         eq_(["eng", "spa"], by_title.languages)
-        eq_([Work.sort_title, Work.title, Work.sort_author, Work.authors, Work.id], by_title.order_by)
+        eq_([WorkRecord.sort_title, WorkRecord.title,
+             WorkRecord.sort_author, WorkRecord.author, WorkRecord.id],
+            by_title.order_by)
 
     def test_several_books_same_author(self):
         title = "The Title"
         author = "Author, The"
-        language = ["eng"]
+        language = "eng"
         genre = self.fantasy_genre
+        lane = self.fantasy_lane
         audience = Classifier.AUDIENCE_ADULT
 
         # We've got three works with the same author but different
@@ -1012,26 +1046,26 @@ class TestWorkFeed(DatabaseTest):
                         audience, with_license_pool=True)
 
         # Order them by title, and everything's fine.
-        feed = WorkFeed(self.fantasy_lane, language, order_by=Work.title)
+        feed = WorkFeed(lane, language, order_by=WorkRecord.title)
         eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
-        eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
+        eq_([w3, w4], feed.page_query(self._db, w1.primary_work_record, 10).all())
 
         # Order them by author, and they're secondarily ordered by title.
-        feed = WorkFeed(self.fantasy_lane, language, order_by=Work.authors)
+        feed = WorkFeed(lane, language, order_by=WorkRecord.author)
         eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
-        eq_([w3], feed.page_query(self._db, w1, 10).all())
+        eq_([w3], feed.page_query(self._db, w1.primary_work_record, 10).all())
 
-        eq_([], feed.page_query(self._db, w3, 10).all())
+        eq_([], feed.page_query(self._db, w3.primary_work_record, 10).all())
 
-    def test_several_books_same_author(self):
+    def test_several_books_different_authors(self):
         title = "The Title"
         language = "eng"
         genre = self.fantasy_genre
         lane = self.fantasy_lane
         audience = Classifier.AUDIENCE_ADULT
         
-        # We've got three works with the same author but different
-        # titles, plus one with a different author and title.
+        # We've got three works with the same title but different
+        # authors, plus one with a different author and title.
         w1 = self._work(title, "Author B", genre, language, audience,
                         with_license_pool=True)
         w2 = self._work(title, "Author A", genre, language, audience, 
@@ -1042,16 +1076,16 @@ class TestWorkFeed(DatabaseTest):
                         with_license_pool=True)
 
         # Order them by author, and everything's fine.
-        feed = WorkFeed(lane, language, order_by=Work.authors)
+        feed = WorkFeed(lane, language, order_by=WorkRecord.author)
         eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
-        eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
+        eq_([w3, w4], feed.page_query(self._db, w1.primary_work_record, 10).all())
 
         # Order them by title, and they're secondarily ordered by author.
-        feed = WorkFeed(lane, language, order_by=Work.title)
+        feed = WorkFeed(lane, language, order_by=WorkRecord.title)
         eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
-        eq_([w3], feed.page_query(self._db, w1, 10).all())
+        eq_([w3], feed.page_query(self._db, w1.primary_work_record, 10).all())
 
-        eq_([], feed.page_query(self._db, w3, 10).all())
+        eq_([], feed.page_query(self._db, w3.primary_work_record, 10).all())
 
     def test_several_books_same_author_and_title(self):
         
@@ -1069,17 +1103,17 @@ class TestWorkFeed(DatabaseTest):
                        with_license_pool=True)
             for i in range(4)]
 
-        # WorkFeed orders them by ID.
-        feed = WorkFeed(lane, language, order_by=Work.authors)
+        # WorkFeed orders them by the ID of their WorkRecords.
+        feed = WorkFeed(lane, language, order_by=WorkRecord.author)
         query = feed.page_query(self._db, None, 10)
         eq_([w1, w2, w3, w4], query.all())
 
         # If we provide a last seen work, we only get the works
         # after that one.
-        query = feed.page_query(self._db, w2, 10)
+        query = feed.page_query(self._db, w2.primary_work_record, 10)
         eq_([w3, w4], query.all())
 
-        eq_([], feed.page_query(self._db, w4, 10).all())
+        eq_([], feed.page_query(self._db, w4.primary_work_record, 10).all())
 
 
 class TestCoverageProvider(DatabaseTest):
@@ -1110,7 +1144,7 @@ class TestCoverageProvider(DatabaseTest):
 
         # There is now one CoverageRecord
         [record] = self._db.query(CoverageRecord).all()
-        eq_(self.work_record, record.work_record)
+        eq_(self.work_record.primary_identifier, record.work_identifier)
         eq_(self.output_source, self.output_source)
 
         # The timestamp is now set.

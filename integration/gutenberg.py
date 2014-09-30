@@ -359,6 +359,8 @@ class GutenbergRDFExtractor(object):
             identifier.add_resource(
                 rel, None, source, media_type="text/plain", content=summary)
 
+        medium = WorkRecord.PRINT_MEDIUM
+
         # Turn the Gutenberg download links into Resources associated 
         # with the new WorkRecord. They will serve either as open access
         # downloads or cover images.
@@ -376,11 +378,17 @@ class GutenbergRDFExtractor(object):
                         # We don't care about thumbnail images--we
                         # make our own.
                         rel = None
+                elif media_type.startswith('audio/'):
+                    medium = WorkRecord.AUDIO_MEDIUM
+                elif media_type.startswith('video/'):
+                    medium = WorkRecord.VIDEO_MEDIUM
                 if rel:
                     identifier.add_resource(
                         rel, unicode(href), source, media_type=media_type)
                 identifier.add_resource(
                     Resource.CANONICAL, unicode(uri), source)
+
+        book.medium = medium
 
         # Associate the appropriate contributors with the book.
         for contributor in contributors:
