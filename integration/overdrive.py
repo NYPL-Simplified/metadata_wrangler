@@ -340,10 +340,13 @@ class OverdriveCirculationMonitor(Monitor):
     def __init__(self, data_directory):
         super(OverdriveCirculationMonitor, self).__init__(
             "Overdrive Circulation Monitor")
-        path = os.path.join(data_directory, DataSource.OVERDRIVE)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        self.source = OverdriveAPI(path)
+        self.path = os.path.join(data_directory, DataSource.OVERDRIVE)
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+        self.source = OverdriveAPI(self.path)
+
+    def recently_changed_ids(self, start, cutoff):
+        return self.source.recently_changed_ids(start, cutoff)
 
     def run_once(self, _db, start, cutoff):
         added_books = 0
@@ -351,7 +354,7 @@ class OverdriveCirculationMonitor(Monitor):
             _db, DataSource.OVERDRIVE)
 
         i = 0
-        for i, book in enumerate(self.source.recently_changed_ids(start, cutoff)):
+        for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
             if i > 0 and not i % 50:
                 print " %s processed" % i
             if not book:
