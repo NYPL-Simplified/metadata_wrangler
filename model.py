@@ -3,6 +3,7 @@ from collections import (
     Counter,
     defaultdict,
 )
+import bisect
 from cStringIO import StringIO
 import datetime
 import os
@@ -2026,10 +2027,14 @@ class Measurement(Base):
     # index n+1 on this list, it is in the nth percentile for
     # popularity and its 'popularity' value should be n * 0.01.
     # 
-    # These values aare empirically determined and may change over
+    # These values are empirically determined and may change over
     # time.
     POPULARITY_PERCENTILES = {
         DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805]
+    }
+
+    RATING_SCALES = {
+        DataSource.OVERDRIVE : [1, 5]
     }
 
     id = Column(Integer, primary_key=True)
@@ -2048,6 +2053,9 @@ class Measurement(Base):
     # The measurement itself.
     value = Column(Float)
 
+    # The measurement normalized to a 0...1 scale.
+    _normalized_value = Column(Float, name="normalized_value")
+
     # How much weight should be assigned this measurement, relative to
     # other measurements of the same quantity from the same source.
     weight = Column(Unicode, default=1)
@@ -2060,6 +2068,75 @@ class Measurement(Base):
     #
     is_most_recent = Column(Boolean, index=True)
 
+    @classmethod
+    def overall_quality(cls, measurements, popularity_weight=0.3,
+                        rating_weight=0.7):
+        """Turn a bunch of measurements into an overall measure of quality."""
+        if popularity_weight + rating_weight != 1.0:
+            raise ValueError(
+                "Popularity weight and rating weight must sum to 1! (%.2f + %.2f)" % (
+                    popularity_weight, rating_weight)
+        )
+        popularities = []
+        ratings = []
+        for m in measurements:
+            l = None
+            if m.quantity_measured == cls.POPULARITY:
+                l = popularities
+            elif m.quantity_measured == cls.RATING:
+                l = ratings
+            if l is not None:
+                l.append(m)
+        popularity = cls._average_normalized_value(popularities)
+        rating = cls._average_normalized_value(ratings)
+        if popularity is None and rating is None:
+            # We have absolutely no idea about the quality of this work.
+            return 0
+        if popularity is not None and rating is None:
+            # Our idea of the quality depends entirely on the work's popularity.
+            return popularity
+        if rating is not None and popularity is None:
+            # Our idea of the quality depends entirely on the work's rating.
+            return rating
+
+        # We have both popularity and rating.
+        final = (popularity * popularity_weight) + (rating * rating_weight)
+        print "(%.2f * %.2f) + (%.2f * %.2f) = %.2f" % (
+            popularity, popularity_weight, rating, rating_weight, final)
+        return final
+
+    @classmethod
+    def _average_normalized_value(cls, measurements):
+        num_measurements = 0
+        measurement_total = 0
+        for m in measurements:
+            v = m.normalized_value
+            if v is None:
+                continue
+            num_measurements += m.weight
+            measurement_total += (v * m.weight)
+        if num_measurements:
+            return measurement_total / num_measurements
+        else:
+            return None
+
+    @property
+    def normalized_value(self):
+        if self._normalized_value:
+            pass
+        elif (self.quantity_measured == self.POPULARITY
+              and self.data_source.name in self.POPULARITY_PERCENTILES):
+            d = self.POPULARITY_PERCENTILES[self.data_source.name]
+            position = bisect.bisect(d, self.value)
+            self._normalized_value = position * 0.01            
+        elif (self.quantity_measured == self.RATING
+              and self.data_source.name in self.RATING_SCALES):
+            scale_min, scale_max = self.RATING_SCALES[self.data_source.name]
+            width = float(scale_max-scale_min)
+            value = self.value-scale_min
+            self._normalized_value = value / width
+
+        return self._normalized_value
 
 class Resource(Base):
     """An external resource that may be mirrored locally."""
