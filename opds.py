@@ -243,9 +243,8 @@ class AcquisitionFeed(OPDSFeed):
                 thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
-            full_url = host + urllib.quote(
+            thumbnail_url = host + urllib.quote(
                 "/Gutenberg ID/%s.png" % identifier.identifier)
-
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
         if thumbnail_url:
