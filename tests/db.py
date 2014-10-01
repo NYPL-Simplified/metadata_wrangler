@@ -82,7 +82,7 @@ class DatabaseTest(object):
 
     def _work(self, title=None, authors=None, genre=None, language=None,
               audience=None, fiction=True, with_license_pool=False, 
-              with_open_access_download=False, quality=100,
+              with_open_access_download=False, quality=0.5,
               primary_work_record=None):
         if with_open_access_download:
             with_license_pool = True

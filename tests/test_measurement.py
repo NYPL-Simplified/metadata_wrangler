@@ -143,3 +143,39 @@ class TestMeasurement(DatabaseTest):
     def test_overall_quality_is_zero_if_no_relevant_measurements(self):
         irrelevant = self._measurement("Some other quantity", 42, self.source, 1)
         eq_(0, Measurement.overall_quality([irrelevant]))
+
+    def test_calculate_quality(self):
+        w = self._work()
+
+        # This book used to be incredibly popular.
+        identifier = w.primary_work_record.primary_identifier
+        old_popularity = identifier.add_measurement(
+            self.source, Measurement.POPULARITY, 6000)
+
+        # Now it's just so-so.
+        popularity = identifier.add_measurement(
+            self.source, Measurement.POPULARITY, 59)
+
+        # This measurement is irrelevant.
+        irrelevant = identifier.add_measurement(
+            self.source, "Some other quantity", 42)
+
+        # If we calculate the quality based solely on the primary
+        # identifier, only the most recent popularity is considered,
+        # and the book ends up in the middle of the road in terms of
+        # quality.
+        w.calculate_quality([identifier.id])
+        eq_(0.51, w.quality)
+
+        old_quality = w.quality
+
+        # But let's say there's another identifier that's equivalent,
+        # and it has a rating.
+        wi = self._workidentifier()
+        wi.add_measurement(self.source, Measurement.RATING, 8)
+
+        # Now the quality is higher--the high quality measurement
+        # bumped it up.
+        w.calculate_quality([identifier.id, wi.id])
+        assert w.quality > old_quality
+

@@ -1929,28 +1929,23 @@ class Work(Base):
                 print d.encode("utf8")
             print
 
-    def calculate_quality(self, flattened_data, summaries):
-        self.quality = len(self.license_pools) * (
-            len(flattened_data)/2 + len(summaries) / 2)
+    def calculate_quality(self, flattened_data):
+        _db = Session.object_session(self)
+        quantities = [Measurement.POPULARITY, Measurement.RATING]
+        measurements = _db.query(Measurement).filter(
+            Measurement.workidentifier_id.in_(flattened_data)).filter(
+                Measurement.is_most_recent==True).filter(
+                    Measurement.quantity_measured.in_(quantities)).all()
 
-        # Boost licensed content significantly.
-        licensed_pools = [
-            x for x in self.license_pools
-            if not x.open_access
-        ]
-        if licensed_pools:
-            self.quality *= (20 * len(licensed_pools))
-
-        # Scale Overdrive content by popularity.
-        popularities = WorkIdentifier.resources_for_identifier_ids(
-            _db, flattened_data, Resource.POPULARITY)
-        popularities = popularities.filter(
-            Resource.content != None).all()
-        import numpy
-        if popularities:
-            avg_popularity = numpy.mean([int(x.content) for x in popularities])
-            self.quality *= (avg_popularity/100.0)
-
+        # Include a synthetic measurement of the sheer number of
+        # identifiers associated with this work.
+        # TODO: This is a hack and we don't even use the
+        # results at this point.
+        # measurements.append(
+        #     Measurement(data_source_id=999,
+        #                 quantity_measured=Measurement.POPULARITY,
+        #                 value=len(flattened_data)))
+        self.quality = Measurement.overall_quality(measurements)
 
     def assign_genres(self, identifier_ids, cutoff=0.15):
         _db = Session.object_session(self)
@@ -2058,7 +2053,7 @@ class Measurement(Base):
 
     # How much weight should be assigned this measurement, relative to
     # other measurements of the same quantity from the same source.
-    weight = Column(Unicode, default=1)
+    weight = Column(Float, default=1)
 
     # When the measurement was taken
     taken_at = Column(DateTime, index=True)
