@@ -18,10 +18,11 @@ from model import (
     CoverageProvider,
     DataSource,
     LicensePool,
+    Measurement,
     Resource,
     Subject,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 
 from integration import (
@@ -161,7 +162,7 @@ class OverdriveAPI(object):
     def metadata_lookup(self, overdrive_id):
         """Look up metadata for an Overdrive ID.
 
-        Update the corresponding WorkRecord appropriately.
+        Update the corresponding Edition appropriately.
         """
         cache_key = overdrive_id + ".json"
         if self.bibliographic_cache.exists(cache_key):
@@ -212,18 +213,18 @@ class OverdriveAPI(object):
         """Update a book's LicensePool with information from a JSON
         representation of its circulation info.
 
-        Also adds very basic bibliographic information to the WorkRecord.
+        Also adds very basic bibliographic information to the Edition.
         """
         if data_source.name != DataSource.OVERDRIVE:
             raise ValueError(
                 "You're supposed to pass in the Overdrive DataSource object so I can avoid looking it up. That's the only valid value for data_source.")
         overdrive_id = book['id']
         pool, was_new = LicensePool.for_foreign_id(
-            _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+            _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
         if was_new:
             pool.open_access = False
-            wr, wr_new = WorkRecord.for_foreign_id(
-                _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+            wr, wr_new = Edition.for_foreign_id(
+                _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
             if 'title' in book:
                 wr.title = book['title']
             print "New book: %r" % wr
@@ -339,10 +340,13 @@ class OverdriveCirculationMonitor(Monitor):
     def __init__(self, data_directory):
         super(OverdriveCirculationMonitor, self).__init__(
             "Overdrive Circulation Monitor")
-        path = os.path.join(data_directory, DataSource.OVERDRIVE)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        self.source = OverdriveAPI(path)
+        self.path = os.path.join(data_directory, DataSource.OVERDRIVE)
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+        self.source = OverdriveAPI(self.path)
+
+    def recently_changed_ids(self, start, cutoff):
+        return self.source.recently_changed_ids(start, cutoff)
 
     def run_once(self, _db, start, cutoff):
         added_books = 0
@@ -350,7 +354,7 @@ class OverdriveCirculationMonitor(Monitor):
             _db, DataSource.OVERDRIVE)
 
         i = 0
-        for i, book in enumerate(self.source.recently_changed_ids(start, cutoff)):
+        for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
             if i > 0 and not i % 50:
                 print " %s processed" % i
             if not book:
@@ -394,12 +398,24 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         identifier.add_resource(
             rel, url, input_source, pool, media_type, value)
 
+    @classmethod
+    def _add_value_as_measurement(
+            cls, input_source, identifier, quantity_measured, value):
+        if isinstance(value, str):
+            value = value.decode("utf8")
+        elif isinstance(value, unicode):
+            pass
+
+        value = float(value)
+        identifier.add_measurement(
+            input_source, quantity_measured, value)
+
     DATE_FORMAT = "%Y-%m-%d"
 
-    def process_work_record(self, wr):
+    def process_edition(self, wr):
         identifier = wr.primary_identifier
         info = self.overdrive.metadata_lookup(identifier.identifier)
-        return self.annotate_work_record_with_bibliographic_information(
+        return self.annotate_edition_with_bibliographic_information(
             self._db, wr, info, self.input_source
         )
 
@@ -411,7 +427,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
     }
         
     @classmethod
-    def annotate_work_record_with_bibliographic_information(
+    def annotate_edition_with_bibliographic_information(
             cls, _db, wr, info, input_source):
 
         identifier = wr.primary_identifier
@@ -455,18 +471,18 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         for i in info.get('subjects', []):
             c = identifier.classify(input_source, Subject.OVERDRIVE, i['value'])
 
+        wr.sort_title = info.get('sortTitle')
         extra = dict()
         for inkey, outkey in (
                 ('gradeLevels', 'grade_levels'),
                 ('mediaType', 'medium'),
-                ('sortTitle', 'sort_title'),
                 ('awards', 'awards'),
         ):
             if inkey in info:
                 extra[outkey] = info.get(inkey)
         wr.extra = extra
 
-        # Associate the Overdrive WorkRecord with other identifiers
+        # Associate the Overdrive Edition with other identifiers
         # such as ISBN.
         for format in info.get('formats', []):
             for new_id in format.get('identifiers', []):
@@ -474,19 +490,19 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 v = new_id['value']
                 type_key = None
                 if t == 'ASIN':
-                    type_key = WorkIdentifier.ASIN
+                    type_key = Identifier.ASIN
                 elif t == 'ISBN':
-                    type_key = WorkIdentifier.ISBN
+                    type_key = Identifier.ISBN
                     if len(v) == 10:
                         v = isbnlib.to_isbn13(v)
                 elif t == 'DOI':
-                    type_key = WorkIdentifier.DOI
+                    type_key = Identifier.DOI
                 elif t == 'UPC':
-                    type_key = WorkIdentifier.UPC
+                    type_key = Identifier.UPC
                 elif t == 'PublisherCatalogNumber':
                     continue
                 if type_key:
-                    new_identifier, ignore = WorkIdentifier.for_foreign_id(
+                    new_identifier, ignore = Identifier.for_foreign_id(
                         _db, type_key, v)
                     identifier.equivalent_to(
                         input_source, new_identifier, 1)
@@ -508,16 +524,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                         license_pool, media_type)
                     resource.file_size = format['fileSize']
 
-        # Add resources: cover, descriptions, rating and popularity
-        if info['starRating']:
-            cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.RATING,
-                info['starRating'])
-
-        if info['popularity']:
-            cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.POPULARITY,
-                info['popularity'])
+        # Add resources: cover and descriptions
 
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
@@ -534,10 +541,21 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 input_source, identifier, license_pool, Resource.DESCRIPTION, full,
                 "text/html", "tag:full")
 
-        if short and short != full and not full.startswith(short):
+        if short and short != full and (not full or not full.startswith(short)):
             cls._add_value_as_resource(
                 input_source, identifier, license_pool, Resource.DESCRIPTION, short,
                 "text/html", "tag:short")
+
+        # Add measurements: rating and popularity
+        if info['starRating'] is not None and info['starRating'] > 0:
+            cls._add_value_as_measurement(
+                input_source, identifier, Measurement.RATING,
+                info['starRating'])
+
+        if info['popularity']:
+            cls._add_value_as_measurement(
+                input_source, identifier, Measurement.POPULARITY,
+                info['popularity'])
 
         return True
 

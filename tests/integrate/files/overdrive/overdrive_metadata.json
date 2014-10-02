@@ -107,7 +107,7 @@
     "series": "Wiley Software Patterns",
     "shortDescription": "<p>Software documentation forms the basis for all communication relating to a software project. To be truly effective and usable, it should be based on what needs to be known. <i>Agile Documentation</i> provides sound advice on how to produce lean and lightweight software documentation. It will be welcomed by all project team members who want to cut out the fat from this time consuming task. Guidance given in pattern form, easily digested and cross-referenced, provides solutions to common problems.  <BR><p> <BR>Straightforward advice will help you to judge:<BR>  <BR><ul><BR>  <BR><li>What details should be left in and what left out<BR>  <BR><li>When communication face-to-face would be better than paper or online<BR>  <BR><li>How to adapt the documentation process to the requirements of individual projects and build in change<BR>  <BR><li>How to organise documents and make them easily accessible<BR>  <BR><li>When to use diagrams rather than text<BR>  <BR><li>How to choose the right t...",
     "sortTitle": "Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects",
-    "starRating": 0.0,
+    "starRating": 1.0,
     "subjects": [
         {
             "value": "Computer Technology"

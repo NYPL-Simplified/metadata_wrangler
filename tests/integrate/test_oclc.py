@@ -10,8 +10,8 @@ from nose.tools import set_trace, eq_
 from model import (
     Contributor,
     Subject,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     )
 
 from tests.db import (
@@ -117,7 +117,7 @@ class TestParser(DatabaseTest):
             assert missing not in swids
 
     def test_extract_single_work(self):
-        """We can turn a single-work response into a single WorkRecord.
+        """We can turn a single-work response into a single Edition.
         """
 
         xml = pkgutil.get_data(
@@ -135,7 +135,7 @@ class TestParser(DatabaseTest):
         # Work and edition both have a primary identifier.
         work = records[0]
         work_id = work.primary_identifier
-        eq_(WorkIdentifier.OCLC_WORK, work_id.type)
+        eq_(Identifier.OCLC_WORK, work_id.type)
         eq_('4687', work_id.identifier)
 
         eq_("Moby Dick", work.title)

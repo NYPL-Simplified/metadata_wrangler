@@ -26,6 +26,7 @@ if __name__ == '__main__':
         print "Usage: %s [data storage directory]" % sys.argv[0]
         sys.exit()
     path = sys.argv[1]
+    #f(1)
     for i in range(20):
         p = Process(target=f, args=(i,))
         p.start()

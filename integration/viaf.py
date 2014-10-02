@@ -204,7 +204,7 @@ class VIAFClient(object):
             data_directory, self.SUBDIR, "cache")
         if not os.path.exists(self.cache_directory):
             os.makedirs(self.cache_directory)
-        self.cache = FilesystemCache(self.cache_directory)
+        self.cache = FilesystemCache(self.cache_directory, subdir_chars=3)
         self._db = _db
         self.parser = VIAFParser()
 

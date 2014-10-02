@@ -13,8 +13,8 @@ from integration.openlibrary import (
 from model import (
     DataSource,
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 
 class TestOpenLibraryIDMapping(object):
@@ -76,24 +76,24 @@ class TestOpenLibraryMonitor(DatabaseTest):
         mapping = OpenLibraryIDMapping(data)
 
         # Two of these OCLC Numbers are in use.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_NUMBER, "001299047")
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_NUMBER, "111")
+        identifier, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, "001299047")
+        identifier, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, "111")
         self._db.commit()
 
         OpenLibraryMonitor().handle(self._db, mapping)
 
         # Those OCLC Numbers have been turned into two
-        # WorkRecords. No other WorkRecords have been created.
-        wr1, wr2 = self._db.query(WorkRecord).all()
+        # Editions. No other Editions have been created.
+        wr1, wr2 = self._db.query(Edition).all()
 
-        # Each WorkRecord corresponds to one of the "001299047" lines
+        # Each Edition corresponds to one of the "001299047" lines
         # in the original data mapping. The "111" line was not turned
-        # into a WorkRecord because OpenLibrary specified an invalid
+        # into a Edition because OpenLibrary specified an invalid
         # cover ID (-1) for it.
 
-        # Each existing WorkRecord has been given a link to a
+        # Each existing Edition has been given a link to a
         # full image.
         id1 = wr1.primary_identifier
         eq_("OL24385118M", id1.identifier)

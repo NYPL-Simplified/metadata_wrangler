@@ -4,10 +4,10 @@
 # "Investigations -- nonfiction" != "Mystery"
 
 # SQL to find commonly used DDC classifications
-# select count(workrecords.id) as c, subjects.identifier from workrecords join workidentifiers on workrecords.primary_identifier_id=workidentifiers.id join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.type = 'DDC' and not subjects.identifier like '8%' group by subjects.identifier order by c desc;
+# select count(editions.id) as c, subjects.identifier from editions join identifiers on workrecords.primary_identifier_id=workidentifiers.id join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.type = 'DDC' and not subjects.identifier like '8%' group by subjects.identifier order by c desc;
 
 # SQL to find commonly used classifications not assigned to a genre 
-# select count(workidentifiers.id) as c, subjects.type, substr(subjects.identifier, 0, 20) as i, substr(subjects.name, 0, 20) as n from workidentifiers join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.genre_id is null and subjects.fiction is null group by subjects.type, i, n order by c desc;
+# select count(identifiers.id) as c, subjects.type, substr(subjects.identifier, 0, 20) as i, substr(subjects.name, 0, 20) as n from workidentifiers join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.genre_id is null and subjects.fiction is null group by subjects.type, i, n order by c desc;
 
 import json
 import pkgutil
@@ -448,7 +448,7 @@ class DeweyDecimalClassifier(Classifier):
     NONFICTION = set(["J", "B"])
 
     # 791.4572 and 791.4372 is for recordings. 741.59 is for comic
-    #  adaptations? This is a good sign that a workidentifier should
+    #  adaptations? This is a good sign that a identifier should
     #  not be considered, actually.
     # 398 - Folklore
     # 428.6 - Primers, Readers, i.e. collections of stories
