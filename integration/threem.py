@@ -21,8 +21,8 @@ from model import (
     DataSource,
     LicensePool,
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 
 from integration import (
@@ -143,11 +143,11 @@ class ThreeMAPI(object):
             if circ:
                 yield circ
 
-    def get_bibliographic_info_for(self, work_records):
+    def get_bibliographic_info_for(self, editions):
         results = dict()
         identifiers = []
         wr_for_identifier = dict()
-        for wr in work_records:
+        for wr in editions:
             identifier = wr.primary_identifier.identifier
             identifiers.append(identifier)
             wr_for_identifier[identifier] = wr
@@ -191,10 +191,10 @@ class CirculationParser(XMLParser):
             return self.int_of_subtag(tag, key)
 
         identifiers = {}
-        item = { WorkIdentifier : identifiers }
+        item = { Identifier : identifiers }
 
-        identifiers[WorkIdentifier.THREEM_ID] = value("ItemId")
-        identifiers[WorkIdentifier.ISBN] = value("ISBN13")
+        identifiers[Identifier.THREEM_ID] = value("ItemId")
+        identifiers[Identifier.ISBN] = value("ISBN13")
         
         item[LicensePool.licenses_owned] = intvalue("TotalCopies")
         item[LicensePool.licenses_available] = intvalue("AvailableCopies")
@@ -232,18 +232,18 @@ class ItemListParser(XMLParser):
             return self.text_of_optional_subtag(tag, threem_key)
         resources = dict()
         identifiers = dict()
-        item = { Resource : resources,  WorkIdentifier: identifiers,
+        item = { Resource : resources,  Identifier: identifiers,
                  "extra": {} }
 
-        identifiers[WorkIdentifier.THREEM_ID] = value("ItemId")
-        identifiers[WorkIdentifier.ISBN] = value("ISBN13")
+        identifiers[Identifier.THREEM_ID] = value("ItemId")
+        identifiers[Identifier.ISBN] = value("ISBN13")
 
-        item[WorkRecord.title] = value("Title")
-        item[WorkRecord.subtitle] = value("SubTitle")
-        item[WorkRecord.publisher] = value("Publisher")
+        item[Edition.title] = value("Title")
+        item[Edition.subtitle] = value("SubTitle")
+        item[Edition.publisher] = value("Publisher")
         language = value("Language")
         language = LanguageCodes.two_to_three.get(language, language)
-        item[WorkRecord.language] = language
+        item[Edition.language] = language
 
         author_string = value('Authors')
         item[Contributor] = list(self.author_names_from_string(author_string))
@@ -261,7 +261,7 @@ class ItemListParser(XMLParser):
             except ValueError, e:
                 pass
 
-        item[WorkRecord.published] = published_date
+        item[Edition.published] = published_date
 
         resources[Resource.DESCRIPTION] = value("Description")
         resources[Resource.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
@@ -270,7 +270,7 @@ class ItemListParser(XMLParser):
         item['extra']['fileSize'] = value("Size")
         item['extra']['numberOfPages'] = value("NumberOfPages")
 
-        return identifiers[WorkIdentifier.THREEM_ID], etree.tostring(tag), item
+        return identifiers[Identifier.THREEM_ID], etree.tostring(tag), item
 
 
 class EventParser(XMLParser):
@@ -367,18 +367,18 @@ class ThreeMEventMonitor(Monitor):
                      start_time, end_time, internal_event_type):
         # Find or lookup the LicensePool for this event.
         license_pool, is_new = LicensePool.for_foreign_id(
-            _db, data_source, WorkIdentifier.THREEM_ID, threem_id)
+            _db, data_source, Identifier.THREEM_ID, threem_id)
 
         # Force the ThreeMCirculationMonitor to check on this book the
         # next time it runs.
         license_pool.last_checked = None
 
         threem_identifier = license_pool.identifier
-        isbn, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.ISBN, isbn)
+        isbn, ignore = Identifier.for_foreign_id(
+            _db, Identifier.ISBN, isbn)
 
-        work_record, ignore = WorkRecord.for_foreign_id(
-            _db, data_source, WorkIdentifier.THREEM_ID, threem_id)
+        edition, ignore = Edition.for_foreign_id(
+            _db, data_source, Identifier.THREEM_ID, threem_id)
 
         # The ISBN and the 3M identifier are exactly equivalent.
         threem_identifier.equivalent_to(data_source, isbn, strength=1)
@@ -421,7 +421,7 @@ class ThreeMBibliographicMonitor(CoverageProvider):
             self.input_source, self.output_source)
         self.current_batch = []
 
-    def process_work_record(self, wr):
+    def process_edition(self, wr):
         self.current_batch.append(wr)
         if len(self.current_batch) == 25:
             self.process_batch(self.current_batch)
@@ -436,12 +436,12 @@ class ThreeMBibliographicMonitor(CoverageProvider):
     def process_batch(self, batch):
         for wr, info in self.source.get_bibliographic_info_for(
                 batch).values():
-            self.annotate_work_record_with_bibliographic_information(
+            self.annotate_edition_with_bibliographic_information(
                 self._db, wr, info, self.input_source
             )
             print wr
 
-    def annotate_work_record_with_bibliographic_information(
+    def annotate_edition_with_bibliographic_information(
             self, db, wr, info, input_source):
 
         # ISBN and 3M ID were associated with the work record earlier,
@@ -453,11 +453,11 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         if not isinstance(info, dict):
             set_trace()
 
-        wr.title = info[WorkRecord.title]
-        wr.subtitle = info[WorkRecord.subtitle]
-        wr.publisher = info[WorkRecord.publisher]
-        wr.language = info[WorkRecord.language]
-        wr.published = info[WorkRecord.published]
+        wr.title = info[Edition.title]
+        wr.subtitle = info[Edition.subtitle]
+        wr.publisher = info[Edition.publisher]
+        wr.language = info[Edition.language]
+        wr.published = info[Edition.published]
 
         for name in info[Contributor]:
             wr.add_contributor(name, Contributor.AUTHOR_ROLE)
@@ -509,7 +509,7 @@ class ThreeMCirculationMonitor(Monitor):
             pool_for_identifier[p.identifier.identifier] = p
             identifiers.append(p.identifier.identifier)
         for item in self.source.get_circulation_for(identifiers):
-            identifier = item[WorkIdentifier][WorkIdentifier.THREEM_ID]
+            identifier = item[Identifier][Identifier.THREEM_ID]
             pool = pool_for_identifier[identifier]
             self.process_pool(_db, pool, item)
         _db.commit()
@@ -520,7 +520,7 @@ class ThreeMCirculationMonitor(Monitor):
             item[LicensePool.licenses_available],
             item[LicensePool.licenses_reserved],
             item[LicensePool.patrons_in_hold_queue])
-        print "%r: %d owned, %d available, %d reserved, %d queued" % (pool.work_record(), pool.licenses_owned, pool.licenses_available, pool.licenses_reserved, pool.patrons_in_hold_queue)
+        print "%r: %d owned, %d available, %d reserved, %d queued" % (pool.edition(), pool.licenses_owned, pool.licenses_available, pool.licenses_reserved, pool.patrons_in_hold_queue)
 
 
 class ThreeMCoverImageMirror(CoverImageMirror):
@@ -531,4 +531,4 @@ class ThreeMCoverImageMirror(CoverImageMirror):
     DATA_SOURCE = DataSource.THREEM
 
     def filename_for(self, resource):
-        return resource.work_identifier.identifier + ".jpg"
+        return resource.identifier.identifier + ".jpg"

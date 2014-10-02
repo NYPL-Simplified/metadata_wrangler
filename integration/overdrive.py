@@ -21,8 +21,8 @@ from model import (
     Measurement,
     Resource,
     Subject,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 
 from integration import (
@@ -162,7 +162,7 @@ class OverdriveAPI(object):
     def metadata_lookup(self, overdrive_id):
         """Look up metadata for an Overdrive ID.
 
-        Update the corresponding WorkRecord appropriately.
+        Update the corresponding Edition appropriately.
         """
         cache_key = overdrive_id + ".json"
         if self.bibliographic_cache.exists(cache_key):
@@ -213,18 +213,18 @@ class OverdriveAPI(object):
         """Update a book's LicensePool with information from a JSON
         representation of its circulation info.
 
-        Also adds very basic bibliographic information to the WorkRecord.
+        Also adds very basic bibliographic information to the Edition.
         """
         if data_source.name != DataSource.OVERDRIVE:
             raise ValueError(
                 "You're supposed to pass in the Overdrive DataSource object so I can avoid looking it up. That's the only valid value for data_source.")
         overdrive_id = book['id']
         pool, was_new = LicensePool.for_foreign_id(
-            _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+            _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
         if was_new:
             pool.open_access = False
-            wr, wr_new = WorkRecord.for_foreign_id(
-                _db, data_source, WorkIdentifier.OVERDRIVE_ID, overdrive_id)
+            wr, wr_new = Edition.for_foreign_id(
+                _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
             if 'title' in book:
                 wr.title = book['title']
             print "New book: %r" % wr
@@ -412,10 +412,10 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
     DATE_FORMAT = "%Y-%m-%d"
 
-    def process_work_record(self, wr):
+    def process_edition(self, wr):
         identifier = wr.primary_identifier
         info = self.overdrive.metadata_lookup(identifier.identifier)
-        return self.annotate_work_record_with_bibliographic_information(
+        return self.annotate_edition_with_bibliographic_information(
             self._db, wr, info, self.input_source
         )
 
@@ -427,7 +427,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
     }
         
     @classmethod
-    def annotate_work_record_with_bibliographic_information(
+    def annotate_edition_with_bibliographic_information(
             cls, _db, wr, info, input_source):
 
         identifier = wr.primary_identifier
@@ -482,7 +482,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 extra[outkey] = info.get(inkey)
         wr.extra = extra
 
-        # Associate the Overdrive WorkRecord with other identifiers
+        # Associate the Overdrive Edition with other identifiers
         # such as ISBN.
         for format in info.get('formats', []):
             for new_id in format.get('identifiers', []):
@@ -490,19 +490,19 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 v = new_id['value']
                 type_key = None
                 if t == 'ASIN':
-                    type_key = WorkIdentifier.ASIN
+                    type_key = Identifier.ASIN
                 elif t == 'ISBN':
-                    type_key = WorkIdentifier.ISBN
+                    type_key = Identifier.ISBN
                     if len(v) == 10:
                         v = isbnlib.to_isbn13(v)
                 elif t == 'DOI':
-                    type_key = WorkIdentifier.DOI
+                    type_key = Identifier.DOI
                 elif t == 'UPC':
-                    type_key = WorkIdentifier.UPC
+                    type_key = Identifier.UPC
                 elif t == 'PublisherCatalogNumber':
                     continue
                 if type_key:
-                    new_identifier, ignore = WorkIdentifier.for_foreign_id(
+                    new_identifier, ignore = Identifier.for_foreign_id(
                         _db, type_key, v)
                     identifier.equivalent_to(
                         input_source, new_identifier, 1)

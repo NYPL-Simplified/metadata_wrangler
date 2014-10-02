@@ -9,8 +9,8 @@ from model import (
     DataSource,
     Resource,
     Subject,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     get_one_or_create,
 )
 from integration.gutenberg import (
@@ -28,10 +28,10 @@ class TestGutenbergAPI(DatabaseTest):
 
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
         identifier, ignore = get_one_or_create(
-            self._db, WorkIdentifier, type=WorkIdentifier.GUTENBERG_ID,
+            self._db, Identifier, type=Identifier.GUTENBERG_ID,
             identifier="17")        
-        work_record, new = WorkRecord.for_foreign_id(
-            self._db, DataSource.GUTENBERG, WorkIdentifier.GUTENBERG_ID, "1")
+        work_record, new = Edition.for_foreign_id(
+            self._db, DataSource.GUTENBERG, Identifier.GUTENBERG_ID, "1")
         eq_(True, new)
 
         license, new = GutenbergAPI.pg_license_for(self._db, work_record)
@@ -63,17 +63,17 @@ class TestGutenbergAPI(DatabaseTest):
 class TestGutenbergMetadataExtractor(DatabaseTest):
 
     def test_rdf_parser(self):
-        """Parse RDF into a WorkRecord."""
+        """Parse RDF into a Edition."""
         fh = StringIO.StringIO(pkgutil.get_data(
             "tests.integrate",
             "files/gutenberg-17.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "17", fh)
 
-        # Verify that the WorkRecord is hooked up to the correct
-        # DataSource and WorkIdentifier.
+        # Verify that the Edition is hooked up to the correct
+        # DataSource and Identifier.
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
         identifier, ignore = get_one_or_create(
-            self._db, WorkIdentifier, type=WorkIdentifier.GUTENBERG_ID,
+            self._db, Identifier, type=Identifier.GUTENBERG_ID,
             identifier="17")
         eq_(gutenberg, book.data_source)
         eq_(identifier, book.primary_identifier)
@@ -154,5 +154,5 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
             "tests.integrate",
             "files/gutenberg/pg28794.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "28794", fh)
-        eq_(WorkRecord.AUDIO_MEDIUM, book.medium)
+        eq_(Edition.AUDIO_MEDIUM, book.medium)
 

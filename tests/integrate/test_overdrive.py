@@ -12,7 +12,7 @@ from model import (
     DataSource,
     Measurement,
     Resource,
-    WorkIdentifier,
+    Identifier,
 )
 
 class TestOverdriveAPI(DatabaseTest):
@@ -35,12 +35,12 @@ class TestOverdriveAPI(DatabaseTest):
         raw = json.loads(data)        
 
         # Create an identifier
-        identifier = self._workidentifier(
-            identifier_type=WorkIdentifier.OVERDRIVE_ID
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID
         )
 
         # Make it look like the availability information is for the
-        # newly created WorkIdentifier.
+        # newly created Identifier.
         raw['id'] = identifier.identifier
 
         overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
@@ -50,9 +50,9 @@ class TestOverdriveAPI(DatabaseTest):
             )
         eq_(True, was_new)
 
-        # The title of the corresponding WorkRecord has been filled
+        # The title of the corresponding Edition has been filled
         # in, just to provide some basic human-readable metadata.
-        eq_("Blah blah blah", pool.work_record().title)
+        eq_("Blah blah blah", pool.edition().title)
         eq_(raw['copiesOwned'], pool.licenses_owned)
         eq_(raw['copiesAvailable'], pool.licenses_available)
         eq_(0, pool.licenses_reserved)
@@ -65,9 +65,9 @@ class TestOverdriveAPI(DatabaseTest):
         raw = json.loads(data)        
 
         # Create a LicensePool.
-        wr, pool = self._workrecord(
+        wr, pool = self._edition(
             data_source_name=DataSource.OVERDRIVE,
-            identifier_type=WorkIdentifier.OVERDRIVE_ID,
+            identifier_type=Identifier.OVERDRIVE_ID,
             with_license_pool=True
         )
 
@@ -101,8 +101,8 @@ class TestOverdriveAPI(DatabaseTest):
             "tests.integrate",
             "files/overdrive/overdrive_availability_information_holds.json")
         raw = json.loads(data)
-        identifier = self._workidentifier(
-            identifier_type=WorkIdentifier.OVERDRIVE_ID
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID
         )
         raw['id'] = identifier.identifier
 
@@ -120,16 +120,16 @@ class TestOverdriveAPI(DatabaseTest):
         expect = OverdriveAPI.make_link_safe("http://api.overdrive.com/v1/collections/collection-id/products?limit=300&offset=0&lastupdatetime=2014-04-28%2009:25:09&sort=popularity:desc&formats=ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open")
         eq_(expect, OverdriveRepresentationExtractor.link(raw, "first"))
 
-    def test_annotate_work_record_with_bibliographic_information(self):
+    def test_annotate_edition_with_bibliographic_information(self):
 
-        wr, new = self._workrecord(with_license_pool=True)
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_metadata.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
 
         # Basic bibliographic info.
@@ -191,15 +191,15 @@ class TestOverdriveAPI(DatabaseTest):
         eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.sort_title)
 
 
-    def test_annotate_work_record_with_sample(self):
-        wr, new = self._workrecord(with_license_pool=True)
+    def test_annotate_edition_with_sample(self):
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_has_sample.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
         
         i = wr.primary_identifier
@@ -208,15 +208,15 @@ class TestOverdriveAPI(DatabaseTest):
         eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.href)
         eq_(820171, sample.file_size)
 
-    def test_annotate_work_record_with_awards(self):
-        wr, new = self._workrecord(with_license_pool=True)
+    def test_annotate_edition_with_awards(self):
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_has_awards.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
         eq_(wr.extra['awards'], [{"source":"The New York Times","value":"The New York Times Best Seller List"}])
 

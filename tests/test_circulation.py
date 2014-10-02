@@ -21,7 +21,7 @@ from model import (
     LaneList,
     Loan,
     Resource,
-    WorkRecord,
+    Edition,
 )
 
 from flask import url_for
@@ -203,9 +203,9 @@ class TestCheckout(CirculationTest):
     def setup(self):
         super(TestCheckout, self).setup()
         self.pool = self.english_1.license_pools[0]
-        self.work_record = self.pool.work_record()
-        self.data_source = self.work_record.data_source
-        self.identifier = self.work_record.primary_identifier
+        self.edition = self.pool.edition()
+        self.data_source = self.edition.data_source
+        self.identifier = self.edition.primary_identifier
     
     def test_checkout_requires_authentication(self):
         with self.app.test_request_context(
@@ -244,9 +244,9 @@ class TestCheckout(CirculationTest):
     # def test_checkout_fails_when_no_available_licenses(self):
     #     pool = self.english_2.license_pools[0]
     #     pool.open_access = False
-    #     work_record = pool.work_record()
-    #     data_source = work_record.data_source
-    #     identifier = work_record.primary_identifier
+    #     edition = pool.edition()
+    #     data_source = edition.data_source
+    #     identifier = edition.primary_identifier
 
     #     with self.app.test_request_context(
     #             "/", headers=dict(Authorization=self.valid_auth)):

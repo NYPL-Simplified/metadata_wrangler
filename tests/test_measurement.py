@@ -46,7 +46,7 @@ class TestMeasurement(DatabaseTest):
         return self._measurement(Measurement.RATING, value, source, weight)
 
     def test_newer_measurement_displaces_earlier_measurement(self):
-        wi = self._workidentifier()
+        wi = self._identifier()
         m1 = wi.add_measurement(self.source, Measurement.DOWNLOADS, 10)
         eq_(True, m1.is_most_recent)
 
@@ -64,7 +64,7 @@ class TestMeasurement(DatabaseTest):
         old = datetime.datetime(2011, 1, 1)
         new = datetime.datetime(2012, 1, 1)
 
-        wi = self._workidentifier()
+        wi = self._identifier()
         m1 = wi.add_measurement(self.source, Measurement.DOWNLOADS, 10,
                                 taken_at=new)
         eq_(True, m1.is_most_recent)
@@ -148,7 +148,7 @@ class TestMeasurement(DatabaseTest):
         w = self._work()
 
         # This book used to be incredibly popular.
-        identifier = w.primary_work_record.primary_identifier
+        identifier = w.primary_edition.primary_identifier
         old_popularity = identifier.add_measurement(
             self.source, Measurement.POPULARITY, 6000)
 
@@ -171,7 +171,7 @@ class TestMeasurement(DatabaseTest):
 
         # But let's say there's another identifier that's equivalent,
         # and it has a rating.
-        wi = self._workidentifier()
+        wi = self._identifier()
         wi.add_measurement(self.source, Measurement.RATING, 8)
 
         # Now the quality is higher--the high quality measurement

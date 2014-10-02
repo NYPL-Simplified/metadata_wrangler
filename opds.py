@@ -18,8 +18,8 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     Work,
     )
 from flask import request, url_for
@@ -166,7 +166,7 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(lane)
         links = []
         feed_size = 20
-        works = lane.quality_sample(languages, 30, 1, feed_size)
+        works = lane.quality_sample(languages, 0.8, 0.3, feed_size)
         return AcquisitionFeed(
             _db, "%s: featured" % lane.name, url, works)
 
@@ -201,7 +201,7 @@ class AcquisitionFeed(OPDSFeed):
                 if p.open_access:
                     # Make sure there's a usable link--it might be
                     # audio-only or something.
-                    if p.work_record().best_open_access_link:
+                    if p.edition().best_open_access_link:
                         open_access_license_pool = p
                 else:
                     # TODO: It's OK to have a non-open-access license pool,
@@ -239,7 +239,7 @@ class AcquisitionFeed(OPDSFeed):
                 
             if work.cover.scaled_path:
                 thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
-        elif identifier.type == WorkIdentifier.GUTENBERG_ID:
+        elif identifier.type == Identifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             full_url = host + urllib.quote(
                 "/Gutenberg ID/%s.png" % identifier.identifier)

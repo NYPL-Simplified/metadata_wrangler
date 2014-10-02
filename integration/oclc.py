@@ -25,8 +25,8 @@ from model import (
     CoverageProvider,
     get_one,
     get_one_or_create,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     DataSource,
     Resource,
     Subject,
@@ -92,8 +92,8 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
-    CAN_HANDLE = set([WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER,
-                      WorkIdentifier.ISBN])
+    CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
+                      Identifier.ISBN])
 
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
@@ -105,7 +105,7 @@ class OCLCLinkedData(object):
                 os.makedirs(p)
 
     def cache_key(self, id, type):
-        if type == WorkIdentifier.ISBN:
+        if type == Identifier.ISBN:
             extension = ".url"
         else:
             extension = ".jsonld"
@@ -134,7 +134,7 @@ class OCLCLinkedData(object):
         if isinstance(work_identifier, basestring):
             match = self.URI_WITH_OCLC_NUMBER.search(work_identifier)
             if match:
-                type = WorkIdentifier.OCLC_NUMBER
+                type = Identifier.OCLC_NUMBER
                 identifier = match.groups()[0]
         else:
             type = work_identifier.type
@@ -144,10 +144,10 @@ class OCLCLinkedData(object):
         return self.lookup_by_identifier(type, identifier)
 
     def lookup_by_identifier(self, type, identifier):
-        if type == WorkIdentifier.OCLC_WORK:
+        if type == Identifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
-        elif type == WorkIdentifier.OCLC_NUMBER:
+        elif type == Identifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
         else:
@@ -170,7 +170,7 @@ class OCLCLinkedData(object):
 
     def oclc_number_for_isbn(self, isbn):
         """Find an OCLC Number for the given ISBN."""
-        cache_key = self.cache_key(isbn, WorkIdentifier.ISBN)
+        cache_key = self.cache_key(isbn, Identifier.ISBN)
         cached = False
         if self.cache.exists(cache_key):
             cached = True
@@ -197,7 +197,7 @@ class OCLCLinkedData(object):
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
         oclc_number_data, cached = self.lookup_by_identifier(
-            WorkIdentifier.OCLC_NUMBER, oclc_number)
+            Identifier.OCLC_NUMBER, oclc_number)
 
         # Look up every work referenced in that document and yield its data.
         graph = oclc_linked_data.graph(oclc_number_data)
@@ -207,7 +207,7 @@ class OCLCLinkedData(object):
             if m:
                 work_id = m.groups()[0]
                 oclc_work_data, cached = self.lookup_by_identifier(
-                    WorkIdentifier.OCLC_WORK, work_id)
+                    Identifier.OCLC_WORK, work_id)
                 yield oclc_work_data
                
     @classmethod
@@ -289,10 +289,10 @@ class OCLCLinkedData(object):
 
         id_type, id = m.groups()
         if id_type == 'oclc':
-            id_type = WorkIdentifier.OCLC_NUMBER
+            id_type = Identifier.OCLC_NUMBER
         elif id_type == 'work':
             # Kind of weird, but okay.
-            id_type = WorkIdentifier.OCLC_WORK
+            id_type = Identifier.OCLC_WORK
         else:
             print "EXPECTED OCLC ID, got %s" % id_type
             return no_value
@@ -501,7 +501,7 @@ class OCLCXMLParser(XMLParser):
     @classmethod
     def parse(cls, _db, xml, **restrictions):
         """Turn XML data from the OCLC lookup service into a list of SWIDs
-        (for a multi-work response) or a list of WorkRecord
+        (for a multi-work response) or a list of Edition
         objects (for a single-work response).
         """
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
@@ -509,7 +509,7 @@ class OCLCXMLParser(XMLParser):
         representation_type = int(response.get('code'))
 
         workset_record = None
-        work_records = []
+        editions = []
         edition_records = [] 
 
         if representation_type == cls.UNEXPECTED_ERROR_STATUS:
@@ -528,11 +528,11 @@ class OCLCXMLParser(XMLParser):
             # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
             work_tag = cls._xpath1(tree, "//oclc:work")
-            work_record, ignore = cls.extract_work_record(
+            edition, ignore = cls.extract_edition(
                 _db, work_tag, existing_authors, **restrictions)
             records = []
-            if work_record:
-                records.append(work_record)
+            if edition:
+                records.append(edition)
             else:
                 # The work record itself failed one of the
                 # restrictions. None of its editions are likely to
@@ -544,16 +544,16 @@ class OCLCXMLParser(XMLParser):
             #     edition_record, ignore = cls.extract_edition_record(
             #         _db, edition_tag, existing_authors, **restrictions)
             #     if not edition_record:
-            #         # This edition did not become a WorkRecord because it
+            #         # This edition did not become a Edition because it
             #         # didn't meet one of the restrictions.
             #         continue
             #     records.append(edition_record)
             #     # Identify the edition with the work based on its
             #     # primary identifier.
-            #     work_record.primary_identifier.equivalent_to(
+            #     edition.primary_identifier.equivalent_to(
             #         data_source, edition_record.primary_identifier)
             #     edition_record.primary_identifier.equivalent_to(
-            #         data_source, work_record.primary_identifier)
+            #         data_source, edition.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
@@ -747,7 +747,7 @@ class OCLCXMLParser(XMLParser):
         # Apply restrictions. If they're not met, return None.
         if 'language' in restrictions and language:
             # We know which language this record is for. Match it
-            # against the language used in the WorkRecord we're
+            # against the language used in the Edition we're
             # matching against.
             restrict_to_language = set(restrictions['language'])
             if language != restrict_to_language:
@@ -791,8 +791,8 @@ class OCLCXMLParser(XMLParser):
     ])
 
     @classmethod
-    def extract_work_record(cls, _db, work_tag, existing_authors, **restrictions):
-        """Create a new WorkRecord object with information about a
+    def extract_edition(cls, _db, work_tag, existing_authors, **restrictions):
+        """Create a new Edition object with information about a
         work (identified by OCLC Work ID).
         """
         oclc_work_id = unicode(work_tag.get('pswid'))
@@ -811,23 +811,23 @@ class OCLCXMLParser(XMLParser):
         item_type = work_tag.get("itemtype")
         if (item_type.startswith('itemtype-book') 
             or item_type.startswith('itemtype-compfile')):
-            medium = WorkRecord.PRINT_MEDIUM
+            medium = Edition.PRINT_MEDIUM
         elif item_type.startswith('itemtype-audiobook') or item_type.startswith('itemtype-music'):
             # Pretty much all Gutenberg texts, even the audio texts,
             # are based on a book, and the ones that aren't
             # (recordings of individual songs) probably aren't in OCLC
             # anyway. So we just want to get the books.
-            medium = WorkRecord.AUDIO_MEDIUM
+            medium = Edition.AUDIO_MEDIUM
             medium = None
         elif item_type.startswith('itemtype-video'):
-            #medium = WorkRecord.VIDEO_MEDIUM
+            #medium = Edition.VIDEO_MEDIUM
             medium = None
         elif item_type in cls.UNUSED_MEDIA:
             medium = None
         else:
             medium = None
 
-        # Only create WorkRecords for books with a recognized medium
+        # Only create Editions for books with a recognized medium
         if medium is None:
             return None, False
 
@@ -845,14 +845,14 @@ class OCLCXMLParser(XMLParser):
         }
         
         # Get an identifier for this work.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.OCLC_WORK, oclc_work_id
+        identifier, ignore = Identifier.for_foreign_id(
+            _db, Identifier.OCLC_WORK, oclc_work_id
         )
 
-        # Create a WorkRecord for source + identifier
+        # Create a Edition for source + identifier
         data_source=DataSource.lookup(_db, DataSource.OCLC)
-        work_record, new = get_one_or_create(
-            _db, WorkRecord,
+        edition, new = get_one_or_create(
+            _db, Edition,
             data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
@@ -885,16 +885,16 @@ class OCLCXMLParser(XMLParser):
             identifier.classify(
                 data_source, Subject.FAST, id, value, weight)
 
-        # Associate the authors with the WorkRecord.
+        # Associate the authors with the Edition.
         for contributor, roles in authors_and_roles:
-            work_record.add_contributor(contributor, roles)
-        return work_record, new
+            edition.add_contributor(contributor, roles)
+        return edition, new
 
     @classmethod
     def extract_edition_record(cls, _db, edition_tag,
                                existing_authors,
                                **restrictions):
-        """Create a new WorkRecord object with information about an
+        """Create a new Edition object with information about an
         edition of a book (identified by OCLC Number).
         """
         oclc_number = unicode(edition_tag.get('oclc'))
@@ -920,14 +920,14 @@ class OCLCXMLParser(XMLParser):
         }
 
         # Get an identifier for this edition.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.OCLC_NUMBER, oclc_number
+        identifier, ignore = Identifier.for_foreign_id(
+            _db, Identifier.OCLC_NUMBER, oclc_number
         )
 
-        # Create a WorkRecord for source + identifier
+        # Create a Edition for source + identifier
         data_source = DataSource.lookup(_db, DataSource.OCLC)
         edition_record, new = get_one_or_create(
-            _db, WorkRecord,
+            _db, Edition,
             data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
@@ -968,8 +968,8 @@ class LinkedDataURLLister:
     def run(self):
         a = 0
         with open(self.output_file, "w") as output:
-            for wi in self.db.query(WorkIdentifier).filter(
-                    WorkIdentifier.type==WorkIdentifier.OCLC_WORK).yield_per(100):
+            for wi in self.db.query(Identifier).filter(
+                    Identifier.type==Identifier.OCLC_WORK).yield_per(100):
                 data, cached = self.oclc.lookup(wi)
                 graph = self.oclc.graph(data)
                 examples = self.oclc.extract_workexamples(graph)
@@ -981,9 +981,9 @@ class LinkedDataURLLister:
 
 class LinkedDataCoverageProvider(CoverageProvider):
 
-    """Runs WorkRecords obtained from OCLC Lookup through OCLC Linked Data.
+    """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
     
-    This (maybe) associates a workrecord with a (potentially) large
+    This (maybe) associates a edition with a (potentially) large
     number of ISBNs, which can be used as input into other services.
     """
 
@@ -1036,7 +1036,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.oclc_linked_data,
             workset_size=3)
 
-    def process_work_record(self, wr):
+    def process_edition(self, wr):
         try:
             original_identifier = wr.primary_identifier
             new_records = 0
@@ -1045,10 +1045,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
             print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
             editions = 0
             for edition in self.info_for(original_identifier):
-                workrecord, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
-                if workrecord:
+                edition, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
+                if edition:
                     new_records += 1
-                    print "", workrecord.publisher, len(isbns), len(descriptions)
+                    print "", edition.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
                 #for isbn in isbns:
                 #    print " NEW ISBN: %s" % isbn
@@ -1084,7 +1084,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             except Exception, e:
                 pass
 
-        oclc_number, new = WorkIdentifier.for_foreign_id(
+        oclc_number, new = Identifier.for_foreign_id(
             self.db, edition['oclc_id_type'],
             edition['oclc_id'])
 
@@ -1101,14 +1101,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # sources that use ISBN as input.
         new_isbns_for_this_oclc_number = []
         for isbn in edition['isbns']:
-            isbn_identifier, new = WorkIdentifier.for_foreign_id(
-                self.db, WorkIdentifier.ISBN, isbn)
+            isbn_identifier, new = Identifier.for_foreign_id(
+                self.db, Identifier.ISBN, isbn)
             if new:
                 new_isbns_for_this_oclc_number.append(isbn_identifier)
 
         # If this OCLC Number didn't tell us about any ISBNs
         # we didn't already know, and there is no description,
-        # we don't need to create a WorkRecord for it--it's
+        # we don't need to create a Edition for it--it's
         # redundant.
         if (len(new_isbns_for_this_oclc_number) == 0
             and not len(edition['descriptions'])):
@@ -1304,10 +1304,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def graphs_for(self, work_identifier):
         if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
-            if work_identifier.type == WorkIdentifier.ISBN:
+            if work_identifier.type == Identifier.ISBN:
                 work_data = list(oclc_linked_data.oclc_works_for_isbn(
                     work_identifier.identifier))
-            elif work_identifier.type == WorkIdentifier.OCLC_WORK:
+            elif work_identifier.type == Identifier.OCLC_WORK:
                 work_data, cached = oclc_linked_data.lookup(work_identifier)
             else:
                 # Look up and yield a single edition.

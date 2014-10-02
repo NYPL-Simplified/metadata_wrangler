@@ -24,10 +24,10 @@ from model import (
     CirculationEvent,
     CoverageProvider,
     Contributor,
-    WorkRecord,
+    Edition,
     DataSource,
     Resource,
-    WorkIdentifier,
+    Identifier,
     LicensePool,
     Subject,
 )
@@ -158,9 +158,9 @@ class GutenbergAPI(object):
             next_item = archive.next()
 
     def create_missing_books(self, _db, subset=None):
-        """Finds books present in the PG catalog but missing from WorkRecord.
+        """Finds books present in the PG catalog but missing from Edition.
 
-        Yields (WorkRecord, LicensePool) 2-tuples.
+        Yields (Edition, LicensePool) 2-tuples.
         """
         books = self.all_books()
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
@@ -168,13 +168,13 @@ class GutenbergAPI(object):
             if subset is not None and not subset(pg_id, archive, archive_item):
                 continue
             print "Considering %s" % pg_id
-            # Find an existing WorkRecord for the book.
-            book = WorkRecord.for_foreign_id(
-                _db, source, WorkIdentifier.GUTENBERG_ID, pg_id,
+            # Find an existing Edition for the book.
+            book = Edition.for_foreign_id(
+                _db, source, Identifier.GUTENBERG_ID, pg_id,
                 create_if_not_exists=False)
 
             if not book:
-                # Create a new WorkRecord object with bibliographic
+                # Create a new Edition object with bibliographic
                 # information from the Project Gutenberg RDF file.
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
@@ -187,14 +187,14 @@ class GutenbergAPI(object):
                     yield (book, license)
 
     @classmethod
-    def pg_license_for(cls, _db, work_record):
+    def pg_license_for(cls, _db, edition):
         """Retrieve a LicensePool for the given Project Gutenberg work,
         creating it (but not committing it) if necessary.
         """
         return get_one_or_create(
             _db, LicensePool,
-            data_source=work_record.data_source,
-            identifier=work_record.primary_identifier,
+            data_source=edition.data_source,
+            identifier=edition.primary_identifier,
             create_method_kwargs=dict(
                 open_access=True,
                 last_checked=datetime.datetime.now(),
@@ -205,7 +205,7 @@ class GutenbergAPI(object):
 class GutenbergRDFExtractor(object):
 
     """Transform a Project Gutenberg RDF description of a title into a
-    WorkRecord object and an open-access LicensePool object.
+    Edition object and an open-access LicensePool object.
     """
 
     dcterms = Namespace("http://purl.org/dc/terms/")
@@ -235,7 +235,7 @@ class GutenbergRDFExtractor(object):
     @classmethod
     def book_in(cls, _db, pg_id, fh):
 
-        """Yield a WorkRecord object for the book described by the given
+        """Yield a Edition object for the book described by the given
         filehandle, creating it (but not committing it) if necessary.
 
         This assumes that there is at most one book per
@@ -276,7 +276,7 @@ class GutenbergRDFExtractor(object):
 
     @classmethod
     def parse_book(cls, _db, g, uri, title):
-        """Turn an RDF graph into a WorkRecord for the given `uri` and
+        """Turn an RDF graph into a Edition for the given `uri` and
         `title`.
         """
         source_id = unicode(cls.ID_IN_URI.search(uri).groups()[0])
@@ -324,12 +324,12 @@ class GutenbergRDFExtractor(object):
             contributor = matches[0]
             contributors.append(contributor)
 
-        # Create or fetch a WorkRecord for this book.
+        # Create or fetch a Edition for this book.
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
-        identifier, new = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.GUTENBERG_ID, source_id)
+        identifier, new = Identifier.for_foreign_id(
+            _db, Identifier.GUTENBERG_ID, source_id)
         book, new = get_one_or_create(
-            _db, WorkRecord,
+            _db, Edition,
             create_method_kwargs=dict(
                 title=title,
                 subtitle=subtitle,
@@ -341,7 +341,7 @@ class GutenbergRDFExtractor(object):
             primary_identifier=identifier,
         )
 
-        # Classify the WorkRecord.
+        # Classify the Edition.
         if new:
             subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
             for subject in subject_links:
@@ -358,10 +358,10 @@ class GutenbergRDFExtractor(object):
             identifier.add_resource(
                 rel, None, source, media_type="text/plain", content=summary)
 
-        medium = WorkRecord.PRINT_MEDIUM
+        medium = Edition.PRINT_MEDIUM
 
         # Turn the Gutenberg download links into Resources associated 
-        # with the new WorkRecord. They will serve either as open access
+        # with the new Edition. They will serve either as open access
         # downloads or cover images.
         download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
         for href in download_links:
@@ -378,9 +378,9 @@ class GutenbergRDFExtractor(object):
                         # make our own.
                         rel = None
                 elif media_type.startswith('audio/'):
-                    medium = WorkRecord.AUDIO_MEDIUM
+                    medium = Edition.AUDIO_MEDIUM
                 elif media_type.startswith('video/'):
-                    medium = WorkRecord.VIDEO_MEDIUM
+                    medium = Edition.VIDEO_MEDIUM
                 if rel:
                     identifier.add_resource(
                         rel, unicode(href), source, media_type=media_type)
@@ -456,7 +456,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
             author = authors[0].name
         return title, author
 
-    def process_work_record(self, book):
+    def process_edition(self, book):
         title, author = self.title_and_author(book)
         language = book.language
 
@@ -480,8 +480,8 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
             # `records` contains a bunch of SWIDs, not
-            # WorkRecords. Do another lookup to turn each SWID
-            # into a set of WorkRecords.
+            # Editions. Do another lookup to turn each SWID
+            # into a set of Editions.
             swids = records
             records = []
             for swid in swids:
