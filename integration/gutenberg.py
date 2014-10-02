@@ -358,7 +358,7 @@ class GutenbergRDFExtractor(object):
             identifier.add_resource(
                 rel, None, source, media_type="text/plain", content=summary)
 
-        medium = Edition.PRINT_MEDIUM
+        medium = Edition.BOOK_MEDIUM
 
         # Turn the Gutenberg download links into Resources associated 
         # with the new Edition. They will serve either as open access

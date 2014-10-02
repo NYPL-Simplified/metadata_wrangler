@@ -811,7 +811,7 @@ class OCLCXMLParser(XMLParser):
         item_type = work_tag.get("itemtype")
         if (item_type.startswith('itemtype-book') 
             or item_type.startswith('itemtype-compfile')):
-            medium = Edition.PRINT_MEDIUM
+            medium = Edition.BOOK_MEDIUM
         elif item_type.startswith('itemtype-audiobook') or item_type.startswith('itemtype-music'):
             # Pretty much all Gutenberg texts, even the audio texts,
             # are based on a book, and the ones that aren't

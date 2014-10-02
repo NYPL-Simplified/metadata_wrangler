@@ -1183,13 +1183,15 @@ class Edition(Base):
     issued = Column(Date)
     published = Column(Date)
 
-    PRINT_MEDIUM = "Print"
+    BOOK_MEDIUM = "Book"
+    PERIODICAL_MEDIUM = "Periodical"
     AUDIO_MEDIUM = "Audio"
     VIDEO_MEDIUM = "Video"
 
     medium = Column(
-        Enum(PRINT_MEDIUM, AUDIO_MEDIUM, VIDEO_MEDIUM, name="medium"),
-        default=PRINT_MEDIUM
+        Enum(BOOK_MEDIUM, PERIODICAL_MEDIUM, AUDIO_MEDIUM,
+             VIDEO_MEDIUM, name="medium"),
+        default=BOOK_MEDIUM
     )
 
     cover_id = Column(
