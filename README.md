@@ -19,5 +19,9 @@ pip install beautifulsoup4
 pip install requests
 pip install rdflib
 pip install gunicorn
+pip install isbnlib
+pip install pillow
+pip install textblob
+pip install pyld
 
 heroku addons:add heroku-postgresql
