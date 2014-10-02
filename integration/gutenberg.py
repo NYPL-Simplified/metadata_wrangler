@@ -57,7 +57,7 @@ class GutenbergAPI(object):
     MIRRORS = [
         "http://www.gutenberg.org/cache/epub/feeds/rdf-files.tar.bz2",
         "http://gutenberg.readingroo.ms/cache/generated/feeds/rdf-files.tar.bz2",
-        "http://snowy.arsc.alaska.edu/gutenberg/cache/generated/feeds/rdf-files.tar.bz2",        
+        # "http://snowy.arsc.alaska.edu/gutenberg/cache/generated/feeds/rdf-files.tar.bz2",        
     ] 
 
     GUTENBERG_ORIGINAL_MIRROR = "%(gutenberg_original_mirror)s"
@@ -259,7 +259,6 @@ class GutenbergRDFExtractor(object):
                     # Each filehandle is associated with one Project
                     # Gutenberg ID and should thus describe at most
                     # one title.
-                    set_trace()
                     raise ValueError(
                         "More than one book in file for Project Gutenberg ID %s" % pg_id)
                 else:
@@ -450,7 +449,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     def title_and_author(self, book):
         title = self.oclc_safe_title(book.title)
 
-        authors = book.authors
+        authors = book.author_contributors
         if len(authors) == 0:
             author = ''
         else:
@@ -473,7 +472,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # works.
         restrictions = dict(language=language,
                             title=title,
-                            authors=book.authors)
+                            authors=book.author_contributors)
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = OCLCXMLParser.parse(
@@ -510,19 +509,19 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # First, find any authors associated with this book that
         # have not been given VIAF or LC IDs.
         gutenberg_authors_to_merge = [
-            x for x in book.authors if not x.viaf or not x.lc
+            x for x in book.author_contributors if not x.viaf or not x.lc
         ]
-        gutenberg_names = set([x.name for x in book.authors])
+        gutenberg_names = set([x.name for x in book.author_contributors])
         for r in records:
             if gutenberg_authors_to_merge:
-                oclc_names = set([x.name for x in r.authors])
+                oclc_names = set([x.name for x in r.author_contributors])
                 if gutenberg_names == oclc_names:
                     # Perfect overlap. We've found an OCLC record
                     # for a book written by exactly the same
                     # people as the Gutenberg book. Merge each
                     # Gutenberg author into its OCLC equivalent.
                     for gutenberg_author in gutenberg_authors_to_merge:
-                        oclc_authors = [x for x in r.authors 
+                        oclc_authors = [x for x in r.author_contributors
                                         if x.name==gutenberg_author.name]
                         if len(oclc_authors) == 1:
                             oclc_author = oclc_authors[0]

@@ -413,6 +413,19 @@ class XIDAPI(object):
             self.cache.store(cache_key, raw)
         return raw, cached
 
+class OCLCClassifyCache(FilesystemCache):
+
+    def _filename(self, key):
+        if len(key) > 140:
+            key = key[:140]
+        if self.subdir_chars:
+            subdir = key[:self.subdir_chars]
+            directory = os.path.join(self.cache_directory, subdir)
+        else:
+            directory = self.cache_directory
+        return os.path.join(directory, key)
+
+
 class OCLCClassifyAPI(object):
 
     BASE_URL = 'http://classify.oclc.org/classify2/Classify?'
@@ -432,13 +445,13 @@ class OCLCClassifyAPI(object):
                 v = v.encode("utf8")
             args[k] = v
         return urllib.urlencode(sorted(args.items()))
-        
+
     def cache_key(self, **kwargs):
         qs = self.query_string(**kwargs)
         if len(qs) > 18: # Length of "isbn=[isbn13]"
-            return md5.md5(qs).hexdigest()
-        return qs
-
+            qs = md5.md5(qs).hexdigest()
+        return os.path.join(qs[-3:], qs)
+        
     def request(self, url):
         """Make a request to the OCLC classification API."""
         response = requests.get(url)
@@ -759,6 +772,24 @@ class OCLCXMLParser(XMLParser):
         print u" SUCCESS %s, %r, %s" % (title, author_names, language)
         return title, authors_and_roles, language
 
+    UNUSED_MEDIA = set([
+        "itemtype-intmm",
+        "itemtype-msscr",
+        "itemtype-artchap-artcl",
+        "itemtype-jrnl",
+        "itemtype-map",
+        "itemtype-vis",
+        "itemtype-jrnl-digital",
+        "itemtype-image-2d",
+        "itemtype-artchap-digital",
+        "itemtype-intmm-digital",
+        "itemtype-archv",
+        "itemtype-msscr-digital",
+        "itemtype-game",
+        "itemtype-web-digital",
+        "itemtype-map-digital",
+    ])
+
     @classmethod
     def extract_work_record(cls, _db, work_tag, existing_authors, **restrictions):
         """Create a new WorkRecord object with information about a
@@ -777,6 +808,29 @@ class OCLCXMLParser(XMLParser):
             # This record does not have a valid OCLC Work ID.
             return None, False
 
+        item_type = work_tag.get("itemtype")
+        if (item_type.startswith('itemtype-book') 
+            or item_type.startswith('itemtype-compfile')):
+            medium = WorkRecord.PRINT_MEDIUM
+        elif item_type.startswith('itemtype-audiobook') or item_type.startswith('itemtype-music'):
+            # Pretty much all Gutenberg texts, even the audio texts,
+            # are based on a book, and the ones that aren't
+            # (recordings of individual songs) probably aren't in OCLC
+            # anyway. So we just want to get the books.
+            medium = WorkRecord.AUDIO_MEDIUM
+            medium = None
+        elif item_type.startswith('itemtype-video'):
+            #medium = WorkRecord.VIDEO_MEDIUM
+            medium = None
+        elif item_type in cls.UNUSED_MEDIA:
+            medium = None
+        else:
+            medium = None
+
+        # Only create WorkRecords for books with a recognized medium
+        if medium is None:
+            return None, False
+
         result = cls._extract_basic_info(_db, work_tag, existing_authors, **restrictions)
         if not result:
             # This record did not meet one of the restrictions.
@@ -784,12 +838,10 @@ class OCLCXMLParser(XMLParser):
 
         title, authors_and_roles, language = result
 
-
         # Record some extra OCLC-specific information
         extra = {
             OCLC.EDITION_COUNT : work_tag.get('editions'),
             OCLC.HOLDING_COUNT : work_tag.get('holdings'),
-            OCLC.FORMAT : work_tag.get('itemtype'),
         }
         
         # Get an identifier for this work.
