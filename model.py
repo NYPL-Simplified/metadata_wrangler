@@ -372,8 +372,7 @@ class Equivalency(Base):
         return q
 
 class Identifier(Base):
-    """A way of uniquely referring to a particular text.
-    Whatever "text" means.
+    """A way of uniquely referring to a particular edition.
     """
     
     # Common types of identifiers.
@@ -2525,6 +2524,11 @@ class Subject(Base):
     # One Subject may participate in many Classifications.
     classifications = relationship(
         "Classification", backref="subject"
+    )
+
+    # Type + identifier must be unique.
+    __table_args__ = (
+        UniqueConstraint('type', 'identifier'),
     )
 
     def __repr__(self):
