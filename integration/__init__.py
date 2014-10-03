@@ -55,9 +55,11 @@ class FilesystemCache(object):
 
     """A simple filesystem-based cache for HTTP representations."""
 
-    def __init__(self, cache_directory, subdir_chars=None):
+    def __init__(self, cache_directory, subdir_chars=None,
+                 take_subdir_from_start=True):
         self.cache_directory = cache_directory
         self.subdir_chars = subdir_chars
+        self.take_subdir_from_start = take_subdir_from_start
         if not os.path.exists(self.cache_directory):
             os.makedirs(self.cache_directory)
 
@@ -65,7 +67,10 @@ class FilesystemCache(object):
         if len(key) > 140:
             key = key[:140]
         if self.subdir_chars:
-            subdir = key[:self.subdir_chars]
+            if take_subdir_from_start:
+                subdir = key[:self.subdir_chars]
+            else:
+                subdir = key[-self.subdir_chars:]
             directory = os.path.join(self.cache_directory, subdir)
         else:
             directory = self.cache_directory

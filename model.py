@@ -231,6 +231,7 @@ class DataSource(Base):
     OPEN_LIBRARY = "Open Library"
     CONTENT_CAFE = "Content Cafe"
     GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
+    AMAZON = "Amazon"
     MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'
@@ -282,6 +283,7 @@ class DataSource(Base):
                 (cls.AXIS_360, True, Identifier.AXIS_360_ID, 0),
                 (cls.OCLC, False, Identifier.OCLC_NUMBER, None),
                 (cls.OCLC_LINKED_DATA, False, Identifier.OCLC_NUMBER, None),
+                (cls.AMAZON, False, Identifier.ASIN, None),
                 (cls.OPEN_LIBRARY, False, Identifier.OPEN_LIBRARY_ID, None),
                 (cls.GUTENBERG_COVER_GENERATOR, False, Identifier.GUTENBERG_ID, None),
                 (cls.WEB, True, Identifier.URI, None),
