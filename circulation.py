@@ -1,5 +1,7 @@
 from functools import wraps
 from nose.tools import set_trace
+import random
+import time
 import os
 import sys
 
@@ -42,6 +44,8 @@ from classifier import (
 )
 
 auth = authenticator()
+
+feed_cache = dict()
 
 class Conf:
     db = None
@@ -121,11 +125,13 @@ def languages_for_request():
     return languages_from_accept(flask.request.accept_languages)
 
 def languages_from_accept(accept_languages):
+    seen = set([])
     languages = []
     for locale, quality in accept_languages:
         language = LanguageCodes.iso_639_2_for_locale(locale)
-        if language:
+        if language and language not in seen:
             languages.append(language)
+            seen.add(language)
     if not languages:
         languages = DEFAULT_LANGUAGES
     return languages
@@ -186,6 +192,11 @@ def index():
 @app.route('/lanes/')
 def navigation_feed():
     languages = languages_for_request()
+    key = (",".join(languages), 'navigation')
+    # This feed will not change unless the application is upgraded,
+    # so there's no need to expire the cache.
+    if key in feed_cache:
+        return feed_cache[key]
     feed = NavigationFeed.main_feed(Conf.lanes)
 
     feed.add_link(
@@ -195,7 +206,10 @@ def navigation_feed():
     feed.add_link(
         rel="http://opds-spec.org/shelf", 
         href=url_for('active_loans', _external=True))
-    return unicode(feed)
+
+    feed = unicode(feed)
+    feed_cache[key] = feed
+    return feed
 
 def lane_url(cls, lane, order=None):
     return url_for('feed', lane=lane.name, order=order, _external=True)
@@ -215,59 +229,82 @@ def feed(lane):
 
     lane = Conf.lanes.by_name[lane]
 
+    key = (lane, ",".join(languages), order)
+    if not last_seen_id and key in feed_cache:
+        print "%r in cache" % list(key)
+        chance = random.random()
+        feed, created_at = feed_cache.get(key)
+        elapsed = time.time()-created_at
+        # An old feed is almost certain to be regenerated.
+        if elapsed > 1800:
+            chance = chance / 5
+        elif elapsed > 3600:
+            change = 0
+        if chance > 0.10:
+            # Return the cached version.
+            return feed
+    else:
+        print "%r not in cache or %r" % (list(key), last_seen_id)
+
     search_link = dict(
         rel="search",
         type="application/opensearchdescription+xml",
         href=url_for('lane_search', lane=lane.name, _external=True))
 
     if order == 'recommended':
-        feed = AcquisitionFeed.featured(Conf.db, languages, lane)
-        feed.add_link(**search_link)
-        return unicode(feed)
-
-    if order == 'title':
-        feed = WorkFeed(lane, languages, Work.title)
+        opds_feed = AcquisitionFeed.featured(Conf.db, languages, lane)
+        opds_feed.add_link(**search_link)
+        work_feed = None
+    elif order == 'title':
+        work_feed = WorkFeed(lane, languages, Work.title)
         title = "%s: By title" % lane.name
     elif order == 'author':
-        feed = WorkFeed(lane, languages, Work.authors)
+        work_feed = WorkFeed(lane, languages, Work.authors)
         title = "%s: By author" % lane.name
     else:
         return "I don't know how to order a feed by '%s'" % order
 
-    size = arg('size', '50')
-    try:
-        size = int(size)
-    except ValueError:
-        return "Invalid size: %s" % size
-    size = min(size, 100)
-
-    last_work_seen = None
-    last_id = arg('after', None)
-    if last_id:
+    if work_feed:
+        # Turn the work feed into an acquisition feed.
+        size = arg('size', '50')
         try:
-            last_id = int(last_id)
+            size = int(size)
         except ValueError:
-            return "Invalid work ID: %s" % last_id
-        try:
-            last_work_seen = Conf.db.query(Work).filter(Work.id==last_id).one()
-        except NoResultFound:
-            return "No such work id: %s" % last_id
+            return "Invalid size: %s" % size
+        size = min(size, 100)
 
-    this_url = url_for('feed', lane=lane.name, order=order, _external=True)
-    page = feed.page_query(Conf.db, last_work_seen, size).all()
-    url_generator = lambda x : url_for(
-        'feed', lane=lane.name, order=x, _external=True)
+        last_work_seen = None
+        last_id = arg('after', None)
+        if last_id:
+            try:
+                last_id = int(last_id)
+            except ValueError:
+                return "Invalid work ID: %s" % last_id
+            try:
+                last_work_seen = Conf.db.query(Work).filter(Work.id==last_id).one()
+            except NoResultFound:
+                return "No such work id: %s" % last_id
 
-    opds_feed = AcquisitionFeed(Conf.db, title, this_url, page, url_generator)
-    # Add a 'next' link if appropriate.
-    if page and len(page) >= size:
-        after = page[-1].id
-        next_url = url_for(
-            'feed', lane=lane.name, order=order, after=after, _external=True)
-        opds_feed.add_link(rel="next", href=next_url)
+        this_url = url_for('feed', lane=lane.name, order=order, _external=True)
+        page = work_feed.page_query(Conf.db, last_work_seen, size).all()
+        url_generator = lambda x : url_for(
+            'feed', lane=lane.name, order=x, _external=True)
 
-    opds_feed.add_link(**search_link)
-    return unicode(opds_feed)
+        opds_feed = AcquisitionFeed(Conf.db, title, this_url, page, url_generator)
+        # Add a 'next' link if appropriate.
+        if page and len(page) >= size:
+            after = page[-1].id
+            next_url = url_for(
+                'feed', lane=lane.name, order=order, after=after, _external=True)
+            opds_feed.add_link(rel="next", href=next_url)
+
+        opds_feed.add_link(**search_link)
+
+    feed_xml = unicode(opds_feed)
+    if not last_seen_id:
+        print "Storing in cache %r." % list(key)
+        feed_cache[key] = (feed_xml, time.time())
+    return feed_xml
 
 @app.route('/search', defaults=dict(lane=None))
 @app.route('/search/', defaults=dict(lane=None))
