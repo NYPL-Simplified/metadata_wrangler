@@ -17,6 +17,7 @@ from lxml import builder, etree
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
+    DataSource,
     Resource,
     WorkIdentifier,
     WorkRecord,
@@ -241,6 +242,8 @@ class AcquisitionFeed(OPDSFeed):
             qualities.append(("Cover quality", work.cover.quality))
             if work.cover.scaled_path:
                 thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
+            elif work.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
+                thumbnail_url = mirrored_url
         elif identifier.type == WorkIdentifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             thumbnail_url = host + urllib.quote(
