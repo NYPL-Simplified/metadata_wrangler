@@ -231,7 +231,6 @@ def feed(lane):
 
     key = (lane, ",".join(languages), order)
     if not last_seen_id and key in feed_cache:
-        print "%r in cache" % list(key)
         chance = random.random()
         feed, created_at = feed_cache.get(key)
         elapsed = time.time()-created_at
@@ -243,8 +242,6 @@ def feed(lane):
         if chance > 0.10:
             # Return the cached version.
             return feed
-    else:
-        print "%r not in cache or %r" % (list(key), last_seen_id)
 
     search_link = dict(
         rel="search",
@@ -302,7 +299,6 @@ def feed(lane):
 
     feed_xml = unicode(opds_feed)
     if not last_seen_id:
-        print "Storing in cache %r." % list(key)
         feed_cache[key] = (feed_xml, time.time())
     return feed_xml
 
