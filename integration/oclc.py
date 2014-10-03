@@ -521,13 +521,20 @@ class OCLCXMLParser(XMLParser):
             raise IOError("Got single-work summary from OCLC despite requesting detail: %s" % xml)
 
         # The real action happens here.
+
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
             authors_tag = cls._xpath1(tree, "//oclc:authors")
-            existing_authors = cls.extract_authors(_db, authors_tag)
+            
+            work_tag = cls._xpath1(tree, "//oclc:work")
+            if work_tag is not None:
+                author_string = work_tag.get('author')
+                primary_author = cls.primary_author_from_author_string(_db, author_string)
+
+            existing_authors = cls.extract_authors(
+                _db, authors_tag, primary_author=primary_author)
 
             # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
-            work_tag = cls._xpath1(tree, "//oclc:work")
             edition, ignore = cls.extract_edition(
                 _db, work_tag, existing_authors, **restrictions)
             records = []
@@ -588,14 +595,15 @@ class OCLCXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def extract_authors(cls, _db, authors_tag):
+    def extract_authors(cls, _db, authors_tag, primary_author=None):
         results = []
         if authors_tag is not None:
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
                 lc = author_tag.get('lc', None)
                 viaf = author_tag.get('viaf', None)
-                contributor, roles = cls._parse_single_author(
-                    _db, author_tag.text, lc=lc, viaf=viaf)
+                contributor, roles, default_role_used = cls._parse_single_author(
+                    _db, author_tag.text, lc=lc, viaf=viaf,
+                    primary_author=primary_author)
                 if contributor:
                     results.append(contributor)
         
@@ -613,7 +621,9 @@ class OCLCXMLParser(XMLParser):
     def _parse_single_author(cls, _db, author, 
                              lc=None, viaf=None,
                              existing_authors=[],
-                             default_role=Contributor.AUTHOR_ROLE):
+                             default_role=Contributor.AUTHOR_ROLE,
+                             primary_author=None):
+        default_role_used = False
         # First find roles if present
         # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
         author = author.strip()
@@ -622,6 +632,9 @@ class OCLCXMLParser(XMLParser):
             author = author[:m.start()].strip()
             role_string = m.groups()[0]
             roles = [x.strip() for x in role_string.split(";")]
+        elif default_role:
+            roles = [default_role]
+            default_role_used = True
         else:
             roles = []
 
@@ -645,7 +658,15 @@ class OCLCXMLParser(XMLParser):
         contributor = None
         if not author:
             # No name was given for the author.
-            return None, roles
+            return None, roles, default_role_used
+
+        if primary_author and author == primary_author.name:
+            if Contributor.AUTHOR_ROLE in roles:
+                roles.remove(Contributor.AUTHOR_ROLE)
+            if Contributor.UNKNOWN_ROLE in roles:
+                roles.remove(Contributor.UNKNOWN_ROLE)
+            roles.insert(0, Contributor.PRIMARY_AUTHOR_ROLE)
+
         if existing_authors:
             # Calling Contributor.lookup will result in a database
             # hit, and looking up a contributor based on name may
@@ -688,24 +709,50 @@ class OCLCXMLParser(XMLParser):
                     contributor = with_id[0]
                 else:
                     contributor = contributor[0]
-        return contributor, roles
+        return contributor, roles, default_role_used
 
     @classmethod
-    def parse_author_string(cls, _db, author_string, existing_authors=[]):
-        default_role = Contributor.AUTHOR_ROLE
+    def primary_author_from_author_string(cls, _db, author_string):
+        # If the first author mentioned in the author string
+        # does not have an explicit role set, treat them as the primary
+        # author.
+        if not author_string:
+            return None
+        authors = author_string.split("|")
+        if not authors:
+            return None
+        author, roles, default_role_used = cls._parse_single_author(
+            _db, authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
+        if roles == [Contributor.PRIMARY_AUTHOR_ROLE]:
+            return author
+        return None
+
+    @classmethod
+    def parse_author_string(cls, _db, author_string, existing_authors=[],
+                            primary_author=None):
+        default_role = Contributor.PRIMARY_AUTHOR_ROLE
         authors = []
         if not author_string:
             return authors
         for author in author_string.split("|"):            
-            author, roles = cls._parse_single_author(
+            author, roles, default_role_used = cls._parse_single_author(
                 _db, author, existing_authors=existing_authors,
-                default_role=default_role)
+                default_role=default_role,
+                primary_author=primary_author)
             if roles:
-                # If we see someone with no explicit role after this
-                # point, it's probably because their role is so minor
-                # as to not be worth mentioning, not because it's so
-                # major that we can assume they're an author.
-                default_role = Contributor.UNKNOWN_ROLE
+                if Contributor.PRIMARY_AUTHOR_ROLE in roles:
+                    # That was the primary author.  If we see someone
+                    # with no explicit role after this point, they're
+                    # just a regular author.
+                    default_role = Contributor.AUTHOR_ROLE
+                elif not default_role_used:
+                    # We're dealing with someone whose role was
+                    # explicitly specified. If we see someone with no
+                    # explicit role after this point, it's probably
+                    # because their role is so minor as to not be
+                    # worth mentioning, not because it's so major that
+                    # we can assume they're an author.
+                    default_role = Contributor.UNKNOWN_ROLE
             roles = roles or [default_role]
             if author:
                 authors.append((author, roles))
@@ -756,15 +803,20 @@ class OCLCXMLParser(XMLParser):
 
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
-            authors_per_se = set([
-                a.name for a, roles in authors_and_roles if Contributor.AUTHOR_ROLE in roles
-            ])
-            for restrict_to_author in restrict_to_authors:
-                if not restrict_to_author.name in authors_per_se:
-                    # The given author did not show up as one of the
-                    # per se 'authors' of this book. They may have had
+            primary_author = None
+
+            for a, roles in authors_and_roles:
+                if Contributor.PRIMARY_AUTHOR_ROLE in roles:
+                    primary_author = a
+                    break
+            if (not primary_author
+                or (primary_author not in restrict_to_authors
+                    and primary_author.name not in restrict_to_authors)):
+                    # None of the given authors showed up as the
+                    # primary author of this book. They may have had
                     # some other role in it, or the book may be about
-                    # them, but this book is not *by* them.
+                    # them, or incorporate their work, but this book
+                    # is not *by* them.
                     return None
 
         author_names = ", ".join([x.name for x, y in authors_and_roles])

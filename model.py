@@ -901,7 +901,9 @@ class Contributor(Base):
                                       )
     # Types of roles
     AUTHOR_ROLE = "Author"
+    PRIMARY_AUTHOR_ROLE = "Primary Author"
     UNKNOWN_ROLE = 'Unknown'
+    AUTHOR_ROLES = set([PRIMARY_AUTHOR_ROLE, AUTHOR_ROLE])
 
     # Extra fields
     BIRTH_DATE = 'birthDate'
@@ -1222,7 +1224,7 @@ class Edition(Base):
     @property
     def author_contributors(self):
         return [x.contributor for x in self.contributions
-                if x.role == Contributor.AUTHOR_ROLE]
+                if x.role in Contributor.AUTHOR_ROLES]
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
