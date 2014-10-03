@@ -105,16 +105,25 @@ class TestParser(DatabaseTest):
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
         
-        # We picked up 20 of the 25 works in the dataset.
-        eq_(20, len(swids))
+        # We picked up 11 of the 25 works in the dataset.
+        eq_(11, len(swids))
 
-        # The missing five (as you can verify by looking at
+        # The missing works (as you can verify by looking at
         # oclc_multi_work_response.xml) either don't credit Herman
         # Melville at all (the 1956 Gregory Peck movie "Moby Dick"),
-        # or credit him as "Associated name" rather than as an author
-        # (four books about "Moby Dick").
-        for missing in '10798812', '13424036', '22658644', '250604212', '474972877':
+        # credit him as "Associated name" rather than as an author
+        # (four books about "Moby Dick"), or credit him as an author
+        # but not as the primary author (academic works and adaptations).
+        for missing in '10798812', '13424036', '22658644', '250604212', '474972877', '13358012', '153927888', '13206523', '46935692', "14135019", "51088077", "105446800", "164732682", "26863225":
             assert missing not in swids
+
+    def test_primary_author_name(self):
+        melville = OCLCXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
+        eq_("Melville, Herman", melville.name)
+
+        eq_(None, OCLCXMLParser.primary_author_from_author_string(
+            self._db, 
+            "Melville, Herman, 1819-1891 [Author] | Hayford, Harrison [Associated name; Editor]"))
 
     def test_extract_single_work(self):
         """We can turn a single-work response into a single Edition.
@@ -166,11 +175,17 @@ class TestParser(DatabaseTest):
             sorted([x.viaf for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
-        # OCLC.
-        work_authors = sorted(
+        # OCLC. Herman Melville is the primary author, and Tony Tanner is
+        # also credited as an author.
+        primary_author = sorted(
             [x.contributor.name for x in work.contributions
-             if x.role==Contributor.AUTHOR_ROLE])
-        eq_(['Melville, Herman', 'Tanner, Tony'], work_authors)
+             if x.role==Contributor.PRIMARY_AUTHOR_ROLE])[0]
+        other_author = sorted(
+            [x.contributor.name for x in work.contributions
+             if x.role==Contributor.AUTHOR_ROLE])[0]
+
+        eq_("Melville, Herman", primary_author)
+        eq_("Tanner, Tony", other_author)
 
         # The work has no language specified. The edition does have
         # a language specified.
@@ -260,7 +275,7 @@ class TestAuthorParser(DatabaseTest):
 
         self.assert_parse(
             "Carroll, Lewis, 1832-1898",
-            "Carroll, Lewis", Contributor.AUTHOR_ROLE, "1832", "1898")
+            "Carroll, Lewis", Contributor.PRIMARY_AUTHOR_ROLE, "1832", "1898")
 
         self.assert_parse(
             "Kent, Rockwell, 1882-1971 [Illustrator]",
@@ -269,13 +284,14 @@ class TestAuthorParser(DatabaseTest):
 
         self.assert_parse(
             u"Карролл, Лувис, 1832-1898.",
-            u"Карролл, Лувис", Contributor.AUTHOR_ROLE, birthdate="1832",
-            deathdate="1898")
+            u"Карролл, Лувис", Contributor.PRIMARY_AUTHOR_ROLE,
+            birthdate="1832", deathdate="1898")
 
         kerry, melville = OCLCXMLParser.parse_author_string(
             self._db,
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
-        self.assert_author(kerry, "McSweeney, Kerry", Contributor.AUTHOR_ROLE,
+        self.assert_author(kerry, "McSweeney, Kerry",
+                           Contributor.PRIMARY_AUTHOR_ROLE,
                            birthdate="1941", deathdate=self.MISSING)
 
         self.assert_author(
@@ -290,7 +306,7 @@ class TestAuthorParser(DatabaseTest):
 
         # This one could be better.
         self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
-                           Contributor.AUTHOR_ROLE)
+                           Contributor.PRIMARY_AUTHOR_ROLE)
         self.assert_author(giles, "Giles, Lionel",
                            ["Writer of added commentary", "Translator"],
                            "1875", "1958")
@@ -317,11 +333,13 @@ class TestAuthorParser(DatabaseTest):
         # we are able to handle them without crashing.
         self.assert_parse(
             u"梅爾維爾 (Melville, Herman), 1819-1891",
-            u"梅爾維爾 (Melville, Herman)", birthdate="1819", deathdate="1891")
+            u"梅爾維爾 (Melville, Herman)", Contributor.PRIMARY_AUTHOR_ROLE,
+            birthdate="1819", deathdate="1891")
 
         self.assert_parse(
             u"卡洛爾 (Carroll, Lewis), (英), 1832-1898",
-            u"卡洛爾 (Carroll, Lewis), (英)", birthdate="1832", deathdate="1898")
+            u"卡洛爾 (Carroll, Lewis), (英)", Contributor.PRIMARY_AUTHOR_ROLE,
+            birthdate="1832", deathdate="1898")
 
         s = u"杜格孫 (Dodgson, Charles Lutwidge,1832-1896)"
-        self.assert_parse(s, s)
+        self.assert_parse(s, s, Contributor.PRIMARY_AUTHOR_ROLE)
