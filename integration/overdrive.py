@@ -40,7 +40,8 @@ class OverdriveAPI(object):
     LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
     EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
-    CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts",
+    CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
+    AVAILABILITY_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products/%(product_id)s/availability"
 
     CRED_FILE = "oauth_cred.json"
     BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
@@ -190,7 +191,17 @@ class OverdriveAPI(object):
         circulation information.
         """
         # Retrieve current circulation information about this book
-        circulation_link = book['availability_link']
+        if data_source.name != DataSource.OVERDRIVE:
+            raise ValueError("Invalid data source %s" % data_source.name)
+        if isinstance(book, basestring):
+            book_id = book
+            circulation_link = self.AVAILABILITY_ENDPOINT % dict(
+                collection_name=self.collection_name,
+                product_id=book_id
+            )
+            book = dict(id=book_id)
+        else:
+            circulation_link = book['availability_link']
         response = self.get(circulation_link)
         if response.status_code == 401:
             if exception_on_401:
