@@ -239,7 +239,7 @@ def feed(lane):
         if elapsed > 1800:
             chance = chance / 5
         elif elapsed > 3600:
-            change = 0
+            chance = 0
         if chance > 0.10:
             # Return the cached version.
             return feed
