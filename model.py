@@ -225,13 +225,13 @@ class DataSource(Base):
     THREEM = "3M"
     OCLC = "OCLC Classify"
     OCLC_LINKED_DATA = "OCLC Linked Data"
+    AMAZON = "Amazon"
     XID = "WorldCat xID"
     AXIS_360 = "Axis 360"
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
     CONTENT_CAFE = "Content Cafe"
     GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
-    AMAZON = "Amazon"
     MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'

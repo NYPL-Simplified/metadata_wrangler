@@ -1,5 +1,6 @@
 import os
 import urlparse
+from cStringIO import StringIO
 
 import requests
 from lxml import etree
@@ -35,11 +36,13 @@ class XMLParser(object):
     def int_of_subtag(self, tag, name):
         return int(self.text_of_subtag(tag, name))
 
-    def process_all(self, xml, xpath, namespaces={}, handler=None):
+    def process_all(self, xml, xpath, namespaces={}, handler=None, parser=None):
+        if not parser:
+            parser = etree.XMLParser()
         if not handler:
             handler = self.process_one
         if isinstance(xml, basestring):
-            root = etree.fromstring(xml)
+            root = etree.parse(StringIO(xml), parser)
         else:
             root = xml
         for i in root.xpath(xpath, namespaces=namespaces):
@@ -93,6 +96,42 @@ class FilesystemCache(object):
         f.write(value)
         f.close()
         return filename
+
+class MultipageFilesystemCache(FilesystemCache):
+
+    """Can associate multiple pages with the same key."""
+
+    def _filename(self, key, page):
+        page = str(page)
+        if len(key) + 1 + len(page) > 140:
+            key = key[:135]
+        if self.subdir_chars:
+            subdir = key[:self.subdir_chars]
+            directory = os.path.join(self.cache_directory, subdir)
+        else:
+            directory = self.cache_directory
+        return os.path.join(directory, key + "-" + page)
+
+    def exists(self, key, page):
+        return os.path.exists(self._filename(key, page))
+
+    def open(self, key, page):
+        return open(self._filename(key, page))
+
+    def store(self, key, page, value):
+        filename = self._filename(key, page)
+        if self.subdir_chars:
+            # Make sure the subdirectory exists.
+            directory = os.path.split(filename)[0]
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        f = open(filename, "w")
+        if isinstance(value, unicode):
+            value = value.encode("utf8")
+        f.write(value)
+        f.close()
+        return filename
+
 
 
 class CoverImageMirror(object):
