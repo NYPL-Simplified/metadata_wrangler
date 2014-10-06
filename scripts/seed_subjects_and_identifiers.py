@@ -25,7 +25,7 @@ def process_file(_db, filename, class_):
         args = {}
         if class_ == Subject and name:
             args['name'] = name
-        create(
+        get_one_or_create(
             _db, class_, type=type, identifier=identifier,
             create_method_kwargs=args
         )
@@ -42,8 +42,8 @@ if __name__ == '__main__':
     path = sys.argv[1]      
     _db = production_session()
     seed_dir = os.path.join(path, "seed")
-    subjects_path = os.path.join(seed_dir, "subjects.tsv")
-    process_file(_db, subjects_path, Subject)
+    #subjects_path = os.path.join(seed_dir, "subjects.tsv")
+    #process_file(_db, subjects_path, Subject)
 
-    #identifiers_path = os.path.join(seed_dir, "identifiers.tsv")
-    #process_file(_db, identifiers_path, Identifier)
+    identifiers_path = os.path.join(seed_dir, "identifiers.tsv")
+    process_file(_db, identifiers_path, Identifier)

@@ -98,7 +98,7 @@ class OCLCLinkedData(object):
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
             data_directory, DataSource.OCLC_LINKED_DATA, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
+        self.cache = FilesystemCache(self.cache_directory, subdir_chars=3)
         for identifier_type in self.CAN_HANDLE:
             p = os.path.join(self.cache_directory, identifier_type)
             if not os.path.exists(p):
@@ -1074,17 +1074,17 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, db, data_directory):
+    def __init__(self, db, data_directory, services=None):
         self.oclc = OCLCLinkedData(data_directory)
         self.db = db
-        self.oclc_classify = DataSource.lookup(db, DataSource.OCLC)
-        self.overdrive = DataSource.lookup(db, DataSource.OVERDRIVE)
-        self.threem = DataSource.lookup(db, DataSource.THREEM)
         self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
+        if not services:
+            services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
+        services = [DataSource.lookup(self.db, x) for x in services]
 
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME,
-            [self.oclc_classify, self.overdrive, self.threem],
+            services,
             self.oclc_linked_data,
             workset_size=3)
 
@@ -1097,7 +1097,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
             editions = 0
             for edition in self.info_for(original_identifier):
-                edition, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
+                edition, isbns, descriptions, subjects = self.process_oclc_edition(original_identifier, edition)
                 if edition:
                     new_records += 1
                     print "", edition.publisher, len(isbns), len(descriptions)
@@ -1115,7 +1115,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             return False
         return True
 
-    def process_edition(self, original_identifier, edition):
+    def process_oclc_edition(self, original_identifier, edition):
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
@@ -1355,6 +1355,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, work_identifier):
+        set_trace()
         if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
             if work_identifier.type == Identifier.ISBN:
                 work_data = list(oclc_linked_data.oclc_works_for_isbn(

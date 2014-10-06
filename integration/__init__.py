@@ -79,6 +79,7 @@ class FilesystemCache(object):
 
     def store(self, key, value):
         filename = self._filename(key)
+        set_trace()
         if self.subdir_chars:
             # Make sure the subdirectory exists.
             directory = os.path.split(filename)[0]
