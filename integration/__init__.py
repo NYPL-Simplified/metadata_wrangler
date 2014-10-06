@@ -6,7 +6,6 @@ import requests
 from lxml import etree
 from nose.tools import set_trace
 
-
 class XMLParser(object):
 
     """Helper functions to process XML data."""
@@ -211,3 +210,5 @@ class CoverImageMirror(object):
         else:
             print "CACHE %s" % path
         resource.mirrored_to(path, content_type, data)
+
+    

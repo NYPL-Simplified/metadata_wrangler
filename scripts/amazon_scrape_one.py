@@ -17,4 +17,6 @@ if __name__ == '__main__':
         sys.exit()
     path = sys.argv[1]      
     asin = sys.argv[2]
-    AmazonScraper(path).scrape_reviews(asin)
+    for review in AmazonScraper(path).scrape_reviews(asin):
+        print review
+        print "-" * 80

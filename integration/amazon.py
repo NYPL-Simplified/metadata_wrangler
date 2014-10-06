@@ -52,7 +52,7 @@ class AmazonScraper(object):
 
         url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         response = self.get(url)
-        self.bibliographic_cache.store(asin, response.text)
+        self.bibliographic_cache.store(asin, response.text.encode("utf8"))
         return response.text
 
     def get_reviews(self, asin, page):
@@ -67,38 +67,35 @@ class AmazonScraper(object):
             asin=asin, page_number=page-1, 
             sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
         else:
-            old_url = None
+            old_url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         response = self.get(url, old_url)
         self.review_cache.store(asin, page, response.text)
         return response.text
 
     def scrape_bibliographic_info(self, asin):
         data = self.get_bibliographic_info(asin)
-        
 
     def scrape_reviews(self, asin):
         parser = AmazonReviewParser()
         for page in range(1,3):
             reviews = self.get_reviews(asin, page)
-            for review in parser.process_all(reviews):
-                yield review
-        
-
+            for page_reviews in parser.process_all(reviews):
+                for review in page_reviews:
+                    yield review
 
 class AmazonReviewParser(XMLParser):
 
     def process_all(self, string):
         parser = etree.HTMLParser()
-        return super(AmazonReviewParser, self).process_all(
+        for review in super(AmazonReviewParser, self).process_all(
                 string, "//*[@id='productReviews']",
-            parser=parser)
+            parser=parser):
+            yield review
 
     def process_one(self, reviewset, ns):
         text = []
         for review in reviewset.xpath("//div[@class='reviewText']",
-                                      namespace=ns):
+                                      namespaces=ns):
             text.append(review.xpath("text()"))
-        return "\n".join(text)
-
-for i in AmazonScraper("/home/leonardr/data/").scrape_reviews("031624662X"):
-    print i
+        for review in text:
+            yield "\n".join(review)
