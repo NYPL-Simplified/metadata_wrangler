@@ -225,6 +225,7 @@ class DataSource(Base):
     THREEM = "3M"
     OCLC = "OCLC Classify"
     OCLC_LINKED_DATA = "OCLC Linked Data"
+    AMAZON = "Amazon"
     XID = "WorldCat xID"
     AXIS_360 = "Axis 360"
     WEB = "Web"
@@ -282,6 +283,7 @@ class DataSource(Base):
                 (cls.AXIS_360, True, Identifier.AXIS_360_ID, 0),
                 (cls.OCLC, False, Identifier.OCLC_NUMBER, None),
                 (cls.OCLC_LINKED_DATA, False, Identifier.OCLC_NUMBER, None),
+                (cls.AMAZON, False, Identifier.ASIN, None),
                 (cls.OPEN_LIBRARY, False, Identifier.OPEN_LIBRARY_ID, None),
                 (cls.GUTENBERG_COVER_GENERATOR, False, Identifier.GUTENBERG_ID, None),
                 (cls.WEB, True, Identifier.URI, None),
