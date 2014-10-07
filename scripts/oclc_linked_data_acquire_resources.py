@@ -30,7 +30,7 @@ if __name__ == '__main__':
         services = sys.argv[2:]
     else:
         services = None
-    # f(services)
-    for i in range(20):
-        p = Process(target=f, args=(services,))
-        p.start()
+    f(services)
+    #for i in range(20):
+    #    p = Process(target=f, args=(services,))
+    #    p.start()

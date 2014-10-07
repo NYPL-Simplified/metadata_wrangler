@@ -62,7 +62,7 @@ class FilesystemCache(object):
                  check_subdirectories=False):
         self.cache_directory = cache_directory
         self.subdir_chars = subdir_chars
-        self.take_subdir_from_start = take_subdir_from_start
+        self.substring_from_beginning = substring_from_beginning
         if not os.path.exists(self.cache_directory):
             os.makedirs(self.cache_directory)
         self.substring_from_beginning = substring_from_beginning

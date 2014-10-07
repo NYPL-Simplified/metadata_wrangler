@@ -177,7 +177,7 @@ class OCLCLinkedData(object):
 
     def oclc_number_for_isbn(self, isbn):
         """Find an OCLC Number for the given ISBN."""
-        cache_key = self.cache_key(isbn, Identifier.ISBN)
+        cache_key = (isbn, Identifier.ISBN)
         cached = False
         if self.cache.exists(cache_key):
             cached = True
