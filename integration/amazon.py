@@ -68,6 +68,7 @@ class AmazonScraper(object):
             sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
         else:
             old_url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
+        print url
         response = self.get(url, old_url)
         self.review_cache.store(asin, page, response.text)
         return response.text
@@ -77,7 +78,7 @@ class AmazonScraper(object):
 
     def scrape_reviews(self, asin):
         parser = AmazonReviewParser()
-        for page in range(1,3):
+        for page in range(1,10):
             reviews = self.get_reviews(asin, page)
             for page_reviews in parser.process_all(reviews):
                 for review in page_reviews:
@@ -87,6 +88,8 @@ class AmazonReviewParser(XMLParser):
 
     def process_all(self, string):
         parser = etree.HTMLParser()
+        if isinstance(string, unicode):
+            string = string.encode("utf8")
         for review in super(AmazonReviewParser, self).process_all(
                 string, "//*[@id='productReviews']",
             parser=parser):

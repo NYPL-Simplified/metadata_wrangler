@@ -23,5 +23,7 @@ pip install isbnlib
 pip install pillow
 pip install textblob
 pip install pyld
+# blas, liblapack
+pip install scipy scikit-learn
 
 heroku addons:add heroku-postgresql
