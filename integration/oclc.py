@@ -81,6 +81,20 @@ class ldq(object):
             elif '@value' in v:
                 yield v['@value']
 
+class OCLCCache(FilesystemCache):
+
+    def __init__(self, path):
+        super(OCLCCache, self).__init__(path, check_subdirectories=True)
+
+    def _filename(self, key):
+        id, type = key
+        if type == Identifier.ISBN:
+            extension = ".url"
+        else:
+            extension = ".jsonld"
+        ending = os.path.join(type, id[-4:], id + extension)
+        return os.path.join(self.cache_directory, ending)
+
 class OCLCLinkedData(object):
 
     BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
@@ -98,18 +112,11 @@ class OCLCLinkedData(object):
     def __init__(self, data_directory):
         self.cache_directory = os.path.join(
             data_directory, DataSource.OCLC_LINKED_DATA, "cache")
-        self.cache = FilesystemCache(self.cache_directory, subdir_chars=3)
+        self.cache = OCLCCache(self.cache_directory)
         for identifier_type in self.CAN_HANDLE:
             p = os.path.join(self.cache_directory, identifier_type)
             if not os.path.exists(p):
                 os.makedirs(p)
-
-    def cache_key(self, id, type):
-        if type == Identifier.ISBN:
-            extension = ".url"
-        else:
-            extension = ".jsonld"
-        return os.path.join(type, id[-4:], id + extension)
 
     def request(self, url):
         """Make a request to OCLC Linked Data."""
@@ -153,13 +160,13 @@ class OCLCLinkedData(object):
         else:
             set_trace()
 
-        cache_key = self.cache_key(identifier, type)
+        cache_key = (identifier, type)
         cached = False
         if self.cache.exists(cache_key):
             cached = True
         else:
             url = url % dict(id=identifier, type=foreign_type)
-            #print " %s => %s" % (url, self.cache._filename(cache_key))
+            print " %s => %s" % (url, self.cache._filename(cache_key))
             print "", url
             raw = self.request(url) or ''
             self.cache.store(cache_key, raw)
@@ -1355,7 +1362,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, work_identifier):
-        set_trace()
         if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
             if work_identifier.type == Identifier.ISBN:
                 work_data = list(oclc_linked_data.oclc_works_for_isbn(

@@ -191,6 +191,7 @@ class OverdriveAPI(object):
         circulation information.
         """
         # Retrieve current circulation information about this book
+        orig_book = book
         if data_source.name != DataSource.OVERDRIVE:
             raise ValueError("Invalid data source %s" % data_source.name)
         if isinstance(book, basestring):
@@ -210,7 +211,7 @@ class OverdriveAPI(object):
             else:
                 # Refresh the token and try again.
                 self.check_creds()
-                return self.update_licensepool(_db, data_source, book, True)
+                return self.update_licensepool(_db, data_source, orig_book, True)
         if response.status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
                 book['id'], response.status_code)
