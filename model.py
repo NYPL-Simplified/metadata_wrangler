@@ -868,6 +868,18 @@ class Identifier(Base):
                 champion = r
         return champion, summaries
 
+    @classmethod
+    def missing_coverage_from(
+            cls, _db, identifier_types, coverage_data_source):
+        """Find identifiers of the given types which have no CoverageRecord
+        from `coverage_data_source`.
+        """
+        q = _db.query(Identifier).outerjoin(
+            CoverageRecord, Identifier.id==CoverageRecord.identifier_id).filter(
+                Identifier.type.in_(identifier_types))
+        q2 = q.filter(CoverageRecord.id==None)
+        return q2
+
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
     __tablename__ = 'contributors'
@@ -2022,6 +2034,7 @@ class Measurement(Base):
     POPULARITY = "http://library-simplified.com/rel/popularity"
     RATING = "http://schema.org/ratingValue"
     DOWNLOADS = "https://schema.org/UserDownloads"
+    PAGE_COUNT = "https://schema.org/numberOfPages"
 
     # If a book's popularity measurement is found between index n and
     # index n+1 on this list, it is in the nth percentile for
@@ -2034,7 +2047,8 @@ class Measurement(Base):
     }
 
     RATING_SCALES = {
-        DataSource.OVERDRIVE : [1, 5]
+        DataSource.OVERDRIVE : [1, 5],
+        DataSource.AMAZON : [1, 5],
     }
 
     id = Column(Integer, primary_key=True)

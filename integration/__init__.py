@@ -108,7 +108,11 @@ class MultipageFilesystemCache(FilesystemCache):
         if len(key) + 1 + len(page) > 140:
             key = key[:135]
         if self.subdir_chars:
-            subdir = key[:self.subdir_chars]
+            if self.substring_from_beginning:
+                subdir = key[:self.subdir_chars]
+            else:
+                subdir = key[-self.subdir_chars:]
+
             directory = os.path.join(self.cache_directory, subdir)
         else:
             directory = self.cache_directory
