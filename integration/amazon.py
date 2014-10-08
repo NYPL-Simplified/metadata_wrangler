@@ -204,6 +204,8 @@ class AmazonReviewParser(XMLParser):
         text = []
         for review in reviewset.xpath("//div[@class='reviewText']",
                                       namespaces=ns):
+            set_trace()
+            b = review.xpath("preceding::b")
             text.append(review.xpath("text()"))
         for review in text:
             yield "\n".join(review)
