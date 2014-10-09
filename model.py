@@ -319,6 +319,7 @@ class CoverageRecord(Base):
     data_source_id = Column(
         Integer, ForeignKey('datasources.id'), index=True)
     date = Column(Date, index=True)
+    exception = Column(Unicode, index=True)
 
 
 class Equivalency(Base):

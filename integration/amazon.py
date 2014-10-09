@@ -332,6 +332,4 @@ class AmazonCoverageProvider(CoverageProvider):
                 weight = 1
             identifier.add_measurement(
                 self.coverage_source, quantity, measurement, weight)
-
-        set_trace()
     
