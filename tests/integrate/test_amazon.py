@@ -2,15 +2,67 @@
 from nose.tools import set_trace, eq_
 import pkgutil
 
+from tests.db import DatabaseTest
 from integration.amazon import (
     AmazonBibliographicParser,
     AmazonReviewParser,
+    AmazonCoverageProvider,
 )
 
 from model import (
     Identifier,
     Measurement,
+    Subject,
 )
+
+class DummyAmazonScraper(object):
+
+    def __init__(self):
+        self.bibliographic_info = []
+        self.reviews = []
+
+    def scrape_bibliographic_info(self, asin):
+        return self.bibliographic_info.pop()
+
+    def scrape_reviews(self, asin):
+        if self.reviews:
+            return self.reviews.pop()
+        else:
+            return []
+
+class TestCoverageProvider(DatabaseTest):
+    
+    def test_process_edition(self):
+
+        provider = AmazonCoverageProvider(self._db, "")
+
+        # Queue up some fake bibliographic info
+        provider.amazon = DummyAmazonScraper()
+        d = dict(identifiers=[(Identifier.ASIN, "foo")],
+                 measurements={"foo measurement" : 101},
+                 keywords=["foo"],
+        )
+        provider.amazon.bibliographic_info.append(d)
+
+        identifier = self._identifier()
+        provider.process_edition(identifier)
+
+        # The identifier has been annotated with an equivalency...
+        [equivalency] = identifier.equivalencies
+        eq_(Identifier.ASIN, equivalency.output.type)
+        eq_("foo", equivalency.output.identifier)
+
+        # ...a measurement....
+        [measurement] = identifier.measurements
+        eq_("foo measurement", measurement.quantity_measured)
+        eq_(101, measurement.value)
+
+        # ...and a 'tag' classification.
+        [classification] = identifier.classifications
+        subject = classification.subject
+        eq_(Subject.TAG, subject.type)
+        eq_("foo", subject.identifier)
+
 
 class TestBibliographicParser(object):
 

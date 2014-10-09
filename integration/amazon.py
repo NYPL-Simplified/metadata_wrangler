@@ -16,6 +16,7 @@ from model import (
     DataSource,
     Identifier,
     Measurement,
+    Subject,
 )
 from pdb import set_trace
 
@@ -98,7 +99,10 @@ class AmazonScraper(object):
         parser = AmazonReviewParser()
         for page in range(1,11):
             reviews_on_this_page = 0
-            reviews = self.get_reviews(asin, page)
+            try:
+                reviews = self.get_reviews(asin, page)
+            except IOError, e:
+                return
             for page_reviews in parser.process_all(reviews):
                 for review in page_reviews:
                     yield review
@@ -309,8 +313,7 @@ class AmazonCoverageProvider(CoverageProvider):
             identifier_types,
             self.coverage_source,
             workset_size=50)
-
-        
+       
     @property
     def editions_that_need_coverage(self):
         """Returns identifiers (not editions) that need coverage."""
@@ -323,8 +326,11 @@ class AmazonCoverageProvider(CoverageProvider):
         bibliographic = self.amazon.scrape_bibliographic_info(i)
         reviews = self.amazon.scrape_reviews(i)
 
-        for type, other_identifier in bibliographic['identifiers']:
+        for type, other_identifier_id in bibliographic['identifiers']:
+            other_identifier = Identifier.for_foreign_id(
+                self._db, type, other_identifier_id)[0]
             identifier.equivalent_to(self.coverage_source, other_identifier, 1)
+
         for quantity, measurement in bibliographic['measurements'].items():
             if isinstance(measurement, tuple):
                 measurement, weight = measurement
@@ -332,4 +338,7 @@ class AmazonCoverageProvider(CoverageProvider):
                 weight = 1
             identifier.add_measurement(
                 self.coverage_source, quantity, measurement, weight)
-    
+        
+        for keyword in bibliographic['keywords']:
+            identifier.classify(
+                self.coverage_source, Subject.TAG, keyword)
