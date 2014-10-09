@@ -9,7 +9,7 @@ from sqlalchemy import and_
 from model import (
     DataSource,
     Resource,
-    WorkIdentifier,
+    Identifier,
     )
 
 class ContentCafeMirror(object):
@@ -56,11 +56,11 @@ class ContentCafeMirror(object):
     def run(self):
         # Find all ISBNs that don't have any associated Content Cafe
         # resources.
-        c = and_(WorkIdentifier.id==Resource.work_identifier_id,
+        c = and_(Identifier.id==Resource.work_identifier_id,
                  Resource.data_source==self.data_source)
-        qu = self._db.query(WorkIdentifier).outerjoin(
+        qu = self._db.query(Identifier).outerjoin(
             Resource, c).filter(
-                WorkIdentifier.type==WorkIdentifier.ISBN).filter(
+                Identifier.type==Identifier.ISBN).filter(
                     Resource.id==None)
         resultset = qu.limit(100).all()
         while resultset:

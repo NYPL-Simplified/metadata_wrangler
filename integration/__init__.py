@@ -201,7 +201,7 @@ class CoverImageMirror(object):
     def filename_for(self, resource):
         href = resource.href
         extension = href[href.rindex('.'):]
-        filename = resource.work_identifier.identifier + extension
+        filename = resource.identifier.identifier + extension
         return filename
 
     def mirror(self, resource):
