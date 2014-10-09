@@ -121,9 +121,15 @@ class AmazonBibliographicParser(XMLParser):
     KEYWORD_BLACKLIST = set(["books"])
     PARTIAL_KEYWORD_BLACKLIST = set(["kindle", "ebook", "amazon"])
 
+    NUMBERS = re.compile("[0-9-]+")
+
     def add_keywords(self, container, keywords, exclude_set):
         for kw in keywords:
             l = kw.lower()
+            if not l:
+                continue
+            if self.NUMBERS.match(l):
+                continue
             if (l in self.KEYWORD_BLACKLIST
                 or l in exclude_set
                 or isbnlib.is_isbn10(l)):
@@ -220,7 +226,7 @@ class AmazonBibliographicParser(XMLParser):
         return '//%s[contains(concat(" ", normalize-space(@class), " "), " %s ")]' % (tag_name, class_name)
 
     def get_quality(self, root):
-        # Look in three different 
+        # Look in three different places for a star rating.
         for xpath in (
                 '//*[@id="acrReviewStars"]',
                 self._cls("div", "acrStars") + "/span",
