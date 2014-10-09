@@ -1,3 +1,4 @@
+import gzip
 import os
 import urlparse
 from cStringIO import StringIO
@@ -59,7 +60,7 @@ class FilesystemCache(object):
 
     def __init__(self, cache_directory, subdir_chars=None,
                  substring_from_beginning=True,
-                 check_subdirectories=False):
+                 check_subdirectories=False, compress=False):
         self.cache_directory = cache_directory
         self.subdir_chars = subdir_chars
         self.substring_from_beginning = substring_from_beginning
@@ -67,6 +68,7 @@ class FilesystemCache(object):
             os.makedirs(self.cache_directory)
         self.substring_from_beginning = substring_from_beginning
         self.check_subdirectories = check_subdirectories or subdir_chars
+        self.compress = compress
 
     def _filename(self, key):
         if len(key) > 140:
@@ -84,8 +86,16 @@ class FilesystemCache(object):
     def exists(self, key):
         return os.path.exists(self._filename(key))
 
+    @property
+    def self._open(self):
+        if self.compress:
+            f = gzip.open
+        else:
+            f = open
+        return f
+            
     def open(self, key):
-        return open(self._filename(key))
+        return self._open(self._filename(key))
 
     def store(self, key, value):
         filename = self._filename(key)
@@ -94,7 +104,7 @@ class FilesystemCache(object):
             directory = os.path.split(filename)[0]
             if not os.path.exists(directory):
                 os.makedirs(directory)
-        f = open(filename, "w")
+        f = self._open(filename, "w")
         f.write(value)
         f.close()
         return filename

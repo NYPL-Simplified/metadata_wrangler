@@ -130,18 +130,32 @@ class AppealTextFilter(object):
                  "you'll", "you're", "you've", "your", "yours",
                  "yourself", "yourselves", "zero",
 
-                    "a", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an", "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot", "could", "dear", "did", "do", "does", "either", "else", "ever", "every", "for", "from", "get", "got", "had", "has", "have", "he", "her", "hers", "him", "his", "how", "however", "i", "if", "in", "into", "is", "it", "its", "just", "least", "let", "like", "likely", "may", "me", "might", "most", "must", "my", "neither", "no", "nor", "not", "of", "off", "often", "on", "only", "or", "other", "our", "own", "rather", "said", "say", "says", "she", "should", "since", "so", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your", "ain't", "aren't", "can't", "could've", "couldn't", "didn't", "doesn't", "don't", "hasn't", "he'd", "he'll", "he's", "how'd", "how'll", "how's", "i'd", "i'll", "i'm", "i've", "isn't", "it's", "might've", "mightn't", "must've", "mustn't", "shan't", "she'd", "she'll", "she's", "should've", "shouldn't", "that'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "wasn't", "we'd", "we'll", "we're", "weren't", "what'd", "what's", "when'd", "when'll", "when's", "where'd", "where'll", "where's", "who'd", "who'll", "who's", "why'd", "why'll", "why's", "won't", "would've", "wouldn't", "you'd", "you'll", "you're", "you've", "'s", "n't", "'m", "'d",
+                    "a", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an", "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot", "could", "dear", "did", "do", "does", "either", "else", "ever", "every", "for", "from", "get", "got", "had", "has", "have", "he", "her", "hers", "him", "his", "how", "however", "i", "if", "in", "into", "is", "it", "its", "just", "least", "let", "like", "likely", "may", "me", "might", "most", "must", "my", "neither", "no", "nor", "not", "of", "off", "often", "on", "only", "or", "other", "our", "own", "rather", "said", "say", "says", "she", "should", "since", "so", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your", "ain't", "aren't", "can't", "could've", "couldn't", "didn't", "doesn't", "don't", "hasn't", "he'd", "he'll", "he's", "how'd", "how'll", "how's", "i'd", "i'll", "i'm", "i've", "isn't", "it's", "might've", "mightn't", "must've", "mustn't", "shan't", "she'd", "she'll", "she's", "should've", "shouldn't", "that'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "wasn't", "we'd", "we'll", "we're", "weren't", "what'd", "what's", "when'd", "when'll", "when's", "where'd", "where'll", "where's", "who'd", "who'll", "who's", "why'd", "why'll", "why's", "won't", "would've", "wouldn't", "you'd", "you'll", "you're", "you've", "'s", "n't", "'m", "'d", "'", "*",
 
 
                     "read", "reading", "kindle", "amazon", "book", "books",
+
+                     'more', 'most', 'less', 'least', 'not', 'so',
+                     'very', 'also', 'then', "just", "much",
+                     "only", "other", "never", "many",
+                     "even", "yet", "too", "really",
+                     "such", "first", "often",
+                     "back", "whole", "else"
                  ])
 
-    WHITELIST = set(["page-turner", "pageturner"])
 
-    SURROUND_WORDS = set(['setting', 'worldbuilding', 'world-building',
+    WHITELIST = set([])
+
+    ADJACENT_TAG_BLACKLIST = set(['DT', 'PRP', 'PRP$', 'CC'])
+
+    ADJACENT_WORDS = set(['setting', 'worldbuilding', 'world-building',
                           'character', 'characters', 'characterization', 
                           'language', 'imagery', 'writing', 'prose',
-                          'story', 'plot', 'plotted', 'plotting', 'subplot',
+                          'narrative', 'narratives', 'written',
+                          'story', 'stories', 'storyteller', 'storytelling',
+                          'tale', 'tales',
+                          'plot', 'plotted', 'plotting', 'subplot',
+                          'twist', 'twists',
     ])
 
     TAGS = set(["RB", "RBR", "RBS", "JJ", "JJR", "JJS"])
@@ -149,20 +163,25 @@ class AppealTextFilter(object):
     def filter(self, text):
         filtered = []
         previous_word = None
-        tags = TextBlob(review_text).tags
+        tags = TextBlob(text).tags
         for i, (word, tag) in enumerate(tags):
             word = word.lower()
-            if word in self.STOPWORDS:
+            if word in self.STOPWORDS or tag in self.ADJACENT_TAG_BLACKLIST:
                 previous_word = None
                 continue
 
-            if word in self.SURROUND_WORDS:
+            if word in self.ADJACENT_WORDS:
                 if i < len(tags)-1:
-                    filtered.append(word + "-" + tags[i+1][0])
+                    next_word, next_tag = tags[i+1]
+                    next_word = next_word.lower()
+                    if (next_word not in self.STOPWORDS
+                        and next_tag not in self.ADJACENT_TAG_BLACKLIST):
+                        filtered.append(word + "-" + next_word)
                 if previous_word:
                     filtered.append(previous_word + "-" + word)
             if tag in self.TAGS or word in self.WHITELIST:
                 filtered.append(word)
+            previous_word = word
         return filtered
 
 

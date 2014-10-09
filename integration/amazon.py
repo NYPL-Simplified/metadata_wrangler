@@ -2,6 +2,8 @@ import isbnlib
 import requests
 import os
 import re
+import random
+import time
 from cStringIO import StringIO
 from lxml import etree 
 from integration import (
@@ -31,7 +33,42 @@ class AmazonScraper(object):
         headers = {"User-Agent" : self.USER_AGENT}
         if referrer:
             headers['Referer'] = referrer
-        return requests.get(url, headers=headers, proxies=dict(http="http://us-il.proxymesh.com:31280"))
+        return requests.get(url, headers=headers)
+import isbnlib
+import requests
+import os
+import re
+from cStringIO import StringIO
+from lxml import etree 
+from integration import (
+    FilesystemCache,
+    MultipageFilesystemCache,
+    XMLParser,
+)
+from model import (
+    CoverageProvider,
+    DataSource,
+    Identifier,
+    Measurement,
+)
+from pdb import set_trace
+
+class AmazonScraper(object):
+    
+    SORT_REVIEWS_BY_DATE = "bySubmissionDateDescending"
+    SORT_REVIEWS_BY_HELPFULNESS = "byRankDescending"
+
+    BIBLIOGRAPHIC_URL = 'http://www.amazon.com/exec/obidos/ASIN/%(asin)s'
+    REVIEW_URL = 'http://www.amazon.com/product-reviews/%(asin)s/ref=cm_cr_dp_see_all_btm?ie=UTF8&showViewpoints=1&pageNumber=%(page_number)s&sortBy=%(sort_by)s'
+
+    USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.103 Safari/537.36"
+
+    def get(self, url, referrer=None):
+        headers = {"User-Agent" : self.USER_AGENT}
+        if referrer:
+            headers['Referer'] = referrer
+        time.sleep(1 + random.random())
+        return requests.get(url, headers=headers)
 
     def __init__(self, data_directory):
         path = os.path.join(data_directory, DataSource.AMAZON)
@@ -39,12 +76,14 @@ class AmazonScraper(object):
         if not os.path.exists(bibliographic_cache):
             os.makedirs(bibliographic_cache)
         self.bibliographic_cache = FilesystemCache(
-            path, subdir_chars=4, substring_from_beginning=False)
+            path, subdir_chars=4, substring_from_beginning=False,
+            compress=True)
         review_cache = os.path.join(path, "review")        
         if not os.path.exists(bibliographic_cache):
             os.makedirs(bibliographic_cache)
         self.review_cache = MultipageFilesystemCache(
-            review_cache, subdir_chars=4, substring_from_beginning=False)
+            review_cache, subdir_chars=4, substring_from_beginning=False,
+            compress=True)
 
     def scrape(self, asin):
         identifiers, subjects, rating = self.scrape_bibliographic_info(asin)
@@ -60,8 +99,8 @@ class AmazonScraper(object):
         self.bibliographic_cache.store(asin, response.text.encode("utf8"))
         return response.text
 
-    def get_reviews(self, asin, page):
-        if self.review_cache.exists(asin, page):
+    def get_reviews(self, asin, page, force=False):
+        if not force and self.review_cache.exists(asin, page):
             return self.review_cache.open(asin, page).read()
 
         url = self.REVIEW_URL % dict(
@@ -75,7 +114,12 @@ class AmazonScraper(object):
             old_url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         print url
         response = self.get(url, old_url)
-        self.review_cache.store(asin, page, response.text)
+        if repsonse.status_code != 200:
+            raise IOError(response.status_code)
+        if response.text:
+            self.review_cache.store(asin, page, response.text)
+        else:
+            raise IOError("Empty response")
         return response.text
 
     def scrape_bibliographic_info(self, asin):
@@ -86,14 +130,14 @@ class AmazonScraper(object):
 
     def scrape_reviews(self, asin):
         parser = AmazonReviewParser()
-        for page in range(1,10):
+        for page in range(1,11):
             reviews_on_this_page = 0
             reviews = self.get_reviews(asin, page)
             for page_reviews in parser.process_all(reviews):
                 for review in page_reviews:
                     yield review
                     reviews_on_this_page += 1
-            if reviews_on_this_page == 0:
+            if reviews_on_this_page == 0 or reviews_on_this_page < 10:
                 break
 
 class AmazonBibliographicParser(XMLParser):
@@ -191,6 +235,8 @@ class AmazonBibliographicParser(XMLParser):
 
 class AmazonReviewParser(XMLParser):
 
+    NAMESPACES = {}
+
     def process_all(self, string):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
@@ -204,11 +250,13 @@ class AmazonReviewParser(XMLParser):
         text = []
         for review in reviewset.xpath("//div[@class='reviewText']",
                                       namespaces=ns):
-            set_trace()
-            b = review.xpath("preceding::b")
-            text.append(review.xpath("text()"))
-        for review in text:
-            yield "\n".join(review)
+            b = self._xpath1(review, "../div/span/b")
+            if b is None:
+                title = None
+            else:
+                title = b.text
+            review_text = review.xpath("text()")
+            yield title, "\n\n".join(review_text)
 
 
 class AmazonCoverageProvider(CoverageProvider):
