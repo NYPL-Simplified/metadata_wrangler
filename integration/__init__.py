@@ -87,7 +87,7 @@ class FilesystemCache(object):
         return os.path.exists(self._filename(key))
 
     @property
-    def self._open(self):
+    def _open(self):
         if self.compress:
             f = gzip.open
         else:

@@ -1,41 +1,7 @@
 import isbnlib
-import requests
-import os
-import re
 import random
-import time
-from cStringIO import StringIO
-from lxml import etree 
-from integration import (
-    FilesystemCache,
-    MultipageFilesystemCache,
-    XMLParser,
-)
-from model import (
-    CoverageProvider,
-    DataSource,
-    Identifier,
-    Measurement,
-)
-from pdb import set_trace
-
-class AmazonScraper(object):
-    
-    SORT_REVIEWS_BY_DATE = "bySubmissionDateDescending"
-    SORT_REVIEWS_BY_HELPFULNESS = "byRankDescending"
-
-    BIBLIOGRAPHIC_URL = 'http://www.amazon.com/exec/obidos/ASIN/%(asin)s'
-    REVIEW_URL = 'http://www.amazon.com/product-reviews/%(asin)s/ref=cm_cr_dp_see_all_btm?ie=UTF8&showViewpoints=1&pageNumber=%(page_number)s&sortBy=%(sort_by)s'
-
-    USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.103 Safari/537.36"
-
-    def get(self, url, referrer=None):
-        headers = {"User-Agent" : self.USER_AGENT}
-        if referrer:
-            headers['Referer'] = referrer
-        return requests.get(url, headers=headers)
-import isbnlib
 import requests
+import time
 import os
 import re
 from cStringIO import StringIO
@@ -68,7 +34,12 @@ class AmazonScraper(object):
         if referrer:
             headers['Referer'] = referrer
         time.sleep(1 + random.random())
-        return requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            raise IOError(response.status_code)
+        if not response.text:
+            raise IOError("Empty response")
+        return response
 
     def __init__(self, data_directory):
         path = os.path.join(data_directory, DataSource.AMAZON)
@@ -76,7 +47,7 @@ class AmazonScraper(object):
         if not os.path.exists(bibliographic_cache):
             os.makedirs(bibliographic_cache)
         self.bibliographic_cache = FilesystemCache(
-            path, subdir_chars=4, substring_from_beginning=False,
+            bibliographic_cache, subdir_chars=4, substring_from_beginning=False,
             compress=True)
         review_cache = os.path.join(path, "review")        
         if not os.path.exists(bibliographic_cache):
@@ -114,12 +85,7 @@ class AmazonScraper(object):
             old_url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         print url
         response = self.get(url, old_url)
-        if repsonse.status_code != 200:
-            raise IOError(response.status_code)
-        if response.text:
-            self.review_cache.store(asin, page, response.text)
-        else:
-            raise IOError("Empty response")
+        self.review_cache.store(asin, page, response.text)
         return response.text
 
     def scrape_bibliographic_info(self, asin):
@@ -140,6 +106,7 @@ class AmazonScraper(object):
             if reviews_on_this_page == 0 or reviews_on_this_page < 10:
                 break
 
+
 class AmazonBibliographicParser(XMLParser):
 
     IDENTIFIER_IN_URL = re.compile("/dp/([^/]+)/")
@@ -151,6 +118,25 @@ class AmazonBibliographicParser(XMLParser):
                      re.compile("#([0-9,]+) Free in"),
                      re.compile("#([0-9,]+) in")]
 
+    KEYWORD_BLACKLIST = set(["books"])
+    PARTIAL_KEYWORD_BLACKLIST = set(["kindle", "ebook", "amazon"])
+
+    def add_keywords(self, container, keywords, exclude_set):
+        for kw in keywords:
+            l = kw.lower()
+            if (l in self.KEYWORD_BLACKLIST
+                or l in exclude_set
+                or isbnlib.is_isbn10(l)):
+                continue
+            ok = True
+            for partial in self.PARTIAL_KEYWORD_BLACKLIST:
+                if partial in l:
+                    ok = False
+                    break
+            if not ok:
+                continue
+            container.add(kw)
+
     def process_all(self, string):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
@@ -159,8 +145,25 @@ class AmazonBibliographicParser(XMLParser):
 
         identifiers = []
         measurements = {}
-        bib = dict(identifiers=identifiers, measurements=measurements)
-        edition_tags = root.xpath("//a[@class='title-text']")
+        keywords = set([])
+        bib = dict(identifiers=identifiers, measurements=measurements,
+                   keywords=keywords)
+        exclude_tags = set()
+
+        # Find the title, mainly so we can exclude it if it shows up
+        # in keywords.
+        title = None
+        for title_id in ('productTitle', 'btAsinTitle'):
+            title_tag = self._xpath1(root, '//*[@id="%s"]' % title_id)
+            if title_tag is not None:
+                title = title_tag.text.strip()
+                break
+        if title:
+            bib['title'] = title
+            exclude_tags.add(title.lower())
+
+        # Find other editions of this book.
+        edition_tags = root.xpath('//a[@class="title-text"]')
         for edition_tag in edition_tags:
             format = "".join([x.strip() for x in edition_tag.xpath("span/text()")])
             usable_format = True
@@ -185,21 +188,45 @@ class AmazonBibliographicParser(XMLParser):
                 identifier_type = Identifier.ISBN
 
             identifiers.append((identifier_type, identifier))
+            # Exclude identifiers if they also show up in tags.
+            exclude_tags.add(identifier)
+
+        # Try two different techniques to find classifications.
+        # First, look in a <meta> tag for keywords.
+        keyword_tag = self._xpath1(root, '//meta[@name="keywords"]')
+        if keyword_tag is not None:
+            tag_keywords = keyword_tag.attrib['content'].split(",")
+            self.add_keywords(keywords, tag_keywords, exclude_tags)
+
+        # Then look for categorizations.
+        similar_tag = self._xpath1(
+            root, '//*[text()="Look for Similar Items by Category"]')
+        if similar_tag is not None:
+            category_keywords = set([])
+            for item in similar_tag.xpath("..//ul/li"):
+                links = item.xpath("a")
+                for l in links:
+                    category_keywords.add(l.text.strip())
+            self.add_keywords(keywords, category_keywords, exclude_tags)
 
         measurements[Measurement.RATING] = self.get_quality(root)
         measurements[Measurement.POPULARITY] = self.get_popularity(root)
-        measurements[Measurement.PAGE_COUNT] = self.get_page_count(root)
-        set_trace()
+        page_count = self.get_page_count(root)
+        if page_count:
+            measurements[Measurement.PAGE_COUNT] = page_count 
+        return bib
 
     def _cls(self, tag_name, class_name):
         return '//%s[contains(concat(" ", normalize-space(@class), " "), " %s ")]' % (tag_name, class_name)
 
     def get_quality(self, root):
+        # Look in three different 
         for xpath in (
+                '//*[@id="acrReviewStars"]',
                 self._cls("div", "acrStars") + "/span",
                 '//*[@id="acrPopover"]'):
             match = self._xpath1(root, xpath)
-            if match is not None:
+            if match is not None and 'title' in match.attrib:
                 quality = match.attrib['title']
                 break
         if not quality:
@@ -212,6 +239,7 @@ class AmazonBibliographicParser(XMLParser):
         return quality
 
     def get_popularity(self, root):
+        # Try a number of ways to measure the sales rank.
         sales_rank_text = self._xpath1(
             root, '//*[@id="SalesRank"]/b/following-sibling::text()').strip()
         popularity = None
@@ -220,10 +248,10 @@ class AmazonBibliographicParser(XMLParser):
             if m:
                 popularity = int(m.groups()[0].replace(",", ""))
                 break
-        set_trace()
         return popularity
 
     def get_page_count(self, root):
+        """Measure the page count, if it's available."""
         page_count_text = self._xpath1(
             root, '//*[@id="pageCountAvailable"]/span/text()')
         if not page_count_text:
@@ -254,7 +282,7 @@ class AmazonReviewParser(XMLParser):
             if b is None:
                 title = None
             else:
-                title = b.text
+                title = b.text.strip()
             review_text = review.xpath("text()")
             yield title, "\n\n".join(review_text)
 
