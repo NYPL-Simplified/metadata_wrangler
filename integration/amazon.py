@@ -325,7 +325,7 @@ class AmazonCoverageProvider(CoverageProvider):
         bibliographic = self.amazon.scrape_bibliographic_info(identifier)
 
         if not bibliographic:
-            return
+            return True
 
         reviews = self.amazon.scrape_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
