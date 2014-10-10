@@ -92,9 +92,11 @@ class AmazonScraper(object):
         representation = self.get_bibliographic_info(identifier)
         if representation.has_content:
             return parser.process_all(representation.content)
+        return None
 
     def scrape_reviews(self, identifier):
         parser = AmazonReviewParser()
+        all_reviews = []
         for page in range(1,11):
             reviews_on_this_page = 0
             representation = self.get_reviews(identifier, page)
@@ -102,11 +104,11 @@ class AmazonScraper(object):
                 break
             for page_reviews in parser.process_all(representation.content):
                 for review in page_reviews:
-                    yield review
+                    all_reviews.append(review)
                     reviews_on_this_page += 1
             if reviews_on_this_page == 0 or reviews_on_this_page < 10:
                 break
-
+        return all_reviews
 
 class AmazonBibliographicParser(XMLParser):
 
@@ -142,7 +144,7 @@ class AmazonBibliographicParser(XMLParser):
                     break
             if not ok:
                 continue
-            container.add(kw)
+            container.add(kw.strip())
 
     def process_all(self, string):
         parser = etree.HTMLParser()
@@ -228,6 +230,7 @@ class AmazonBibliographicParser(XMLParser):
 
     def get_quality(self, root):
         # Look in three different places for a star rating.
+        quality = None
         for xpath in (
                 '//*[@id="acrReviewStars"]',
                 self._cls("div", "acrStars") + "/span",
@@ -298,8 +301,8 @@ class AmazonCoverageProvider(CoverageProvider):
     
     SERVICE_NAME = "Amazon Coverage Provider"
 
-    def __init__(self, db, data_directory, identifier_types=None):
-        self.amazon = AmazonScraper(data_directory)
+    def __init__(self, db, identifier_types=None):
+        self.amazon = AmazonScraper(db)
         self.db = db
         if not identifier_types:
             identifier_types = [Identifier.ISBN, Identifier.ASIN]
@@ -309,7 +312,7 @@ class AmazonCoverageProvider(CoverageProvider):
             self.SERVICE_NAME,
             identifier_types,
             self.coverage_source,
-            workset_size=50)
+            workset_size=1)
        
     @property
     def editions_that_need_coverage(self):
@@ -320,8 +323,11 @@ class AmazonCoverageProvider(CoverageProvider):
     def process_edition(self, identifier):
         """Process an identifier (not an edition)."""
         bibliographic = self.amazon.scrape_bibliographic_info(identifier)
-        reviews = self.amazon.scrape_reviews(identifier)
 
+        if not bibliographic:
+            return
+
+        reviews = self.amazon.scrape_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(
                 self._db, type, other_identifier_id)[0]
@@ -338,3 +344,4 @@ class AmazonCoverageProvider(CoverageProvider):
         for keyword in bibliographic['keywords']:
             identifier.classify(
                 self.coverage_source, Subject.TAG, keyword)
+        return True

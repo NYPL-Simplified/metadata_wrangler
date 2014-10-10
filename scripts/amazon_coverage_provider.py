@@ -12,12 +12,9 @@ from model import (
 )
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print "Usage: %s [data storage directory]" % sys.argv[0]
-        sys.exit()
-    path = sys.argv[1]
-    if len(sys.argv) > 2:
-        types = sys.argv[2:]
+    if len(sys.argv) > 1:
+        types = sys.argv[1:]
     else:
         types = None
-    AmazonCoverageProvider(production_session(), path, types).run()
+
+    AmazonCoverageProvider(production_session(), types).run()

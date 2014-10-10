@@ -49,6 +49,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy import (
     create_engine, 
+    Binary,
     Boolean,
     Column,
     Date,
@@ -693,6 +694,7 @@ class Identifier(Base):
             _db, Measurement, identifier=self,
             data_source=data_source,
             quantity_measured=quantity_measured,
+            is_most_recent=True,
         )
         if most_recent and most_recent.taken_at < taken_at:
             most_recent.is_most_recent = False
@@ -3485,7 +3487,7 @@ class Representation(Base):
     last_modified = Column(Unicode)
 
     # The representation itself.
-    content = Column(Unicode)
+    content = Column(Binary)
 
     BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36 (Simplified)"
 
@@ -3528,6 +3530,7 @@ class Representation(Base):
             print "Cached %s" % url
             return representation, True
 
+        print "Fetching %s" % url
         headers = {}
         if extra_request_headers:
             headers.update(extra_request_headers)
@@ -3590,7 +3593,7 @@ class Representation(Base):
     def simple_http_get(cls, url, headers):
         """The most simple HTTP-based GET."""
         response = requests.get(url, headers=headers)
-        return response.status_code, response.headers, response.text
+        return response.status_code, response.headers, response.content
 
     @classmethod
     def browser_http_get(cls, url, headers):
@@ -3642,9 +3645,13 @@ class CoverageProvider(object):
                 if self.process_edition(record):
                     # Success! Now there's coverage! Add a CoverageRecord.
                     successes += 1
+                    if isinstance(record, Identifier):
+                        identifier = record
+                    else:
+                        identifier = record.primary_identifier
                     get_one_or_create(
                         self._db, CoverageRecord,
-                        identifier=record.primary_identifier,
+                        identifier=identifier,
                         data_source=self.output_source,
                         create_method_kwargs = dict(date=datetime.datetime.utcnow()))
                 else:
