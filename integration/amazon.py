@@ -109,9 +109,9 @@ class AmazonScraper(object):
                     all_reviews.append(review)
                     reviews_on_this_page += 1
             if reviews_on_this_page == 0 or reviews_on_this_page < 10:
-                print "Only %s reviews on the page." %  reviews_on_this_page
+                # print "Only %s reviews on the page." %  reviews_on_this_page
                 break
-            print "%d reviews so far" % len(all_reviews)
+            # print "%d reviews so far" % len(all_reviews)
         return all_reviews
 
 class AmazonBibliographicParser(XMLParser):
