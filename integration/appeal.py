@@ -1,9 +1,13 @@
+import cPickle
 from nose.tools import set_trace
+import os
 import csv
 from csv import Dialect
 from cStringIO import StringIO
 from collections import Counter
 from sklearn import svm
+from sklearn import cross_validation
+import numpy as np
 
 from text.blob import TextBlob
 
@@ -188,42 +192,67 @@ class AppealTextFilter(object):
 class ClassifierFactory(object):
 
     @classmethod
+    def from_file(cls, path, cache_at):
+        if os.path.exists(cache_at):
+            with open(cache_at, 'rb') as fid:
+                classifier = cPickle.load(fid)
+        else:
+            data, labels = cls.parse_data_and_labels(path)
+            classifier = cls.from_data_and_labels(data, labels)
+            with open(cache_at, 'wb') as fid:
+                cPickle.dump(classifier, fid)
+        return classifier
+
+    @classmethod
+    def feature_names(self, path):
+        # Element 0 is 'identifier', element 1 is 'primary appeal'.
+        reader = csv.reader(open(path))
+        return reader.next()[2:]
+
+    @classmethod
+    def parse_data_and_labels(cls, path):
+        labels = []
+        data = []
+
+        reader = csv.reader(open(path))
+        # Ignore the first row--it's the feature names.
+        reader.next()
+
+        # Element 0 of the row is an identifier, which we ignore.
+        # Element 1 is the classification, which we treat as a label.
+        # Subsequent elements are features.
+        for row in reader:
+            labels.append(row[1])
+            row_data = []
+            data.append(row_data)
+            for x in row[2:]:
+                row_data.append(cls.str_to_float(x))
+        return data, labels
+        
+    @classmethod
+    def from_data_and_labels(cls, training_data, training_labels):
+        np_tr_data = np.array(training_data)
+        np_tr_labels = np.array(training_labels)
+
+        train, test = iter(
+            cross_validation.StratifiedKFold(np_tr_labels, n_folds=5)).next()
+        X_train, X_test = np_tr_data[train], np_tr_data[test]
+        y_train, y_test = np_tr_labels[train], np_tr_labels[test]
+
+        clf = svm.SVC(kernel='poly', gamma=2)
+        clf.fit(X_train, y_train)
+        return clf
+
+    @classmethod
     def str_to_float(cls, x):
+        if x=='': return 0.0
+        if x=='false': return 0.0
+        if x=='true': return 1.0
         try:
-            if not x: return 0.0
             return float(x)
         except:
             print("[{x}] is not a float".format(x=x))
             return 0.0
-
-    @classmethod
-    def data_load(cls, path):
-        column_labels = None
-        data = []
-        for line in open(path):
-            v = line.strip().split(',')
-            if column_labels is None:
-                column_labels = v
-            else:
-                data.append(v)
-        return column_labels, data
-
-    @classmethod
-    def data_load_parse(cls, path, label_position=1):
-        column_labels, raw_data = cls.data_load(path)
-        column_labels = column_labels[label_position+1:]
-        data = []
-        row_labels = []
-        for row in raw_data:
-            row_labels.append(row[label_position])
-            data.append([cls.str_to_float(x) for x in row[label_position+1:]])
-        return column_labels, row_labels, data
-
-    @classmethod
-    def train_classifier(cls, training_data, training_labels):
-        clf = svm.SVC(kernel='poly')
-        clf.fit(training_data, training_labels)
-        return clf
 
 
 class FeatureCounter(Counter):

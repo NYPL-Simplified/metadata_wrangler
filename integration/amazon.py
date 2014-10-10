@@ -101,13 +101,17 @@ class AmazonScraper(object):
             reviews_on_this_page = 0
             representation = self.get_reviews(identifier, page)
             if not representation.has_content:
+                print "No content!"
+                set_trace()
                 break
             for page_reviews in parser.process_all(representation.content):
                 for review in page_reviews:
                     all_reviews.append(review)
                     reviews_on_this_page += 1
             if reviews_on_this_page == 0 or reviews_on_this_page < 10:
+                print "Only %s reviews on the page." %  reviews_on_this_page
                 break
+            print "%d reviews so far" % len(all_reviews)
         return all_reviews
 
 class AmazonBibliographicParser(XMLParser):
@@ -225,9 +229,6 @@ class AmazonBibliographicParser(XMLParser):
             measurements[Measurement.PAGE_COUNT] = page_count 
         return bib
 
-    def _cls(self, tag_name, class_name):
-        return '//%s[contains(concat(" ", normalize-space(@class), " "), " %s ")]' % (tag_name, class_name)
-
     def get_quality(self, root):
         # Look in three different places for a star rating.
         quality = None
@@ -280,14 +281,15 @@ class AmazonReviewParser(XMLParser):
         if isinstance(string, unicode):
             string = string.encode("utf8")
         for review in super(AmazonReviewParser, self).process_all(
-                string, "//*[@id='productReviews']",
+                string, "//html",
             parser=parser):
             yield review
 
     def process_one(self, reviewset, ns):
         text = []
-        for review in reviewset.xpath("//div[@class='reviewText']",
-                                      namespaces=ns):
+        # There are two different web pages we might get.
+        reviews = reviewset.xpath(self._cls("div", "reviewText"))
+        for review in reviews:
             b = self._xpath1(review, "../div/span/b")
             if b is None:
                 title = None
@@ -296,6 +298,12 @@ class AmazonReviewParser(XMLParser):
             review_text = review.xpath("text()")
             yield title, "\n\n".join(review_text)
 
+        reviews = reviewset.xpath(self._cls("div", "review"))
+        for review in reviews:
+            title = self._xpath1(review, self._cls("a", "review-title")).text
+            review_text = self._xpath1(
+                review, self._cls("div", "review-text")).xpath("text()")
+            yield title, "\n\n".join(review_text)
 
 class AmazonCoverageProvider(CoverageProvider):
     
