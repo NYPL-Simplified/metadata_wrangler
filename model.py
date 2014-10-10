@@ -11,6 +11,7 @@ import os
 from nose.tools import set_trace
 import random
 import re
+import requests
 import time
 
 from PIL import (
@@ -3440,10 +3441,10 @@ class Timestamp(Base):
             stamp.timestamp = now
         return stamp
 
-class Representation(object):
+class Representation(Base):
     """A cached document from the Web at large."""
 
-    __tablename__ = 'timestamps'
+    __tablename__ = 'representations'
     id = Column(Integer, primary_key=True)
 
     # URL from which the representation was fetched.
@@ -3458,7 +3459,7 @@ class Representation(object):
 
     # Or (less likely) the representation may be the data source's
     # representation of a particular license pool.
-    license_pool_id = Column(Integer, ForeignKey('license_pools.id'), index=True)
+    license_pool_id = Column(Integer, ForeignKey('licensepools.id'), index=True)
 
     # When the representation was fetched.
     fetched_at = Column(DateTime, index=True)
@@ -3492,9 +3493,14 @@ class Representation(object):
     def age(self):
         return datetime.datetime.utcnow() - self.fetched_at
 
+    @property
+    def has_content(self):
+        return (self.status_code == 200 and self.exception == None
+                and self.content is not None)
+
     @classmethod
     def get(cls, _db, url, do_get, extra_request_headers=None, data_source=None,
-            identifier=None, license_pool=None, max_age=None):
+            identifier=None, license_pool=None, max_age=None, pause_before=0):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
@@ -3518,7 +3524,8 @@ class Representation(object):
             representation and not representation.exception)
 
         if usable_representation and (
-                not max_age or max_age > cached.age):
+                not max_age or max_age > representation.age):
+            print "Cached %s" % url
             return representation, True
 
         headers = {}
@@ -3531,7 +3538,9 @@ class Representation(object):
                 headers['If-None-Match'] = representation.etag
         # Either the representation was not cached, or the cache is stale.
         # We need to get a new representation.
-        fetched_at = datetime.utcnow()
+        fetched_at = datetime.datetime.utcnow()
+        if pause_before:
+            time.sleep(pause_before)
         try:
             status_code, headers, content = do_get(url, headers)
             exception = None
@@ -3568,7 +3577,7 @@ class Representation(object):
             representation.last_modified = headers['last-modified']
         representation.headers = cls.headers_to_string(headers)
         representation.content = content
-        representation.fetched_at = datetime.utcnow()
+        representation.fetched_at = fetched_at
         return representation, False
 
     @classmethod
@@ -3587,8 +3596,9 @@ class Representation(object):
     def browser_http_get(cls, url, headers):
         """GET the representation that would be displayed to a web browser.
         """
-        headers['User-Agent'] = self.BROWSER_USER_AGENT
+        headers['User-Agent'] = cls.BROWSER_USER_AGENT
         return cls.simple_http_get(url, headers)
+
 
 
 class CoverageProvider(object):

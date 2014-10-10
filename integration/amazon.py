@@ -1,3 +1,4 @@
+from datetime import timedelta
 import isbnlib
 import random
 import requests
@@ -7,8 +8,6 @@ import re
 from cStringIO import StringIO
 from lxml import etree 
 from integration import (
-    FilesystemCache,
-    MultipageFilesystemCache,
     XMLParser,
 )
 from model import (
@@ -16,6 +15,7 @@ from model import (
     DataSource,
     Identifier,
     Measurement,
+    Representation,
     Subject,
 )
 from pdb import set_trace
@@ -28,82 +28,79 @@ class AmazonScraper(object):
     BIBLIOGRAPHIC_URL = 'http://www.amazon.com/exec/obidos/ASIN/%(asin)s'
     REVIEW_URL = 'http://www.amazon.com/product-reviews/%(asin)s/ref=cm_cr_dp_see_all_btm?ie=UTF8&showViewpoints=1&pageNumber=%(page_number)s&sortBy=%(sort_by)s'
 
-    USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.103 Safari/537.36"
+    MAX_BIBLIOGRAPHIC_AGE = timedelta(days=30*3)
+    MAX_REVIEW_AGE = timedelta(days=30*6)
 
-    def get(self, url, referrer=None):
-        headers = {"User-Agent" : self.USER_AGENT}
-        if referrer:
-            headers['Referer'] = referrer
-        time.sleep(1 + random.random())
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            raise IOError(response.status_code)
-        if not response.text:
-            raise IOError("Empty response")
-        return response
+    def __init__(self, _db):
+        self._db = _db
+        self.data_source = DataSource.lookup(_db, DataSource.AMAZON)
 
-    def __init__(self, data_directory):
-        path = os.path.join(data_directory, DataSource.AMAZON)
-        bibliographic_cache = os.path.join(path, "bibliographic")
-        if not os.path.exists(bibliographic_cache):
-            os.makedirs(bibliographic_cache)
-        self.bibliographic_cache = FilesystemCache(
-            bibliographic_cache, subdir_chars=4, substring_from_beginning=False,
-            compress=True)
-        review_cache = os.path.join(path, "review")        
-        if not os.path.exists(bibliographic_cache):
-            os.makedirs(bibliographic_cache)
-        self.review_cache = MultipageFilesystemCache(
-            review_cache, subdir_chars=4, substring_from_beginning=False,
-            compress=True)
-
-    def scrape(self, asin):
-        identifiers, subjects, rating = self.scrape_bibliographic_info(asin)
-        reviews = self.scrape_reviews(asin)
+    def scrape(self, identifier):
+        identifiers, subjects, rating = self.scrape_bibliographic_info(
+            identifier)
+        reviews = self.scrape_reviews(identifier)
         return identifiers, subjects, rating, reviews
     
-    def get_bibliographic_info(self, asin):
-        if self.bibliographic_cache.exists(asin):
-            return self.bibliographic_cache.open(asin).read()
+    def get_bibliographic_info(self, identifier, get_method=None):
+        if get_method:
+            pause = 0
+        else:
+            get_method = Representation.browser_http_get
+            pause = 1 + random.random()
+        url = self.BIBLIOGRAPHIC_URL % dict(asin=identifier.identifier)
+        representation, cached = Representation.get(
+            self._db, url, get_method,
+            data_source=self.data_source, identifier=identifier,
+            pause_before=pause,
+            max_age=self.MAX_BIBLIOGRAPHIC_AGE)
+        return representation
 
-        url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
-        response = self.get(url)
-        self.bibliographic_cache.store(asin, response.text.encode("utf8"))
-        return response.text
+    def get_reviews(self, identifier, page, force=False, get_method=None):
+        if get_method:
+            pause = 0
+        else:
+            get_method = Representation.browser_http_get
+            pause = 1 + random.random()
+        get_method = get_method or Representation.browser_http_get
 
-    def get_reviews(self, asin, page, force=False):
-        if not force and self.review_cache.exists(asin, page):
-            return self.review_cache.open(asin, page).read()
+        if force:
+            max_age=timedelta(seconds=0)
+        else:
+            max_age=self.MAX_REVIEW_AGE
 
         url = self.REVIEW_URL % dict(
-            asin=asin, page_number=page, 
+            asin=identifier.identifier, page_number=page, 
             sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
+        extra_request_headers = dict()
         if page > 1:
-            old_url = self.REVIEW_URL % dict(
-            asin=asin, page_number=page-1, 
-            sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
+            referrer = self.REVIEW_URL % dict(
+                asin=identifier.identifier, page_number=page-1, 
+                sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
         else:
-            old_url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
-        print url
-        response = self.get(url, old_url)
-        self.review_cache.store(asin, page, response.text)
-        return response.text
+            referrer = self.BIBLIOGRAPHIC_URL % dict(asin=identifier.identifier)
+        extra_request_headers['Referer'] = referrer
 
-    def scrape_bibliographic_info(self, asin):
-        print "ASIN %s" % asin
+        representation, cached = Representation.get(
+            self._db, url, get_method,
+            extra_request_headers=extra_request_headers,
+            data_source=self.data_source, identifier=identifier,
+            max_age=max_age, pause_before=pause)
+        return representation
+
+    def scrape_bibliographic_info(self, identifier):
         parser = AmazonBibliographicParser()
-        data = self.get_bibliographic_info(asin)
-        return parser.process_all(data)
+        representation = self.get_bibliographic_info(identifier)
+        if representation.has_content:
+            return parser.process_all(representation.content)
 
-    def scrape_reviews(self, asin):
+    def scrape_reviews(self, identifier):
         parser = AmazonReviewParser()
         for page in range(1,11):
             reviews_on_this_page = 0
-            try:
-                reviews = self.get_reviews(asin, page)
-            except IOError, e:
-                return
-            for page_reviews in parser.process_all(reviews):
+            representation = self.get_reviews(identifier, page)
+            if not representation.has_content:
+                break
+            for page_reviews in parser.process_all(representation.content):
                 for review in page_reviews:
                     yield review
                     reviews_on_this_page += 1
@@ -322,9 +319,8 @@ class AmazonCoverageProvider(CoverageProvider):
 
     def process_edition(self, identifier):
         """Process an identifier (not an edition)."""
-        i = identifier.identifier
-        bibliographic = self.amazon.scrape_bibliographic_info(i)
-        reviews = self.amazon.scrape_reviews(i)
+        bibliographic = self.amazon.scrape_bibliographic_info(identifier)
+        reviews = self.amazon.scrape_reviews(identifier)
 
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(
