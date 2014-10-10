@@ -5,7 +5,7 @@ from cStringIO import StringIO
 from collections import Counter
 from sklearn import svm
 
-from text.blob import TextBlob
+from textblob import TextBlob
 
 class WakaDialect(Dialect):
     delimiter=","

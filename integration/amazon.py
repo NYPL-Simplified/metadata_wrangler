@@ -251,7 +251,10 @@ class AmazonBibliographicParser(XMLParser):
     def get_popularity(self, root):
         # Try a number of ways to measure the sales rank.
         sales_rank_text = self._xpath1(
-            root, '//*[@id="SalesRank"]/b/following-sibling::text()').strip()
+            root, '//*[@id="SalesRank"]/b/following-sibling::text()')
+        if not sales_rank_text:
+            return None
+        sales_rank_text = sales_rank_text.strip()
         popularity = None
         for r in self.SALESRANK_RES:
             m = r.search(sales_rank_text)
