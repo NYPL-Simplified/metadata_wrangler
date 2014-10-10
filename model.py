@@ -6,6 +6,7 @@ from collections import (
 import bisect
 from cStringIO import StringIO
 import datetime
+import json
 import os
 from nose.tools import set_trace
 import random
@@ -257,6 +258,9 @@ class DataSource(Base):
     # One DataSource can provide many Resources.
     resources = relationship("Resource", backref="data_source")
 
+    # One DataSource can provide many Representations.
+    representations = relationship("Representation", backref="data_source")
+
     # One DataSource can generate many Measurements.
     measurements = relationship("Measurement", backref="data_source")
 
@@ -413,6 +417,9 @@ class Identifier(Base):
 
     # One Identifier may have many associated CoverageRecords.
     coverage_records = relationship("CoverageRecord", backref="identifier")
+
+    # One Identifier can have many Representations.
+    representations = relationship("Representation", backref="identifier")
 
     def __repr__(self):
         records = self.primarily_identifies
@@ -2951,6 +2958,9 @@ class LicensePool(Base):
     # One LicensePool can have many Loans.
     loans = relationship('Loan', backref='license_pool')
 
+    # One LicensePool can have many Representations.
+    representations = relationship("Representation", backref="license_pool")
+
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
         "CirculationEvent", backref="license_pool")
@@ -3429,6 +3439,157 @@ class Timestamp(Base):
         if not was_new:
             stamp.timestamp = now
         return stamp
+
+class Representation(object):
+    """A cached document from the Web at large."""
+
+    __tablename__ = 'timestamps'
+    id = Column(Integer, primary_key=True)
+
+    # URL from which the representation was fetched.
+    url = Column(Unicode, index=True)
+
+    # The representation is probably obtained from a particular data source.
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    # The representation may be the data source's representation of a
+    # particular identifier.
+    identifier_id = Column(Integer, ForeignKey('identifiers.id'), index=True)
+
+    # Or (less likely) the representation may be the data source's
+    # representation of a particular license pool.
+    license_pool_id = Column(Integer, ForeignKey('license_pools.id'), index=True)
+
+    # When the representation was fetched.
+    fetched_at = Column(DateTime, index=True)
+
+    # The HTTP status code from the last representation.
+    status_code = Column(Integer)
+
+    # A textual description of the error encountered the last time
+    # we tried to fetch the representation
+    exception = Column(Unicode, index=True)
+
+    # A textual representation of the HTTP headers sent along with the
+    # representation.
+    headers = Column(Unicode)
+
+    # The Content-Type header from the last representation.
+    content_type = Column(Unicode)
+
+    # The Last-Modified header from the last representation.
+    last_modified = Column(Unicode)
+
+    # The Etag header from the last representation.
+    last_modified = Column(Unicode)
+
+    # The representation itself.
+    content = Column(Unicode)
+
+    BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36 (Simplified)"
+
+    @property
+    def age(self):
+        return datetime.datetime.utcnow() - self.fetched_at
+
+    @classmethod
+    def get(cls, _db, url, do_get, extra_request_headers=None, data_source=None,
+            identifier=None, license_pool=None, max_age=None):
+        """Retrieve a representation from the cache if possible.
+        
+        If not possible, retrieve it from the web and store it in the
+        cache.
+        
+        :param do_get: A function that takes arguments (url, headers)
+        and retrieves a representation over the network.
+
+        :param max_age: A timedelta object representing the maximum
+        time to consider a cached representation fresh. (We ignore the
+        caching directives from the server because they're usually far
+        too conservative for our purposes.)
+
+        :return: A 2-tuple (representation, obtained_from_cache)
+
+        """
+        representation = get_one(_db, Representation, url=url)
+
+        # Do we already have a usable representation?
+        usable_representation = (
+            representation and not representation.exception)
+
+        if usable_representation and (
+                not max_age or max_age > cached.age):
+            return representation, True
+
+        headers = {}
+        if extra_request_headers:
+            headers.update(extra_request_headers)
+        if usable_representation:
+            if representation.last_modified:
+                headers['If-Modified-Since'] = representation.last_modified
+            if representation.etag:
+                headers['If-None-Match'] = representation.etag
+        # Either the representation was not cached, or the cache is stale.
+        # We need to get a new representation.
+        fetched_at = datetime.utcnow()
+        try:
+            status_code, headers, content = do_get(url, headers)
+            exception = None
+        except Exception, e:
+            exception = e.message()
+            status_code = None
+            headers = None
+            content = None
+
+        if usable_representation and status_code == 304:
+            # The representation has not been modified since the last
+            # time we retrieved it. Return the cached version.
+            representation.fetched_at = fetched_at
+            return representation, True
+
+        if not representation:
+            # This is our first time retrieving a representation of
+            # this url.
+            representation = Representation(
+                url=url, data_source=data_source, identifier=identifier,
+                license_pool=license_pool)
+
+        if exception:
+            representation.exception = exception
+        else:
+            representation.exception = None
+
+        representation.status_code = status_code
+        if 'content-type' in headers:
+            representation.content_type = headers['content-type']
+        if 'etag' in headers:
+            representation.etag = headers['etag']
+        if 'last-modified' in headers:
+            representation.last_modified = headers['last-modified']
+        representation.headers = cls.headers_to_string(headers)
+        representation.content = content
+        representation.fetched_at = datetime.utcnow()
+        return representation, False
+
+    @classmethod
+    def headers_to_string(cls, d):
+        if d is None:
+            return None
+        return json.dumps(dict(d))
+
+    @classmethod
+    def simple_http_get(cls, url, headers):
+        """The most simple HTTP-based GET."""
+        response = requests.get(url, headers=headers)
+        return response.status_code, response.headers, response.text
+
+    @classmethod
+    def browser_http_get(cls, url, headers):
+        """GET the representation that would be displayed to a web browser.
+        """
+        headers['User-Agent'] = self.BROWSER_USER_AGENT
+        return cls.simple_http_get(url, headers)
+
 
 class CoverageProvider(object):
 
