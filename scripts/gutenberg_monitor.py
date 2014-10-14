@@ -87,4 +87,4 @@ if __name__ == '__main__':
         sys.exit()
     path = sys.argv[1]      
     session = production_session()
-    GutenbergMonitor(path).run(session, subset)
+    GutenbergMonitor(session, path).run(subset)

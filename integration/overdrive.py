@@ -19,6 +19,7 @@ from model import (
     DataSource,
     LicensePool,
     Measurement,
+    Representation,
     Resource,
     Subject,
     Identifier,
@@ -55,12 +56,9 @@ class OverdriveAPI(object):
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
     
-    def __init__(self, data_directory):
-
-        self.bibliographic_cache = FilesystemCache(
-            os.path.join(data_directory, self.EVENT_SOURCE, 
-                         self.BIBLIOGRAPHIC_DIRECTORY),
-            subdir_chars=4)
+    def __init__(self, _db, data_directory):
+        self._db = _db
+        self.source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         self.credential_path = os.path.join(data_directory, self.CRED_FILE)
 
         # Set some stuff from environment variables
@@ -94,10 +92,11 @@ class OverdriveAPI(object):
             dict(grant_type="client_credentials"))
         open(self.credential_path, "w").write(response.text)
 
-    def get(self, url):
+    def get(self, url, extra_headers):
         """Make an HTTP GET request using the active Bearer Token."""
         headers = dict(Authorization="Bearer %s" % self.token)
-        return requests.get(url, headers=headers)
+        headers.update(extra_headers)
+        return Representation.simple_http_get(url, headers)
 
     def token_post(self, url, payload, headers={}):
         """Make an HTTP POST request for purposes of getting an OAuth token."""
@@ -135,7 +134,9 @@ class OverdriveAPI(object):
 
     def get_library(self):
         url = self.LIBRARY_ENDPOINT % dict(library_id=self.library_id)
-        return self.get(url).json()
+        representation, cached = Representation.get(
+            self._db, url, self.get, data_source=self.source)
+        return json.loads(representation.content)
 
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
@@ -160,28 +161,19 @@ class OverdriveAPI(object):
                 print i
                 yield i
 
-    def metadata_lookup(self, overdrive_id):
-        """Look up metadata for an Overdrive ID.
-
-        Update the corresponding Edition appropriately.
+    def metadata_lookup(self, identifier):
+        """Look up metadata for an Overdrive identifier.
         """
-        cache_key = overdrive_id + ".json"
-        if self.bibliographic_cache.exists(cache_key):
-            raw = self.bibliographic_cache.open(cache_key).read()
-            return json.loads(raw)
-        else:
-            url = self.METADATA_ENDPOINT % dict(
-                collection_token=self.collection_token,
-                item_id=overdrive_id
-                )
-            print "%s => %s" % (url, self.bibliographic_cache._filename(cache_key))
-            response = self.get(url)
-            if response.status_code != 200:
-                raise IOError(response.status_code)
-            self.bibliographic_cache.store(cache_key, response.content)
-            return response.json()
+        url = self.METADATA_ENDPOINT % dict(
+            collection_token=self.collection_token,
+            item_id=identifier.identifier
+        )
+        representation, cached = Representation.get(
+            self._db, url, self.get, data_source=self.source,
+            identifier=identifier)
+        return json.loads(representation.content)
 
-    def update_licensepool(self, _db, data_source, book, exception_on_401=False):
+    def update_licensepool(self, book, exception_on_401=False):
         """Update availability information for a single book.
 
         If the book has never been seen before, a new LicensePool
@@ -192,8 +184,6 @@ class OverdriveAPI(object):
         """
         # Retrieve current circulation information about this book
         orig_book = book
-        if data_source.name != DataSource.OVERDRIVE:
-            raise ValueError("Invalid data source %s" % data_source.name)
         if isinstance(book, basestring):
             book_id = book
             circulation_link = self.AVAILABILITY_ENDPOINT % dict(
@@ -203,40 +193,36 @@ class OverdriveAPI(object):
             book = dict(id=book_id)
         else:
             circulation_link = book['availability_link']
-        response = self.get(circulation_link)
-        if response.status_code == 401:
+        status_code, headers, content = self.get(circulation_link, {})
+        if status_code == 401:
             if exception_on_401:
                 # This is our second try. Give up.
                 raise Exception("Something's wrong with the OAuth Bearer Token!")
             else:
                 # Refresh the token and try again.
                 self.check_creds()
-                return self.update_licensepool(_db, data_source, orig_book, True)
-        if response.status_code != 200:
+                return self.update_licensepool(orig_book, True)
+        if status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
                 book['id'], response.status_code)
             return
 
-        book.update(response.json())
-        return self.update_licensepool_with_book_info(_db, data_source, book)
+        book.update(json.loads(content))
+        return self.update_licensepool_with_book_info(book)
 
-    @classmethod
-    def update_licensepool_with_book_info(cls, _db, data_source, book):
+    def update_licensepool_with_book_info(self, book):
         """Update a book's LicensePool with information from a JSON
         representation of its circulation info.
 
         Also adds very basic bibliographic information to the Edition.
         """
-        if data_source.name != DataSource.OVERDRIVE:
-            raise ValueError(
-                "You're supposed to pass in the Overdrive DataSource object so I can avoid looking it up. That's the only valid value for data_source.")
         overdrive_id = book['id']
         pool, was_new = LicensePool.for_foreign_id(
-            _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
+            self._db, self.source, Identifier.OVERDRIVE_ID, overdrive_id)
         if was_new:
             pool.open_access = False
             wr, wr_new = Edition.for_foreign_id(
-                _db, data_source, Identifier.OVERDRIVE_ID, overdrive_id)
+                self._db, self.source, Identifier.OVERDRIVE_ID, overdrive_id)
             if 'title' in book:
                 wr.title = book['title']
             print "New book: %r" % wr
@@ -252,12 +238,12 @@ class OverdriveAPI(object):
         Returns a list of (title, id, availability_link) 3-tuples,
         plus a link to the next page of results.
         """
-        response = self.get(link)
+        # We don't cache this because it changes constantly.
+        status_code, headers, content = self.get(link, {})
         try:
-            data = response.json()
+            data = json.loads(content)
         except Exception, e:
-            print "ERROR: %s" % response
-            set_trace()
+            print "ERROR: %r %r %r" % (status_code, headers, content)
             return [], None
 
         # Find the link to the next page of results, if any.
@@ -349,16 +335,17 @@ class OverdriveCirculationMonitor(Monitor):
     bibliographic data isn't inserted into those LicensePools until
     the OverdriveCoverageProvider runs.
     """
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
         super(OverdriveCirculationMonitor, self).__init__(
             "Overdrive Circulation Monitor")
+        self._db = _db
         self.path = os.path.join(data_directory, DataSource.OVERDRIVE)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
-        self.source = OverdriveAPI(self.path)
+        self.api = OverdriveAPI(self._db, self.path)
 
     def recently_changed_ids(self, start, cutoff):
-        return self.source.recently_changed_ids(start, cutoff)
+        return self.api.recently_changed_ids(start, cutoff)
 
     def run_once(self, _db, start, cutoff):
         added_books = 0
@@ -371,8 +358,7 @@ class OverdriveCirculationMonitor(Monitor):
                 print " %s processed" % i
             if not book:
                 continue
-            license_pool, is_new = self.source.update_licensepool(
-                _db, overdrive_data_source, book)
+            license_pool, is_new = self.api.update_licensepool(book)
             # Log a circulation event for this work.
             if is_new:
                 event = get_one_or_create(
@@ -390,8 +376,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
 
     def __init__(self, _db, data_directory):
-        self.overdrive = OverdriveAPI(data_directory)
         self._db = _db
+        self.overdrive = OverdriveAPI(self._db, data_directory)
         self.input_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         self.output_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         super(OverdriveBibliographicMonitor, self).__init__(
@@ -426,7 +412,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
     def process_edition(self, wr):
         identifier = wr.primary_identifier
-        info = self.overdrive.metadata_lookup(identifier.identifier)
+        info = self.overdrive.metadata_lookup(identifier)
         return self.annotate_edition_with_bibliographic_information(
             self._db, wr, info, self.input_source
         )

@@ -18,19 +18,14 @@ from nose.tools import set_trace
 
 def f(services):
     print "Starting coverage provider"
-    LinkedDataCoverageProvider(production_session(), path, services).run()
-
+    LinkedDataCoverageProvider(production_session(), services).run()
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print "Usage: %s [data storage directory]" % sys.argv[0]
-        sys.exit()
-    path = sys.argv[1]
-    if len(sys.argv) > 2:
-        services = sys.argv[2:]
+    if len(sys.argv) > 1:
+        services = sys.argv[1:]
     else:
         services = None
-    #f(services)
-    for i in range(20):
-        p = Process(target=f, args=(services,))
-        p.start()
+    f(services)
+    #for i in range(20):
+    #    p = Process(target=f, args=(services,))
+    #    p.start()

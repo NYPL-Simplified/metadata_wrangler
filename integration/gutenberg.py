@@ -3,8 +3,8 @@ import os
 import json
 import random
 import re
-import requests
 import random
+import requests
 import time
 import shutil
 import tarfile
@@ -26,6 +26,7 @@ from model import (
     Contributor,
     Edition,
     DataSource,
+    Representation,
     Resource,
     Identifier,
     LicensePool,
@@ -54,17 +55,25 @@ class GutenbergAPI(object):
 
     ONE_DAY = 60 * 60 * 24
 
+
     MIRRORS = [
         "http://www.gutenberg.org/cache/epub/feeds/rdf-files.tar.bz2",
         "http://gutenberg.readingroo.ms/cache/generated/feeds/rdf-files.tar.bz2",
-        # "http://snowy.arsc.alaska.edu/gutenberg/cache/generated/feeds/rdf-files.tar.bz2",        
     ] 
+
+    # This will be passed in to Representation.get when downloading
+    # the mirror.
+    def http_get_from_random_mirror(self, url, headers):
+        actual_url = random.choice(MIRRORS)
+        return Representations.simple_http_get(actual_url, headers)
 
     GUTENBERG_ORIGINAL_MIRROR = "%(gutenberg_original_mirror)s"
     GUTENBERG_EBOOK_MIRROR = "%(gutenberg_ebook_mirror)s"
     EPUB_ID = re.compile("/([0-9]+)")
 
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.GUTENBERG)
         self.data_directory = data_directory
         self.catalog_path = os.path.join(self.data_directory, self.FILENAME)
 
@@ -122,19 +131,22 @@ class GutenbergAPI(object):
             #     =>
             # /38044/pg38044.cover.medium.jpg 
             new_path = parsed.path.replace('/cache/epub/', '/', 1)
-        else:
-            set_trace()
 
         return mirror, new_path
 
     def update_catalog(self):
         """Download the most recent Project Gutenberg catalog
-        from a randomly selected mirror."""
+        from a randomly selected mirror.
+
+        We don't use Representation (for now) because the file is huge
+        and the tarfile module only supports reading from a file on
+        disk.
+        """
         url = random.choice(self.MIRRORS)
         print "Refreshing %s" % url
-        data = requests.get(url)
+        response = requests.get(url)
         tmp_path = self.catalog_path + ".tmp"
-        open(tmp_path, "wb").write(data.content)
+        open(tmp_path, "wb").write(response.content)
         shutil.move(tmp_path, self.catalog_path)
 
     def needs_refresh(self):
@@ -153,24 +165,24 @@ class GutenbergAPI(object):
         a = 0
         while next_item:
             if next_item.isfile() and next_item.name.endswith(".rdf"):
+
                 pg_id = self.ID_IN_FILENAME.search(next_item.name).groups()[0]
                 yield pg_id, archive, next_item
             next_item = archive.next()
 
-    def create_missing_books(self, _db, subset=None):
+    def create_missing_books(self, subset=None):
         """Finds books present in the PG catalog but missing from Edition.
 
         Yields (Edition, LicensePool) 2-tuples.
         """
         books = self.all_books()
-        source = DataSource.lookup(_db, DataSource.GUTENBERG)
         for pg_id, archive, archive_item in books:
             if subset is not None and not subset(pg_id, archive, archive_item):
                 continue
             print "Considering %s" % pg_id
             # Find an existing Edition for the book.
             book = Edition.for_foreign_id(
-                _db, source, Identifier.GUTENBERG_ID, pg_id,
+                self._db, self.source, Identifier.GUTENBERG_ID, pg_id,
                 create_if_not_exists=False)
 
             if not book:
@@ -179,11 +191,12 @@ class GutenbergAPI(object):
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
                 fake_fh = StringIO(data)
-                book, new = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
+                book, new = GutenbergRDFExtractor.book_in(
+                    self._db, pg_id, fake_fh)
 
                 if book:
                     # Ensure that an open-access LicensePool exists for this book.
-                    license, new = self.pg_license_for(_db, book)
+                    license, new = self.pg_license_for(self._db, book)
                     yield (book, license)
 
     @classmethod
@@ -399,26 +412,26 @@ class GutenbergMonitor(Monitor):
     """Maintain license pool and metadata info for Gutenberg titles.
     """
 
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
+        self._db = _db
         path = os.path.join(data_directory, DataSource.GUTENBERG)
         if not os.path.exists(path):
             os.makedirs(path)
-        self.source = GutenbergAPI(path)
+        self.source = GutenbergAPI(_db, path)
 
-    def run(self, _db, subset=None):
+    def run(self, subset=None):
         added_books = 0
-        for work, license_pool in self.source.create_missing_books(
-                _db, subset):
+        for work, license_pool in self.source.create_missing_books(subset):
             # Log a circulation event for this work.
             event = get_one_or_create(
-                _db, CirculationEvent,
+                self._db, CirculationEvent,
                 type=CirculationEvent.TITLE_ADD,
                 license_pool=license_pool,
                 create_method_kwargs=dict(
                     start=license_pool.last_checked
                 )
             )
-            _db.commit()
+            self._db.commit()
 
 
 class OCLCMonitorForGutenberg(CoverageProvider):
@@ -436,10 +449,11 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
     
     def __init__(self, _db, data_directory):
-        self.gutenberg = GutenbergMonitor(data_directory)
-        self.oclc = OCLCClassifyAPI(data_directory)
-        input_source = DataSource.lookup(_db, DataSource.GUTENBERG)
-        output_source = DataSource.lookup(_db, DataSource.OCLC)
+        self._db = _db
+        self.gutenberg = GutenbergMonitor(self._db, data_directory)
+        self.oclc_classify = OCLCClassifyAPI(self._db)
+        input_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        output_source = DataSource.lookup(self._db, DataSource.OCLC)
         super(OCLCMonitorForGutenberg, self).__init__(
             "OCLC Monitor for Gutenberg", input_source, output_source)
 
@@ -462,7 +476,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, language)
         # Perform a title/author lookup
-        xml = self.oclc.lookup_by(title=title, author=author)
+        xml = self.oclc_classify.lookup_by(title=title, author=author)
 
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
@@ -485,10 +499,9 @@ class OCLCMonitorForGutenberg(CoverageProvider):
             swids = records
             records = []
             for swid in swids:
-                swid_xml = self.oclc.lookup_by(swid=swid)
+                swid_xml = self.oclc_classify.lookup_by(swid=swid)
                 representation_type, editions = OCLCXMLParser.parse(
                     self._db, swid_xml, **restrictions)
-
 
                 if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                     records.extend(editions)
@@ -540,36 +553,36 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         print " Created %s records(s)." % len(records)
         return True
 
-class PopularityScraper(object):
+# class PopularityScraper(object):
 
-    start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
+#     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
 
-    def scrape(self):
-        previous_page = None
-        next_page = self.start_url
-        while next_page:
-            previous_page, next_page = self.scrape_page(
-                previous_page, next_page)
-            time.sleep(5 + random.random())
+#     def scrape(self):
+#         previous_page = None
+#         next_page = self.start_url
+#         while next_page:
+#             previous_page, next_page = self.scrape_page(
+#                 previous_page, next_page)
+#             time.sleep(5 + random.random())
 
-    def scrape_page(self, referer, url):
-        headers = dict()
-        if referer:
-            headers['Referer']=referer
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            raise Exception("Request to %s got status code %s: %s" % (
-                url, response.status_code, response.content))
-        soup = BeautifulSoup(response.content, 'lxml')
-        set_trace()
-        for book in soup.find_all('li', 'booklink'):
-            id = book.find('a')['href']
-            downloads = book.find('span', 'extra')
-            print id, downloads
+#     def scrape_page(self, referer, url):
+#         headers = dict()
+#         if referer:
+#             headers['Referer']=referer
+#         response = requests.get(url, headers=headers)
+#         if response.status_code != 200:
+#             raise Exception("Request to %s got status code %s: %s" % (
+#                 url, response.status_code, response.content))
+#         soup = BeautifulSoup(response.content, 'lxml')
+#         set_trace()
+#         for book in soup.find_all('li', 'booklink'):
+#             id = book.find('a')['href']
+#             downloads = book.find('span', 'extra')
+#             print id, downloads
 
-        next_page = soup.find(accesskey='+')
-        if next_page:
-            return url, urljoin(url, next_page['href'])
-        else:
-            return None, None
+#         next_page = soup.find(accesskey='+')
+#         if next_page:
+#             return url, urljoin(url, next_page['href'])
+#         else:
+#             return None, None
             

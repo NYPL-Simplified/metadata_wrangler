@@ -6,7 +6,6 @@ import md5
 import os
 import pprint
 import re
-import requests
 import time
 import urllib
 
@@ -28,6 +27,7 @@ from model import (
     Identifier,
     Edition,
     DataSource,
+    Representation,
     Resource,
     Subject,
 )
@@ -81,19 +81,6 @@ class ldq(object):
             elif '@value' in v:
                 yield v['@value']
 
-class OCLCCache(FilesystemCache):
-
-    def __init__(self, path):
-        super(OCLCCache, self).__init__(path, check_subdirectories=True)
-
-    def _filename(self, key):
-        id, type = key
-        if type == Identifier.ISBN:
-            extension = ".url"
-        else:
-            extension = ".jsonld"
-        ending = os.path.join(type, id[-4:], id + extension)
-        return os.path.join(self.cache_directory, ending)
 
 class OCLCLinkedData(object):
 
@@ -109,93 +96,65 @@ class OCLCLinkedData(object):
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
                       Identifier.ISBN])
 
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.OCLC_LINKED_DATA, "cache")
-        self.cache = OCLCCache(self.cache_directory)
-        for identifier_type in self.CAN_HANDLE:
-            p = os.path.join(self.cache_directory, identifier_type)
-            if not os.path.exists(p):
-                os.makedirs(p)
+    def __init__(self, _db):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
-    def request(self, url):
-        """Make a request to OCLC Linked Data."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return ''
-        elif response.status_code == 500:
-            return None
-        elif response.status_code != 200:
-            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
-    def redirect_location(self, url):
-        """Make a request to OCLC Linked Data to see where it redirects."""
-        return requests.get(url, allow_redirects=False)
-
-    def lookup(self, work_identifier):
+    def lookup(self, identifier):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
-        if isinstance(work_identifier, basestring):
-            match = self.URI_WITH_OCLC_NUMBER.search(work_identifier)
+        if isinstance(identifier, basestring):
+            # e.g. http://experiment.worldcat.org/oclc/1862341597.json
+            match = self.URI_WITH_OCLC_NUMBER.search(identifier)
             if match:
                 type = Identifier.OCLC_NUMBER
-                identifier = match.groups()[0]
-        else:
-            type = work_identifier.type
-            identifier = work_identifier.identifier
+                id = match.groups()[0]
+                if not type or not id:
+                    return None, None
+                identifier = Identifier.for_foreign_id(self._db, type, id)
         if not type or not identifier:
             return None, None
-        return self.lookup_by_identifier(type, identifier)
+        return self.lookup_by_identifier(identifier)
 
-    def lookup_by_identifier(self, type, identifier):
-        if type == Identifier.OCLC_WORK:
+    def lookup_by_identifier(self, identifier):
+        """Turn an Identifier into a JSON-LD document."""
+        if identifier.type == Identifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
-        elif type == Identifier.OCLC_NUMBER:
+        elif identifier.type == Identifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
-        else:
-            set_trace()
 
-        cache_key = (identifier, type)
-        cached = False
-        if self.cache.exists(cache_key):
-            cached = True
-        else:
-            url = url % dict(id=identifier, type=foreign_type)
-            print " %s => %s" % (url, self.cache._filename(cache_key))
-            print "", url
-            raw = self.request(url) or ''
-            self.cache.store(cache_key, raw)
-        f = self.cache._filename(cache_key)
-        url = "file://" + f
+        url = url % dict(id=identifier.identifier, type=foreign_type)
+        representation, cached = Representation.get(
+            self._db, url, data_source=self.source,
+            identifier=identifier)
         data = jsonld.load_document(url)
-        return data, cached
+        doc = {
+            'contextUrl': None,
+            'documentUrl': url,
+            'document': representation.content.decode('utf8')
+        }
+        return doc, cached
 
     def oclc_number_for_isbn(self, isbn):
-        """Find an OCLC Number for the given ISBN."""
-        cache_key = (isbn, Identifier.ISBN)
-        cached = False
-        if self.cache.exists(cache_key):
-            cached = True
-            location = self.cache.open(cache_key).read()
-        else:
-            url = self.ISBN_BASE_URL % dict(id=isbn)
-            # print "%s => %s" % (url, self.cache._filename(cache_key))
-            raw = self.redirect_location(url)
-            if not 'Location' in raw.headers:
-                raise IOError("Expected %s to redirect, but couldn't find location." % url)
-            location = raw.headers['Location']
-            self.cache.store(cache_key, location)
-
+        """Turn an ISBN identifier into an OCLC Number identifier."""
+        url = self.ISBN_BASE_URL % dict(id=isbn.identifier)
+        representation, cached = Representation.get(
+            self._db, url, Representation.http_get_no_redirect, 
+            data_source=self.source, identifier=isbn)
+        if not representation.location:
+            raise IOError(
+                "Expected %s to redirect, but couldn't find location." % url)
+        location = representation.location
         match = self.URI_WITH_OCLC_NUMBER.match(location)
         if not match:
-            raise IOError("OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
+            raise IOError(
+                "OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
         oclc_number = match.groups()[0]
-        return oclc_number
+        return Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, oclc_number)
 
     def oclc_works_for_isbn(self, isbn):
         """Yield every OCLC Work graph for the given ISBN."""
@@ -368,82 +327,15 @@ class OCLCLinkedData(object):
         return [x for x in graph if x['@id'] in uris]
 
 
-oclc_linked_data = None
-if 'DATA_DIRECTORY' in os.environ:
-    oclc_linked_data = OCLCLinkedData(os.environ['DATA_DIRECTORY'])
-
-
-class XIDAPI(object):
-
-    OCLC_ID_TYPE = "oclcnum"
-    ISBN_ID_TYPE = "isbn"
-
-    BASE_URL = 'http://xisbn.worldcat.org/webservices/xid/%(type)s/%(id)s'
-
-    ARGUMENTS = '?method=getEditions&format=json&fl=*'
-
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.XID, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
-
-    def cache_key(self, id, type):
-        return "%s-%s" % (type, id)
-
-    def request(self, url):
-        """Make a request to the xID API."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return None
-        elif response.status_code != 200:
-            raise IOError("xID API returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
-    def get_editions(self, id, type=None):
-        """Perform an OCLC lookup."""
-        type = type or self.OCLC_ID_TYPE
-        cache_key = self.cache_key(id, type)
-        raw = None
-        cached = False
-        if self.cache.exists(cache_key):
-            # Don't go over the wire. Get the raw XML from cache
-            # and process it fresh.
-            raw = self.cache.open(cache_key).read()
-            cached = True
-        if not raw:
-            url = self.BASE_URL % dict(id=id, type=type)
-            url += self.ARGUMENTS
-            print "Requesting %s" % url
-            raw = self.request(url) or ''
-            print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
-        return raw, cached
-
-class OCLCClassifyCache(FilesystemCache):
-
-    def _filename(self, key):
-        if len(key) > 140:
-            key = key[:140]
-        if self.subdir_chars:
-            subdir = key[:self.subdir_chars]
-            directory = os.path.join(self.cache_directory, subdir)
-        else:
-            directory = self.cache_directory
-        return os.path.join(directory, key)
-
-
 class OCLCClassifyAPI(object):
 
     BASE_URL = 'http://classify.oclc.org/classify2/Classify?'
 
     NO_SUMMARY = '&summary=false'
 
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.OCLC, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
-        self.last_access = None
+    def __init__(self, _db):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
         args = dict()
@@ -452,41 +344,15 @@ class OCLCClassifyAPI(object):
                 v = v.encode("utf8")
             args[k] = v
         return urllib.urlencode(sorted(args.items()))
-
-    def cache_key(self, **kwargs):
-        qs = self.query_string(**kwargs)
-        if len(qs) > 18: # Length of "isbn=[isbn13]"
-            qs = md5.md5(qs).hexdigest()
-        return os.path.join(qs[-3:], qs)
-        
-    def request(self, url):
-        """Make a request to the OCLC classification API."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return None
-        elif response.status_code != 200:
-            raise IOError("OCLC API returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
+       
     def lookup_by(self, **kwargs):
-        """Perform an OCLC lookup."""
+        """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
-        cache_key = self.cache_key(**kwargs)
-        #print " Query string: %s" % query_string
-        raw = None
-        if self.cache.exists(cache_key):
-            # Don't go over the wire. Get the raw XML from cache
-            # and process it fresh.
-            raw = self.cache.open(cache_key).read()
-        if not raw:
-            url = self.BASE_URL + query_string + self.NO_SUMMARY
-            #print " URL: %s" % url
-            raw = self.request(url) or ''
-            #print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
+        url = self.BASE_URL + query_string
+        representation, cached = Representation.get(
+            self._db, url, data_source=self.source)
+        return representation.content
 
-        return raw
 
 class OCLCXMLParser(XMLParser):
 
@@ -1022,7 +888,7 @@ class LinkedDataURLLister:
         self.db = db
         self.data_directory = data_directory
         self.output_file = output_file
-        self.oclc = OCLCLinkedData(self.data_directory)        
+        self.oclc = OCLCLinkedData(db)
 
     def run(self):
         a = 0
@@ -1081,10 +947,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, db, data_directory, services=None):
-        self.oclc = OCLCLinkedData(data_directory)
-        self.db = db
-        self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
+    def __init__(self, _db, services=None):
+        self.oclc = OCLCLinkedData(_db)
+        self.db = _db
+        self.oclc_linked_data = DataSource.lookup(
+            _db, DataSource.OCLC_LINKED_DATA)
         if not services:
             services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
         services = [DataSource.lookup(self.db, x) for x in services]

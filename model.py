@@ -3502,8 +3502,9 @@ class Representation(Base):
                 and self.content is not None)
 
     @classmethod
-    def get(cls, _db, url, do_get, extra_request_headers=None, data_source=None,
-            identifier=None, license_pool=None, max_age=None, pause_before=0):
+    def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
+            identifier=None, license_pool=None, max_age=None, pause_before=0,
+            allow_redirects=True):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
@@ -3520,6 +3521,8 @@ class Representation(Base):
         :return: A 2-tuple (representation, obtained_from_cache)
 
         """
+        do_get = do_get or cls.simple_http_get
+
         representation = get_one(_db, Representation, url=url)
 
         # Do we already have a usable representation?
@@ -3553,6 +3556,9 @@ class Representation(Base):
             status_code = None
             headers = None
             content = None
+
+        if status_code == 401:
+            raise IOError("401 status code")
 
         if usable_representation and status_code == 304:
             # The representation has not been modified since the last
@@ -3595,7 +3601,13 @@ class Representation(Base):
     @classmethod
     def simple_http_get(cls, url, headers):
         """The most simple HTTP-based GET."""
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, allow_redirects=True)
+        return response.status_code, response.headers, response.content
+
+    @classmethod
+    def http_get_no_redirect(cls, url, headers):
+        """HTTP-based GET with no redirects."""
+        response = requests.get(url, headers=headers, allow_redirects=False)
         return response.status_code, response.headers, response.content
 
     @classmethod
