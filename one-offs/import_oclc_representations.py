@@ -23,12 +23,6 @@ from integration.oclc import (
 def imp(db, data_source, identifier, cache):
     i = identifier.identifier
     type = identifier.type
-    key = (i, type)
-    if not cache.exists(key):
-        return
-    fn = cache._filename(key)
-    modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
-    data = open(fn).read()
 
     location = None
     status_code = 200
@@ -39,14 +33,28 @@ def imp(db, data_source, identifier, cache):
         url = OCLCLinkedData.BASE_URL % dict(id=i, type="oclc")
     elif type == Identifier.ISBN:
         url = OCLCLinkedData.ISBN_BASE_URL % dict(id=i)
-        location = data
-        data = None
         media_type = None
         status_code = 301
-    representation, ignore = get_one_or_create(
+
+    representation, already_stored = get_one_or_create(
         db, Representation,
         url=url, data_source=data_source, identifier=identifier,
         )
+    if already_stored:
+        return
+
+    print i
+    key = (i, type)
+    if not cache.exists(key):
+        return
+    fn = cache._filename(key)
+    modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
+    data = open(fn).read()
+
+    if type == Identifier.ISBN:
+        location = data
+        data = None
+
     representation.status_code = status_code
     representation.content = data
     representation.location = location
@@ -70,7 +78,6 @@ if __name__ == '__main__':
         keep_going = False
         for identifier in q.offset(start).limit(start+1000):
             imp(db, source, identifier, b)
-            print identifier
             keep_going = True
         start += 1000
         db.commit()
