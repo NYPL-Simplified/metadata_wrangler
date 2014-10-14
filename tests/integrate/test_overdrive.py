@@ -43,11 +43,8 @@ class TestOverdriveAPI(DatabaseTest):
         # newly created Identifier.
         raw['id'] = identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-
-        pool, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(True, was_new)
 
         # The title of the corresponding Edition has been filled
@@ -75,17 +72,14 @@ class TestOverdriveAPI(DatabaseTest):
         # newly created LicensePool.
         raw['id'] = pool.identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-
         wr.title = "The real title."
         eq_(0, pool.licenses_owned)
         eq_(0, pool.licenses_available)
         eq_(0, pool.licenses_reserved)
         eq_(0, pool.patrons_in_hold_queue)
 
-        p2, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        p2, was_new = api.update_licensepool_with_book_info(raw)
         eq_(False, was_new)
         eq_(p2, pool)
         # The title didn't change to that title given in the availability
@@ -106,10 +100,8 @@ class TestOverdriveAPI(DatabaseTest):
         )
         raw['id'] = identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        pool, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(10, pool.patrons_in_hold_queue)
 
     def test_link(self):

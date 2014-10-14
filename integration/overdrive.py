@@ -59,7 +59,6 @@ class OverdriveAPI(object):
     def __init__(self, _db, data_directory):
         self._db = _db
         self.source = DataSource.lookup(_db, DataSource.OVERDRIVE)
-        self.credential_path = os.path.join(data_directory, self.CRED_FILE)
 
         # Set some stuff from environment variables
         self.client_key = os.environ['OVERDRIVE_CLIENT_KEY']
@@ -69,8 +68,10 @@ class OverdriveAPI(object):
         self.collection_name = os.environ['OVERDRIVE_COLLECTION_NAME']
 
         # Get set up with up-to-date credentials from the API.
-        self.check_creds()
-        self.collection_token = self.get_library()['collectionToken']
+        if data_directory:
+            self.credential_path = os.path.join(data_directory, self.CRED_FILE)
+            self.check_creds()
+            self.collection_token = self.get_library()['collectionToken']
 
     def check_creds(self):
         """If the Bearer Token is about to expire, update it."""

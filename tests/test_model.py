@@ -59,6 +59,7 @@ class TestDataSource(DatabaseTest):
             (DataSource.OCLC_LINKED_DATA, False, Identifier.OCLC_NUMBER),
             (DataSource.OPEN_LIBRARY, False, Identifier.OPEN_LIBRARY_ID),
             (DataSource.WEB, True, Identifier.URI),
+            (DataSource.AMAZON, False, Identifier.ASIN),
             (DataSource.GUTENBERG_COVER_GENERATOR, False, Identifier.GUTENBERG_ID),
             (DataSource.CONTENT_CAFE, False, None),
             (DataSource.MANUAL, False, None)
@@ -726,7 +727,6 @@ class TestWorkQuality(DatabaseTest):
         work2.editions.extend([wr2_1])
         work2.license_pools.extend([pool2])
 
-        set_trace()
         work1.calculate_presentation()
         work2.calculate_presentation()
 
