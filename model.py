@@ -389,16 +389,14 @@ class Identifier(Base):
     THREEM_ID = "3M ID"
     GUTENBERG_ID = "Gutenberg ID"
     AXIS_360_ID = "Axis 360 ID"
-    QUERY_STRING = "Query string"
     ASIN = "ASIN"
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
+    OPEN_LIBRARY_ID = "OLID"
     URI = "URI"
     DOI = "DOI"
     UPC = "UPC"
-
-    OPEN_LIBRARY_ID = "OLID"
 
     __tablename__ = 'identifiers'
     id = Column(Integer, primary_key=True)
@@ -1218,7 +1216,7 @@ class Edition(Base):
     medium = Column(
         Enum(BOOK_MEDIUM, PERIODICAL_MEDIUM, AUDIO_MEDIUM,
              VIDEO_MEDIUM, name="medium"),
-        default=BOOK_MEDIUM
+        default=BOOK_MEDIUM, index=True
     )
 
     cover_id = Column(
@@ -3480,6 +3478,9 @@ class Representation(Base):
     # The Content-Type header from the last representation.
     content_type = Column(Unicode)
 
+    # The Location header from the last representation.
+    location = Column(Unicode)
+
     # The Last-Modified header from the last representation.
     last_modified = Column(Unicode)
 
@@ -3578,6 +3579,8 @@ class Representation(Base):
             representation.etag = headers['etag']
         if 'last-modified' in headers:
             representation.last_modified = headers['last-modified']
+        if 'location' in headers:
+            representation.location = headers['location']
         representation.headers = cls.headers_to_string(headers)
         representation.content = content
         representation.fetched_at = fetched_at
