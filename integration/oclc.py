@@ -154,7 +154,7 @@ class OCLCLinkedData(object):
                 "OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
         oclc_number = match.groups()[0]
         return Identifier.for_foreign_id(
-            self._db, Identifier.OCLC_NUMBER, oclc_number)
+            self._db, Identifier.OCLC_NUMBER, oclc_number)[0]
 
     def oclc_works_for_isbn(self, isbn):
         """Yield every OCLC Work graph for the given ISBN."""
@@ -162,18 +162,19 @@ class OCLCLinkedData(object):
         oclc_number = self.oclc_number_for_isbn(isbn)
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
-        oclc_number_data, cached = self.lookup_by_identifier(
-            Identifier.OCLC_NUMBER, oclc_number)
+        oclc_number_data, was_new = self.lookup_by_identifier(oclc_number)
 
         # Look up every work referenced in that document and yield its data.
-        graph = oclc_linked_data.graph(oclc_number_data)
-        works = oclc_linked_data.extract_works(graph)
+        graph = OCLCLinkedData.graph(oclc_number_data)
+        works = OCLCLinkedData.extract_works(graph)
         for work_uri in works:
             m = self.URI_WITH_OCLC_WORK_ID.match(work_uri)
             if m:
                 work_id = m.groups()[0]
-                oclc_work_data, cached = self.lookup_by_identifier(
-                    Identifier.OCLC_WORK, work_id)
+                set_trace()
+                identifier, was_new = Identifier.for_foreign_id(
+                    self._db, Identifier.OCLC_WORK, work_id)
+                oclc_work_data, was_new = self.lookup_by_identifier(identifire)
                 yield oclc_work_data
                
     @classmethod
@@ -1088,8 +1089,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def info_for(self, work_identifier):
         for data in self.graphs_for(work_identifier):
-            subgraph = oclc_linked_data.graph(data)
-            for book in oclc_linked_data.books(subgraph):
+            subgraph = self.oclc.graph(data)
+            for book in self.oclc.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
                     yield info
@@ -1228,16 +1229,15 @@ class LinkedDataCoverageProvider(CoverageProvider):
         )
         return r
 
-    def graphs_for(self, work_identifier):
-        if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
-            if work_identifier.type == Identifier.ISBN:
-                work_data = list(oclc_linked_data.oclc_works_for_isbn(
-                    work_identifier.identifier))
-            elif work_identifier.type == Identifier.OCLC_WORK:
-                work_data, cached = oclc_linked_data.lookup(work_identifier)
+    def graphs_for(self, identifier):
+        if identifier.type in OCLCLinkedData.CAN_HANDLE:
+            if identifier.type == Identifier.ISBN:
+                work_data = list(self.oclc.oclc_works_for_isbn(identifier))
+            elif identifier.type == Identifier.OCLC_WORK:
+                work_data, cached = self.oclc.lookup(identifier)
             else:
                 # Look up and yield a single edition.
-                edition_data, cached = oclc_linked_data.lookup(work_identifier)                
+                edition_data, cached = self.oclc.lookup(identifier)
                 yield edition_data
                 work_data = None
 
@@ -1247,16 +1247,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     work_data = [work_data]
                 for data in work_data:
                     # Turn the work graph into a bunch of edition graphs.
-                    graph = oclc_linked_data.graph(data)
-                    examples = oclc_linked_data.extract_workexamples(graph)
+                    graph = self.oclc.graph(data)
+                    examples = self.oclc.extract_workexamples(graph)
                     for uri in examples:
-                        data, cached = oclc_linked_data.lookup(uri)
+                        data, cached = self.oclc.lookup(uri)
                         yield data
 
         else:
             # We got an identifier we can't handle. Turn it into a number
             # of identifiers we can handle.
-            for i in work_identifier.equivalencies:
+            for i in identifier.equivalencies:
                 if i.output.type in OCLCLinkedData.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph

@@ -117,7 +117,7 @@ class AmazonScraper(object):
 class AmazonBibliographicParser(XMLParser):
 
     IDENTIFIER_IN_URL = re.compile("/dp/([^/]+)/")
-    BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio']
+    BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio', 'Audible']
     NAMESPACES = {}
     QUALITY_RE = re.compile("([0-9.]+) out of")
     PAGE_COUNT_RE = re.compile("([0-9]+) page")

@@ -3531,10 +3531,10 @@ class Representation(Base):
 
         if usable_representation and (
                 not max_age or max_age > representation.age):
-            # print "Cached %s" % url
+            print "Cached %s" % url
             return representation, True
 
-        # print "Fetching %s" % url
+        print "Fetching %s" % url
         headers = {}
         if extra_request_headers:
             headers.update(extra_request_headers)
