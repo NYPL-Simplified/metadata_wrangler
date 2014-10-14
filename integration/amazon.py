@@ -102,7 +102,7 @@ class AmazonScraper(object):
             representation = self.get_reviews(identifier, page)
             if not representation.has_content:
                 print "No content!"
-                set_trace()
+                time.sleep(60)
                 break
             for page_reviews in parser.process_all(representation.content):
                 for review in page_reviews:
