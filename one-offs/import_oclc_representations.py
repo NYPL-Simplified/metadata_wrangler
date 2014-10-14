@@ -42,12 +42,13 @@ def imp(db, data_source, identifier, cache):
         )
     if already_stored:
         print "Already did", identifier
-        return
+        return False
 
     print i
     key = (i, type)
     if not cache.exists(key):
-        return
+        print "Not cached", key
+        return False
     fn = cache._filename(key)
     modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
     data = open(fn).read()
@@ -61,7 +62,7 @@ def imp(db, data_source, identifier, cache):
     representation.location = location
     representation.media_type = media_type
     representation.fetched_at = modified
-
+    return True
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]
@@ -83,12 +84,15 @@ if __name__ == '__main__':
          and Representation.data_source_id==source.id)
      ).filter(Identifier.type.in_(types)).filter(Representation.id==None)
     start = 0
-    batch_size = 10
+    batch_size = 1000
     keep_going = True
     while keep_going:
         keep_going = False
+        processed = 0
         for identifier in q.offset(start).limit(start+batch_size):
-            imp(db, source, identifier, b)
-            keep_going = True
+            if imp(db, source, identifier, b):
+                keep_going = True
+                processed += 1
         start += batch_size
-        db.commit()
+        if processed > 0:
+            db.commit()
