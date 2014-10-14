@@ -35,12 +35,11 @@ def imp(db, data_source, identifier, cache):
         url = OCLCLinkedData.ISBN_BASE_URL % dict(id=i)
         media_type = None
         status_code = 301
-
-    representation, already_stored = get_one_or_create(
+    representation, new = get_one_or_create(
         db, Representation,
         url=url, data_source=data_source, identifier=identifier,
         )
-    if already_stored:
+    if not new:
         print "Already did", identifier
         return False
 
@@ -74,15 +73,15 @@ if __name__ == '__main__':
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
     types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
 
-    #all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
-    #    Identifier.type.in_(types)).filter(Representation.data_source==source)]
-    #q = db.query(Identifier).filter(~Identifier.id.in_(all_ids))
-    #print "Excluding", len(all_ids)
-    q = db.query(Identifier).outerjoin(
-        Representation,
-        (Identifier.id==Representation.identifier_id
-         and Representation.data_source_id==source.id)
-     ).filter(Identifier.type.in_(types)).filter(Representation.id==None)
+    all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
+        Identifier.type.in_(types)).filter(Representation.data_source==source)]
+    q = db.query(Identifier).filter(~Identifier.id.in_(all_ids)).order_by(Identifier.id).filter(Identifier.type.in_(types))
+    print "Excluding", len(all_ids)
+    #q = db.query(Identifier).outerjoin(
+    #    Representation,
+    #    (Identifier.id==Representation.identifier_id
+    #     and Representation.data_source_id==source.id)
+    # ).filter(Identifier.type.in_(types)).filter(Representation.id==None).order_by(Identifier.id)
     start = 0
     batch_size = 1000
     keep_going = True
@@ -90,8 +89,8 @@ if __name__ == '__main__':
         keep_going = False
         processed = 0
         for identifier in q.offset(start).limit(start+batch_size):
+            keep_going = True
             if imp(db, source, identifier, b):
-                keep_going = True
                 processed += 1
         start += batch_size
         if processed > 0:
