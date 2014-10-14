@@ -13,8 +13,8 @@ from model import (
     LicensePool,
     Work,
     WorkGenre,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     production_session,
 )
 
@@ -35,23 +35,23 @@ if __name__ == '__main__':
 
         work_ids_to_delete = set()
 
-        work_records = session.query(WorkRecord)
+        work_records = session.query(Edition)
         if data_source:
             work_records = work_records.join(
-                WorkIdentifier).filter(
-                    WorkIdentifier.type==identifier_type)
+                Identifier).filter(
+                    Identifier.type==identifier_type)
             for wr in work_records:
                 work_ids_to_delete.add(wr.work_id)
-            work_records = session.query(WorkRecord).filter(
-                WorkRecord.work_id.in_(work_ids_to_delete))
+            work_records = session.query(Edition).filter(
+                Edition.work_id.in_(work_ids_to_delete))
         else:
-            work_records = work_records.filter(WorkRecord.work_id!=None)
+            work_records = work_records.filter(Edition.work_id!=None)
         work_records.update(update, synchronize_session='fetch')
 
         pools = session.query(LicensePool)
         if data_source:
-            pools = pools.join(WorkIdentifier).filter(
-                WorkIdentifier.type==identifier_type)
+            pools = pools.join(Identifier).filter(
+                Identifier.type==identifier_type)
             if data_source:
                 for pool in pools:
                     # This should not be necessary--every single work ID we're
