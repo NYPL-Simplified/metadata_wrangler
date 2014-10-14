@@ -85,6 +85,9 @@ class AmazonScraper(object):
             extra_request_headers=extra_request_headers,
             data_source=self.data_source, identifier=identifier,
             max_age=max_age, pause_before=pause)
+        if not cached and not representation.content:
+            print "No content!"
+            time.sleep(60)
         return representation
 
     def scrape_bibliographic_info(self, identifier):
@@ -101,8 +104,6 @@ class AmazonScraper(object):
             reviews_on_this_page = 0
             representation = self.get_reviews(identifier, page)
             if not representation.has_content:
-                print "No content!"
-                time.sleep(60)
                 break
             for page_reviews in parser.process_all(representation.content):
                 for review in page_reviews:
@@ -338,6 +339,7 @@ class AmazonCoverageProvider(CoverageProvider):
         if not bibliographic:
             return True
 
+        print identifier
         reviews = self.amazon.scrape_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(

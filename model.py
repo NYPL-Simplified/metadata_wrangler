@@ -1518,7 +1518,7 @@ class Edition(Base):
         return Identifier.best_cover_for(_db, flattened_data)
         
 
-    def calculate_presentation(self, debug=True):
+    def calculate_presentation(self, debug=False):
         if not self.sort_title:
             self.sort_title = TitleProcessor.sort_title_for(self.title)
         sort_names = []
@@ -3504,7 +3504,7 @@ class Representation(Base):
     @classmethod
     def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
             identifier=None, license_pool=None, max_age=None, pause_before=0,
-            allow_redirects=True):
+            allow_redirects=True, debug=False):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
@@ -3531,10 +3531,12 @@ class Representation(Base):
 
         if usable_representation and (
                 not max_age or max_age > representation.age):
-            print "Cached %s" % url
+            if debug:
+                print "Cached %s" % url
             return representation, True
 
-        print "Fetching %s" % url
+        if debug:
+            print "Fetching %s" % url
         headers = {}
         if extra_request_headers:
             headers.update(extra_request_headers)
