@@ -3504,7 +3504,7 @@ class Representation(Base):
     @classmethod
     def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
             identifier=None, license_pool=None, max_age=None, pause_before=0,
-            allow_redirects=True, debug=False):
+            allow_redirects=True, debug=True):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
