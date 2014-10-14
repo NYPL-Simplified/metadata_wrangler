@@ -14,15 +14,16 @@ from nose.tools import set_trace
 from sqlalchemy import or_
 
 from model import (
-    get_one_or_create,
-    Contributor,
     CirculationEvent,
+    Contributor,
     CoverageProvider,
     DataSource,
-    LicensePool,
-    Resource,
-    Identifier,
     Edition,
+    Identifier,
+    LicensePool,
+    Representation,
+    Resource,
+    get_one_or_create,
 )
 
 from integration import (
@@ -45,18 +46,16 @@ class ThreeMAPI(object):
     AUTHORIZATION_HEADER = "3mcl-Authorization"
     VERSION_HEADER = "3mcl-APIVersion"
 
-    def __init__(self, data_dir, account_id=None, library_id=None, account_key=None,
+    def __init__(self, _db, account_id=None, library_id=None, account_key=None,
                  base_url = "http://cloudlibraryapi.3m.com/",
                  version="1.0"):
+        self._db = _db
         self.version = version
         self.library_id = library_id or os.environ['THREEM_LIBRARY_ID']
         self.account_id = account_id or os.environ['THREEM_ACCOUNT_ID']
         self.account_key = account_key or os.environ['THREEM_ACCOUNT_KEY']
         self.base_url = base_url
-        self.event_cache = FilesystemCache(
-            os.path.join(data_dir, "cache", "events"))
-        self.bibliographic_cache = FilesystemCache(
-            os.path.join(data_dir, "cache", "bibliographic"), 3)
+        self.source = DataSource.lookup(self._db, DataSource.THREEM)
         self.item_list_parser = ItemListParser()
 
     def now(self):
@@ -84,10 +83,8 @@ class ThreeMAPI(object):
         signature = base64.b64encode(digest)
         return signature, now
 
-    def request(self, path, body=None, method="GET", cache=None, cache_key=None):
-        if cache and cache.exists(cache_key):
-            print " Cached! %s" % cache_key
-            return cache.open(cache_key).read()
+    def request(self, path, body=None, method="GET", identifier=None,
+                cache_result=True):
         if not path.startswith("/"):
             path = "/" + path
         if not path.startswith("/cirrus"):
@@ -95,42 +92,36 @@ class ThreeMAPI(object):
         url = urlparse.urljoin(self.base_url, path)
         headers = {}
         self.sign(method, headers, path)
-        if cache:
-            print " %s <= %s" % (cache_key, url)
-        else:
-            print url
+
+        if cache_result and method=='GET':
+            representation, cached = Representation.get(
+                self._db, url, extra_request_headers=headers,
+                data_source=self.source, identifier=identifier)
+            return representation.content
+
         response = requests.request(method, url, data=body, headers=headers)
-        data = response.text
-        if cache:
-            cache.store(cache_key, data)
-        return data
+        return response.text
 
-    def get_patron_circulation(self, patron_id):
-        path = "circulation/patron/%s" % patron_id
-        return self.request(path)
+    # def get_patron_circulation(self, patron_id):
+    #     path = "circulation/patron/%s" % patron_id
+    #     return self.request(path)
 
-    def place_hold(self, item_id, patron_id):
-        path = "placehold"
-        body = "<PlaceHoldRequest><ItemId>%s</ItemId><PatronId>%s</PatronId></PlaceHoldRequest>" % (item_id, patron_id)
-        return self.request(path, body, method="PUT")
+    # def place_hold(self, item_id, patron_id):
+    #     path = "placehold"
+    #     body = "<PlaceHoldRequest><ItemId>%s</ItemId><PatronId>%s</PatronId></PlaceHoldRequest>" % (item_id, patron_id)
+    #     return self.request(path, body, method="PUT")
 
-    def cancel_hold(self, item_id, patron_id):
-        path = "cancelhold"
-        body = "<CancelHoldRequest><ItemId>%s</ItemId><PatronId>%s</PatronId></CancelHoldRequest>" % (item_id, patron_id)
-        return self.request(path, body, method="PUT")
+    # def cancel_hold(self, item_id, patron_id):
+    #     path = "cancelhold"
+    #     body = "<CancelHoldRequest><ItemId>%s</ItemId><PatronId>%s</PatronId></CancelHoldRequest>" % (item_id, patron_id)
+    #     return self.request(path, body, method="PUT")
 
-    def get_events_between(self, start, end, cache=False):
+    def get_events_between(self, start, end, cache_result=False):
         """Return event objects for events between the given times."""
         start = start.strftime(self.ARGUMENT_TIME_FORMAT)
         end = end.strftime(self.ARGUMENT_TIME_FORMAT)
         url = "data/cloudevents?startdate=%s&enddate=%s" % (start, end)
-        if cache:
-            cache = self.event_cache
-            key = start + "-" + end
-        else:
-            cache = None
-            key = None
-        data = self.request(url, cache=cache, cache_key=key)
+        data = self.request(url, cache_result=cache_result)
         events = EventParser().process_all(data)
         return events
 
@@ -138,7 +129,7 @@ class ThreeMAPI(object):
         """Return circulation objects for the selected identifiers."""
         url = "/circulation/items/" + ",".join(identifiers)
         # We don't cache this data--it changes too frequently.
-        data = self.request(url)
+        data = self.request(url, cache_result=False)
         for circ in CirculationParser().process_all(data):
             if circ:
                 yield circ
@@ -146,27 +137,15 @@ class ThreeMAPI(object):
     def get_bibliographic_info_for(self, editions):
         results = dict()
         identifiers = []
-        wr_for_identifier = dict()
-        for wr in editions:
-            identifier = wr.primary_identifier.identifier
+        edition_for_identifier = dict()
+        for edition in editions:
+            identifier = edition.primary_identifier
             identifiers.append(identifier)
-            wr_for_identifier[identifier] = wr
-        uncached = set(identifiers)
-        for identifier in identifiers:
-            if self.bibliographic_cache.exists(identifier):
-                wr = wr_for_identifier[identifier]
-                data = self.bibliographic_cache.open(identifier).read()
-                identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
-                results[identifier] = (wr, cooked)
-                uncached.remove(identifier)
+            edition_for_identifier[identifier] = edition
+            data = self.request("/items/%s" % identifier.identifier)
+            identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
+            results[identifier] = (edition, cooked)
 
-        if uncached:
-            url = "/items/" + ",".join(uncached)
-            response = self.request(url)
-            for (identifier, raw, cooked) in self.item_list_parser.parse(response):
-                self.bibliographic_cache.store(identifier, raw)
-                wr = wr_for_identifier[identifier]
-                results[identifier] = (wr, cooked)
         return results
       
 class CirculationParser(XMLParser):
@@ -325,14 +304,12 @@ class ThreeMEventMonitor(Monitor):
     associated with it until the ThreeMCirculationMonitor runs.
     """
 
-    def __init__(self, data_directory, default_start_time=None,
+    def __init__(self, _db, default_start_time=None,
                  account_id=None, library_id=None, account_key=None):
         super(ThreeMEventMonitor, self).__init__(
             "3M Event Monitor", default_start_time=default_start_time)
-        path = os.path.join(data_directory, DataSource.THREEM)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        self.source = ThreeMAPI(path, account_id, library_id, account_key)
+        self._db = _db
+        self.api = ThreeMAPI(_db, account_id, library_id, account_key)
 
     def slice_timespan(self, start, cutoff, increment):
         slice_start = start
@@ -347,15 +324,13 @@ class ThreeMEventMonitor(Monitor):
 
     def run_once(self, _db, start, cutoff):
         added_books = 0
-        threem_data_source = DataSource.lookup(_db, DataSource.THREEM)
-
         i = 0
         one_day = datetime.timedelta(days=1)
         for start, cutoff, full_slice in self.slice_timespan(
                 start, cutoff, one_day):
-            events = self.source.get_events_between(start, cutoff, full_slice)
+            events = self.api.get_events_between(start, cutoff, full_slice)
             for event in events:
-                self.handle_event(_db, threem_data_source, *event)
+                self.handle_event(*event)
                 i += 1
                 if not i % 1000:
                     print i
@@ -363,11 +338,11 @@ class ThreeMEventMonitor(Monitor):
             self.timestamp.timestamp = cutoff
         print "Handled %d events total" % i
 
-    def handle_event(self, _db, data_source, threem_id, isbn, foreign_patron_id,
+    def handle_event(self, threem_id, isbn, foreign_patron_id,
                      start_time, end_time, internal_event_type):
         # Find or lookup the LicensePool for this event.
         license_pool, is_new = LicensePool.for_foreign_id(
-            _db, data_source, Identifier.THREEM_ID, threem_id)
+            self._db, self.api.source, Identifier.THREEM_ID, threem_id)
 
         # Force the ThreeMCirculationMonitor to check on this book the
         # next time it runs.
@@ -375,17 +350,17 @@ class ThreeMEventMonitor(Monitor):
 
         threem_identifier = license_pool.identifier
         isbn, ignore = Identifier.for_foreign_id(
-            _db, Identifier.ISBN, isbn)
+            self._db, Identifier.ISBN, isbn)
 
         edition, ignore = Edition.for_foreign_id(
-            _db, data_source, Identifier.THREEM_ID, threem_id)
+            self._db, self.api.source, Identifier.THREEM_ID, threem_id)
 
         # The ISBN and the 3M identifier are exactly equivalent.
-        threem_identifier.equivalent_to(data_source, isbn, strength=1)
+        threem_identifier.equivalent_to(self.api.source, isbn, strength=1)
 
         # Log the event.
         event, was_new = get_one_or_create(
-            _db, CirculationEvent, license_pool=license_pool,
+            self._db, CirculationEvent, license_pool=license_pool,
             type=internal_event_type, start=start_time,
             foreign_patron_id=foreign_patron_id,
             create_method_kwargs=dict(delta=1,end=end_time)
@@ -395,7 +370,7 @@ class ThreeMEventMonitor(Monitor):
         # occurance as a separate event
         if is_new:
             event = get_one_or_create(
-                _db, CirculationEvent,
+                self._db, CirculationEvent,
                 type=CirculationEvent.TITLE_ADD,
                 license_pool=license_pool,
                 create_method_kwargs=dict(
@@ -409,11 +384,10 @@ class ThreeMEventMonitor(Monitor):
 class ThreeMBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for 3M records."""
 
-    def __init__(self, _db, data_directory,
+    def __init__(self, _db,
                  account_id=None, library_id=None, account_key=None):
-        path = os.path.join(data_directory, DataSource.THREEM)
-        self.source = ThreeMAPI(path, account_id, library_id, account_key)
         self._db = _db
+        self.api = ThreeMAPI(_db, account_id, library_id, account_key)
         self.input_source = DataSource.lookup(_db, DataSource.THREEM)
         self.output_source = DataSource.lookup(_db, DataSource.THREEM)
         super(ThreeMBibliographicMonitor, self).__init__(
@@ -421,8 +395,8 @@ class ThreeMBibliographicMonitor(CoverageProvider):
             self.input_source, self.output_source)
         self.current_batch = []
 
-    def process_edition(self, wr):
-        self.current_batch.append(wr)
+    def process_edition(self, edition):
+        self.current_batch.append(edition)
         if len(self.current_batch) == 25:
             self.process_batch(self.current_batch)
             self.current_batch = []
@@ -434,35 +408,32 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         super(ThreeMBibliographicMonitor, self).commit_workset()
 
     def process_batch(self, batch):
-        for wr, info in self.source.get_bibliographic_info_for(
+        for edition, info in self.api.get_bibliographic_info_for(
                 batch).values():
             self.annotate_edition_with_bibliographic_information(
-                self._db, wr, info, self.input_source
+                self._db, edition, info, self.input_source
             )
-            print wr
+            print edition
 
     def annotate_edition_with_bibliographic_information(
-            self, db, wr, info, input_source):
+            self, db, edition, info, input_source):
 
         # ISBN and 3M ID were associated with the work record earlier,
         # so don't bother doing it again.
 
-        pool = wr.license_pool
-        identifier = wr.primary_identifier
+        pool = edition.license_pool
+        identifier = edition.primary_identifier
 
-        if not isinstance(info, dict):
-            set_trace()
-
-        wr.title = info[Edition.title]
-        wr.subtitle = info[Edition.subtitle]
-        wr.publisher = info[Edition.publisher]
-        wr.language = info[Edition.language]
-        wr.published = info[Edition.published]
+        edition.title = info[Edition.title]
+        edition.subtitle = info[Edition.subtitle]
+        edition.publisher = info[Edition.publisher]
+        edition.language = info[Edition.language]
+        edition.published = info[Edition.published]
 
         for name in info[Contributor]:
-            wr.add_contributor(name, Contributor.AUTHOR_ROLE)
+            edition.add_contributor(name, Contributor.AUTHOR_ROLE)
 
-        wr.extra = info['extra']
+        edition.extra = info['extra']
 
         # Associate resources with the work record.
         for rel, value in info[Resource].items():
@@ -481,18 +452,17 @@ class ThreeMCirculationMonitor(Monitor):
 
     MAX_STALE_TIME = datetime.timedelta(seconds=3600 * 24 * 30)
 
-    def __init__(self, data_directory, account_id=None, library_id=None, account_key=None):
+    def __init__(self, _db, account_id=None, library_id=None, account_key=None):
         super(ThreeMCirculationMonitor, self).__init__("3M Circulation Monitor")
-        path = os.path.join(data_directory, DataSource.THREEM)
-        self.source = ThreeMAPI(path, account_id, library_id, account_key)
+        self._db = _db
+        self.api = ThreeMAPI(_db, account_id, library_id, account_key)
 
     def run_once(self, _db, start, cutoff):
         stale_at = start - self.MAX_STALE_TIME
-        data_source = DataSource.lookup(_db, DataSource.THREEM)
         clause = or_(LicensePool.last_checked==None,
                     LicensePool.last_checked <= stale_at)
         q = _db.query(LicensePool).filter(clause).filter(
-            LicensePool.data_source==data_source)
+            LicensePool.data_source==self.api.source)
         current_batch = []
         for pool in q:
             current_batch.append(pool)
@@ -508,7 +478,7 @@ class ThreeMCirculationMonitor(Monitor):
         for p in pools:
             pool_for_identifier[p.identifier.identifier] = p
             identifiers.append(p.identifier.identifier)
-        for item in self.source.get_circulation_for(identifiers):
+        for item in self.api.get_circulation_for(identifiers):
             identifier = item[Identifier][Identifier.THREEM_ID]
             pool = pool_for_identifier[identifier]
             self.process_pool(_db, pool, item)
