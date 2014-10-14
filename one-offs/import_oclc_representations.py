@@ -62,15 +62,16 @@ if __name__ == '__main__':
     db = production_session()
 
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-    q = db.query(Identifier).filter(Identifier.type.in_(
-        [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]))
+    q = db.query(Identifier).outerjoin(Representation, Identifier.id==Representation.identifier_id).filter(Representation.data_source==source).filter(Identifier.type.in_(
+        [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN])).filter(Representation.id==None)
     start = 0
+    batch_size = 10
     keep_going = True
     while keep_going:
         keep_going = False
-        for identifier in q.offset(start).limit(start+1000):
+        for identifier in q.offset(start).limit(start+batch_size):
             imp(db, source, identifier, b)
             print identifier
             keep_going = True
-        start += 1000
+        start += batch_size
         db.commit()
