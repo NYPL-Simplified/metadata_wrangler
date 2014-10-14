@@ -41,6 +41,7 @@ def imp(db, data_source, identifier, cache):
         url=url, data_source=data_source, identifier=identifier,
         )
     if already_stored:
+        print "Already did", identifier
         return
 
     print i
@@ -70,8 +71,17 @@ if __name__ == '__main__':
     db = production_session()
 
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-    q = db.query(Identifier).outerjoin(Representation, Identifier.id==Representation.identifier_id).filter(Representation.data_source==source).filter(Identifier.type.in_(
-        [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN])).filter(Representation.id==None)
+    types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
+
+    #all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
+    #    Identifier.type.in_(types)).filter(Representation.data_source==source)]
+    #q = db.query(Identifier).filter(~Identifier.id.in_(all_ids))
+    #print "Excluding", len(all_ids)
+    q = db.query(Identifier).outerjoin(
+        Representation,
+        (Identifier.id==Representation.identifier_id
+         and Representation.data_source_id==source.id)
+     ).filter(Identifier.type.in_(types)).filter(Representation.id==None)
     start = 0
     batch_size = 10
     keep_going = True
