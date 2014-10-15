@@ -74,7 +74,7 @@ if __name__ == '__main__':
     cache = FakeCache(d, 4, False)
 
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-    min_oclc = 604263
+    min_oclc = 1284796
     max_oclc = 2052405
     batch_size = 10000
     type = Identifier.OCLC_NUMBER
