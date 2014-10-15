@@ -15,10 +15,14 @@ from model import (
     Representation,
     get_one_or_create,
 )
+from integration import FilesystemCache
 from integration.oclc import (
     OCLCLinkedData,
-    OCLCCache,
 )
+
+class FakeCache(FilesystemCache):
+    def _filename(self, key):
+        return super(FakeCache, self)._filename(key) + ".jsonld"
 
 def imp(db, data_source, identifier, cache):
     i = identifier.identifier
@@ -43,12 +47,10 @@ def imp(db, data_source, identifier, cache):
         print "Already did", identifier
         return False
 
-    print "Checking", identifier
-    key = (i, type)
-    if not cache.exists(key):
-        print "Not cached", identifier
+    if not cache.exists(i):
+        # print "Not cached", identifier
         return False
-    fn = cache._filename(key)
+    fn = cache._filename(i)
     modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
     data = open(fn).read()
 
@@ -66,34 +68,29 @@ def imp(db, data_source, identifier, cache):
 if __name__ == '__main__':
     data_dir = sys.argv[1]
 
-    oclc = OCLCLinkedData(data_dir)
-    b = oclc.cache
     db = production_session()
+    oclc = OCLCLinkedData(db)
+    d = os.path.join(data_dir, "OCLC Linked Data", "cache", "OCLC Number")
+    cache = FakeCache(d, 4, False)
 
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-    #types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
-    types = [Identifier.ISBN]
-
-    #all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
-    #    Identifier.type.in_(types)).filter(Representation.data_source==source)]
-    #q = db.query(Identifier).filter(~Identifier.id.in_(all_ids)).order_by(Identifier.id).filter(Identifier.type.in_(types))
-    #print "Excluding", len(all_ids)
-    #q = db.query(Identifier).outerjoin(
-    #    Representation,
-    #    (Identifier.id==Representation.identifier_id
-    #     and Representation.data_source_id==source.id)
-    # ).filter(Identifier.type.in_(types)).filter(Representation.id==None).order_by(Identifier.id)
-    q = db.query(Identifier).filter(Identifier.type.in_(types)).order_by(Identifier.id)
-    start = 0
+    min_oclc = 604263
+    max_oclc = 2052405
     batch_size = 10000
-    keep_going = True
-    while keep_going:
-        keep_going = False
+    type = Identifier.OCLC_NUMBER
+
+    cursor = min_oclc
+    while cursor < max_oclc:
+        first_time = time.time()
         processed = 0
-        for identifier in q.offset(start).limit(start+batch_size):
-            keep_going = True
-            if imp(db, source, identifier, b):
+        max_batch = cursor + batch_size
+        q = db.query(Identifier).filter(Identifier.type==Identifier.OCLC_NUMBER).filter(Identifier.id >= cursor).filter(Identifier.id < max_batch)
+
+        for identifier in q:
+            if imp(db, source, identifier, cache):
                 processed += 1
-        start += batch_size
         if processed > 0:
+            a = "%d sec, %d cached/%d, final" % (time.time()-first_time, processed, batch_size)
+            print a, identifier
             db.commit()
+        cursor = max_batch
