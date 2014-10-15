@@ -171,10 +171,9 @@ class OCLCLinkedData(object):
             m = self.URI_WITH_OCLC_WORK_ID.match(work_uri)
             if m:
                 work_id = m.groups()[0]
-                set_trace()
                 identifier, was_new = Identifier.for_foreign_id(
                     self._db, Identifier.OCLC_WORK, work_id)
-                oclc_work_data, was_new = self.lookup_by_identifier(identifire)
+                oclc_work_data, cached = self.lookup_by_identifier(identifier)
                 yield oclc_work_data
                
     @classmethod

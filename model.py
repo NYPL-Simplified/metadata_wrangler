@@ -3537,6 +3537,7 @@ class Representation(Base):
 
         if debug:
             print "Fetching %s" % url
+        set_trace()
         headers = {}
         if extra_request_headers:
             headers.update(extra_request_headers)
@@ -3606,8 +3607,9 @@ class Representation(Base):
         if not 'timeout' in kwargs:
             kwargs['timeout'] = 20
         
-        response = requests.get(url, headers=headers, allow_redirects=True,
-                                **kwargs)
+        if not 'allow_redirects' in kwargs:
+            kwargs['allow_redirects'] = True
+        response = requests.get(url, headers=headers, **kwargs)
         return response.status_code, response.headers, response.content
 
     @classmethod
