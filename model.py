@@ -3601,24 +3601,27 @@ class Representation(Base):
         return json.dumps(dict(d))
 
     @classmethod
-    def simple_http_get(cls, url, headers):
+    def simple_http_get(cls, url, headers, **kwargs):
         """The most simple HTTP-based GET."""
-        response = requests.get(url, headers=headers, allow_redirects=True)
+        if not 'timeout' in kwargs:
+            kwargs['timeout'] = 20
+        
+        response = requests.get(url, headers=headers, allow_redirects=True,
+                                **kwargs)
         return response.status_code, response.headers, response.content
 
     @classmethod
     def http_get_no_redirect(cls, url, headers):
         """HTTP-based GET with no redirects."""
-        response = requests.get(url, headers=headers, allow_redirects=False)
-        return response.status_code, response.headers, response.content
+        return cls.simple_http_get(url, headers, allow_redirects=False)
 
     @classmethod
     def browser_http_get(cls, url, headers):
         """GET the representation that would be displayed to a web browser.
         """
+        headers = dict(headers)
         headers['User-Agent'] = cls.BROWSER_USER_AGENT
         return cls.simple_http_get(url, headers)
-
 
 
 class CoverageProvider(object):
