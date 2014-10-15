@@ -43,10 +43,10 @@ def imp(db, data_source, identifier, cache):
         print "Already did", identifier
         return False
 
-    print i
+    print "Checking", identifier
     key = (i, type)
     if not cache.exists(key):
-        print "Not cached", key
+        print "Not cached", identifier
         return False
     fn = cache._filename(key)
     modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
@@ -71,19 +71,21 @@ if __name__ == '__main__':
     db = production_session()
 
     source = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
-    types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
+    #types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
+    types = [Identifier.ISBN]
 
-    all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
-        Identifier.type.in_(types)).filter(Representation.data_source==source)]
-    q = db.query(Identifier).filter(~Identifier.id.in_(all_ids)).order_by(Identifier.id).filter(Identifier.type.in_(types))
-    print "Excluding", len(all_ids)
+    #all_ids = [x.id for x in db.query(Identifier).join(Representation).filter(
+    #    Identifier.type.in_(types)).filter(Representation.data_source==source)]
+    #q = db.query(Identifier).filter(~Identifier.id.in_(all_ids)).order_by(Identifier.id).filter(Identifier.type.in_(types))
+    #print "Excluding", len(all_ids)
     #q = db.query(Identifier).outerjoin(
     #    Representation,
     #    (Identifier.id==Representation.identifier_id
     #     and Representation.data_source_id==source.id)
     # ).filter(Identifier.type.in_(types)).filter(Representation.id==None).order_by(Identifier.id)
+    q = db.query(Identifier).filter(Identifier.type.in_(types)).order_by(Identifier.id)
     start = 0
-    batch_size = 1000
+    batch_size = 10000
     keep_going = True
     while keep_going:
         keep_going = False
