@@ -121,29 +121,34 @@ class TestOPDS(DatabaseTest):
 
         works = self._db.query(Work)
         feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
-                               works, facet_url_generator)
+                               works, facet_url_generator, "author")
         u = unicode(feed)
         parsed = feedparser.parse(u)
         by_title = parsed['feed']
 
-        alternate_link, self_link, by_author, by_title = sorted(
-            by_title['links'])
+        alternate_link, by_author, by_title, self_link = sorted(
+            by_title['links'], key=lambda x: (x['rel'], x.get('title')))
 
         eq_("http://the-url.com/", self_link['href'])
 
         # As we'll see below, the feed parser parses facetGroup as
-        # facetgroup; that's not a problem with the generator code.
+        # facetgroup and activeFacet as activefacet. As we see here,
+        # that's not a problem with the generator code.
         assert 'opds:facetgroup' not in u
         assert 'opds:facetGroup' in u
+        assert 'opds:activefacet' not in u
+        assert 'opds:activeFacet' in u
 
         eq_('Sort by', by_author['opds:facetgroup'])
         eq_('http://opds-spec.org/facet', by_author['rel'])
+        eq_('true', by_author['opds:activefacet'])
         eq_('Author', by_author['title'])
         eq_(facet_url_generator("author"), by_author['href'])
 
         eq_('Sort by', by_title['opds:facetgroup'])
         eq_('http://opds-spec.org/facet', by_title['rel'])
         eq_('Title', by_title['title'])
+        assert not 'opds:activefacet' in by_title
         eq_(facet_url_generator("title"), by_title['href'])
 
 

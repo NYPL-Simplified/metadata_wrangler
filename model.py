@@ -2553,6 +2553,13 @@ class WorkFeed(object):
     
     """Identify a certain page in a certain feed."""
 
+    active_facet_for_field = {
+        Work.title : "title",
+        Work.sort_title : "title",
+        Work.sort_author : "author",
+        Work.authors : "author"
+    }
+
     def __init__(self, lane, languages, order_by=None):
         if isinstance(languages, basestring):
             languages = [languages]
@@ -2567,6 +2574,7 @@ class WorkFeed(object):
                   Work.id):
             if i not in self.order_by:
                 self.order_by.append(i)
+        self.active_facet = self.active_facet_for_field.get(order_by[0], None)
 
     def page_query(self, _db, last_work_seen, page_size):
         """A page of works."""

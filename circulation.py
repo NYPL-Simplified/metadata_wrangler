@@ -287,7 +287,8 @@ def feed(lane):
         url_generator = lambda x : url_for(
             'feed', lane=lane.name, order=x, _external=True)
 
-        opds_feed = AcquisitionFeed(Conf.db, title, this_url, page, url_generator)
+        opds_feed = AcquisitionFeed(Conf.db, title, this_url, page, 
+                                    url_generator, work_feed.active_facet)
         # Add a 'next' link if appropriate.
         if page and len(page) >= size:
             after = page[-1].id

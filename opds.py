@@ -137,7 +137,8 @@ class OPDSFeed(AtomFeed):
 
 class AcquisitionFeed(OPDSFeed):
 
-    def __init__(self, _db, title, url, works, facet_url_generator=None):
+    def __init__(self, _db, title, url, works, facet_url_generator=None,
+                 active_facet=None):
         super(AcquisitionFeed, self).__init__(title, url=url)
         lane_link = dict(rel="collection", href=url)
         import time
@@ -160,6 +161,8 @@ class AcquisitionFeed(OPDSFeed):
                             title=title)
                 link['rel'] = "http://opds-spec.org/facet"
                 link['{%s}facetGroup' % opds_ns] = facet_group
+                if order==active_facet:
+                    link['{%s}activeFacet' % opds_ns] = "true"
                 self.add_link(**link)
 
     @classmethod

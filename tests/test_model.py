@@ -1013,11 +1013,13 @@ class TestWorkFeed(DatabaseTest):
 
         # Order them by title, and everything's fine.
         feed = WorkFeed(self.fantasy_lane, language, order_by=Work.title)
+        eq_("title", feed.active_facet)
         eq_([w2, w1, w3, w4], feed.page_query(self._db, None, 10).all())
         eq_([w3, w4], feed.page_query(self._db, w1, 10).all())
 
         # Order them by author, and they're secondarily ordered by title.
         feed = WorkFeed(self.fantasy_lane, language, order_by=Work.authors)
+        eq_("author", feed.active_facet)
         eq_([w4, w2, w1, w3], feed.page_query(self._db, None, 10).all())
         eq_([w3], feed.page_query(self._db, w1, 10).all())
 
