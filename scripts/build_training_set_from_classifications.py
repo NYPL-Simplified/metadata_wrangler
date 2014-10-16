@@ -42,6 +42,7 @@ class App:
         print "Already seen %d" % len(self.seen)
 
         self.training_out = csv.writer(open(training_out_path, "a"), dialect=WakaDialect)
+        self.training_out.writerow(["Key", "Title", "Author", "Primary Appeal", "Words"])
         self.failures_out = csv.writer(open(failures_out_path, "w"), dialect=WakaDialect)
         self.filter = AppealTextFilter()
         self.classifications_in = csv.reader(open(classifications_path),
@@ -72,7 +73,9 @@ class App:
             self.failures_out.writerow(row)
             return
 
-        if asin and asin in self.seen:
+        key = source + "-" + asin
+
+        if key in self.seen:
             return
 
         if isbnlib.is_isbn10(asin):
@@ -87,7 +90,7 @@ class App:
             review_words.extend(self.filter.filter(review_title))
             review_words.extend(self.filter.filter(review))
 
-        row = [asin, title, author, "", " ".join(review_words).encode("utf8")]
+        row = [key, title, author, primary_appeal, " ".join(review_words).encode("utf8")]
         self.db.commit()
         self.training_out.writerow(row)
         
