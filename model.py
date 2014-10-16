@@ -234,6 +234,7 @@ class DataSource(Base):
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
     CONTENT_CAFE = "Content Cafe"
+    VIAF = "Content Cafe"
     GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
     MANUAL = "Manual intervention"
 
@@ -293,6 +294,7 @@ class DataSource(Base):
                 (cls.OPEN_LIBRARY, False, Identifier.OPEN_LIBRARY_ID, None),
                 (cls.GUTENBERG_COVER_GENERATOR, False, Identifier.GUTENBERG_ID, None),
                 (cls.WEB, True, Identifier.URI, None),
+                (cls.VIAF, False, None, None),
                 (cls.CONTENT_CAFE, False, None, None),
                 (cls.MANUAL, False, None, None),
         ):
