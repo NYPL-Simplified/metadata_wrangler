@@ -60,7 +60,7 @@ class AmazonScraper(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = 1 + random.random()
+            pause = random.random()
         get_method = get_method or Representation.browser_http_get
 
         if force:

@@ -44,7 +44,8 @@ class App:
         self.training_out = csv.writer(open(training_out_path, "a"), dialect=WakaDialect)
         self.failures_out = csv.writer(open(failures_out_path, "w"), dialect=WakaDialect)
         self.filter = AppealTextFilter()
-        self.classifications_in = csv.reader(open(classifications_path))
+        self.classifications_in = csv.reader(open(classifications_path),
+                                             dialect=csv.excel_tab)
         self.classifications_in.next()
 
     def run(self):
@@ -61,17 +62,17 @@ class App:
         return None
 
     def process_row(self, row):
-        title, author, asin, primary_appeal, character, language, setting, story, source = row
+        source, title, author, asin, primary_appeal, ignore, character, language, setting, story = row
         if not asin:
             asin = self.find_asin_dammit(title)
-
-        if asin and asin in self.seen:
-            return
 
         if asin:
             asin = string.zfill(asin, 10)
         else:
             self.failures_out.writerow(row)
+            return
+
+        if asin and asin in self.seen:
             return
 
         if isbnlib.is_isbn10(asin):

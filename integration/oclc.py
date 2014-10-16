@@ -131,6 +131,11 @@ class OCLCLinkedData(object):
             self._db, url, data_source=self.source,
             identifier=identifier)
         data = jsonld.load_document(url)
+        if cached and not representation.content:
+            representation, cached = Representation.get(
+                self._db, url, data_source=self.source,
+                identifier=identifier, max_age=0)
+            
         doc = {
             'contextUrl': None,
             'documentUrl': url,

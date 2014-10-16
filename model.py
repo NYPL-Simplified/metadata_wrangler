@@ -3485,7 +3485,7 @@ class Representation(Base):
     last_modified = Column(Unicode)
 
     # The Etag header from the last representation.
-    last_modified = Column(Unicode)
+    etag = Column(Unicode)
 
     # The representation itself.
     content = Column(Binary)
@@ -3494,6 +3494,8 @@ class Representation(Base):
 
     @property
     def age(self):
+        if not self.fetched_at:
+            return 1000000
         return datetime.datetime.utcnow() - self.fetched_at
 
     @property
@@ -3530,14 +3532,13 @@ class Representation(Base):
             representation and not representation.exception)
 
         if usable_representation and (
-                not max_age or max_age > representation.age):
+                max_age is None or max_age > representation.age):
             if debug:
                 print "Cached %s" % url
             return representation, True
 
         if debug:
             print "Fetching %s" % url
-        set_trace()
         headers = {}
         if extra_request_headers:
             headers.update(extra_request_headers)
@@ -3555,7 +3556,7 @@ class Representation(Base):
             status_code, headers, content = do_get(url, headers)
             exception = None
         except Exception, e:
-            exception = e.message()
+            exception = str(e)
             status_code = None
             headers = None
             content = None
