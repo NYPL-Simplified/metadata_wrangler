@@ -1235,9 +1235,16 @@ class Edition(Base):
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
     def __repr__(self):
-        return (u"Edition %s (%s/%s/%s)" % (
-            self.id, self.title, ", ".join([x.name for x in self.contributors]),
-            self.language)).encode("utf8")
+        id_repr = repr(self.primary_identifier).decode("utf8")
+        a = (u"Edition %s [%r] (%s/%s/%s)" % (
+            self.id, id_repr, self.title,
+            ", ".join([x.name for x in self.contributors]),
+            self.language))
+        try:
+            a.encode("utf8")
+        except Exception, e:
+            set_trace()
+        return a.encode("utf8")
 
     @property
     def language_code(self):
@@ -1677,9 +1684,9 @@ class Work(Base):
         return self.primary_edition.cover_thumbnail_url
 
     def __repr__(self):
-        return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.author, ", ".join([g.name for g in self.genres]), self.language,
-            len(self.editions), len(self.license_pools))).encode("utf8")
+        return (u'%s "%s" (%s) %s %s (%s wr, %s lp)' % (
+                self.id, self.title, self.author, ", ".join([g.name for g in self.genres]), self.language,
+                len(self.editions), len(self.license_pools))).encode("utf8")
 
     def all_editions(self, recursion_level=5):
         """All Editions identified by a Identifier equivalent to 
@@ -2055,7 +2062,8 @@ class Measurement(Base):
     # These values are empirically determined and may change over
     # time.
     POPULARITY_PERCENTILES = {
-        DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805]
+        DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805],
+        DataSource.AMAZON : [14937330, 1974074, 1702163, 1553600, 1432635, 1327323, 1251089, 1184878, 1131998, 1075720, 1024272, 978514, 937726, 898606, 868506, 837523, 799879, 770211, 743194, 718052, 693932, 668030, 647121, 627642, 609399, 591843, 575970, 559942, 540713, 524397, 511183, 497576, 483884, 470850, 458438, 444475, 432528, 420088, 408785, 398420, 387895, 377244, 366837, 355406, 344288, 333747, 324280, 315002, 305918, 296420, 288522, 279185, 270824, 262801, 253865, 246224, 238239, 230537, 222611, 215989, 208641, 202597, 195817, 188939, 181095, 173967, 166058, 160032, 153526, 146706, 139981, 133348, 126689, 119201, 112447, 106795, 101250, 96534, 91052, 85837, 80619, 75292, 69957, 65075, 59901, 55616, 51624, 47598, 43645, 39403, 35645, 31795, 27990, 24496, 20780, 17740, 14102, 10498, 7090, 3861]
     }
 
     RATING_SCALES = {
@@ -3185,8 +3193,8 @@ class LicensePool(Base):
                 # This edition has been claimed by a Work. This
                 # strengthens the tie between this LicensePool and that
                 # Work.
-                l = claimed_records_by_work[r.work]
-                check_against = r.work
+                l = claimed_records_by_work[e.work]
+                check_against = e.work
             else:
                 # This edition has not been claimed by anyone. 
                 l = unclaimed_records
