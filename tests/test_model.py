@@ -761,6 +761,47 @@ class TestWorkSimilarity(DatabaseTest):
         wr = self._edition()
         eq_(1, wr.similarity_to(wr))
 
+class TestPotentialWorks(DatabaseTest):
+
+    def test_open_access_pools_grouped_together(self):
+
+        # We have four editions with exactly the same title and author.
+        title = "The Only Title"
+        author = "Single Author"
+        ed1 = self._edition(title=title, authors=author)
+        ed2 = self._edition(title=title, authors=author)
+        ed3 = self._edition(
+            title=title, authors=author, data_source_name=DataSource.OVERDRIVE)
+        ed4 = self._edition(
+            title=title, authors=author, data_source_name=DataSource.OVERDRIVE)
+
+        # Every identifier is equivalent to every other identifier.
+        s = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+        ed1.primary_identifier.equivalent_to(s, ed2.primary_identifier, 1)
+        ed1.primary_identifier.equivalent_to(s, ed3.primary_identifier, 1)
+        ed1.primary_identifier.equivalent_to(s, ed4.primary_identifier, 1)
+        ed2.primary_identifier.equivalent_to(s, ed3.primary_identifier, 1)
+        ed2.primary_identifier.equivalent_to(s, ed4.primary_identifier, 1)
+        ed3.primary_identifier.equivalent_to(s, ed4.primary_identifier, 1)
+
+        open1 = self._licensepool(ed1)
+        open2 = self._licensepool(ed2)
+        restricted3 = self._licensepool(
+            ed3, open_access=False, data_source_name=DataSource.OVERDRIVE)
+        restricted4 = self._licensepool(
+            ed4, open_access=False, data_source_name=DataSource.OVERDRIVE)
+
+        potential_open = open1.potential_works()
+        potential_restricted_3 = restricted3.potential_works()
+        potential_restricted_4 = restricted4.potential_works()
+
+        # The two open-access pools are grouped together.
+        eq_(({}, [ed1, ed2]), potential_open)
+
+        # Each restricted-access pool is completely isolated.
+        eq_(({}, [ed3]), potential_restricted_3)
+        eq_(({}, [ed4]), potential_restricted_4)
+
 class TestWorkConsolidation(DatabaseTest):
 
     # Versions of Work and Edition instrumented to bypass the

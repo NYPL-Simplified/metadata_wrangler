@@ -465,6 +465,7 @@ class Identifier(Base):
     @classmethod
     def for_foreign_id(cls, _db, foreign_identifier_type, foreign_id,
                        autocreate=True):
+        """Turn a foreign ID into an Identifier."""
         was_new = None
         if autocreate:
             m = get_one_or_create
@@ -3146,7 +3147,7 @@ class LicensePool(Base):
 
     def potential_works(self, initial_threshold=0.2, final_threshold=0.8):
         """Find all existing works that have claimed this pool's 
-        work records.
+        editions.
 
         :return: A 3-tuple ({Work: [Edition]}, [Edition])
         Element 0 is a mapping of Works to the Editions they've claimed.
@@ -3158,28 +3159,45 @@ class LicensePool(Base):
         claimed_records_by_work = defaultdict(list)
         unclaimed_records = []
 
-        # Find all work records connected to this LicensePool's
-        # primary work record. We are very lenient about scooping up
-        # as many work records as possible here, but we will be very
-        # strict when we apply the similarity threshold.
+        # If this pool is not an open-access pool, it will never be
+        # grouped together with any other pools.
+        if not self.open_access:
+            if self.work:
+                claimed_records_by_work[self.work] = primary_edition
+            else:
+                unclaimed_records.append(primary_edition)
+            return claimed_records_by_work, unclaimed_records
+
+        # Beyond this point we can assume this is an open-access pool.
+        # It will only be combined with other open-access pools.
+
+        # Find all editions connected to this LicensePool's primary
+        # editions. We are very lenient about scooping up as many
+        # editions as possible here, but we will be very strict when
+        # we apply the similarity threshold.
         equivalent_editions = primary_edition.equivalent_editions(
             threshold=initial_threshold)
 
-        for r in equivalent_editions:
-            if r.work:
-                # This work record has been claimed by a Work. This
+        for e in equivalent_editions:
+            if e.work:
+                # This edition has been claimed by a Work. This
                 # strengthens the tie between this LicensePool and that
                 # Work.
                 l = claimed_records_by_work[r.work]
                 check_against = r.work
             else:
-                # This work record has not been claimed by anyone. 
+                # This edition has not been claimed by anyone. 
                 l = unclaimed_records
                 check_against = primary_edition
 
             # Apply the similarity threshold filter.
-            if check_against.similarity_to(r) >= final_threshold:
-                l.append(r)
+            if check_against.similarity_to(e) >= final_threshold:
+                other_pool = e.license_pool
+                if other_pool and not other_pool.open_access:
+                    # An open access pool will never be combined
+                    # with a non-open-access pool.
+                    continue
+                l.append(e)
         return claimed_records_by_work, unclaimed_records
 
     def calculate_work(self, record_similarity_threshold=0.4,
