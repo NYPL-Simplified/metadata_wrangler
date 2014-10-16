@@ -1,17 +1,17 @@
 import os
 from nose.tools import set_trace
 from lxml import etree
-import requests
 import re
 
 from collections import Counter, defaultdict
 
 from model import (
     Contributor,
+    DataSource,
+    Representation,
 )
 
 from integration import (
-    FilesystemCache,
     XMLParser,
 )
 
@@ -199,13 +199,9 @@ class VIAFClient(object):
     BASE_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
     SUBDIR = "viaf"
 
-    def __init__(self, _db, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, self.SUBDIR, "cache")
-        if not os.path.exists(self.cache_directory):
-            os.makedirs(self.cache_directory)
-        self.cache = FilesystemCache(self.cache_directory, subdir_chars=3)
+    def __init__(self, _db):
         self._db = _db
+        self.data_source = DataSource.lookup(self._db, DataSource.VIAF)
         self.parser = VIAFParser()
 
     def run(self, force=False):
@@ -219,7 +215,10 @@ class VIAFClient(object):
             if contributor.viaf:
                 viafs = [x.strip() for x in contributor.viaf.split("|")]
                 for v in viafs:
-                    xml = self.lookup(v)
+                    url = self.BASE_URL % dict(viaf=v)
+                    r, cached = Representation.get(self._db, url, data_source=self.data_source)
+
+                    xml = r.content
                     display_name, family_name, wikipedia_name = self.parser.info(
                         contributor, xml)
                     contributor.display_name = display_name
@@ -239,30 +238,3 @@ class VIAFClient(object):
                 print a
                 self._db.commit()
         self._db.commit()
-
-    def cache_key(self, id):
-        return os.path.join("%s.xml" % id)
-
-    def request(self, url):
-        """Make a request to VIAF."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return ''
-        elif response.status_code == 500:
-            return None
-        elif response.status_code != 200:
-            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
-    def lookup(self, viaf):
-        cache_key = self.cache_key(viaf)
-        cached = False
-        if self.cache.exists(cache_key):
-            return self.cache.open(cache_key).read()
-        else:
-            url = self.BASE_URL % dict(viaf=viaf)
-            print "%s => %s" % (url, self.cache._filename(cache_key))
-            raw = self.request(url) or ''
-            self.cache.store(cache_key, raw)
-            return raw

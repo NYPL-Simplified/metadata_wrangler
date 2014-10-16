@@ -5,7 +5,7 @@ import csv
 from csv import Dialect
 from cStringIO import StringIO
 from collections import Counter
-from sklearn import svm
+from sklearn import linear_model
 from sklearn import cross_validation
 import numpy as np
 
@@ -239,7 +239,8 @@ class ClassifierFactory(object):
         X_train, X_test = np_tr_data[train], np_tr_data[test]
         y_train, y_test = np_tr_labels[train], np_tr_labels[test]
 
-        clf = svm.SVC(kernel='poly', gamma=2)
+        #clf = svm.SVC(kernel='poly', gamma=2)
+        clf = linear_model.LogisticRegression()
         clf.fit(X_train, y_train)
         return clf
 
