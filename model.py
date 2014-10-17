@@ -1897,7 +1897,7 @@ class Work(Base):
         if old_primary and old_primary != champion:
             old_primary.is_primary_for_work = False
         champion.is_primary_for_work = True
-        return champion
+        self.primary_edition = champion
 
 
     def calculate_presentation(self, choose_edition=True,
@@ -1914,12 +1914,12 @@ class Work(Base):
         * The best available summary for the work.
         * The overall popularity of the work.
         """
-        if choose_edition:
+        if choose_edition or not self.primary_edition:
             self.set_primary_edition()
 
         if self.primary_edition:
             self.primary_edition.calculate_presentation()
-
+        
         if not (classify or choose_summary or calculate_quality):
             return
 
@@ -2109,6 +2109,11 @@ class Measurement(Base):
     #
     is_most_recent = Column(Boolean, index=True)
 
+    def __repr__(self):
+        return "%s(%r)=%s (norm=%.2d)" % (
+            self.quantity_measured, self.identifier, self.value,
+            self.normalized_value)
+
     @classmethod
     def overall_quality(cls, measurements, popularity_weight=0.3,
                         rating_weight=0.7):
@@ -2165,6 +2170,8 @@ class Measurement(Base):
     def normalized_value(self):
         if self._normalized_value:
             pass
+        elif not self.value:
+            return None
         elif (self.quantity_measured == self.POPULARITY
               and self.data_source.name in self.POPULARITY_PERCENTILES):
             d = self.POPULARITY_PERCENTILES[self.data_source.name]
