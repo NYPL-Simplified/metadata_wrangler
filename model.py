@@ -2531,6 +2531,7 @@ class Subject(Base):
     DDC = Classifier.DDC              # Dewey Decimal Classification
     OVERDRIVE = Classifier.OVERDRIVE  # Overdrive's classification system
     TAG = "tag"   # Folksonomic tags.
+    GUTENBERG_BOOKSHELF = "gutenberg:bookshelf"
     TOPIC = "schema:Topic"
     PLACE = "schema:Place"
     PERSON = "schema:Person"

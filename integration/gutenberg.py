@@ -553,6 +553,79 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         print " Created %s records(s)." % len(records)
         return True
 
+class GutenbergBookshelfClient(object):
+    """Get classifications and measurements of popularity from Gutenberg
+    bookshelves.
+    """
+
+    BASE_URL = "http://www.gutenberg.org/wiki/Category:Bookshelf"
+
+    def __init__(self, _db):
+        self._db = _db
+        self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+
+    def do_get(self, referer, url, handled):
+        headers = dict()
+        if referer:
+            headers['Referer'] = referer
+        url = urljoin(self.BASE_URL, url)
+        if url in handled:
+            return None
+        representation, cached = Representation.get(
+            self._db, url, Representation.browser_http_get,
+            headers, data_source=self.data_source,
+            pause_before=random.random())
+        if not cached:
+            self._db.commit()
+        handled.add(url)
+        return representation
+
+    def full_update(self):
+        url = self.BASE_URL
+        lists_of_shelves = [(None, url)]
+        shelves = []
+        handled = set()
+        while lists_of_shelves:
+            referer, url = lists_of_shelves.pop()
+            representation = self.do_get(referer, url, handled)
+            if not representation:
+                # Already handled
+                continue
+            new_lists, new_shelves = self.process_bookshelf_list_page(
+                representation)
+            for i in new_lists:
+                lists_of_shelves.append((url, i))
+            for i in new_shelves:
+                shelves.append((url, i))
+
+        # Now get the contents of each bookshelf.
+        for referer, url in shelves:
+            representation = self.do_get(referer, url, handled) 
+            if not representation:
+                # Already handled
+                continue
+            self.process_shelf(representation)
+
+    def process_shelf(self, representation):
+        pass
+
+    def process_bookshelf_list_page(self, representation):
+        lists = []
+        shelves = []
+        soup = BeautifulSoup(representation.content, "lxml")
+        # If this is a multi-page list, the next page counts as a list.
+        next_link = soup.find("a", text="next 200", href=True)
+        if next_link:
+            lists.append(next_link['href'])
+        for i in soup.find_all("a", href=re.compile("^/wiki/.*Bookshelf")):
+            new_url = i['href']
+            if '/wiki/Category:' in new_url:
+                lists.append(new_url)
+            elif new_url.endswith("Bookshelf)"):
+                shelves.append(new_url)
+        return lists, shelves
+
+
 # class PopularityScraper(object):
 
 #     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
