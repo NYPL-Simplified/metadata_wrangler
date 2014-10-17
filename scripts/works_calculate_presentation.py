@@ -13,8 +13,7 @@ from model import (
     SessionManager,
     Work,
     WorkGenre,
-    WorkIdentifier,
-    WorkRecord,
+    Edition,
 )
 from model import production_session
 
@@ -33,8 +32,8 @@ if __name__ == '__main__':
 
     if len(sys.argv) == 4:
         source, type, id = sys.argv[1:]
-        pool, ignore = LicensePool.for_foreign_id(session, source, type, id)
-        work = pool.work
+        edition, ignore = Edition.for_foreign_id(session, source, type, id)
+        work = edition.work
     else:
         work = None
     
@@ -52,12 +51,9 @@ if __name__ == '__main__':
         i = 0
         q = session.query(Work)
         if works_from_source:
-            q = q.outerjoin(WorkRecord)
+            q = q.join(Edition).filter(Edition.data_source==works_from_source)
         if not force:
-            q = q.outerjoin(WorkGenre).filter(WorkGenre.id==None).filter(Work.fiction==None).filter(Work.audience==None)
-
-        if works_from_source:
-            q = q.filter(WorkRecord.data_source==works_from_source)
+            q = q.filter(Work.fiction==None).filter(Work.audience==None)
 
         print "That's %d works." % q.count()
         for work in q:

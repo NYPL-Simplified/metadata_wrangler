@@ -231,17 +231,8 @@ class ClassifierFactory(object):
         
     @classmethod
     def from_data_and_labels(cls, training_data, training_labels):
-        np_tr_data = np.array(training_data)
-        np_tr_labels = np.array(training_labels)
-
-        train, test = iter(
-            cross_validation.StratifiedKFold(np_tr_labels, n_folds=5)).next()
-        X_train, X_test = np_tr_data[train], np_tr_data[test]
-        y_train, y_test = np_tr_labels[train], np_tr_labels[test]
-
-        #clf = svm.SVC(kernel='poly', gamma=2)
         clf = linear_model.LogisticRegression()
-        clf.fit(X_train, y_train)
+        clf.fit(training_data, training_labels)
         return clf
 
     @classmethod
@@ -283,5 +274,14 @@ class FeatureCounter(Counter):
                 self[(last_word, word)] += 1
             last_word = word
 
-    def row(self):
-        return [self[i] for i in self.features]
+    def row(self, boolean=False):
+        if boolean:
+            x = []
+            for i in self.features:
+                if self[i] > 0:
+                    x.append(1)
+                else:
+                    x.append(0)
+            return x
+        else:
+            return [self[i] for i in self.features]

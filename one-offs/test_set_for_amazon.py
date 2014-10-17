@@ -93,7 +93,7 @@ for i in q:
         classifier = ClassifierFactory.from_file(f, c)
         sys.stderr.write("Done\n")
 
-    a = [i.identifier, edition.title.encode("utf8"), authors.encode("utf8"), classifier.predict(counter.row())[0], ", ".join(training_data.get(edition.title, []))]
+    a = [i.identifier, edition.title.encode("utf8"), authors.encode("utf8"), classifier.predict(counter.row(boolean=True))[0], ", ".join(training_data.get(edition.title, []))]
              
     predictions_out.writerow(a)
     of.flush()
