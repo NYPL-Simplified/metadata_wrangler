@@ -25,7 +25,6 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         if sys.argv[1] == 'force':
             force = True
-            works_from_source = DataSource.lookup(session, sys.argv[2])
         else:
             works_from_source = DataSource.lookup(session, sys.argv[1])
             force = False

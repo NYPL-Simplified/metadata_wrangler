@@ -58,7 +58,12 @@ classifier = None
 amazon = DataSource.lookup(db, DataSource.AMAZON)
 scraper = AmazonScraper(db)
 counter = FeatureCounter(features)
-q = db.query(Identifier).join(Measurement).filter(Measurement.data_source==amazon).filter(Measurement.quantity_measured==Measurement.POPULARITY).filter(Measurement.value < 20000)
+
+q = db.query(Identifier).join(Measurement).filter(Measurement.data_source==amazon).filter(Measurement.quantity_measured==Measurement.POPULARITY)
+print "Measured popularity of %d" % q.count()
+
+q = q.filter(Measurement.value < 20000)
+print "%d are popular enough for this script." % q.count()
 for i in q:
     if i.identifier in seen:
         print "Skipping %s" % i.identifier

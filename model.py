@@ -1920,7 +1920,7 @@ class Work(Base):
         if self.primary_edition:
             self.primary_edition.calculate_presentation()
 
-        if not classify or choose_summary or calculate_quality:
+        if not (classify or choose_summary or calculate_quality):
             return
 
         # Find all related IDs that might have associated descriptions
@@ -1940,8 +1940,19 @@ class Work(Base):
             self.summary, summaries = Identifier.evaluate_summary_quality(
                 _db, flattened_data)
 
+        # If this is a Project Gutenberg book, treat the number of IDs
+        # associated with the work (~the number of editions of the
+        # work published in modern times) as a measurement of
+        # popularity.
+        if self.primary_edition and self.primary_edition.data_source.name==DataSource.GUTENBERG:
+            oclc_linked_data = DataSource.lookup(
+                _db, DataSource.OCLC_LINKED_DATA)
+            self.primary_edition.primary_identifier.add_measurement(
+                oclc_linked_data, Measurement.POPULARITY, 
+                len(flattened_data))
+
         if calculate_quality:
-            self.quality = self.calculate_quality(flattened_data, summaries)
+            self.calculate_quality(flattened_data)
 
         # Now that everything's calculated, print it out.
         if True:
@@ -1973,14 +1984,6 @@ class Work(Base):
                 Measurement.is_most_recent==True).filter(
                     Measurement.quantity_measured.in_(quantities)).all()
 
-        # Include a synthetic measurement of the sheer number of
-        # identifiers associated with this work.
-        # TODO: This is a hack and we don't even use the
-        # results at this point.
-        # measurements.append(
-        #     Measurement(data_source_id=999,
-        #                 quantity_measured=Measurement.POPULARITY,
-        #                 value=len(flattened_data)))
         self.quality = Measurement.overall_quality(measurements)
 
     def assign_genres(self, identifier_ids, cutoff=0.15):
@@ -2063,7 +2066,11 @@ class Measurement(Base):
     # time.
     POPULARITY_PERCENTILES = {
         DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805],
-        DataSource.AMAZON : [14937330, 1974074, 1702163, 1553600, 1432635, 1327323, 1251089, 1184878, 1131998, 1075720, 1024272, 978514, 937726, 898606, 868506, 837523, 799879, 770211, 743194, 718052, 693932, 668030, 647121, 627642, 609399, 591843, 575970, 559942, 540713, 524397, 511183, 497576, 483884, 470850, 458438, 444475, 432528, 420088, 408785, 398420, 387895, 377244, 366837, 355406, 344288, 333747, 324280, 315002, 305918, 296420, 288522, 279185, 270824, 262801, 253865, 246224, 238239, 230537, 222611, 215989, 208641, 202597, 195817, 188939, 181095, 173967, 166058, 160032, 153526, 146706, 139981, 133348, 126689, 119201, 112447, 106795, 101250, 96534, 91052, 85837, 80619, 75292, 69957, 65075, 59901, 55616, 51624, 47598, 43645, 39403, 35645, 31795, 27990, 24496, 20780, 17740, 14102, 10498, 7090, 3861]
+        DataSource.AMAZON : [14937330, 1974074, 1702163, 1553600, 1432635, 1327323, 1251089, 1184878, 1131998, 1075720, 1024272, 978514, 937726, 898606, 868506, 837523, 799879, 770211, 743194, 718052, 693932, 668030, 647121, 627642, 609399, 591843, 575970, 559942, 540713, 524397, 511183, 497576, 483884, 470850, 458438, 444475, 432528, 420088, 408785, 398420, 387895, 377244, 366837, 355406, 344288, 333747, 324280, 315002, 305918, 296420, 288522, 279185, 270824, 262801, 253865, 246224, 238239, 230537, 222611, 215989, 208641, 202597, 195817, 188939, 181095, 173967, 166058, 160032, 153526, 146706, 139981, 133348, 126689, 119201, 112447, 106795, 101250, 96534, 91052, 85837, 80619, 75292, 69957, 65075, 59901, 55616, 51624, 47598, 43645, 39403, 35645, 31795, 27990, 24496, 20780, 17740, 14102, 10498, 7090, 3861],
+        # This is a percentile list of OCLC Work IDs and OCLC Numbers
+        # associated with Project Gutenberg texts via OCLC Linked
+        # Data.
+        DataSource.OCLC_LINKED_DATA : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11, 12, 14, 15, 18, 21, 29, 41, 81],
     }
 
     RATING_SCALES = {
@@ -2161,7 +2168,7 @@ class Measurement(Base):
         elif (self.quantity_measured == self.POPULARITY
               and self.data_source.name in self.POPULARITY_PERCENTILES):
             d = self.POPULARITY_PERCENTILES[self.data_source.name]
-            position = bisect.bisect(d, self.value)
+            position = bisect.bisect_left(d, self.value)
             self._normalized_value = position * 0.01            
         elif (self.quantity_measured == self.RATING
               and self.data_source.name in self.RATING_SCALES):
