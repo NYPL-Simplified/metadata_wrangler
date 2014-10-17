@@ -568,7 +568,8 @@ class GutenbergBookshelfClient(object):
         headers = dict()
         if referer:
             headers['Referer'] = referer
-        url = urljoin(self.BASE_URL, url)
+        if not url.startswith('http'):
+            url = urljoin(self.BASE_URL, url)
         if url in handled:
             return None
         representation, cached = Representation.get(
@@ -604,10 +605,44 @@ class GutenbergBookshelfClient(object):
             if not representation:
                 # Already handled
                 continue
-            self.process_shelf(representation)
+            self.process_shelf(representation, handled)
 
-    def process_shelf(self, representation):
-        pass
+    gutenberg_text_number = re.compile("gutenberg.org/ebooks/([0-9]+)")
+
+    def process_shelf(self, representation, handled):
+        texts = set()
+        favorites = set()
+        downloads = dict()
+        soup = BeautifulSoup(representation.content, "lxml")
+        for book in soup.find_all("a", href=self.gutenberg_text_number):
+            is_favorite = book.parent.find(
+                'img', src=re.compile("Favorite-icon")) is not None
+            m = self.gutenberg_text_number.search(book['href'])
+            if m:
+                identifier = m.groups()[0]
+            else:
+                set_trace()
+
+            texts.add(identifier)
+            if is_favorite:
+                favorites.add(identifier)
+
+        catalog_search_link = soup.find('a', text="catalog search")
+        if catalog_search_link:
+            url = catalog_search_link
+            new_texts, downloads = self.process_catalog_search(
+                representation.url, url, handled)
+            texts = texts.union(new_texts)
+
+        return texts, favorites, downloads
+
+    def process_catalog_search(self, referer, url, handled):
+        texts = set()
+        downloads = dict()
+        representation = self.do_get(referer, url, handled)
+        if not representation:
+            return texts, downloads
+        set_trace()
 
     def process_bookshelf_list_page(self, representation):
         lists = []
