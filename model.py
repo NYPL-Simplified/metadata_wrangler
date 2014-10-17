@@ -3604,8 +3604,8 @@ class Representation(Base):
             headers = None
             content = None
 
-        if status_code == 401:
-            raise IOError("401 status code")
+        if status_code % 100 == 4:
+            raise IOError("%s status code" % status_code)
 
         if usable_representation and status_code == 304:
             # The representation has not been modified since the last
@@ -3657,17 +3657,17 @@ class Representation(Base):
         return response.status_code, response.headers, response.content
 
     @classmethod
-    def http_get_no_redirect(cls, url, headers):
+    def http_get_no_redirect(cls, url, headers, **kwargs):
         """HTTP-based GET with no redirects."""
-        return cls.simple_http_get(url, headers, allow_redirects=False)
+        return cls.simple_http_get(url, headers, allow_redirects=False, **kwargs)
 
     @classmethod
-    def browser_http_get(cls, url, headers):
+    def browser_http_get(cls, url, headers, **kwargs):
         """GET the representation that would be displayed to a web browser.
         """
         headers = dict(headers)
         headers['User-Agent'] = cls.BROWSER_USER_AGENT
-        return cls.simple_http_get(url, headers)
+        return cls.simple_http_get(url, headers, **kwargs)
 
 
 class CoverageProvider(object):

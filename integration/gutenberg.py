@@ -564,6 +564,12 @@ class GutenbergBookshelfClient(object):
         self._db = _db
         self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
 
+    def do_get_with_captcha_trapdoor(self, *args, **kwargs):
+        status_code, headers, content = Representation.browser_http_get(*args, **kwargs)
+        if 'captcha' in content:
+            raise IOError("Triggered CAPTCHA.")
+        return status_code, headers, content
+
     def do_get(self, referer, url, handled):
         headers = dict()
         if referer:
@@ -573,15 +579,19 @@ class GutenbergBookshelfClient(object):
         if url in handled:
             return None
         representation, cached = Representation.get(
-            self._db, url, Representation.browser_http_get,
+            self._db, url, self.do_get_with_captcha_trapdoor,
             headers, data_source=self.data_source,
-            pause_before=random.random())
+            pause_before=random.random()*5)
         if not cached:
             self._db.commit()
         handled.add(url)
         return representation
 
     def full_update(self):
+        all_classifications = dict()
+        all_favorites = set()
+        all_download_counts = dict()
+
         url = self.BASE_URL
         lists_of_shelves = [(None, url)]
         shelves = []
@@ -596,18 +606,27 @@ class GutenbergBookshelfClient(object):
                 representation)
             for i in new_lists:
                 lists_of_shelves.append((url, i))
-            for i in new_shelves:
-                shelves.append((url, i))
+            for shelf_url, shelf_name in new_shelves:
+                shelves.append((url, shelf_url, shelf_name))
 
         # Now get the contents of each bookshelf.
-        for referer, url in shelves:
+        for referer, url, bookshelf_name in shelves:
             representation = self.do_get(referer, url, handled) 
             if not representation:
                 # Already handled
                 continue
-            self.process_shelf(representation, handled)
+            texts, favorites, downloads = self.process_shelf(
+                representation, handled)
+            all_classifications[bookshelf_name] = texts
+            all_favorites = all_favorites.union(favorites)
+            all_download_counts.update(downloads)
+            print "%s %d %d %d %d %d" % (
+                bookshelf_name, len(favorites), len(all_favorites), 
+                len(downloads), len(all_download_counts),
+                len(texts))
 
-    gutenberg_text_number = re.compile("gutenberg.org/ebooks/([0-9]+)")
+    gutenberg_text_number = re.compile("/ebooks/([0-9]+)")
+    number_of_downloads = re.compile("([0-9]+) download")
 
     def process_shelf(self, representation, handled):
         texts = set()
@@ -627,9 +646,9 @@ class GutenbergBookshelfClient(object):
             if is_favorite:
                 favorites.add(identifier)
 
-        catalog_search_link = soup.find('a', text="catalog search")
+        catalog_search_link = soup.find('a', text="catalog search", href=True)
         if catalog_search_link:
-            url = catalog_search_link
+            url = catalog_search_link['href']
             new_texts, downloads = self.process_catalog_search(
                 representation.url, url, handled)
             texts = texts.union(new_texts)
@@ -639,10 +658,28 @@ class GutenbergBookshelfClient(object):
     def process_catalog_search(self, referer, url, handled):
         texts = set()
         downloads = dict()
-        representation = self.do_get(referer, url, handled)
-        if not representation:
-            return texts, downloads
-        set_trace()
+        while url:
+            representation = self.do_get(referer, url, handled)
+            if not representation:
+                return texts, downloads
+            soup = BeautifulSoup(representation.content, "lxml")
+            for book in soup.find_all('li', 'booklink'):
+                link = book.find('a', 'link', href=self.gutenberg_text_number)
+                identifier = self.gutenberg_text_number.search(link['href']).groups()[0]
+                texts.add(identifier)
+                download_count_tag = book.find(
+                    'span', 'extra', text=self.number_of_downloads)
+                if download_count_tag:
+                    download_count = self.number_of_downloads.search(
+                        download_count_tag.text).groups()[0]
+                    downloads[identifier] = int(download_count)
+
+            next_link = soup.find('a', accesskey='+')
+            if next_link:
+                url = next_link['href']
+            else:
+                url = None
+        return texts, downloads
 
     def process_bookshelf_list_page(self, representation):
         lists = []
@@ -657,7 +694,11 @@ class GutenbergBookshelfClient(object):
             if '/wiki/Category:' in new_url:
                 lists.append(new_url)
             elif new_url.endswith("Bookshelf)"):
-                shelves.append(new_url)
+                bookshelf_name = i.text
+                if bookshelf_name.endswith("(Bookshelf)"):
+                    bookshelf_name = bookshelf_name[:-len("(Bookshelf)")]
+                bookshelf_name = bookshelf_name.strip()
+                shelves.append((new_url, bookshelf_name))
         return lists, shelves
 
 
