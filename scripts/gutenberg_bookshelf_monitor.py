@@ -16,3 +16,4 @@ from integration.gutenberg import GutenbergBookshelfClient
 if __name__ == '__main__':
     db = production_session()
     GutenbergBookshelfClient(db).full_update()
+    db.commit()
