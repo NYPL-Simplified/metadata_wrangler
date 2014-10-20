@@ -2080,6 +2080,10 @@ class Measurement(Base):
         DataSource.OCLC_LINKED_DATA : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11, 12, 14, 15, 18, 21, 29, 41, 81],
     }
 
+    DOWNLOAD_PERCENTILES = {
+        DataSource.GUTENBERG : [0, 1, 2, 3, 4, 5, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 12, 12, 13, 14, 14, 15, 15, 16, 16, 17, 18, 18, 19, 19, 20, 21, 21, 22, 23, 23, 24, 25, 26, 27, 28, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 40, 41, 43, 45, 46, 48, 50, 52, 55, 57, 60, 62, 65, 69, 72, 76, 79, 83, 87, 93, 99, 106, 114, 122, 130, 140, 152, 163, 179, 197, 220, 251, 281, 317, 367, 432, 501, 597, 658, 718, 801, 939, 1065, 1286, 1668, 2291, 4139]
+    },
+
     RATING_SCALES = {
         DataSource.OVERDRIVE : [1, 5],
         DataSource.AMAZON : [1, 5],
@@ -2134,7 +2138,7 @@ class Measurement(Base):
         ratings = []
         for m in measurements:
             l = None
-            if m.quantity_measured == cls.POPULARITY:
+            if m.quantity_measured in (cls.POPULARITY, cls.DOWNLOADS):
                 l = popularities
             elif m.quantity_measured == cls.RATING:
                 l = ratings
@@ -2182,6 +2186,11 @@ class Measurement(Base):
         elif (self.quantity_measured == self.POPULARITY
               and self.data_source.name in self.POPULARITY_PERCENTILES):
             d = self.POPULARITY_PERCENTILES[self.data_source.name]
+            position = bisect.bisect_left(d, self.value)
+            self._normalized_value = position * 0.01            
+        elif (self.quantity_measured == self.DOWNLOADS
+              and self.data_source.name in self.DOWNLOAD_PERCENTILES):
+            d = self.DOWNLOAD_PERCENTILES[self.data_source.name]
             position = bisect.bisect_left(d, self.value)
             self._normalized_value = position * 0.01            
         elif (self.quantity_measured == self.RATING
