@@ -3604,7 +3604,7 @@ class Representation(Base):
             headers = None
             content = None
 
-        if status_code / 100 == 4:
+        if status_code / 100 == 4 and status_code != 404:
             raise IOError("%s status code" % status_code)
 
         if usable_representation and status_code == 304:

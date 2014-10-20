@@ -47,7 +47,10 @@ class AmazonScraper(object):
         else:
             get_method = Representation.browser_http_get
             pause = 1 + random.random()
-        url = self.BIBLIOGRAPHIC_URL % dict(asin=identifier.identifier)
+        asin = identifier.identifier
+        if isbnlib.is_isbn13(asin):
+            asin = isbnlib.to_isbn10(asin)
+        url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         representation, cached = Representation.get(
             self._db, url, get_method,
             data_source=self.data_source, identifier=identifier,
@@ -68,8 +71,12 @@ class AmazonScraper(object):
         else:
             max_age=self.MAX_REVIEW_AGE
 
+        asin = identifier.identifier
+        if isbnlib.is_isbn13(asin):
+            asin = isbnlib.to_isbn10(asin)
+
         url = self.REVIEW_URL % dict(
-            asin=identifier.identifier, page_number=page, 
+            asin=asin, page_number=page, 
             sort_by=self.SORT_REVIEWS_BY_HELPFULNESS)
         extra_request_headers = dict()
         if page > 1:
@@ -118,7 +125,8 @@ class AmazonScraper(object):
 class AmazonBibliographicParser(XMLParser):
 
     IDENTIFIER_IN_URL = re.compile("/dp/([^/]+)/")
-    BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio', 'Audible']
+    BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio', 'Audible',
+                                   'Multimedia', 'CD', 'DVD']
     NAMESPACES = {}
     QUALITY_RE = re.compile("([0-9.]+) out of")
     PAGE_COUNT_RE = re.compile("([0-9]+) page")
@@ -188,7 +196,7 @@ class AmazonBibliographicParser(XMLParser):
             if not usable_format:
                 continue
 
-            if not 'Kindle' in format:
+            if not 'Kindle' in format and not 'Hardcover' in format and not 'Paperback' in format:
                 print "Unknown format: %s" % format
             href = edition_tag.attrib['href']
             m = self.IDENTIFIER_IN_URL.search(href)
