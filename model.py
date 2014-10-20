@@ -697,6 +697,11 @@ class Identifier(Base):
             quantity_measured=quantity_measured,
             is_most_recent=True,
         )
+        if most_recent and most_recent.value == value and taken_at == now:
+            # The value hasn't changed since last time. Just update
+            # the timestamp of the existing measurement.
+            self.taken_at = taken_at
+
         if most_recent and most_recent.taken_at < taken_at:
             most_recent.is_most_recent = False
 
@@ -2057,6 +2062,8 @@ class Measurement(Base):
     RATING = "http://schema.org/ratingValue"
     DOWNLOADS = "https://schema.org/UserDownloads"
     PAGE_COUNT = "https://schema.org/numberOfPages"
+
+    GUTENBERG_FAVORITE = "http://library-simplified.com/rel/lists/gutenberg-favorite"
 
     # If a book's popularity measurement is found between index n and
     # index n+1 on this list, it is in the nth percentile for
