@@ -26,6 +26,7 @@ from model import (
     Contributor,
     Edition,
     DataSource,
+    Measurement,
     Representation,
     Resource,
     Identifier,
@@ -559,12 +560,15 @@ class GutenbergBookshelfClient(object):
     """
 
     BASE_URL = "http://www.gutenberg.org/wiki/Category:Bookshelf"
+    gutenberg_text_number = re.compile("/ebooks/([0-9]+)")
+    number_of_downloads = re.compile("([0-9]+) download")
 
     def __init__(self, _db):
         self._db = _db
         self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
 
     def do_get_with_captcha_trapdoor(self, *args, **kwargs):
+        kwargs['proxies'] = dict(http='http://us-il.proxymesh.com:31280')
         status_code, headers, content = Representation.browser_http_get(*args, **kwargs)
         if 'captcha' in content:
             raise IOError("Triggered CAPTCHA.")
@@ -624,9 +628,52 @@ class GutenbergBookshelfClient(object):
                 bookshelf_name, len(favorites), len(all_favorites), 
                 len(downloads), len(all_download_counts),
                 len(texts))
+        set_trace()
+        self.set_favorites(all_favorites)
+        self.set_download_counts(all_download_counts)
+        self.classify(all_classifications)
 
-    gutenberg_text_number = re.compile("/ebooks/([0-9]+)")
-    number_of_downloads = re.compile("([0-9]+) download")
+    def _title(self, identifier):
+        a = identifier.primarily_identifies
+        if not a:
+            return "(unknown)"
+        else:
+            return a[0].title
+
+    def _gutenberg_id_lookup(self, ids):
+        return self._db.query(Identifier).filter(
+            Identifier.identifier.in_(ids)).filter(
+                Identifier.type==Identifier.GUTENBERG_ID)
+
+    def set_favorites(self, ids):
+        # TODO: Once we have lists this should be a list.
+        print "%d Favorites:" % len(ids)
+        identifiers = self._gutenberg_id_lookup(ids)
+        for identifier in identifiers:
+            identifier.add_measurement(
+                self.data_source, Measurement.GUTENBERG_FAVORITE,
+                1)
+            print "", self._title(identifier)
+
+    def set_download_counts(self, all_download_counts):
+        print "Downloads:"
+        identifiers = self._gutenberg_id_lookup(all_download_counts.keys())
+        for identifier in identifiers:
+            identifier.add_measurement(
+                self.data_source, Measurement.DOWNLOADS,
+                all_download_counts[identifier.identifier])
+            print "%d\t%s" % (
+                all_download_counts[identifier.identifier],
+                self._title(identifier))
+
+    def classify(self, all_classifications):
+        for classification, ids in all_classifications.items():
+            identifiers = self._gutenberg_id_lookup(ids)
+            for identifier in identifiers:
+                identifier.classify(
+                    self.data_source, Subject.GUTENBERG_BOOKSHELF, 
+                    classification)
+                print "%s\t%s" % (classification, self._title(identifier))
 
     def process_shelf(self, representation, handled):
         texts = set()
