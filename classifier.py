@@ -1579,7 +1579,7 @@ class GutenbergBookshelfClassifier(Classifier):
         if (identifier in cls.FICTION
             or "Fiction" in identifier or "Stories" in identifier):
             return True
-        return False
+        return None
 
     @classmethod
     def audience(cls, identifier, name):
@@ -1601,4 +1601,4 @@ Classifier.classifiers[Classifier.FAST] = FASTClassifier
 Classifier.classifiers[Classifier.LCSH] = LCSHClassifier
 Classifier.classifiers[Classifier.TAG] = TAGClassifier
 Classifier.classifiers[Classifier.OVERDRIVE] = OverdriveClassifier
-Classifier.classifiers[Classifier.GUTENBERG_BOOKSHELF] = OverdriveClassifier
+Classifier.classifiers[Classifier.GUTENBERG_BOOKSHELF] = GutenbergBookshelfClassifier

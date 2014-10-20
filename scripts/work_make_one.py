@@ -12,8 +12,7 @@ from model import (
     LicensePool,
     SessionManager,
     Work,
-    WorkRecord,
-    WorkIdentifier,
+    Identifier,
 )
 from model import production_session
 
@@ -23,12 +22,12 @@ if __name__ == '__main__':
     data_source_name = sys.argv[1]
     identifier = sys.argv[2]
     data_source = DataSource.lookup(session, data_source_name)
-    wid, ignore = WorkIdentifier.for_foreign_id(
+    wid, ignore = Identifier.for_foreign_id(
         session, data_source.primary_identifier_type, identifier, False)
     pool = session.query(LicensePool).filter(
         LicensePool.data_source==data_source).filter(
             LicensePool.identifier==wid).one()
-    pool.work_record().work = None
+    pool.edition().work = None
     pool.calculate_work()
     work = pool.work
     work.calculate_presentation()

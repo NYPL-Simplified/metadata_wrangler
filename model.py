@@ -1924,7 +1924,7 @@ class Work(Base):
 
         if self.primary_edition:
             self.primary_edition.calculate_presentation()
-        
+
         if not (classify or choose_summary or calculate_quality):
             return
 
@@ -1983,7 +1983,8 @@ class Work(Base):
 
     def calculate_quality(self, flattened_data):
         _db = Session.object_session(self)
-        quantities = [Measurement.POPULARITY, Measurement.RATING]
+        quantities = [Measurement.POPULARITY, Measurement.RATING,
+                      Measurement.DOWNLOADS]
         measurements = _db.query(Measurement).filter(
             Measurement.identifier_id.in_(flattened_data)).filter(
                 Measurement.is_most_recent==True).filter(
@@ -2082,7 +2083,7 @@ class Measurement(Base):
 
     DOWNLOAD_PERCENTILES = {
         DataSource.GUTENBERG : [0, 1, 2, 3, 4, 5, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 12, 12, 13, 14, 14, 15, 15, 16, 16, 17, 18, 18, 19, 19, 20, 21, 21, 22, 23, 23, 24, 25, 26, 27, 28, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 40, 41, 43, 45, 46, 48, 50, 52, 55, 57, 60, 62, 65, 69, 72, 76, 79, 83, 87, 93, 99, 106, 114, 122, 130, 140, 152, 163, 179, 197, 220, 251, 281, 317, 367, 432, 501, 597, 658, 718, 801, 939, 1065, 1286, 1668, 2291, 4139]
-    },
+    }
 
     RATING_SCALES = {
         DataSource.OVERDRIVE : [1, 5],
@@ -2121,9 +2122,9 @@ class Measurement(Base):
     is_most_recent = Column(Boolean, index=True)
 
     def __repr__(self):
-        return "%s(%r)=%s (norm=%.2d)" % (
+        return "%s(%r)=%s (norm=%.2f)" % (
             self.quantity_measured, self.identifier, self.value,
-            self.normalized_value)
+            self.normalized_value or 0)
 
     @classmethod
     def overall_quality(cls, measurements, popularity_weight=0.3,
