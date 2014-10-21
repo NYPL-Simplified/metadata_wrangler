@@ -306,7 +306,9 @@ class AmazonReviewParser(XMLParser):
             if b is None:
                 title = None
             else:
-                title = b.text.strip()
+                title = b.text
+                if title:
+                    title = title.strip()
             review_text = review.xpath("text()")
             yield title, "\n\n".join(review_text)
 

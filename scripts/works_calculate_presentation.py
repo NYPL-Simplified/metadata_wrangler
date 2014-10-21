@@ -65,7 +65,8 @@ if __name__ == '__main__':
         print "That's %d works." % q.count()
         for work in q:
             #work.calculate_presentation(choose_edition=False, classify=True, choose_summary=False, calculate_quality=True)
-            work.calculate_presentation()
+            work.calculate_presentation(choose_edition=False, classify=False, choose_summary=False, calculate_quality=True)
+            #work.calculate_presentation()
             i += 1
             if not i % 10:
                 session.commit()

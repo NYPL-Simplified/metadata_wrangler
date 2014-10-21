@@ -1955,6 +1955,11 @@ class Work(Base):
             self.primary_edition.primary_identifier.add_measurement(
                 oclc_linked_data, Measurement.POPULARITY, 
                 len(flattened_data))
+            # Only consider the quality signals associated with the
+            # primary edition. Otherwise texts that have multiple
+            # Gutenberg editions will drag down the quality of popular
+            # books.
+            flattened_data = [self.primary_edition.primary_identifier.id]
 
         if calculate_quality:
             self.calculate_quality(flattened_data)
@@ -3620,6 +3625,9 @@ class Representation(Base):
             status_code = None
             headers = None
             content = None
+
+        if not status_code:
+            raise IOError("No status code!")
 
         if status_code / 100 == 4 and status_code != 404:
             raise IOError("%s status code" % status_code)
