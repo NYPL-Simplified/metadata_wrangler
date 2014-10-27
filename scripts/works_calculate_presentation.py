@@ -29,6 +29,14 @@ if __name__ == '__main__':
             works_from_source = DataSource.lookup(session, sys.argv[1])
             force = False
 
+    if len(sys.argv) == 3:
+        if sys.argv[1] == 'force':
+            force = True
+        else:
+            force = False
+
+        works_from_source = DataSource.lookup(session, sys.argv[2])
+
     if len(sys.argv) == 4:
         source, type, id = sys.argv[1:]
         edition, ignore = Edition.for_foreign_id(session, source, type, id)
@@ -56,7 +64,9 @@ if __name__ == '__main__':
 
         print "That's %d works." % q.count()
         for work in q:
-            work.calculate_presentation()
+            #work.calculate_presentation(choose_edition=False, classify=True, choose_summary=False, calculate_quality=True)
+            work.calculate_presentation(choose_edition=False, classify=False, choose_summary=False, calculate_quality=True)
+            #work.calculate_presentation()
             i += 1
             if not i % 10:
                 session.commit()

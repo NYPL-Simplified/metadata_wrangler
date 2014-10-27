@@ -16,6 +16,8 @@ if __name__ == '__main__':
         force = True
         if sys.argv[1] == 'force':
             type_restriction = None
+            if len(sys.argv) > 2:
+                type_restriction = sys.argv[2]
         else:
             type_restriction = sys.argv[1]
 

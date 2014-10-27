@@ -681,6 +681,8 @@ class OCLCXMLParser(XMLParser):
 
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
+            if restrict_to_authors and isinstance(restrict_to_authors[0], Contributor):
+                restrict_to_authors = [x.name for x in restrict_to_authors]
             primary_author = None
 
             for a, roles in authors_and_roles:
@@ -695,7 +697,7 @@ class OCLCXMLParser(XMLParser):
                     # some other role in it, or the book may be about
                     # them, or incorporate their work, but this book
                     # is not *by* them.
-                    return None
+                return None
 
         author_names = ", ".join([x.name for x, y in authors_and_roles])
 
@@ -736,7 +738,7 @@ class OCLCXMLParser(XMLParser):
             int(oclc_work_id)
         except ValueError, e:
             # This record does not have a valid OCLC Work ID.
-            return None, False
+            oclc_work_id = None
 
         item_type = work_tag.get("itemtype")
         if (item_type.startswith('itemtype-book') 

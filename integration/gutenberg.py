@@ -560,6 +560,7 @@ class GutenbergBookshelfClient(object):
     """
 
     BASE_URL = "http://www.gutenberg.org/wiki/Category:Bookshelf"
+    MOST_POPULAR_URL = 'http://www.gutenberg.org/ebooks/search/%3Fsort_order%3Ddownloads'
     gutenberg_text_number = re.compile("/ebooks/([0-9]+)")
     number_of_downloads = re.compile("([0-9]+) download")
 
@@ -568,7 +569,6 @@ class GutenbergBookshelfClient(object):
         self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
 
     def do_get_with_captcha_trapdoor(self, *args, **kwargs):
-        kwargs['proxies'] = dict(http='http://us-il.proxymesh.com:31280')
         status_code, headers, content = Representation.browser_http_get(*args, **kwargs)
         if 'captcha' in content:
             raise IOError("Triggered CAPTCHA.")
@@ -594,12 +594,12 @@ class GutenbergBookshelfClient(object):
     def full_update(self):
         all_classifications = dict()
         all_favorites = set()
-        all_download_counts = dict()
-
-        url = self.BASE_URL
-        lists_of_shelves = [(None, url)]
-        shelves = []
         handled = set()
+        ignore, all_download_counts = self.process_catalog_search(
+            None, self.MOST_POPULAR_URL, handled)
+
+        lists_of_shelves = [(None, self.BASE_URL)]
+        shelves = []
         while lists_of_shelves:
             referer, url = lists_of_shelves.pop()
             representation = self.do_get(referer, url, handled)
@@ -624,12 +624,8 @@ class GutenbergBookshelfClient(object):
             all_classifications[bookshelf_name] = texts
             all_favorites = all_favorites.union(favorites)
             all_download_counts.update(downloads)
-            print "%s %d %d %d %d %d" % (
-                bookshelf_name, len(favorites), len(all_favorites), 
-                len(downloads), len(all_download_counts),
-                len(texts))
-        set_trace()
-        self.set_favorites(all_favorites)
+        # Favorites turns out not to be that useful.
+        # self.set_favorites(all_favorites)
         self.set_download_counts(all_download_counts)
         self.classify(all_classifications)
 
@@ -638,7 +634,7 @@ class GutenbergBookshelfClient(object):
         if not a:
             return "(unknown)"
         else:
-            return a[0].title
+            return a[0].title.encode("utf8")
 
     def _gutenberg_id_lookup(self, ids):
         return self._db.query(Identifier).filter(
@@ -673,7 +669,7 @@ class GutenbergBookshelfClient(object):
                 identifier.classify(
                     self.data_source, Subject.GUTENBERG_BOOKSHELF, 
                     classification)
-                print "%s\t%s" % (classification, self._title(identifier))
+                print "%s\t%s" % (classification.encode("utf8"), self._title(identifier))
 
     def process_shelf(self, representation, handled):
         texts = set()
