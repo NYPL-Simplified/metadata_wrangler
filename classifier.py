@@ -98,7 +98,7 @@ genre_structure = {
         "Middle East History",
         "Military History",
         "Modern History",
-        "Renaissance History",
+        "Renaissance & Early Modern History",
         "United States History",
         "World History",
     ],
@@ -172,6 +172,7 @@ genre_structure = {
         "Transportation",
         "Travel",
     ],
+    ("Urban Fiction", True): [],
     ("African-American", None) : [],
     ("LGBT", None) : [],
 }
@@ -336,7 +337,7 @@ class OverdriveClassifier(Classifier):
         ])
 
     GENRES = {
-        African_American : ["African American Fiction", "African American Nonfiction", "Urban Fiction", ],
+        African_American : ["African American Fiction", "African American Nonfiction"],
         Antiques_Collectibles : "Antiques",
         Architecture : "Architecture",
         Art : "Art",
@@ -398,6 +399,7 @@ class OverdriveClassifier(Classifier):
         Transportation : "Transportation",
         Travel : ["Travel", "Travel Literature"],
         True_Crime : "True Crime",
+        Urban_Fiction: "Urban Fiction", 
     }
 
     @classmethod
@@ -710,14 +712,16 @@ class KeywordBasedClassifier(Classifier):
         "autobiographies", "nonfiction")
     JUVENILE_INDICATORS = match_kw(
         "for children", "children's", "juvenile",
-        "nursery rhymes")
-    YOUNG_ADULT_INDICATORS = match_kw("young adult", "ya")
+        "nursery rhymes", "9-12")
+    YOUNG_ADULT_INDICATORS = match_kw("young adult", "ya", "12-Up", 
+                                      "teenage fiction")
 
     # These identifiers indicate that the string "children" or
     # "juvenile" in the identifier does not actually mean the work is
     # _for_ children.
     JUVENILE_BLACKLIST = set([
         "military participation",
+        "services",
         "children's accidents",
         "children's voices",
         "juvenile delinquency",
@@ -725,570 +729,1052 @@ class KeywordBasedClassifier(Classifier):
         "missing children",
     ])
 
-    GENRES = {
+    GENRES = { 
         Action_Adventure : match_kw(
-             "adventure",
-             "adventure stories",
-             "adventure fiction",
-             "western stories",
-             "adventurers",
-             "sea stories",
-             "war stories",
-        ),
+            "adventure",
+            "adventurers",
+            "adventure stories",
+            "adventure fiction", 
+            "western stories",
+            "adventurers",
+            "sea stories",
+            "war stories", 
+            "men's adventure",
+        ), 
+
         African_American : match_kw(
-            "african americans",
-            "african american",
+            "african americans", 
+            "african american", 
             "african-american",
-            "african-americans",
-            "urban fiction",
+            "african-americans", 
+            "black studies",
+            "african-american studies",
         ),
-
+               
         African_History: match_kw(
+            "african history",
+            "history.*africa",
         ),
-
-        Ancient_History: match_kw(
-        ),
-
-        Antiques_Collectibles: match_kw(
-        ),
-
-        Architecture: match_kw(
-        ),
-
-        Art: match_kw(
-        ),
-
-        Art_Architecture_Design: match_kw(
-        ),
-
-        Art_Criticism_Theory: match_kw(
-        ),
-
-        Art_History: match_kw(
-        ),
-
-        Asian_History: match_kw(
-        ),
-
-        Bartending_Cocktails: match_kw(
-        ),
-
-        Biography_Memoir : match_kw(
-            "autobiographies",
-            "autobiography",
-            "biographies",
-            "biography",
-        ),
-
-        Body_Mind_Spirit: match_kw(
-        ),
-
-        Buddhism: match_kw(
-        ),
-
-        Business_Economics: match_kw(
-        ),
-
-        Christianity : match_kw(
-            "schema:creativework:bible",
-            "bible",
-            "sermons",
-            "theological",
-            "theology",
-            'biblical',
-            "christian",
-            "christianity",
-            "catholic",
-            "protestant",
-            "catholicism",
-            "protestantism",
-            "church",
-        ),
-
-        Civil_War_History: match_kw(
-            "american civil war",
-            "1861-1865",
-        ),
-
-        Classics: match_kw(
-        ),
-
-        Classics_Poetry: match_kw(
-        ),
-
-        Classifier: match_kw(
-        ),
-
-        Computers : match_kw(
-            "computer",
-            "computers",
-            "hardware",
-            "software",
-        ),
-
-        Contemporary_Romance: match_kw(
-            "contemporary romance",
-        ),
-
-        Cooking : match_kw(
-            "baking",
-            "cookbook",
-            "cooking",
-            "food",
-            "home economics",
-        ),
-
-        Crafts_Cooking_Garden: match_kw(
-        ),
-
-        Crafts_Hobbies_Games: match_kw(
-        ),
-
-        Crime_Thrillers_Mystery: match_kw(
-        ),
-
-        Criticism_Philosophy: match_kw(
-        ),
-
-        Dance: match_kw(
-        ),
-
-        Design: match_kw(
-        ),
-
-        Dictionaries: match_kw(
-            "dictionaries",
-            "dictionary",
-        ),
-
-        Economics: match_kw(
-        ),
-
-        Education: match_kw(
-        ),
-
-        Encyclopedias: match_kw(
-            "encyclopaedias",
-            "encyclopaedia",
-            "encyclopedias",
-            "encyclopedia",            
-        ),
-
-        Epic_Fantasy: match_kw(
-        ),
-
-        Erotica: match_kw(
-        ),
-
-        Espionage: match_kw(
-        ),
-
-        # TODO: history _plus_ a place
+               
+               Ancient_History: match_kw(
+                   "ancient history",
+                   "civilization, classical",
+               ),
+               
+               Antiques_Collectibles: match_kw(
+                   "antiques",
+                   "collectibles",
+                   "collectors",
+                   "collecting",
+               ),
+               
+               Architecture: match_kw(
+                   "architecture",
+                   "architectural",
+                   "architect",
+                   "architects",
+               ),
+               
+               Art: match_kw(
+                   "art",
+                   "artist",
+                   "artists",
+                   "artistic",
+               ),
+               
+               Art_Architecture_Design: match_kw(
+                   # Pure super-category.
+               ),
+               
+               Art_Criticism_Theory: match_kw(
+                   "art criticism",
+                   "art / criticism & theory",
+               ),
+               
+               Art_History: match_kw(
+                   "art history",
+               ),
+               
+               Asian_History: match_kw(
+                   "asian history",
+               ),
+               
+               Bartending_Cocktails: match_kw(
+                   "cocktail",
+                   "cocktails",
+                   "bartending",
+                   "beer",
+                   "alcoholic beverages",
+                   "wine",
+                   "wine & spirits",
+                   "spirits & cocktails",
+               ),
+               
+               Biography_Memoir : match_kw(
+                   "autobiographies",
+                   "autobiography",
+                   "biographies",
+                   "biography",
+               ),
+               
+               Body_Mind_Spirit: match_kw(
+                   "body, mind & spirit",
+               ),
+               
+               Buddhism: match_kw(
+                   "buddhism",
+                   "buddhist",
+                   "buddha",
+               ),
+               
+               Business_Economics: match_kw(
+                   "business",
+                   "businesspeople",
+                   "businesswomen",
+                   "businessmen",
+                   "business & economics",
+                   "business & financial",
+                   "commerce",
+                   "sales",
+                   "selling",
+                   "sales & selling",
+                   "nonprofit",
+               ),
+               
+               Christianity : match_kw(
+                   "schema:creativework:bible",
+                   "bible",
+                   "sermons",
+                   "theological",
+                   "theology",
+                   'biblical',
+                   "christian",
+                   "christianity",
+                   "catholic",
+                   "protestant",
+                   "catholicism",
+                   "protestantism",
+                   "church",
+               ),
+               
+               Civil_War_History: match_kw(
+                   "american civil war",
+                   "1861-1865",
+               ),
+               
+               Classics: match_kw(
+                   'classics',
+               ),
+               
+               Classics_Poetry: match_kw(
+                   # Pure supercategory
+               ),
+               
+               Computers : match_kw(
+                   "computer",
+                   "computer science",
+                   "computational",
+                   "computers",
+                   "computing",
+                   "data",
+                   "database",
+                   "hardware",
+                   "software",
+                   "software development",
+                   "information technology",
+                   "web",
+                   "world wide web",
+               ),
+               
+               Contemporary_Romance: match_kw(
+                   "contemporary romance",
+                   "romance--contemporary",
+                   "romance / contemporary",
+                   "romance - contemporary",
+               ),
+               
+               Cooking : match_kw(
+                   "non-alcoholic",
+                   "baking",
+                   "cookbook",
+                   "cooking",
+                   "food",
+                   "health & healing",
+                   "home economics",
+                   "cuisine",
+               ),
+               
+               Crafts_Cooking_Garden: match_kw(
+                   # Pure supercategory
+               ),
+               
+               Crafts_Hobbies_Games: match_kw(
+                   # ! "arts and crafts movement"
+                   "arts & crafts",
+                   "arts, crafts"
+                   "beadwork",
+                   "candle crafts",
+                   "candle making",
+                   "carving",
+                   "ceramics",
+                   "crafts & hobbies",
+                   "crafts",
+                   "crocheting",
+                   "cross-stitch",
+                   "decorative arts",
+                   "flower arranging",
+                   "folkcrafts",
+                   "games",
+                   "handicrafts",
+                   "hobbies",
+                   "hobby",
+                   "hobbyist",
+                   "hobbyists",
+                   "jewelry",
+                   "knitting",
+                   "metal work",
+                   "needlework",
+                   "origami",
+                   "paper crafts",
+                   "pottery",
+                   "quilting",
+                   "quilts",
+                   "scrapbooking",
+                   "sewing",
+                   "soap making",
+                   "stamping",
+                   "stenciling",
+                   "textile crafts",
+                   "toymaking",
+                   "weaving",
+                   "woodwork",
+                   "video games",
+                   "gaming",
+                   "gambling",
+               ),
+               
+               Crime_Thrillers_Mystery: match_kw(
+                   # Pure supercategory
+               ),
+               
+               Criticism_Philosophy: match_kw(
+                   # Pure supercategory
+               ),
+               
+               Dance: match_kw(
+                   "dance",
+                   "dances",
+                   "dancers",
+                   "dancer",
+               ),
+               
+               Design: match_kw(
+                   "design",
+                   "designer",
+                   "designers",
+                   "graphic design",
+                   "typography"
+               ),
+               
+               Dictionaries: match_kw(
+                   "dictionaries",
+                   "dictionary",
+               ),              
+               
+               Drama : match_kw(
+                   "comedies",
+                   "drama",
+                   "dramatist",
+                   "dramatists",
+                   "plays",
+                   "shakespeare",
+                   "tragedies",
+                   "tragedy",
+               ),
+               
+               Economics: match_kw(
+                   "banking",
+                   "economy",
+                   "economies",
+                   "economic",
+                   "economics",
+               ),
+               
+               Education: match_kw(
+                   # "school" doesn't work because of artistic/philosophic "schools".
+                   # "schools" is likewise problematic.
+                   "education",
+                   "educational",
+                   "educator",
+                   "educators",
+                   "principals",
+                   "teacher",
+                   "teachers",
+                   "teaching",
+                   "schools",
+                   "high school",
+                   "schooling",
+                   "student",
+                   "students",
+                   "college",
+                   "university",
+                   "universities",
+               ),
+               
+               Encyclopedias: match_kw(
+                   "encyclopaedias",
+                   "encyclopaedia",
+                   "encyclopedias",
+                   "encyclopedia",            
+               ),
+               
+               Epic_Fantasy: match_kw(
+                   "epic fantasy",
+                   "fantasy - epic",
+                   "fantasy / epic",
+                   "fantasy--epic",
+                   "fantasy/epic",
+               ),
+               
+               Espionage: match_kw(
+                   "espionage",
+                   "spies",
+                   "spy stories",
+                   "spy novels",
+                   "spy fiction",
+                   "spy thriller",
+               ),
+               
+               Erotica : match_kw(
+                   'erotic',
+                   'erotica',
+               ),
+               
+               # TODO: history _plus_ a place
         European_History: match_kw(
+            "europe.*history",
+            "history.*europe",
         ),
-
-        Family_Relationships: match_kw(
-        ),
-
-        Drama : match_kw(
-            "drama",
-            "plays",
-        ),
-
-        Erotica : match_kw(
-            'erotic',
-            'erotica',
-        ),
-
-        Fantasy : match_kw(
-            "fantasy",
-            "magic",
-            "wizards",
-            "fairies",
-            "witches",
-            "dragons",
-            "sorcery",
-        ),
-
-        Fashion: match_kw(
-            "fashion",
-        ),
-
-        Film_TV: match_kw(
-        ),
-
-        Foreign_Language_Study: match_kw(
-        ),
-
-        Gardening: match_kw(
-        ),
-
-        Graphic_Novels_Comics: match_kw(
-            "comics",
-            "comic books",
-            "graphic novels",
-        ),
-
-        Hard_Boiled: match_kw(
-        ),
-
-        Health_Diet: match_kw(
-        ),
-
-        Hinduism: match_kw(
-        ),
-
-        Historical_Fiction : match_kw(
-            "historical fiction",
-        ),
-
-        Historical_Romance: match_kw(
-            "historical romance",
-        ),
-
-        History : match_kw(
-            "histories",
-            "history",
-        ),
-
-        Horror : match_kw(
-            "ghost stories",
-            "horror",
-            "vampires",
-            "paranormal fiction",
-            "occult fiction",
-        ),
-
-        House_Home: match_kw(
-        ),
-
-        Humor : match_kw(
-            "comedies",
-            "comedy",
-            "humor",
-            "humorous",
-            "satire",
-            "wit",
-        ),
-
-        Humor_Entertainment: match_kw(
-        ),
-
-        # These might be a problem because they might pick up
+               
+               Family_Relationships: match_kw(
+                   # ! human-animal relationships
+                   "family & relationships",                   
+                   # This is a little awkward because many (most?) of
+                   # "relationships" go into fiction
+                   "relationships",
+                   "family relationships",
+               ),
+               
+               Fantasy : match_kw(
+                   "fantasy",
+                   "magic",
+                   "wizards",
+                   "fairies",
+                   "witches",
+                   "dragons",
+                   "sorcery",
+                   "witchcraft",
+                   "wizardry",
+               ),
+               
+               Fashion: match_kw(
+                   "fashion",
+                   "fashion design",
+                   "fashion designers",
+               ),
+               
+               Film_TV: match_kw(
+                   "director",
+                   "directors",
+                   "film",
+                   "films",
+                   "movies",
+                   "movie",
+                   "motion picture",
+                   "motion pictures",
+                   "moviemaker",
+                   "moviemakers",
+                   "producer",
+                   "producers",
+                   "television",
+                   "video",
+               ),
+               
+               Foreign_Language_Study: match_kw(
+                   "english as a foreign language",
+                   "english as a second language",
+                   "esl",
+                   "foreign language study",
+                   "multi-language dictionaries",
+               ),
+               
+               Gardening: match_kw(
+                   "gardening",
+                   "horticulture",
+               ),
+               
+               Graphic_Novels_Comics: match_kw(
+                   "comics",
+                   "comic book",
+                   "comic books",
+                   "graphic novels",
+               ),
+               
+               Hard_Boiled: match_kw(
+                   "hard-boiled",
+               ),
+               
+               Health_Diet: match_kw(
+                   # ! "health services" ?
+                   # ! "health care reform"
+                   "fitness",
+                   "health",
+                   "health aspects",
+                   "health & fitness",
+                   "hygiene",
+                   "nutrition",
+                   "diet",
+                   "diets",
+                   "weight loss",
+               ),
+               
+               Hinduism: match_kw(
+                   "hinduism",
+                   "hindu",
+                   "hindus",
+               ),
+               
+               Historical_Fiction : match_kw(
+                   "historical fiction",
+                   "fiction.*historical",
+               ),
+               
+               Historical_Romance: match_kw(
+                   "historical romance",
+               ),
+               
+               History : match_kw(
+                   "histories",
+                   "history",
+               ),
+               
+               Horror : match_kw(
+                   "ghost stories",
+                   "horror",
+                   "vampires",
+                   "paranormal fiction",
+                   "occult fiction",
+               ),
+               
+               House_Home: match_kw(
+                   "house and home",
+                   "house & home",
+                   "remodeling",
+                   "renovation",
+                   "caretaking",
+                   "interior decorating",
+               ),
+               
+               Humor : match_kw(
+                   "comedy",
+                   "humor",
+                   "humorous",
+                   "humour",
+                   "satire",
+                   "wit",
+               ),
+               
+               Humor_Entertainment: match_kw(
+                   # Almost a pure top-level category 
+                   "entertainment",
+                   "entertainers",
+               ),
+               
+               # These might be a problem because they might pick up
         # hateful books. Not sure if this will be a problem.
-        Islam : match_kw('islam', 'islamic', 'muslim', 'muslims'),
-
-        Judaism: match_kw(
-            'judaism', 'jewish', 'kosher', 'jews',
+        Islam : match_kw(
+            'islam', 'islamic', 'muslim', 'muslims', 'halal',
+            'islamic studies',
         ),
+               
+               Judaism: match_kw(
+                   'judaism', 'jewish', 'kosher', 'jews',
+                   'jewish studies',
+               ),
+               
+               LGBT: match_kw(
+                   'lesbian',
+                   'lesbians',
+                   'gay',
+                   'gay studies',
+                   'bisexual',
+                   'lesbian studies',
+                   'transgender',
+                   'transsexual',
+                   'transsexuals',
+                   'homosexual',
+                   'homosexuals',
+                   'homosexuality',
+                   'queer',
+               ),
+               
+               Language_Arts_Disciplines: match_kw(
+                   "alphabets",
+                   "communication studies",
+                   "composition",
+                   "creative writing",
+                   "grammar",
+                   "handwriting",
+                   "information sciences",
+                   "journalism",
+                   "language arts & disciplines",
+                   "language arts and disciplines",
+                   "language arts",
+                   "library & information sciences",
+                   "linguistics",
+                   "literacy",
+                   "public speaking",
+                   "rhetoric",
+                   "sign language",
+                   "speech",
+                   "spelling",
+                   "style manuals",
+                   "syntax",
+                   "vocabulary",
+                   "writing systems",
+               ),
+               
+               Latin_American_History: match_kw(
+               ),
+               
+               Law: match_kw(
+                   "law",
+                   "laws",
+                   "legislation",
+                   "legal",
+               ),
+               
+               Legal_Thrillers: match_kw(
+                   "legal thriller",
+                   "legal thrillers",
+               ),
+               
+               Literary: match_kw(
+                   "literary fiction",
+                   "general fiction",
+                   "fiction, general",
+                   "fiction--general",
+                   "fiction - general",
+                   "fiction -- general",
+                   "fiction / general",
+                   "fiction.--general",
+                   "fiction/general",
+               ),
+               
+               Literary_Collections: match_kw(
+                   "literary collections",
+               ),
+               
+               Literary_Criticism: match_kw(
+                   "criticism, interpretation",
+               ),
+               
+               Literary_Fiction: match_kw(
+                   "literary",
+                   "literary fiction",
+               ),
+               
+               Management_Leadership: match_kw(
+                   "management",
+                   "business & economics / leadership",
+                   "business & economics -- leadership",
+                   "management science",
+               ),
+               
+               Manga: match_kw(
+                   "japanese comic books",
+                   "japanese comics",
+                   "manga",
+                   "yaoi",
+               ),
+               
+               Mathematics : match_kw(
+                   "algebra",
+                   "arithmetic",
+                   "calculus",
+                   "chaos theory",
+                   "game theory",
+                   "geometry",
+                   "group theory",
+                   "logic",
+                   "math",
+                   "mathematical",
+                   "mathematician",
+                   "mathematicians",
+                   "mathematics",
+                   "probability",
+                   "statistical",
+                   "statistics",
+                   "trigonometry",
+               ),
+               
+               Medical : match_kw(
+                   "anatomy",
+                   "disease",
+                   "diseases",
+                   "disorders",
+                   "epidemiology",
+                   "illness",
+                   "illnesses",
+                   "medical",
+                   "medicine", 
+                   "neuroscience",
+                   "physiology",
+               ),
+               
+               Medieval_History: match_kw(
+                   "civilization, medieval",
+                   "medieval period",
+                   "history.*medieval",
+               ),
+               
+               Middle_East_History: match_kw(
+                   "middle east.*history",
+                   "history.*middle east",
+               ),
 
-        LGBT: match_kw(
-            'lesbian',
-            'lesbians',
-            'gay',
-            'bisexual',
-            'transgender',
-            'transsexual',
-            'transsexuals',
-            'homosexual',
-            'homosexuals',
-            'homosexuality',
-            'queer',
-        ),
-
-        Language_Arts_Disciplines: match_kw(
-        ),
-
-        Latin_American_History: match_kw(
-        ),
-
-        Law: match_kw(
-        ),
-
-        Legal_Thrillers: match_kw(
-        ),
-
-        Literary: match_kw(
-        ),
-
-        Literary_Collections: match_kw(
-        ),
-
-        Literary_Criticism: match_kw(
-            "criticism, interpretation",
-        ),
-
-        Literary_Fiction: match_kw(
-            "literary",
-            "literary fiction",
-        ),
-
-        Management_Leadership: match_kw(
-        ),
-
-        Manga: match_kw(
-            "manga",
-        ),
-
-        Mathematics : match_kw("mathematics"),
-
-        Medical : match_kw("medicine", "medical"),
-
-        Medieval_History: match_kw(
-        ),
-
-        Middle_East_History: match_kw(
-        ),
-
+               # Military SF, not "military" in general.
         Military: match_kw(
+            "science fiction.*military",
+            "military.*science fiction",
         ),
-
-        Military_History : match_kw(
-            "military science",
-            "warfare",
-            "military",
-            "1939-1945",
-        ),
-
-        Military_Thrillers: match_kw(
-            "military thrillers",
-        ),
-
-        Modern_History: match_kw(
-            "1900 - 1999",
-        ),
-
+               
+               Military_History : match_kw(
+                   "military science",
+                   "warfare",
+                   "military",
+                   "1914-1918",
+                   "1939-1945",
+                   "world war",
+               ),
+               
+               Military_Thrillers: match_kw(
+                   "military thrillers",
+                   "thrillers.*military",
+               ),
+               
+               Modern_History: match_kw(
+                   "1900 - 1999",
+                   "2000-2099",
+                   "modern history",
+                   "history, modern",
+                   "history (modern)",
+                   "history--modern",
+                   "history.*20th century",
+                   "history.*21st century",
+               ),
+               
+               # This is SF movie tie-ins, not movies & gaming per se.
+        # This one is difficult because it takes effect if book
+        # has subject "media tie-in" *and* "science fiction" or
+        # "fantasy"
         Movies_Gaming: match_kw(
-            "film",
-            "movies",
-            "games",
-            "video games",
-            "motion picture",
-            "motion pictures",
+            "science fiction & fantasy gaming",
+            "star trek",
+            "star wars",
         ),
+               
+               Music: match_kw(
+                   "music",
+                   "musician",
+                   "musicians",
+                   "musical",
+                   "genres & styles"
+                   "blues",
+                   "jazz",
+                   "rap",
+                   "hip-hop",
+                   "rock.*roll",
+                   "rock music",
+                   "punk rock",
+               ),
+               
+               Mystery : match_kw(
+                   "crime",
+                   "detective",
+                   "murder",
+                   "mystery",
+                   "mysteries",
+                   "private investigators",
+                   "holmes, sherlock",
+                   "poirot, hercule",
+                   "schema:person:holmes, sherlock",
+               ),
+               
+               Nature : match_kw(
+                   # TODO: not sure about this one
+                   "nature",
+               ),
+               
+               New_Age: match_kw(
+                   "new age",
+               ),
+               
+               Paranormal_Romance : match_kw(
+                   "paranormal romance",
+                   "romance.*paranormal",
+               ),
+               
+               Parenting : match_kw(
+                   # ! "children of"
+                   # "family" doesn't work because of many specific
+                   # families.
+                   "parenting",
+                   "parent",
+                   "parents",
+                   "motherhood",
+                   "fatherhood",
+               )
+               
+               Parenting_Family: match_kw(
+                   # Pure top-level category
+               ),
+               
+               Performing_Arts: match_kw(
+                   "theatre",
+                   "theatrical",
+                   "performing arts",
+               ),
+               
+               Periodicals : match_kw(
+                   "periodicals",
+                   "periodical",
+               ),
+               
+               Personal_Finance_Investing: match_kw(
+                   "personal finance",
+                   "financial planning",
+                   "investing",
+                   "retirement planning",
+                   "money management",
+               ),
+               
+               Pets: match_kw(
+                   "pets",
+                   "dogs",
+                   "cats",
+               ),
+               
+               Philosophy : match_kw(
+                   "philosophy",
+                   "philosophical",
+                   "philosopher",
+                   "philosophers",
+               ),
+               
+               Photography: match_kw(
+                   "photography",
+                   "photographer",
+                   "photographers",
+                   "photographic",
+               ),
+               
+               Police_Procedurals: match_kw(
+                   "police procedural",
+                   "police procedurals",
+               ),
+               
+               Poetry : match_kw(
+                   "poetry",
+                   "poet",
+                   "poets",
+                   "poem",
+                   "poems",
+               ),
+               
+               Political_Science : match_kw(
+                   "american government",
+                   "anarchism",
+                   "censorship",
+                   "citizenship",
+                   "civics",
+                   "communism",
+                   "democracy",
+                   "geopolitics",
+                   "goverment",
+                   "human rights",
+                   "international relations",
+                   "political economy",
+                   "political ideologies",
+                   "political process",
+                   "political science",
+                   "public affairs",
+                   "public policy",
+               ),
+               
+               Politics_Current_Events: match_kw(
+                   "politics",
+                   "current events",
+               ),
+               
+               Psychology: match_kw(
+                   "psychology",
+                   "psychiatry",
+                   "psychological aspects",
+                   "psychiatric",
+               ),
+               
+               Real_Estate: match_kw(
+                   "real estate",
+               ),
+               
+               Reference : match_kw(
+                   "catalogs",
+                   "handbooks",
+                   "manuals",
+               ),
+               
+               Regency_Romance: match_kw(
+                   "regency romance",
+                   "romance.*regency",
+               ),
+               
+               Religion_Spirituality : match_kw(
+                   "religion",
+                   "religious",
+               ),
+               
+               Religious_Fiction: match_kw(
+                   "christian fiction",
+                   "fiction.*christian",
+                   "religious fiction",
+                   "fiction.*religious",
+               ),
 
-        Music: match_kw(
-            "music",
-        ),
+               Renaissance_Early_Modern_History: match_kw(
+                   "early modern period",
+                   "early modern history",
+                   "early modern, 1500-1700",
+                   "history.*early modern",
+                   "renaissance.*history",
+                   "history.*renaissance",
+               ),
+               
+               Romance : match_kw(
+                   # ! romance language
+                   "love stories",
+                   "romance",
+                   "love & romance",
+                   "romances",
+               ),
+               
+               Romance_Erotica: match_kw(
+                   # Pure super-category.
+               ),
+               
+               Science : match_kw(
+                   "aeronautics",
+                   "astronomy",
+                   "biology",
+                   "biophysics",
+                   "biochemistry", 
+                   "botany",
+                   "chemistry",
+                   "ecology",
+                   "entomology",
+                   "evolution",
+                   "geology",
+                   "genetics",
+                   "genetic engineering",
+                   "genomics",
+                   "ichthyology",
+                   "herpetology", 
+                   "life sciences",
+                   "microbiology",
+                   "microscopy",
+                   "mycology",
+                   "ornithology",
+                   "natural history",
+                   "natural history",
+                   "physics",
+                   "science",
+                   "scientist",
+                   "scientists",
+                   "zoology",
+                   "virology",
+                   "cytology",
+               ),
+               
+               Science_Fiction : match_kw(
+                   "science fiction",
+                   "time travel",
+               ),
+               
+               Science_Fiction_Fantasy: match_kw(
+                   "science fiction.*fantasy",
+               ),
+               
+               Science_Technology_Nature: match_kw(
+                   # Pure top-level category
+               ),
+               
+               Self_Help: match_kw(
+                   "self help",
+                   "self-help",
+               ),
+               
+               Social_Science: match_kw(
+                   "folklore",
+                   "myth",
 
-        Mystery : match_kw(
-            "crime",
-            "detective",
-            "murder",
-            "mystery",
-            "mysteries",
-            "private investigators",
-            "holmes, sherlock",
-            "poirot, hercule",
-            "schema:person:holmes, sherlock",
-        ),
-
-        Nature : match_kw(
-            "nature",
-        ),
-
-        New_Age: match_kw(
-            "new age",
-        ),
-
-        Paranormal_Romance : match_kw(
-            "paranormal romance",
-        ),
-
-        Parenting_Family: match_kw(
-        ),
-
-        Performing_Arts: match_kw(
-        ),
-
-        Periodicals : match_kw(
-            "periodicals",
-        ),
-
-        Personal_Finance_Investing: match_kw(
-            "personal finance",
-            "investing",
-        ),
-
-        Pets: match_kw(
-            "pets",
-            "dogs",
-            "cats",
-        ),
-
-        Philosophy : match_kw(
-            "philosophy",
-
-        ),
-
-        Photography: match_kw(
-            "photography",
-        ),
-
-        Police_Procedurals: match_kw(
-            "police procedural",
-            "police procedurals",
-        ),
-
-        Poetry : match_kw(
-            "poetry",
-        ),
-
-        Political_Science : match_kw(
-            "political science",
-            "goverment",
-            "political economy",
-        ),
-
-        Politics_Current_Events: match_kw(
-            "politics",
-            "current events",
-        ),
-
-        Psychology: match_kw(
-            "psychology",
-            "psychiatry",
-            "psychological aspects",
-            "psychiatric",
-        ),
-
-        Real_Estate: match_kw(
-            "real estate",
-        ),
-
-        Reference : match_kw(
-            "catalogs",
-            "handbooks",
-            "manuals",
-        ),
-
-        Regency_Romance: match_kw(
-            "regency romance",
-        ),
-
-        Religion_Spirituality : match_kw(
-            "religion",
-            "religious",
-        ),
-
-        Religious_Fiction: match_kw(
-            "christian fiction",
-            "religious fiction",
-        ),
-
-        Renaissance_History: match_kw(
-        ),
-
-        Romance : match_kw(
-            "love stories",
-            "romance",
-            "romances",
-        ),
-
-        Romance_Erotica: match_kw(
-        ),
-
-        Science : match_kw(
-            "aeronautics",
-            "evolution",
-            "natural history",
-            "science",
-        ),
-
-        Science_Fiction : match_kw(
-            "science fiction",
-            "time travel",
-        ),
-
-        Science_Fiction_Fantasy: match_kw(
-            "science fiction and fantasy",
-            "science fiction & fantasy",
-        ),
-
-        Science_Technology_Nature: match_kw(
-        ),
-
-        Self_Help: match_kw(
-        ),
-
-        Social_Science: match_kw(
-        ),
-
-        Space_Opera: match_kw(
-            "space opera",
-        ),
-
-        Sports: match_kw(
-            "sports",
-        ),
-
-        Study_Aids: match_kw(
-        ),
-
-        Superhero: match_kw(
-            "superhero",
-            "superheroes",
-        ),
-
-        Supernatural_Thrillers: match_kw(
-        ),
-
-        Suspense_Romance : match_kw(
-            "romantic suspense",
-        ),
-
-        Technology_Engineering: match_kw(
-        ),
-
-        Thrillers: match_kw(
-            "thriller",
-            "thrillers",
-            "suspense",
-        ),
-
-        Transportation: match_kw(
-        ),
-
-        Travel : match_kw(
-            "discovery",
-            "exploration",
-            "travel",
-            "travels",
-            "voyages",
-        ),
-
-        True_Crime: match_kw(
-            "true crime",
-        ),
-
-        United_States_History: match_kw(
-            "united states history",
-            "u.s. history",
-            "american revolution",
-            "1775-1783",
-        ),
-
-        Urban_Fantasy: match_kw(
-            "urban fantasy",
-        ),
-
-        Vegetarian_Vegan: match_kw(
-            "vegetarian",
-            "vegan",
-            "veganism",
-            "vegetarianism",
-        ),
-
-        Women_Detectives : match_kw(
-            "women detectives",
-            "women private investigators",
-            "women sleuths",
-        ),
-        
-        World_History: match_kw(
-            "world history",
-        ),
-
+                   "social sciences",
+                   "social science",
+                   "anthropology",
+                   "archaology",
+                   "sociology",
+                   "ethnic studies",
+                   "gender studies",
+                   "media studies",
+                   "minority studies",
+                   "men's studies",
+                   "regional studies",
+                   "women's studies",
+                   "demography",
+               ),
+               
+               Space_Opera: match_kw(
+                   "space opera",
+               ),
+               
+               Sports: match_kw(
+                   # Ton of specific sports here since 'players'
+                   # doesn't work.
+                   "sports",
+                   "baseball",
+                   "football",
+                   "hockey",
+                   "soccer",
+               ),
+               
+               Study_Aids: match_kw(
+                   "act",
+                   "advanced placement",
+                   "bar exam",
+                   "clep",
+                   "college entrance",
+                   "college guides",
+                   "financial aid",
+                   "ged",
+                   "gmat",
+                   "gre",
+                   "lsat",
+                   "mat",
+                   "mcat",
+                   "nmsqt",
+                   "nte",
+                   "psat",
+                   "sat",
+                   "school guides",
+                   "study aids",
+                   "toefl",
+                   "workbooks",
+               ),
+               
+               Superhero: match_kw(
+                   "superhero",
+                   "superheroes",
+               ),
+               
+               Supernatural_Thrillers: match_kw(
+                   "thriller.*supernatural",
+                   "supernatural.*thriller",
+               ),
+               
+               Suspense_Romance : match_kw(
+                   "romantic.*suspense",
+                   "suspense.*romance",
+                   "romance.*suspense",
+               ),
+               
+               Technology_Engineering: match_kw(
+                   "technology",
+                   "engineering",
+                   "bioengineering",
+               ),
+               
+               Thrillers: match_kw(
+                   "thriller",
+                   "thrillers",
+                   "suspense",
+                   "techno-thriller",
+                   "technothriller",
+                   "technothrillers",
+               ),
+               
+               Transportation: match_kw(
+                   "transportation",
+                   "railroads",
+                   "trains",
+                   "automotive",
+                   "ships & shipbuilding",
+                   "cars & trucks",
+               ),
+               
+               Travel : match_kw(
+                   "discovery",
+                   "exploration",
+                   "travel",
+                   "travels.*voyages",
+                   "voyage.*travels",
+                   "voyages",
+                   "travelers",
+                   "description.*travel",
+               ),
+               
+               True_Crime: match_kw(
+                   "true crime",
+               ),
+               
+               United_States_History: match_kw(
+                   "united states history",
+                   "u.s. history",
+                   "american revolution",
+                   "1775-1783",
+               ),
+               
+               Urban_Fantasy: match_kw(
+                   "urban fantasy",
+                   "fantasy.*urban",
+               ),
+               
+               Urban_Fiction: match_kw(
+                   # TODO: fiction.*urban but not fiction.*fantasy.*urban
+                   "urban fiction",
+                   "fiction.*african american.*urban",
+                   "fiction / urban",
+                   "fiction/urban",
+               ),
+               
+               Vegetarian_Vegan: match_kw(
+                   "vegetarian",
+                   "vegan",
+                   "veganism",
+                   "vegetarianism",
+               ),
+               
+               Women_Detectives : match_kw(
+                   "women detectives",
+                   "women detective",
+                   "women private investigators",
+                   "women private investigator",
+                   "women sleuths",
+                   "women sleuth",
+               ),
+               
+               World_History: match_kw(
+                   "world history",
+                   "history[^a-z]*world",
+               ),              
     }
 
     @classmethod
@@ -1525,7 +2011,6 @@ class GutenbergBookshelfClassifier(Classifier):
             "Reference",
             "CIA World Factbooks",
         ],
-        Renaissance_History: [],
         Religion_Spirituality : [
             "Atheism",
             "Bahá'í Faith",
