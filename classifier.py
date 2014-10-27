@@ -184,6 +184,9 @@ class GenreData(object):
         self.is_fiction = is_fiction
         self.subgenres = []
 
+    def __repr__(self):
+        return "[Genre: %s]" % self.name
+
     @property
     def variable_name(self):
         return self.name.replace("-", "_").replace(", & ", "_").replace(", ", "_").replace(" & ", "_").replace(" ", "_").replace("/", "_")
@@ -1437,7 +1440,7 @@ class KeywordBasedClassifier(Classifier):
                    "parents",
                    "motherhood",
                    "fatherhood",
-               )
+               ),
                
                Parenting_Family: match_kw(
                    # Pure top-level category
@@ -1810,11 +1813,12 @@ class KeywordBasedClassifier(Classifier):
 
     @classmethod
     def genre(cls, identifier, name):
+        matches = Counter()
         match_against = [name]
         for genre, keywords in cls.GENRES.items():
             if keywords and keywords.search(name):
-                return genre
-        return None
+                matches[genre] += 1
+        return matches.most_common(1)[0][0]
 
 class LCSHClassifier(KeywordBasedClassifier):
     pass

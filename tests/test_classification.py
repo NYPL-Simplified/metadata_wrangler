@@ -2,6 +2,7 @@
 
 from nose.tools import eq_, set_trace
 
+import classifier
 from classifier import (
     Classifier,
     DeweyDecimalClassifier as DDC,
@@ -149,6 +150,17 @@ class TestLCSH(object):
         eq_(None, aud("Runaway children"))
         eq_(None, aud("Humor"))
 
+
+class TestKeyword(object):
+
+    def test_history(self):
+        def genre(keyword):
+            return Keyword.genre(None, Keyword.scrub_identifier(keyword))
+
+        set_trace()
+        eq_(classifier.Asian_History, genre("asian history"))
+        eq_(classifier.Asian_History, genre("history: asia"))
+        pass
 
 # TODO: This needs to be moved into model I guess?
 
