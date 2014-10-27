@@ -220,7 +220,7 @@ class GenreData(object):
             raise ValueError("Duplicate genre name! %s" % name)
 
         # Create the GenreData object.
-        genre_data = GenreData(name, default_to_fiction)
+        genre_data = GenreData(name, default_to_fiction, parent)
         if parent:
             parent.subgenres.append(genre_data)
 
@@ -260,6 +260,33 @@ class Classifier(object):
 
     # TODO: This is currently set in model.py in the Subject class.
     classifiers = dict()
+
+    @classmethod
+    def consolidate_weights(cls, weights, subgenre_swallows_parent_at=0.03):
+        """If a genre and its subgenres both show up, examine the subgenre
+        with the highest weight. If its weight exceeds a certain
+        proportion of the weight of the parent genre, assign the
+        parent's weight to the subgenre and remove the parent.
+        """
+        heaviest_child = dict()
+        for genre, weight in weights.items():
+            if genre.parent in weights:
+                if ((not genre.parent in heaviest_child) 
+                    or weight > heaviest_child[genre.parent][1]):
+                    heaviest_child[genre.parent] = (genre, weight)
+        for parent, (child, weight) in heaviest_child.items():
+            # TODO: there's an unhandled edge case here when there's
+            # more than one level of subgenre.
+            parent_weight = weights.get(parent, 0)
+            if weight > (subgenre_swallows_parent_at * parent_weight):
+                weights[child] += parent_weight
+                del weights[parent]
+                # Something like this:
+                # if parent.parent:
+                #     heaviest_child[parent.parent] = (child, weights[child])
+                # but then we need to restart the iteration because we
+                # changed the dict.
+        return weights
 
     @classmethod
     def lookup(cls, scheme):

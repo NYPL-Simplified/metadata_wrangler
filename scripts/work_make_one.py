@@ -29,7 +29,8 @@ if __name__ == '__main__':
             LicensePool.identifier==wid).one()
     primary_edition = pool.edition()
     old_work = primary_edition.work
-    old_work.license_pools.remove(pool)
+    if old_work:
+        old_work.license_pools.remove(pool)
     primary_edition.work = None
     pool.calculate_work()
     work = pool.work

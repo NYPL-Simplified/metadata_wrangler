@@ -152,7 +152,7 @@ class TestLCSH(object):
 
 
 class TestKeyword(object):
-    def genre(keyword):
+    def genre(self, keyword):
         return Keyword.genre(None, Keyword.scrub_identifier(keyword))
 
     def test_subgenre_wins_over_genre(self):
@@ -161,6 +161,27 @@ class TestKeyword(object):
         # specific.
         eq_(classifier.Asian_History, self.genre("asian history"))
         eq_(classifier.Asian_History, self.genre("history: asia"))
+
+
+class TestConsolidateWeights(object):
+
+    def test_consolidate(self):
+        weights = dict()
+        weights[classifier.History] = 10
+        weights[classifier.Asian_History] = 4
+        weights[classifier.Middle_East_History] = 1
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(14, w2[classifier.Asian_History])
+        eq_(1, w2[classifier.Middle_East_History])
+        assert classifier.History not in weights
+
+    def test_consolidate_fails_when_threshold_not_met(self):
+        weights = dict()
+        weights[classifier.History] = 100
+        weights[classifier.Middle_East_History] = 1
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(100, w2[classifier.History])
+        eq_(1, w2[classifier.Middle_East_History])
 
 
 # TODO: This needs to be moved into model I guess?
