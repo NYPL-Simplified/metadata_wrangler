@@ -3210,7 +3210,7 @@ class LicensePool(Base):
         # grouped together with any other pools.
         if not self.open_access:
             if self.work:
-                claimed_records_by_work[self.work] = primary_edition
+                claimed_records_by_work[self.work] = [primary_edition]
             else:
                 unclaimed_records.append(primary_edition)
             return claimed_records_by_work, unclaimed_records
