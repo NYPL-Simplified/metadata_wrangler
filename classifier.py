@@ -756,48 +756,51 @@ class KeywordBasedClassifier(Classifier):
             "history.*africa",
         ),
                
-               Ancient_History: match_kw(
-                   "ancient history",
-                   "civilization, classical",
-               ),
+        Ancient_History: match_kw(
+            "ancient.*history",
+            "history.*ancient",
+            "civilization, classical",
+        ),
                
-               Antiques_Collectibles: match_kw(
-                   "antiques",
-                   "collectibles",
-                   "collectors",
-                   "collecting",
-               ),
+        Antiques_Collectibles: match_kw(
+            "antiques",
+            "collectibles",
+            "collectors",
+            "collecting",
+        ),
                
-               Architecture: match_kw(
-                   "architecture",
-                   "architectural",
-                   "architect",
-                   "architects",
-               ),
+        Architecture: match_kw(
+            "architecture",
+            "architectural",
+            "architect",
+            "architects",
+        ),
                
-               Art: match_kw(
-                   "art",
-                   "artist",
-                   "artists",
-                   "artistic",
-               ),
+        Art: match_kw(
+            "art",
+            "artist",
+            "artists",
+            "artistic",
+        ),
                
-               Art_Architecture_Design: match_kw(
-                   # Pure super-category.
-               ),
+        Art_Architecture_Design: match_kw(
+            # Pure super-category.
+        ),
                
-               Art_Criticism_Theory: match_kw(
-                   "art criticism",
-                   "art / criticism & theory",
-               ),
+        Art_Criticism_Theory: match_kw(
+            "art criticism",
+            "art / criticism & theory",
+        ),
                
-               Art_History: match_kw(
-                   "art history",
-               ),
+        Art_History: match_kw(
+            "art.*history",
+        ),
                
-               Asian_History: match_kw(
-                   "asian history",
-               ),
+        Asian_History: match_kw(
+            "asian history",
+            "history.*asia",
+            "australasian & pacific history",
+        ),
                
                Bartending_Cocktails: match_kw(
                    "cocktail",
