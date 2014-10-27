@@ -857,6 +857,7 @@ class KeywordBasedClassifier(Classifier):
                    "schema:creativework:bible",
                    "bible",
                    "sermons",
+                   "devotional",
                    "theological",
                    "theology",
                    'biblical',
