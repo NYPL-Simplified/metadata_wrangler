@@ -152,15 +152,16 @@ class TestLCSH(object):
 
 
 class TestKeyword(object):
+    def genre(keyword):
+        return Keyword.genre(None, Keyword.scrub_identifier(keyword))
 
-    def test_history(self):
-        def genre(keyword):
-            return Keyword.genre(None, Keyword.scrub_identifier(keyword))
+    def test_subgenre_wins_over_genre(self):
+        # Asian_History wins over History, even though they both
+        # have the same number of matches, because Asian_History is more
+        # specific.
+        eq_(classifier.Asian_History, self.genre("asian history"))
+        eq_(classifier.Asian_History, self.genre("history: asia"))
 
-        set_trace()
-        eq_(classifier.Asian_History, genre("asian history"))
-        eq_(classifier.Asian_History, genre("history: asia"))
-        pass
 
 # TODO: This needs to be moved into model I guess?
 

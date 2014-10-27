@@ -187,6 +187,12 @@ class GenreData(object):
     def __repr__(self):
         return "[Genre: %s]" % self.name
 
+    def has_subgenre(self, subgenre):
+        for s in self.subgenres:
+            if s == subgenre or s.has_subgenre(subgenre):
+                return True
+        return False
+
     @property
     def variable_name(self):
         return self.name.replace("-", "_").replace(", & ", "_").replace(", ", "_").replace(" & ", "_").replace(" ", "_").replace("/", "_")
@@ -1818,7 +1824,19 @@ class KeywordBasedClassifier(Classifier):
         for genre, keywords in cls.GENRES.items():
             if keywords and keywords.search(name):
                 matches[genre] += 1
-        return matches.most_common(1)[0][0]
+        most_specific_genre = None
+        most_specific_count = 0
+        # The genre with the most regex matches wins.
+        #
+        # If a genre and a subgenre are tied, then the subgenre wins
+        # because it's more specific.
+        for genre, count in matches.most_common():
+            if not most_specific_genre or (
+                    most_specific_genre.has_subgenre(genre)
+                    and count >= most_specific_count):
+                most_specific_genre = genre
+                most_specific_count = count
+        return most_specific_genre
 
 class LCSHClassifier(KeywordBasedClassifier):
     pass
