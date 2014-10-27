@@ -1112,6 +1112,7 @@ class KeywordBasedClassifier(Classifier):
                    "producer",
                    "producers",
                    "television",
+                   "tv",
                    "video",
                ),
                
