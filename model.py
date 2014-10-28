@@ -3596,6 +3596,8 @@ class Representation(Base):
         usable_representation = (
             representation and not representation.exception)
 
+        if isinstance(max_age, datetime.timedelta):
+            max_age = max_age.total_seconds()
         if usable_representation and (
                 max_age is None or max_age > representation.age):
             if debug:
