@@ -35,3 +35,37 @@ class TestSummaryEvaluator(object):
         # s3 is longer, and they're all one sentence, but s3 mentions
         # three noun phrases instead of two.
         eq_(s3, self._best(s1, s2, s3))
+
+    def test_non_english_is_penalized(self):
+        """If description text appears not to be in English, it is rated down
+        for its deviations from average English bigram distribution.
+        """
+        dutch = "Op haar nieuwe school leert de jarige Bella (ik-figuur) een mysterieuze jongen kennen op wie ze ogenblikkelijk verliefd wordt. Hij blijkt een groot geheim te hebben. Vanaf ca. jaar."
+        
+        evaluator = SummaryEvaluator()
+        evaluator.add(dutch)
+        evaluator.ready()
+
+        dutch_no_language_penalty = evaluator.score(
+            dutch, apply_language_penalty=False)
+
+        dutch_language_penalty = evaluator.score(
+            dutch, apply_language_penalty=True)
+
+    def test_english_is_not_penalized(self):
+        """If description text appears to be in English, it is not rated down
+        for its deviations from average English bigram distribution.
+        """
+
+        english = "After the warrior cat Clans settle into their new homes, the harmony they once had disappears as the clans start fighting each other, until the day their common enemy the badger."
+
+        evaluator = SummaryEvaluator()
+        evaluator.add(english)
+        evaluator.ready()
+
+        english_no_language_penalty = evaluator.score(
+            english, apply_language_penalty=False)
+
+        english_language_penalty = evaluator.score(
+            english, apply_language_penalty=True)
+        eq_(english_language_penalty, english_no_language_penalty)

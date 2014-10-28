@@ -1,6 +1,10 @@
 from textblob import TextBlob
 from collections import Counter
 from nose.tools import set_trace
+from util import (
+    Bigrams,
+    english_bigrams,
+)
 import re
 re_type = type(re.compile(""))
 
@@ -15,6 +19,8 @@ class SummaryEvaluator(object):
     edition of the book.
 
     All else being equal, a shorter summary is better.
+
+    A summary is penalized for apparently not being in English.
     """   
 
     # These phrases are indicative of a description we can't use for
@@ -88,7 +94,7 @@ class SummaryEvaluator(object):
             scores[summary] = self.score(summary)
         return scores.most_common(n)
 
-    def score(self, summary):
+    def score(self, summary, apply_language_penalty=True):
         """Score a summary relative to our current view of the dataset."""
         if summary in self.scores:
             return self.scores[summary]
@@ -126,5 +132,11 @@ class SummaryEvaluator(object):
             bad_phrases += 1
 
         score *= (0.5 ** bad_phrases)
+
+        if apply_language_penalty:
+            language_difference = english_bigrams.difference_from(
+                Bigrams.from_string(summary))
+            if language_difference > 1:
+                score *= (0.5 ** (language_difference-1))
 
         return score
