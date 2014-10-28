@@ -852,6 +852,8 @@ class KeywordBasedClassifier(Classifier):
         African_American : match_kw(
             "african[^a-z]+americans", 
             "african[^a-z]+american", 
+            "afro[^a-z]+americans", 
+            "afro[^a-z]+american", 
             "black studies",
             "african-american studies",
         ),
@@ -1449,6 +1451,8 @@ class KeywordBasedClassifier(Classifier):
                    "medicine", 
                    "neuroscience",
                    "physiology",
+                   "vaccines",
+                   "virus",
                ),
                
                Medieval_History: match_kw(
@@ -1583,6 +1587,7 @@ class KeywordBasedClassifier(Classifier):
                    "pets",
                    "dogs",
                    "cats",
+                   "human-animal relationships",
                ),
                
                Philosophy : match_kw(
