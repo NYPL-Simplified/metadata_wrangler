@@ -1374,6 +1374,8 @@ class KeywordBasedClassifier(Classifier):
                ),
                
                Law: match_kw(
+            "court",
+            "judicial",
                    "law",
                    "laws",
                    "legislation",
@@ -1505,6 +1507,7 @@ class KeywordBasedClassifier(Classifier):
             "science fiction & fantasy gaming",
             "star trek",
             "star wars",
+            "jedi",
         ),
                
                Music: match_kw(
