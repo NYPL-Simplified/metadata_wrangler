@@ -206,7 +206,7 @@ class GenreData(object):
         self.subgenres = []
 
     def __repr__(self):
-        return "[Genre: %s]" % self.name
+        return "[GenreData: %s]" % self.name
 
     @property
     def parents(self):
@@ -301,26 +301,38 @@ class Classifier(object):
         proportion of the weight of the parent genre, assign the
         parent's weight to the subgenre and remove the parent.
         """
-        heaviest_child = dict()
+        #print "Before consolidation:"
+        #for genre, weight in weights.items():
+        #    print "", genre, weight
+
+        # Convert Genre objects to GenreData.
+        consolidated = dict()
         for genre, weight in weights.items():
             if not isinstance(genre, GenreData):
                 genre = genres[genre.name]
+            consolidated[genre] = weight
+
+        heaviest_child = dict()
+        for genre, weight in consolidated.items():
             for parent in genre.parents:
-                if parent in weights:
+                if parent in consolidated:
                     if ((not parent in heaviest_child) 
                         or weight > heaviest_child[parent][1]):
                         heaviest_child[parent] = (genre, weight)
+        #print "Heaviest child:"
+        #for parent, (genre, weight) in heaviest_child.items():
+        #    print "", parent, genre, weight
         made_it = False
         while not made_it:
             for parent, (child, weight) in list(heaviest_child.items()):
-                parent_weight = weights.get(parent, 0)
+                parent_weight = consolidated.get(parent, 0)
                 if weight > (subgenre_swallows_parent_at * parent_weight):
-                    weights[child] += parent_weight
-                    del weights[parent]
+                    consolidated[child] += parent_weight
+                    del consolidated[parent]
                     changed = False
                     for parent in parent.parents:
                         if parent in heaviest_child:
-                            heaviest_child[parent] = (child, weights[child])
+                            heaviest_child[parent] = (child, consolidated[child])
                             changed = True
                     if changed:
                         # We changed the dict, so we need to restart
@@ -328,7 +340,10 @@ class Classifier(object):
                         break
             # We made it all the way through the dict without changing it.
             made_it = True
-        return weights
+        #print "After consolidation:"
+        #for genre, weight in consolidated.items():
+        #    print "", genre, weight
+        return consolidated
 
     @classmethod
     def lookup(cls, scheme):

@@ -2050,7 +2050,7 @@ class Work(Base):
         for g, score in genre_s.items():
             affinity = score / total_weight
             if not isinstance(g, Genre):
-                g = Genre.lookup(_db, g)
+                g, ignore = Genre.lookup(_db, g.name)
             wg, ignore = get_one_or_create(
                 _db, WorkGenre, work=self, genre=g)
             wg.affinity = score/total_weight
@@ -2793,10 +2793,8 @@ class Lane(object):
             # Turn names or GenreData objects into Genre objects. 
             self.genres = []
             for genre in genres:
-                if isinstance(genre, basestring):
+                if not isinstance(genre, Genre):
                     genre, ignore = Genre.lookup(_db, genre)
-                elif isinstance(genre, GenreData):
-                    genre, ignore = Genre.lookup(_db, genre.name)
                 self.genres.append(genre)
             self.include_subgenres=include_subgenres
         self.fiction = fiction
