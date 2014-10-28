@@ -551,46 +551,52 @@ class DeweyDecimalClassifier(Classifier):
     # 700.8996073 - African American arts
     # 700.9 - Art history
     # 700.71 Arts education
+    # 398.7 Jokes and jests
 
     GENRES = {
-        African_History : [range(960, 970)],
-        Architecture : [range(710, 720), range(720, 730)],
-        Art : [range(700, 710), range(730, 770), 774, 776],
+        African_History : range(960, 970),
+        Architecture : range(710, 720) + range(720, 730),
+        Art : range(700, 710) + range(730, 770) + [774, 776],
         Art_Criticism_Theory : [701],
-        Asian_History : [range(950, 960), 995, 996, 997],
+        Asian_History : range(950, 960) + [995, 996, 997],
         Biography_Memoir : ["B", 920],
-        Business_Economics : [range(330, 340)],
-        Christianity : [range(220, 230), range(230, 290)],
+        Business_Economics : range(330, 340),
+        Christianity : [range(220, 230) + range(230, 290)],
         Cooking : [range(640, 642)],
         Crafts_Hobbies_Games : [790, 793, 794, 795],
         Drama : [812, 822, 832, 842, 852, 862, 872, 882],
-        Education : [range(370,380), 707],
-        European_History : [range(940, 950)],
+        Education : range(370,380) + [707],
+        European_History : range(940, 950),
         History : [900],
         Islam : [297],
         Judaism : [296],
-        Language_Arts_Disciplines : [range(410, 430)],
-        Latin_American_History : [range(981, 990)],
-        Law : [range(340, 350), 364],
+        Language_Arts_Disciplines : range(410, 430),
+        Latin_American_History : range(981, 990),
+        Law : range(340, 350) + [364],
         Management_Leadership : [658],        
-        Mathematics : [range(510, 520)],
-        Medical : [range(610, 620),],
-        Military_History : [range(355, 360)],
-        Music : [range(780, 789)],
-        Periodicals : [range(50, 60), 105, 205, 304, 405, 505, 605, 705, 805, 905],
-        Philosophy : [range(160, 200)],
+        Mathematics : range(510, 520),
+        Medical : range(610, 620),
+        Military_History : range(355, 360),
+        Music : range(780, 789),
+        Periodicals : range(50, 60) + [105, 205, 304, 405, 505, 605, 705, 805, 905],
+        Philosophy : range(160, 200),
         Photography : [771, 772, 773, 775, 778, 779],
         Poetry : [811, 821, 831, 841, 851, 861, 871, 874, 881, 884],
-        Political_Science : [range(320, 330), range(351, 355)],
-        Psychology : [range(150, 160)],
-        Reference : [range(10, 20), range(30, 40), 103, 203, 303, 403, 503, 603, 703, 803, 903],
-        Religion_Spirituality : [range(200, 220), 290, 292, 293, 294, 295, 299,],
-        Science : [500, 501, 502, range(506, 510), range(520, 530), range(530, 540), range(540, 550), range(550, 560), range(560, 570), range(570, 580), range(580, 590), range(590, 600),],
-        Social_Science : [range(300, 310), range(360, 364), range(390,400)], # 398=Folklore
-        Sports : [range(796, 800)],
-        Technology_Engineering : [600, 601, 602, 604, range(606, 610), range(610, 640), range(660, 670), range(670, 680), range(681, 690), range(690, 700),],
-        Travel : [range(910, 920)],
-        United_States_History : [range(973,980)],
+        Political_Science : range(320, 330) + range(351, 355),
+        Psychology : range(150, 160),
+        Reference : range(10, 20) + range(30, 40) + [103, 203, 303, 403, 503, 603, 703, 803, 903],
+        Religion_Spirituality : range(200, 220) + [290, 292, 293, 294, 295, 299],
+        Science : ([500, 501, 502] + range(506, 510) + range(520, 530) 
+                   + range(530, 540) + range(540, 550) + range(550, 560)
+                   + range(560, 570) + range(570, 580) + range(580, 590)
+                   + range(590, 600)),
+        Social_Science : (range(300, 310) + range(360, 364) + range(390,400)), # 398=Folklore
+        Sports : range(796, 800),
+        Technology_Engineering : (
+            [600, 601, 602, 604] + range(606, 610) + range(610, 640)
+            + range(660, 670) + range(670, 680) + range(681, 690) + range(690, 700)),
+        Travel : range(910, 920),
+        United_States_History : range(973,980),
         World_History : [909],
     }
 

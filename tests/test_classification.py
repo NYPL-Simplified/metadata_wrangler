@@ -70,6 +70,13 @@ class TestDewey(object):
         eq_(False, fic(800))
         eq_(False, fic(814))
 
+    def test_classification(self):
+        def c(identifier):
+            i = DDC.scrub_identifier(identifier)
+            return DDC.genre(i, None)
+
+        eq_(classifier.Social_Science, c("398"))
+
 class TestLCC(object):
 
     def test_name_for(self):
