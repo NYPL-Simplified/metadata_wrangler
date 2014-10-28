@@ -852,6 +852,8 @@ class KeywordBasedClassifier(Classifier):
         African_American : match_kw(
             "african[^a-z]+americans", 
             "african[^a-z]+american", 
+            "afro[^a-z]+americans", 
+            "afro[^a-z]+american", 
             "black studies",
             "african-american studies",
         ),
@@ -1064,6 +1066,8 @@ class KeywordBasedClassifier(Classifier):
                
                Crime_Thrillers_Mystery: match_kw(
                    # Pure supercategory
+                   "crime",
+                   "crimes",
                ),
                
                Criticism_Philosophy: match_kw(
@@ -1095,7 +1099,8 @@ class KeywordBasedClassifier(Classifier):
                    "drama",
                    "dramatist",
                    "dramatists",
-                   "opera",
+                   # Removed so as not to conflict with 'space opera'
+                   # "opera",
                    "operas",
                    "plays",
                    "shakespeare",
@@ -1446,6 +1451,8 @@ class KeywordBasedClassifier(Classifier):
                    "medicine", 
                    "neuroscience",
                    "physiology",
+                   "vaccines",
+                   "virus",
                ),
                
                Medieval_History: match_kw(
@@ -1580,6 +1587,7 @@ class KeywordBasedClassifier(Classifier):
                    "pets",
                    "dogs",
                    "cats",
+                   "human-animal relationships",
                ),
                
                Philosophy : match_kw(
@@ -1607,6 +1615,8 @@ class KeywordBasedClassifier(Classifier):
                    "poets",
                    "poem",
                    "poems",
+                   "sonnet",
+                   "sonnets",
                ),
                
                Political_Science : match_kw(
@@ -1616,6 +1626,8 @@ class KeywordBasedClassifier(Classifier):
                    "citizenship",
                    "civics",
                    "communism",
+                   "corruption",
+                   "corrupt practices",
                    "democracy",
                    "geopolitics",
                    "goverment",
@@ -1771,6 +1783,7 @@ class KeywordBasedClassifier(Classifier):
                    "football",
                    "hockey",
                    "soccer",
+                   "skating",
                ),
                
                Study_Aids: match_kw(
@@ -1811,6 +1824,9 @@ class KeywordBasedClassifier(Classifier):
                    "romantic.*suspense",
                    "suspense.*romance",
                    "romance.*suspense",
+                   "romantic.*thriller",
+                   "romance.*thriller",
+                   "thriller.*romance",
                ),
                
                Technology_Engineering: match_kw(
