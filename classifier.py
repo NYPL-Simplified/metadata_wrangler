@@ -1154,6 +1154,7 @@ class KeywordBasedClassifier(Classifier):
                
                Espionage: match_kw(
                    "espionage",
+                   "intrigue",
                    "spies",
                    "spy stories",
                    "spy novels",
