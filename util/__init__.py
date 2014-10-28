@@ -722,6 +722,19 @@ class Bigrams(object):
                 break
             self.proportional[bigram] = proportion        
 
+    def difference_from(self, other_bigrams):
+        total_difference = 0
+        for bigram, proportion in self.proportional.items():
+            other_proportion = other_bigrams.proportional[bigram]
+            difference = abs(other_proportion - proportion)
+            total_difference += difference
+            # print "%s %.4f-%.4f = %.4f => %.4f" % (bigram, other_proportion, proportion, difference, total_difference)
+        for bigram, proportion in other_bigrams.proportional.items():
+            if bigram not in self.proportional:
+                total_difference += proportion
+                # print "%s MISSING %.4f => %.4f" % (bigram, proportion, total_difference)
+        return total_difference
+
     @classmethod
     def from_text_files(cls, paths):
         bigrams = Counter()
