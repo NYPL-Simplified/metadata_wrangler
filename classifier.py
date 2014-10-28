@@ -1242,6 +1242,8 @@ class KeywordBasedClassifier(Classifier):
                
                Graphic_Novels_Comics: match_kw(
                    "comics",
+                   "comic strip",
+                   "comic strips",
                    "comic book",
                    "comic books",
                    "graphic novels",
