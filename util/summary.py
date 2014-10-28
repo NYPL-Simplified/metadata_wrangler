@@ -15,7 +15,7 @@ class SummaryEvaluator(object):
     edition of the book.
 
     All else being equal, a shorter summary is better.
-    """
+    """   
 
     # These phrases are indicative of a description we can't use for
     # whatever reason.

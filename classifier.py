@@ -20,25 +20,34 @@ import re
 from sqlalchemy.sql.expression import and_
 
 # This is the large-scale structure of our classification system,
-# taken from Zola. 
+# taken mostly from Zola. 
 #
 # "Children" and "Young Adult" are not here--they are the 'audience' facet
 # of a genre.
 #
-# "Fiction" is not here--it's a seprate facet.
+# "Fiction" is not here--it's a seperate facet.
 #
 # If the name of a genre is a 2-tuple, the second item in the tuple is
 # whether or not the genre contains fiction by default. If the name of
 # a genre is a string, the genre inherits the default fiction status
 # of its parent, or (if a top-level genre) is nonfiction by default.
+#
+# If the name of a genre is a dictionary, the 'name' key corresponds to its
+# name and the 'subgenres' key contains a list of subgenres. 
+#
+# Genres and subgenres do *not* correspond to lanes and sublanes in
+# the user-visible side of the circulation server. This is the
+# structure used when classifying books. The circulation server is
+# responsible for its own mapping of genres to lanes.
 genre_structure = {
     "Art, Architecture, & Design" : [
         "Architecture",
-        "Art",
-        "Art Criticism & Theory",
+        dict(name="Art", subgenres=[
+            "Art Criticism & Theory",
+            "Art History",
+        ]),
         "Design",
         "Fashion",
-        "Art History",
         "Photography",
     ],
     "Biography & Memoir" : [],
@@ -54,27 +63,31 @@ genre_structure = {
     ],
     "Crafts, Cooking & Garden" : [
         "Antiques & Collectibles",
-        "Bartending & Cocktails",
-        "Cooking",
+        dict(name="Cooking", subgenres=[
+            "Bartending & Cocktails",
+            "Vegetarian & Vegan",
+            ]
+         ),
         "Crafts, Hobbies, & Games",
         "Gardening",
         "Health & Diet",
         "House & Home",
         "Pets",
-        "Vegetarian & Vegan",
     ],
     ("Crime, Thrillers & Mystery", True) : [
         "Action & Adventure",
+        dict(name="Mystery", subgenres=[
+            "Hard Boiled",
+            "Police Procedurals",
+            "Women Detectives",
+        ]),
+        dict(name="Thrillers", subgenres=[
+            "Legal Thrillers",
+            "Military Thrillers",
+            "Supernatural Thrillers",
+        ]),
         "Espionage",
-        "Hard Boiled",
-        "Legal Thrillers",
-        "Military Thrillers",
-        "Mystery",
-        "Police Procedurals",
-        "Supernatural Thrillers",
-        "Thrillers",
         ("True Crime", False),
-        "Women Detectives",
     ],
     "Criticism & Philosophy" : [
         "Language Arts & Disciplines",
@@ -138,33 +151,40 @@ genre_structure = {
         ("Religious Fiction", True),
     ],
     ("Romance & Erotica", True) : [
-        "Contemporary Romance",
+        dict(name="Romance", subgenres=[
+            "Contemporary Romance",
+            "Historical Romance",
+            "Paranormal Romance",
+            "Regency Romance",
+            "Suspense Romance",
+        ]),
         "Erotica",
-        "Historical Romance",
-        "Paranormal Romance",
-        "Regency Romance",
-        "Romance",
-        "Suspense Romance",
     ],
     ("Science Fiction & Fantasy", True) : [
-        "Epic Fantasy",
-        "Fantasy",
+        dict(name="Fantasy", subgenres=[
+            "Epic Fantasy",
+            "Urban Fantasy",
+        ]),
         "Horror",
-        "Military",
         "Movies/Gaming",
-        "Science Fiction",
-        "Space Opera",
-        "Urban Fantasy",
+        dict(name="Science Fiction", subgenres=[
+            "Military",
+            "Space Opera",
+            ]
+         ),
     ],
     "Science, Technology, & Nature" : [
-        "Computers",
-        "Mathematics",
-        "Medical",
+        dict(name="Technology & Engineering", subgenres=[
+            "Computers",
+        ]),
+        dict(name="Social Science", subgenres=[
+            "Psychology",
+        ]),
+        dict(name="Science", subgenres=[
+            "Mathematics",
+            "Medical",
+        ]),
         "Nature",
-        "Psychology",
-        "Science",
-        "Social Science",
-        "Technology & Engineering",
     ],
     "Self-Help" : [],
     "Travel, Adventure & Sports" : [
@@ -172,8 +192,9 @@ genre_structure = {
         "Transportation",
         "Travel",
     ],
-    ("Urban Fiction", True): [],
-    ("African-American", None) : [],
+    ("African-American", None) : [
+        ("Urban Fiction", True)
+    ],
     ("LGBT", None) : [],
 }
 
@@ -186,6 +207,15 @@ class GenreData(object):
 
     def __repr__(self):
         return "[Genre: %s]" % self.name
+
+    @property
+    def parents(self):
+        parents = []
+        p = self.parent
+        while p:
+            parents.append(p)
+            p = p.parent
+        return reversed(parents)
 
     def has_subgenre(self, subgenre):
         for s in self.subgenres:
@@ -216,6 +246,9 @@ class GenreData(object):
         """
         if isinstance(name, tuple):
             name, default_to_fiction = name
+        if isinstance(name, dict):
+            subgenres = name['subgenres']
+            name = name['name']
         if name in genres:
             raise ValueError("Duplicate genre name! %s" % name)
 
@@ -270,22 +303,31 @@ class Classifier(object):
         """
         heaviest_child = dict()
         for genre, weight in weights.items():
-            if genre.parent in weights:
-                if ((not genre.parent in heaviest_child) 
-                    or weight > heaviest_child[genre.parent][1]):
-                    heaviest_child[genre.parent] = (genre, weight)
-        for parent, (child, weight) in heaviest_child.items():
-            # TODO: there's an unhandled edge case here when there's
-            # more than one level of subgenre.
-            parent_weight = weights.get(parent, 0)
-            if weight > (subgenre_swallows_parent_at * parent_weight):
-                weights[child] += parent_weight
-                del weights[parent]
-                # Something like this:
-                # if parent.parent:
-                #     heaviest_child[parent.parent] = (child, weights[child])
-                # but then we need to restart the iteration because we
-                # changed the dict.
+            if not isinstance(genre, GenreData):
+                genre = genres[genre.name]
+            for parent in genre.parents:
+                if parent in weights:
+                    if ((not parent in heaviest_child) 
+                        or weight > heaviest_child[parent][1]):
+                        heaviest_child[parent] = (genre, weight)
+        made_it = False
+        while not made_it:
+            for parent, (child, weight) in list(heaviest_child.items()):
+                parent_weight = weights.get(parent, 0)
+                if weight > (subgenre_swallows_parent_at * parent_weight):
+                    weights[child] += parent_weight
+                    del weights[parent]
+                    changed = False
+                    for parent in parent.parents:
+                        if parent in heaviest_child:
+                            heaviest_child[parent] = (child, weights[child])
+                            changed = True
+                    if changed:
+                        # We changed the dict, so we need to restart
+                        # the iteration.
+                        break
+            # We made it all the way through the dict without changing it.
+            made_it = True
         return weights
 
     @classmethod
@@ -1043,8 +1085,8 @@ class KeywordBasedClassifier(Classifier):
                ),
                
                Education: match_kw(
-                   # "school" doesn't work because of artistic/philosophic "schools".
-                   # "schools" is likewise problematic.
+                   # a lot of these don't work well because of the
+                   # huge amount of fiction about students.
                    "education",
                    "educational",
                    "educator",
@@ -1053,12 +1095,12 @@ class KeywordBasedClassifier(Classifier):
                    "teacher",
                    "teachers",
                    "teaching",
-                   "schools",
-                   "high school",
+                   #"schools",
+                   #"high school",
                    "schooling",
-                   "student",
-                   "students",
-                   "college",
+                   #"student",
+                   #"students",
+                   #"college",
                    "university",
                    "universities",
                ),
@@ -1302,16 +1344,8 @@ class KeywordBasedClassifier(Classifier):
                    "legal thrillers",
                ),
                
+               # This is 'literary' comic books, not literary fiction.
                Literary: match_kw(
-                   "literary fiction",
-                   "general fiction",
-                   "fiction, general",
-                   "fiction--general",
-                   "fiction - general",
-                   "fiction -- general",
-                   "fiction / general",
-                   "fiction.--general",
-                   "fiction/general",
                ),
                
                Literary_Collections: match_kw(
@@ -1325,6 +1359,9 @@ class KeywordBasedClassifier(Classifier):
                Literary_Fiction: match_kw(
                    "literary",
                    "literary fiction",
+                   "general fiction",
+                   "fiction[^a-z]+general",
+                   "fiction[^a-z]+literary",
                ),
                
                Management_Leadership: match_kw(

@@ -162,10 +162,19 @@ class TestKeyword(object):
         eq_(classifier.Asian_History, self.genre("asian history"))
         eq_(classifier.Asian_History, self.genre("history: asia"))
 
+class TestNestedSubgenres(object):
+
+    def test_parents(self):
+        eq_([classifier.Romance_Erotica],
+            list(classifier.Erotica.parents))
+
+        eq_([classifier.Crime_Thrillers_Mystery, classifier.Mystery],
+            list(classifier.Police_Procedurals.parents))
 
 class TestConsolidateWeights(object):
 
     def test_consolidate(self):
+        # Asian History is a subcategory of the top-level category History.
         weights = dict()
         weights[classifier.History] = 10
         weights[classifier.Asian_History] = 4
@@ -174,6 +183,34 @@ class TestConsolidateWeights(object):
         eq_(14, w2[classifier.Asian_History])
         eq_(1, w2[classifier.Middle_East_History])
         assert classifier.History not in weights
+
+        # Paranormal Romance is a subcategory of Romance, which is itself
+        # a subcategory.
+        weights = dict()
+        weights[classifier.Romance] = 100
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance not in weights
+
+    def test_consolidate_through_multiple_levels(self):
+        # Romance & Erotica is the parent of the parent of Paranormal
+        # Romance, but its weight successfully flows down into
+        # Paranormal Romance.
+        weights = dict()
+        weights[classifier.Romance_Erotica] = 100
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance_Erotica not in weights
+
+        weights = dict()
+        weights[classifier.Romance_Erotica] = 50
+        weights[classifier.Romance] = 50
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance_Erotica not in weights
 
     def test_consolidate_fails_when_threshold_not_met(self):
         weights = dict()
