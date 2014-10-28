@@ -320,12 +320,12 @@ class Classifier(object):
                     if ((not parent in heaviest_child) 
                         or weight > heaviest_child[parent][1]):
                         heaviest_child[parent] = (genre, weight)
-        #print "Heaviest child:"
-        #for parent, (genre, weight) in heaviest_child.items():
-        #    print "", parent, genre, weight
+        print "Heaviest child:"
+        for parent, (genre, weight) in heaviest_child.items():
+            print "", parent, genre, weight
         made_it = False
         while not made_it:
-            for parent, (child, weight) in list(heaviest_child.items()):
+            for parent, (child, weight) in sorted(list(heaviest_child.items())):
                 parent_weight = consolidated.get(parent, 0)
                 if weight > (subgenre_swallows_parent_at * parent_weight):
                     consolidated[child] += parent_weight
@@ -341,6 +341,9 @@ class Classifier(object):
                         break
             # We made it all the way through the dict without changing it.
             made_it = True
+        print "Final heaviest child:"
+        for parent, (genre, weight) in heaviest_child.items():
+            print "", parent, genre, weight
         print "After consolidation:"
         for genre, weight in consolidated.items():
             print "", genre, weight

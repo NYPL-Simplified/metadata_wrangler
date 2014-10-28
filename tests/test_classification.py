@@ -189,7 +189,7 @@ class TestConsolidateWeights(object):
         w2 = Classifier.consolidate_weights(weights)
         eq_(14, w2[classifier.Asian_History])
         eq_(1, w2[classifier.Middle_East_History])
-        assert classifier.History not in weights
+        assert classifier.History not in w2
 
         # Paranormal Romance is a subcategory of Romance, which is itself
         # a subcategory.
@@ -198,7 +198,7 @@ class TestConsolidateWeights(object):
         weights[classifier.Paranormal_Romance] = 4
         w2 = Classifier.consolidate_weights(weights)
         eq_(104, w2[classifier.Paranormal_Romance])
-        assert classifier.Romance not in weights
+        assert classifier.Romance not in w2
 
     def test_consolidate_through_multiple_levels(self):
         # Romance & Erotica is the parent of the parent of Paranormal
@@ -209,15 +209,16 @@ class TestConsolidateWeights(object):
         weights[classifier.Paranormal_Romance] = 4
         w2 = Classifier.consolidate_weights(weights)
         eq_(104, w2[classifier.Paranormal_Romance])
-        assert classifier.Romance_Erotica not in weights
+        assert classifier.Romance_Erotica not in w2
 
+    def test_consolidate_through_multiple_levels_from_multiple_sources(self):
         weights = dict()
         weights[classifier.Romance_Erotica] = 50
         weights[classifier.Romance] = 50
         weights[classifier.Paranormal_Romance] = 4
         w2 = Classifier.consolidate_weights(weights)
         eq_(104, w2[classifier.Paranormal_Romance])
-        assert classifier.Romance_Erotica not in weights
+        assert classifier.Romance_Erotica not in w2
 
     def test_consolidate_fails_when_threshold_not_met(self):
         weights = dict()
