@@ -3561,7 +3561,7 @@ class Representation(Base):
     def age(self):
         if not self.fetched_at:
             return 1000000
-        return datetime.datetime.utcnow() - self.fetched_at
+        return (datetime.datetime.utcnow() - self.fetched_at).total_seconds()
 
     @property
     def has_content(self):
