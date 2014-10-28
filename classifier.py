@@ -1097,7 +1097,8 @@ class KeywordBasedClassifier(Classifier):
                    "drama",
                    "dramatist",
                    "dramatists",
-                   "opera",
+                   # Removed so as not to conflict with 'space opera'
+                   # "opera",
                    "operas",
                    "plays",
                    "shakespeare",
@@ -1609,6 +1610,8 @@ class KeywordBasedClassifier(Classifier):
                    "poets",
                    "poem",
                    "poems",
+                   "sonnet",
+                   "sonnets",
                ),
                
                Political_Science : match_kw(
@@ -1619,6 +1622,7 @@ class KeywordBasedClassifier(Classifier):
                    "civics",
                    "communism",
                    "corruption",
+                   "corrupt practices",
                    "democracy",
                    "geopolitics",
                    "goverment",
@@ -1774,6 +1778,7 @@ class KeywordBasedClassifier(Classifier):
                    "football",
                    "hockey",
                    "soccer",
+                   "skating",
                ),
                
                Study_Aids: match_kw(
@@ -1814,6 +1819,9 @@ class KeywordBasedClassifier(Classifier):
                    "romantic.*suspense",
                    "suspense.*romance",
                    "romance.*suspense",
+                   "romantic.*thriller",
+                   "romance.*thriller",
+                   "thriller.*romance",
                ),
                
                Technology_Engineering: match_kw(
