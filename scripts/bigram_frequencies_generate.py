@@ -1,24 +1,18 @@
+from nose.tools import set_trace
+import os
+import site
 import sys
-import re
-from collections import Counter
+import csv
+import string
+import isbnlib
+import json
+d = os.path.split(__file__)[0]
+site.addsitedir(os.path.join(d, ".."))
 
-bigrams = Counter()
-all_letters = re.compile("^[a-z]+$")
+from util import Bigrams
 
-def process_file(filename):
-    data = open(filename).read()
-    for i in range(0, len(data)-1):
-        bigram = data[i:i+2].strip()
-        if len(bigram) == 2 and all_letters.match(bigram):
-            bigrams[bigram.lower()] += 1
+bigrams = Bigrams.from_text_files(sys.argv[1:])
+print json.dumps(bigrams.proportional, sort_keys=True, indent=4)
 
-for filename in sys.argv[1:]:
-    process_file(filename)
 
-total = float(sum(bigrams.values()))
-for bigram, quantity in bigrams.most_common():
-    proportion = quantity/total
-    if proportion < 0.001:
-        break
-    print bigram, proportion
 
