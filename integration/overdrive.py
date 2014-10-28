@@ -93,11 +93,22 @@ class OverdriveAPI(object):
             dict(grant_type="client_credentials"))
         open(self.credential_path, "w").write(response.text)
 
-    def get(self, url, extra_headers):
+    def get(self, url, extra_headers, exception_on_401=False):
         """Make an HTTP GET request using the active Bearer Token."""
         headers = dict(Authorization="Bearer %s" % self.token)
         headers.update(extra_headers)
-        return Representation.simple_http_get(url, headers)
+        status_code, headers, content = Representation.simple_http_get(
+            url, headers)
+        if status_code == 401:
+            if exception_on_401:
+                # This is our second try. Give up.
+                raise Exception("Something's wrong with the OAuth Bearer Token!")
+            else:
+                # Refresh the token and try again.
+                self.check_creds()
+                return self.get(url, extra_headers, True)
+        else:
+            return status_code, headers, content
 
     def token_post(self, url, payload, headers={}):
         """Make an HTTP POST request for purposes of getting an OAuth token."""
@@ -174,7 +185,7 @@ class OverdriveAPI(object):
             identifier=identifier)
         return json.loads(representation.content)
 
-    def update_licensepool(self, book, exception_on_401=False):
+    def update_licensepool(self, book):
         """Update availability information for a single book.
 
         If the book has never been seen before, a new LicensePool
@@ -195,14 +206,6 @@ class OverdriveAPI(object):
         else:
             circulation_link = book['availability_link']
         status_code, headers, content = self.get(circulation_link, {})
-        if status_code == 401:
-            if exception_on_401:
-                # This is our second try. Give up.
-                raise Exception("Something's wrong with the OAuth Bearer Token!")
-            else:
-                # Refresh the token and try again.
-                self.check_creds()
-                return self.update_licensepool(orig_book, True)
         if status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
                 book['id'], response.status_code)
