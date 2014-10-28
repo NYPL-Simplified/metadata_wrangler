@@ -706,3 +706,38 @@ class TitleProcessor(object):
                 title = title[len(stopword):] + ", " + stopword.strip()
                 break
         return title
+
+
+class Bigrams(object):
+
+    all_letters = re.compile("^[a-z]+$")
+
+    def __init__(self, bigrams):
+        self.bigrams = bigrams
+        self.proportional = Counter()
+        total = float(sum(bigrams.values()))
+        for bigram, quantity in self.bigrams.most_common():
+            proportion = quantity/total
+            if proportion < 0.001:
+                break
+            self.proportional[bigram] = proportion        
+
+    @classmethod
+    def from_text_files(cls, paths):
+        bigrams = Counter()
+        for path in paths:
+            cls.process_data(open(path).read(), bigrams)
+        return Bigrams(bigrams)
+
+    @classmethod
+    def from_string(cls, string):
+        bigrams = Counter()
+        cls.process_data(string, bigrams)
+        return Bigrams(bigrams)
+
+    @classmethod
+    def process_data(cls, data, bigrams):
+        for i in range(0, len(data)-1):
+            bigram = data[i:i+2].strip()
+            if len(bigram) == 2 and cls.all_letters.match(bigram):
+                bigrams[bigram.lower()] += 1
