@@ -1064,6 +1064,8 @@ class KeywordBasedClassifier(Classifier):
                
                Crime_Thrillers_Mystery: match_kw(
                    # Pure supercategory
+                   "crime",
+                   "crimes",
                ),
                
                Criticism_Philosophy: match_kw(
@@ -1616,6 +1618,7 @@ class KeywordBasedClassifier(Classifier):
                    "citizenship",
                    "civics",
                    "communism",
+                   "corruption",
                    "democracy",
                    "geopolitics",
                    "goverment",
