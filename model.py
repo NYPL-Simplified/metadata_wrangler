@@ -2034,6 +2034,8 @@ class Work(Base):
             _db.delete(i)
         self.work_genres = []
 
+        # Consolidate parent genres into their heaviest subgenre.
+        genre_s = Classifier.consolidate_weights(genre_s)
         total_weight = float(sum(genre_s.values()))
         workgenres = []
 
