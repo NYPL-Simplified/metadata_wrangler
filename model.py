@@ -1907,7 +1907,7 @@ class Work(Base):
 
     def calculate_presentation(self, choose_edition=True,
                                classify=True, choose_summary=True,
-                               calculate_quality=True):
+                               calculate_quality=True, debug=True):
         """Determine the following information:
         
         * Which Edition is the 'primary'. The default view of the
@@ -1965,7 +1965,7 @@ class Work(Base):
             self.calculate_quality(flattened_data)
 
         # Now that everything's calculated, print it out.
-        if True:
+        if debug:
             t = u"WORK %s (by %s)" % (self.title, self.author)
             print t.encode("utf8")
             print " language=%s" % self.language
