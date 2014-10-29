@@ -1313,11 +1313,6 @@ class Edition(Base):
                        data_source=self.data_source,
                        identifier=self.primary_identifier)
 
-    def set_cover(self, resource):
-        self.cover = resource
-        self.cover_full_url = resource.final_url
-        self.cover_thumbnail_url = resource.scaled_href
-
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other Identifiers.
@@ -1398,7 +1393,13 @@ class Edition(Base):
         else:
             type = "text"
         return dict(type=type, value=content)
-              
+
+    def set_cover(self, resource):
+        self.cover = resource
+        self.cover_full_url = resource.href
+        self.cover_thumbnail_url = resource.scaled_href
+        print self.cover_full_url, self.cover_thumbnail_url
+
     def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
                         **kwargs):
         """Assign a contributor to this Edition."""
@@ -1549,7 +1550,7 @@ class Edition(Base):
             # best cover associated with any related identifier.
             best_cover, covers = self.best_cover_within_distance(distance)
             if best_cover:
-                self.cover = best_cover
+                self.set_cover(best_cover)
                 break
 
         # Now that everything's calculated, print it out.
@@ -1689,6 +1690,12 @@ class Work(Base):
         return (u'%s "%s" (%s) %s %s (%s wr, %s lp)' % (
                 self.id, self.title, self.author, ", ".join([g.name for g in self.genres]), self.language,
                 len(self.editions), len(self.license_pools))).encode("utf8")
+
+    def set_summary(self, resource):
+        self.summary = resource
+        # TODO: clean up the content
+        self.summary_text = resource.content
+        print self.summary_text[:80]
 
     @classmethod
     def with_no_genres(self, q):
@@ -1947,10 +1954,10 @@ class Work(Base):
                 flattened_data)
 
         if choose_summary:
-            self.summary, summaries = Identifier.evaluate_summary_quality(
+            summary, summaries = Identifier.evaluate_summary_quality(
                 _db, flattened_data)
             # TODO: clean up the content
-            self.summary_text = self.summary.content
+            self.set_summary(summary)
 
         # If this is a Project Gutenberg book, treat the number of IDs
         # associated with the work (~the number of editions of the
