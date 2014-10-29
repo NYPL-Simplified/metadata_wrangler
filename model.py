@@ -1397,8 +1397,8 @@ class Edition(Base):
 
     def set_cover(self, resource):
         self.cover = resource
-        self.cover_full_url = resource.href
-        self.cover_thumbnail_url = resource.scaled_href
+        self.cover_full_url = resource.final_url
+        self.cover_thumbnail_url = resource.scaled_url
         print self.cover_full_url, self.cover_thumbnail_url
 
     def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
@@ -1696,7 +1696,6 @@ class Work(Base):
         self.summary = resource
         # TODO: clean up the content
         self.summary_text = resource.content
-        print self.summary_text[:80]
 
     @classmethod
     def with_no_genres(self, q):
@@ -2275,9 +2274,6 @@ class Resource(Base):
 
     # The actual URL to the resource.
     href = Column(Unicode)
-
-    # The URL to a scaled-down version of the resource.
-    scaled_href = Column(Unicode)
 
     # Whether or not we have a local copy of the representation.
     mirrored = Column(Boolean, default=False, index=True)

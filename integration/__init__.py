@@ -181,6 +181,8 @@ class CoverImageMirror(object):
         self.data_source = DataSource.lookup(self._db, self.DATA_SOURCE)
         self.original_subdir = self.data_directory(data_directory)
         self.original_cache = FilesystemCache(self.original_subdir, 3)
+        from integration.s3 import S3Uploader
+        self.uploader = S3Uploader()
 
     def run(self):
         """Mirror all image resources associated with this data source."""
@@ -191,9 +193,12 @@ class CoverImageMirror(object):
                     Resource.mirror_date==None)
         print "Mirroring %d images." % q.count()
         resultset = q.limit(100).all()
+        to_upload = []
         while resultset:
             for resource in resultset:
-                self.mirror(resource)
+                to_upload.append(self.mirror(resource))
+
+            self.uploader.upload_resources(to_upload)
             self._db.commit()
             resultset = q.limit(100).all()
         self._db.commit()
@@ -231,5 +236,5 @@ class CoverImageMirror(object):
         else:
             print "CACHE %s" % path
         resource.mirrored_to(path, content_type, data)
-
+        return location, resource.final_url
     

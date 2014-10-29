@@ -3,9 +3,6 @@ import tinys3
 import os
 from urlparse import urlsplit
 
-# https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/Overdrive/746/746d295e-71c1-4059-a567-c9acad94f967.jpg
-# https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/3M/49w/49wkz9.jpg
-# /home/leonardr/data/Overdrive/covers/scaled/a3b/a3bd7038-0180-4bdd-af5d-bf8f055289a7.jpg
 class S3Uploader(object):
 
     def __init__(self, access_key=None, secret_key=None):
