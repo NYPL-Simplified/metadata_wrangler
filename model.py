@@ -1313,14 +1313,6 @@ class Edition(Base):
                        data_source=self.data_source,
                        identifier=self.primary_identifier)
 
-    def set_cover(self, resource):
-        self.cover = resource
-        if resource.mirrored_path:
-            self.cover_full_url = resource.mirrored_path
-        else:
-            self.cover_full_url = resource.full_url
-        self.cover_thumbnail_url = resource.thumbnail_url
-
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
         identifier and other Identifiers.
@@ -1401,7 +1393,13 @@ class Edition(Base):
         else:
             type = "text"
         return dict(type=type, value=content)
-              
+
+    def set_cover(self, resource):
+        self.cover = resource
+        self.cover_full_url = resource.href
+        self.cover_thumbnail_url = resource.scaled_href
+        print self.cover_full_url, self.cover_thumbnail_url
+
     def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
                         **kwargs):
         """Assign a contributor to this Edition."""
@@ -1552,7 +1550,7 @@ class Edition(Base):
             # best cover associated with any related identifier.
             best_cover, covers = self.best_cover_within_distance(distance)
             if best_cover:
-                self.cover = best_cover
+                self.set_cover(best_cover)
                 break
 
         # Now that everything's calculated, print it out.
@@ -1692,6 +1690,20 @@ class Work(Base):
         return (u'%s "%s" (%s) %s %s (%s wr, %s lp)' % (
                 self.id, self.title, self.author, ", ".join([g.name for g in self.genres]), self.language,
                 len(self.editions), len(self.license_pools))).encode("utf8")
+
+    def set_summary(self, resource):
+        self.summary = resource
+        # TODO: clean up the content
+        self.summary_text = resource.content
+        print self.summary_text[:80]
+
+    @classmethod
+    def with_no_genres(self, q):
+        """Modify a query so it finds only Works that are not classified under
+        any genre."""
+        q = q.outerjoin(Work.work_genres)
+        q = q.filter(WorkGenre.genre==None)
+        return q
 
     def all_editions(self, recursion_level=5):
         """All Editions identified by a Identifier equivalent to 
@@ -1942,8 +1954,10 @@ class Work(Base):
                 flattened_data)
 
         if choose_summary:
-            self.summary, summaries = Identifier.evaluate_summary_quality(
+            summary, summaries = Identifier.evaluate_summary_quality(
                 _db, flattened_data)
+            # TODO: clean up the content
+            self.set_summary(summary)
 
         # If this is a Project Gutenberg book, treat the number of IDs
         # associated with the work (~the number of editions of the
@@ -2210,6 +2224,7 @@ class Measurement(Base):
 
         return self._normalized_value
 
+
 class Resource(Base):
     """An external resource that may be mirrored locally."""
 
@@ -2248,7 +2263,7 @@ class Resource(Base):
         Integer, ForeignKey('datasources.id'), index=True)
 
     # Many Editions may use this resource as their cover image.
-    cover_editionss = relationship("Edition", backref="cover", foreign_keys=[Edition.cover_id])
+    cover_editions = relationship("Edition", backref="cover", foreign_keys=[Edition.cover_id])
 
     # Many Works may use this resource as their summary.
     summary_works = relationship("Work", backref="summary", foreign_keys=[Work.summary_id])
@@ -2338,10 +2353,10 @@ class Resource(Base):
         This link will be served to the client.
         """
         if self.mirrored_path:
-            url = self.mirrored_path
+            url = self.mirrored_path % self.URL_ROOTS
         else:
             url = self.href
-        return url % self.URL_ROOTS
+        return url
 
     @property
     def scaled_url(self):        
@@ -2892,8 +2907,7 @@ class Lane(object):
         if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
             # No genre plus a boolean value for `fiction` means
             # fiction or nonfiction not associated with any genre.
-            q = q.outerjoin(Work.work_genres)
-            q = q.filter(WorkGenre.genre==None)
+            q = Work.with_no_genres(q)
         else:
             # Find works that are assigned to the given genres. This
             # may also turn into a restriction on the fiction status.

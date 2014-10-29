@@ -231,14 +231,17 @@ class AcquisitionFeed(OPDSFeed):
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
         full_url = None
+        if not work.cover_full_url and work.primary_edition.cover:
+            work.primary_edition.set_cover(work.primary_edition.cover)
+
         if work.cover_full_url:
             full_url = URLRewriter.rewrite(work.cover_full_url)
-            mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
-            if mirrored_url:
-                full_url = mirrored_url
+            #mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
+            #if mirrored_url:
+            #    full_url = mirrored_url
                 
-            if work.cover.scaled_path:
-                thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
+            #if work.cover.scaled_path:
+            #    thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
         elif identifier.type == Identifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             thumbnail_url = host + urllib.quote(
@@ -248,7 +251,6 @@ class AcquisitionFeed(OPDSFeed):
         if work.cover_thumbnail_url:
             thumbnail_url = URLrewriter.rewrite(work.cover_thumbnail_url)
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
-
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
                       identifier=identifier.identifier, _external=True)
@@ -260,6 +262,9 @@ class AcquisitionFeed(OPDSFeed):
             summary = work.summary_text
             if work.summary:
                 qualities.append(("Summary quality", work.summary.quality))
+        elif work.summary:
+            work.summary_text = work.summary.content
+            summary = work.summary_text
         else:
             summary = ""
         summary += "<ul>"

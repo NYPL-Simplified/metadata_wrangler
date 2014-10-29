@@ -129,7 +129,7 @@ class SummaryEvaluator(object):
                 bad_phrases += 1
 
         if l.count(" -- ") > 3:
-            bad_phrases += 1
+            bad_phrases += (l.count(" -- ") - 3)
 
         score *= (0.5 ** bad_phrases)
 
