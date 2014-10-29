@@ -38,7 +38,6 @@ def imp(db, data_source, identifier, cache, library):
     representation.fetched_at = modified
     print identifier
 
-
 if __name__ == '__main__':
     data_dir = sys.argv[1]
 

@@ -97,10 +97,12 @@ class ThreeMAPI(object):
             representation, cached = Representation.get(
                 self._db, url, extra_request_headers=headers,
                 data_source=self.source, identifier=identifier)
-            return representation.content
-
-        response = requests.request(method, url, data=body, headers=headers)
-        return response.text
+            content = representation.content
+        else:
+            response = requests.request(
+                method, url, data=body, headers=headers)
+            content = response.text
+        return content
 
     # def get_patron_circulation(self, patron_id):
     #     path = "circulation/patron/%s" % patron_id
