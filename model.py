@@ -2470,8 +2470,10 @@ class Resource(Base):
             original_variable_to_scaled_variable)
         scaled_path = scaled_path_template % scaled_path_expansions
 
+        already_scaled = False
         if os.path.exists(scaled_path) and not force:
             scaled_image = Image.open(scaled_path)
+            already_scaled = True
         else:
             path = self.local_path(original_path_expansions)
             try:
@@ -2499,18 +2501,18 @@ class Resource(Base):
 
         # Save the scaled image.
         if scaled_image:
-            d, f = os.path.split(scaled_path)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            scaled_image.save(scaled_path)
+            if not already_scaled:
+                d, f = os.path.split(scaled_path)
+                if not os.path.exists(d):
+                    os.makedirs(d)
+                scaled_image.save(scaled_path)
             self.scaled = True
             self.scaled_path = scaled_path_template
             self.scaled_width, self.scaled_height = scaled_image.size
         else:
             self.scaled_path = None
             self.scaled = False
-
-        # TODO: We can also dump it to S3 at this point.
+        return already_scaled
 
 class Genre(Base):
     """A subject-matter classification for a book.
@@ -3808,30 +3810,32 @@ class ImageScaler(object):
 
         if not force:
             q = q.filter(Resource.scaled==False)
-        total = 0
         if upload:
             uploader = S3Uploader()
         print "Scaling %d images." % q.count()
         resultset = q.limit(batch_size).all()
         while resultset:
+            total = 0
             a = time.time()
             to_upload = []
             for r in resultset:
-                r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
+                already_scaled = r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
                 if not r.scaled_path:
                     print "Could not scale %s" % r.href
+                elif already_scaled:
+                    pass
                 else:
                     local_path = r.local_scaled_path(self.scaled_expansions)
-                    print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                                        local_path)
+                    #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                    #                    local_path)
                     to_upload.append((local_path, r.scaled_url))
-                total += 1
-            print "%d to scale" % (time.time()-a)
+                    total += 1
+            print "%.2f sec to scale %d" % ((time.time()-a), total)
             a = time.time()
             if upload:
                 uploader.upload_resources(to_upload)
             self._db.commit()
-            print "%d to upload" % (time.time()-a)
+            print "%.2f sec to upload %d" % ((time.time()-a), total)
             a = time.time()
             resultset = q.limit(batch_size).all()
         self._db.commit()
