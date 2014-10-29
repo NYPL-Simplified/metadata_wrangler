@@ -22,8 +22,10 @@ while batch:
     for work in batch:
         if work.primary_edition and work.primary_edition.cover:
             work.primary_edition.set_cover(work.primary_edition.cover)
+            print work.primary_edition.cover_full_url
         if work.summary:
             work.set_summary(work.summary)
+            print work.summary[:70]
     db.commit()
     start += batch_size
     batch = base_query.offset(start).all()
