@@ -13,6 +13,7 @@ import random
 import re
 import requests
 import time
+from integration.s3 import S3Uploader
 
 from PIL import (
     Image,
@@ -3796,7 +3797,8 @@ class ImageScaler(object):
             self.scaled_expansions[scaled] = mirror.scaled_image_directory(data_directory)
             self.original_variable_to_scaled_variable[original] = "%(" + scaled + ")s"
 
-    def run(self, destination_width, destination_height, force):
+    def run(self, destination_width, destination_height, force,
+            batch_size=100, upload=True):
         q = self._db.query(Resource).filter(
             Resource.rel==Resource.IMAGE).filter(
                 Resource.mirrored==True).filter(
@@ -3805,22 +3807,30 @@ class ImageScaler(object):
         if not force:
             q = q.filter(Resource.scaled==False)
         total = 0
+        if upload:
+            uploader = S3Uploader()
         print "Scaling %d images." % q.count()
-        resultset = q.limit(100).all()
+        resultset = q.limit(batch_size).all()
         while resultset:
             a = time.time()
+            to_upload = []
             for r in resultset:
                 r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
                 if not r.scaled_path:
                     print "Could not scale %s" % r.href
                 else:
+                    local_path = r.local_scaled_path(self.scaled_expansions)
                     print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                                        r.local_scaled_path(self.scaled_expansions) 
-                    )
+                                        local_path)
+                    to_upload.append((local_path, r.scaled_url))
                 total += 1
-            self._db.commit()
-            print total, time.time()-a
+            print "%d to scale" % (time.time()-a)
             a = time.time()
-            resultset = q.limit(100).all()
+            if upload:
+                uploader.upload_resources(to_upload)
+            self._db.commit()
+            print "%d to upload" % (time.time()-a)
+            a = time.time()
+            resultset = q.limit(batch_size).all()
         self._db.commit()
 
