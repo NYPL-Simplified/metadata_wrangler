@@ -1695,7 +1695,8 @@ class Work(Base):
     def set_summary(self, resource):
         self.summary = resource
         # TODO: clean up the content
-        self.summary_text = resource.content
+        if resource:
+            self.summary_text = resource.content
 
     @classmethod
     def with_no_genres(self, q):
