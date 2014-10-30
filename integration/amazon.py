@@ -13,11 +13,14 @@ from integration import (
 from model import (
     CoverageProvider,
     DataSource,
+    Equivalency,
     Identifier,
     Measurement,
     Representation,
     Subject,
 )
+from sqlalchemy import alias
+
 from pdb import set_trace
 
 class AmazonScraper(object):
@@ -339,8 +342,20 @@ class AmazonCoverageProvider(CoverageProvider):
     @property
     def editions_that_need_coverage(self):
         """Returns identifiers (not editions) that need coverage."""
-        return Identifier.missing_coverage_from(
+        q = Identifier.missing_coverage_from(
             self.db, self.input_sources, self.coverage_source)
+
+        if self.input_sources == [Identifier.ISBN]:
+            threem_identifier = alias(Identifier.__table__)
+            other_equivalency = alias(Equivalency.__table__)
+            yet_another_equivalency = alias(Equivalency.__table__)
+
+            q = q.join(Equivalency, Identifier.id==Equivalency.output_id).join(
+                other_equivalency, Equivalency.input_id==other_equivalency.c.output_id).join(
+                yet_another_equivalency, other_equivalency.c.input_id==yet_another_equivalency.c.output_id).join(
+                threem_identifier, yet_another_equivalency.c.input_id==threem_identifier.c.id).filter(
+                threem_identifier.c.type==Identifier.THREEM_ID)
+        return q
 
     def process_edition(self, identifier):
         """Process an identifier (not an edition)."""
