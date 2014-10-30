@@ -249,7 +249,7 @@ class AcquisitionFeed(OPDSFeed):
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
         if work.cover_thumbnail_url:
-            thumbnail_url = URLrewriter.rewrite(work.cover_thumbnail_url)
+            thumbnail_url = URLRewriter.rewrite(work.cover_thumbnail_url)
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
