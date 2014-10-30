@@ -3641,10 +3641,16 @@ class Representation(Base):
             headers = None
             content = None
 
+        if exception:
+            print "EXCEPTION: %s" % exception
+        
         if not status_code:
             raise IOError("No status code!")
 
         if status_code / 100 == 4 and status_code != 404:
+            raise IOError("%s status code" % status_code)
+
+        if status_code / 100 == 5:
             raise IOError("%s status code" % status_code)
 
         if usable_representation and status_code == 304:
@@ -3695,6 +3701,10 @@ class Representation(Base):
             kwargs['allow_redirects'] = True
         response = requests.get(url, headers=headers, **kwargs)
         return response.status_code, response.headers, response.content
+
+    @classmethod
+    def http_get_no_timeout(cls, url, headers, **kwargs):
+        return Representation.simple_http_get(url, headers, timeout=None, **kwargs)
 
     @classmethod
     def http_get_no_redirect(cls, url, headers, **kwargs):

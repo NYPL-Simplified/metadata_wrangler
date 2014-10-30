@@ -44,17 +44,21 @@ class ldq(object):
     
     @classmethod
     def for_type(self, g, search):
-        check = { "@id": search }
+        check = [search, { "@id": search }]
         for node in g:
             if not isinstance(node, dict):
                 continue
-            node_type = node.get('rdf:type')
-            if not node_type:
-                continue
-            if node_type == check:
-                yield node
-            elif isinstance(node_type, list) and check in node_type:
-                yield node
+            for key in ('rdf:type', '@type'):
+                node_type = node.get(key)
+                if not node_type:
+                    continue
+                for c in check:
+                    if node_type == c:
+                        yield node
+                        break
+                    elif isinstance(node_type, list) and c in node_type:
+                        yield node
+                        break
 
     @classmethod
     def restrict_to_language(self, values, code_2):
@@ -100,19 +104,22 @@ class OCLCLinkedData(object):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
-    def lookup(self, identifier):
+    def lookup(self, identifier_or_uri):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
-        if isinstance(identifier, basestring):
+        if isinstance(identifier_or_uri, basestring):
             # e.g. http://experiment.worldcat.org/oclc/1862341597.json
-            match = self.URI_WITH_OCLC_NUMBER.search(identifier)
+            match = self.URI_WITH_OCLC_NUMBER.search(identifier_or_uri)
             if match:
                 type = Identifier.OCLC_NUMBER
                 id = match.groups()[0]
                 if not type or not id:
                     return None, None
-                identifier = Identifier.for_foreign_id(self._db, type, id)
+                identifier, is_new = Identifier.for_foreign_id(
+                    self._db, type, id)
+        else:
+            identifier = identifier_or_uri
         if not type or not identifier:
             return None, None
         return self.lookup_by_identifier(identifier)
@@ -305,20 +312,29 @@ class OCLCLinkedData(object):
                 # print "WEIRD INTERNAL LOOKUP: %r" % result
                 continue
             use_type = None
-            if 'rdf:type' in result:
-                types = result.get('rdf:type', [])
-                if isinstance(types, dict):
-                    types = [types]
-                for rdf_type in types:
-                    if '@id' in rdf_type:
-                        type_id = rdf_type['@id']
-                    if type_id in cls.ACCEPTABLE_TYPES:
-                        use_type = type_id
-                        break
-                    elif type_id == 'schema:Intangible':
-                        use_type = Subject.TAG
-                        break
-                    # print "", type_id, result
+            type_objs = []
+            for type_name in ('rdf:type', '@type'):
+                these_type_objs = result.get(type_name, [])
+                if not isinstance(these_type_objs, list):
+                    these_type_objs = [these_type_objs]
+                for this_type_obj in these_type_objs:
+                    if isinstance(this_type_obj, dict):
+                        type_objs.append(this_type_obj)
+                    elif isinstance(this_type_obj, basestring):
+                        type_objs.append({"@id": this_type_obj})
+
+            for rdf_type in type_objs:
+                if '@id' in rdf_type:
+                    type_id = rdf_type['@id']
+                else:
+                    type_id = rdf_type
+                if type_id in cls.ACCEPTABLE_TYPES:
+                    use_type = type_id
+                    break
+                elif type_id == 'schema:Intangible':
+                    use_type = Subject.TAG
+                    break
+                # print "", type_id, result
                     
             if use_type:
                 for value in ldq.values(name):
@@ -975,6 +991,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_records = 0
             new_isbns = 0
             new_descriptions = 0
+            new_subjects = 0
             print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
             editions = 0
             for edition in self.info_for(original_identifier):
@@ -986,9 +1003,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 #for isbn in isbns:
                 #    print " NEW ISBN: %s" % isbn
                 new_descriptions += len(descriptions)
+                new_subjects += len(subjects)
 
-            print "Total: %s editions, %s ISBNs, %s descriptions." % (
-                editions, new_isbns, new_descriptions)
+            print "Total: %s editions, %s ISBNs, %s descriptions, %s classifications." % (
+                editions, new_isbns, new_descriptions, new_subjects)
         except IOError, e:
             if ", but couldn't find location" in e.message:
                 # OCLC doesn't know about an ISBN.
@@ -1140,10 +1158,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
         isbns = set([])
         descriptions = []
 
-        types = []
-        type_objs = book.get('rdf:type', [])
-        if isinstance(type_objs, dict):
-            type_objs = [type_objs]
+        type_objs = []
+        for type_name in ('rdf:type', '@type'):
+            these_type_objs = book.get(type_name, [])
+            if not isinstance(these_type_objs, list):
+                these_type_objs = [these_type_objs]
+            for this_type_obj in these_type_objs:
+                if isinstance(this_type_obj, dict):
+                    type_objs.append(this_type_obj)
+                elif isinstance(this_type_obj, basestring):
+                    type_objs.append({"@id": this_type_obj})
         types = [i['@id'] for i in type_objs if 
                  i['@id'] not in self.UNUSED_TYPES]
         if not types:

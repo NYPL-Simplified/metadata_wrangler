@@ -17,7 +17,7 @@ a = 0
 db = production_session()
 start = 0
 batch_size = 1000
-source = DataSource.lookup(db, DataSource.OVERDRIVE)
+source = DataSource.lookup(db, DataSource.THREEM)
 base_query = db.query(Work).join(Work.primary_edition).filter(Edition.data_source==source).order_by(Work.id).options(
         joinedload('summary'), joinedload('primary_edition', 'cover')).limit(batch_size)
 batch = base_query.offset(start).all()

@@ -96,7 +96,8 @@ class ThreeMAPI(object):
         if cache_result and method=='GET':
             representation, cached = Representation.get(
                 self._db, url, extra_request_headers=headers,
-                data_source=self.source, identifier=identifier)
+                data_source=self.source, identifier=identifier,
+                do_get=Representation.http_get_no_timeout)
             content = representation.content
         else:
             response = requests.request(
@@ -124,6 +125,8 @@ class ThreeMAPI(object):
         end = end.strftime(self.ARGUMENT_TIME_FORMAT)
         url = "data/cloudevents?startdate=%s&enddate=%s" % (start, end)
         data = self.request(url, cache_result=cache_result)
+        if cache_result:
+            self._db.commit()
         events = EventParser().process_all(data)
         return events
 
@@ -337,6 +340,7 @@ class ThreeMEventMonitor(Monitor):
                 if not i % 1000:
                     print i
                     _db.commit()
+            _db.commit()
             self.timestamp.timestamp = cutoff
         print "Handled %d events total" % i
 
