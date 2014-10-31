@@ -3604,7 +3604,14 @@ class Representation(Base):
         """
         do_get = do_get or cls.simple_http_get
 
-        representation = get_one(_db, Representation, url=url)
+        representation = None
+        try:
+            representation = get_one(_db, Representation, url=url, data_source=data_source)
+        except Exception, e:
+            print "ERROR: more than one representation for %s" % url
+            representations = _db.query(Representation).filter(Representation.url==url).filter(Representation.data_source==data_source).all()
+            if representations:
+                representation = representations[0]
 
         # Do we already have a usable representation?
         usable_representation = (
