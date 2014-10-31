@@ -210,6 +210,13 @@ class GenreData(object):
         return "[GenreData: %s]" % self.name
 
     @property
+    def self_and_subgenres(self):
+        yield self
+        for child in self.subgenres:
+            for subgenre in child.self_and_subgenres:
+                yield subgenre
+
+    @property
     def parents(self):
         parents = []
         p = self.parent

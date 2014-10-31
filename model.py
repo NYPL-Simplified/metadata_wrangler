@@ -2551,8 +2551,8 @@ class Genre(Base):
     @property
     def self_and_subgenres(self):
         _db = Session.object_session(self)
-        genres = [self]
-        for genre_data in classifier.genres[self.name].subgenres:
+        genres = []
+        for genre_data in classifier.genres[self.name].self_and_subgenres:
             genres.append(self.lookup(_db, genre_data.name)[0])
         return genres
 

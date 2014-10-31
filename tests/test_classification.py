@@ -178,6 +178,19 @@ class TestNestedSubgenres(object):
         eq_([classifier.Crime_Thrillers_Mystery, classifier.Mystery],
             list(classifier.Police_Procedurals.parents))
 
+    def test_self_and_subgenres(self):
+        # Romance and Erotica
+        #  - Erotica
+        #  - Romance
+        #    - Contemporary Romance
+        #    - etc.
+        eq_(
+            set([classifier.Romance_Erotica, classifier.Erotica, 
+                 classifier.Romance, classifier.Contemporary_Romance,
+                 classifier.Historical_Romance, classifier.Paranormal_Romance,
+                 classifier.Regency_Romance, classifier.Suspense_Romance]),
+            set(list(classifier.Romance_Erotica.self_and_subgenres)))
+
 class TestConsolidateWeights(object):
 
     def test_consolidate(self):
