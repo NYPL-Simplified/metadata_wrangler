@@ -238,6 +238,7 @@ class AcquisitionFeed(OPDSFeed):
         if not work.cover_full_url and work.primary_edition.cover:
             work.primary_edition.set_cover(work.primary_edition.cover)
 
+        thumbnail_url = work.cover_thumbnail_url
         if work.cover_full_url:
             full_url = URLRewriter.rewrite(work.cover_full_url)
             #mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
@@ -253,10 +254,12 @@ class AcquisitionFeed(OPDSFeed):
             host = URLRewriter.GENERATED_COVER_HOST
             thumbnail_url = host + urllib.quote(
                 "/Gutenberg ID/%s.png" % identifier.identifier)
+            full_url = thumbnail_url
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
-        if work.cover_thumbnail_url:
-            thumbnail_url = URLRewriter.rewrite(work.cover_thumbnail_url)
+
+        if thumbnail_url:
+            thumbnail_url = URLRewriter.rewrite(thumbnail_url)
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
