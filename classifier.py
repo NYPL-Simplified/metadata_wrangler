@@ -302,9 +302,9 @@ class Classifier(object):
         proportion of the weight of the parent genre, assign the
         parent's weight to the subgenre and remove the parent.
         """
-        print "Before consolidation:"
-        for genre, weight in weights.items():
-            print "", genre, weight
+        #print "Before consolidation:"
+        #for genre, weight in weights.items():
+        #    print "", genre, weight
 
         # Convert Genre objects to GenreData.
         consolidated = dict()
@@ -320,9 +320,9 @@ class Classifier(object):
                     if ((not parent in heaviest_child) 
                         or weight > heaviest_child[parent][1]):
                         heaviest_child[parent] = (genre, weight)
-        print "Heaviest child:"
-        for parent, (genre, weight) in heaviest_child.items():
-            print "", parent, genre, weight
+        #print "Heaviest child:"
+        #for parent, (genre, weight) in heaviest_child.items():
+        #    print "", parent, genre, weight
         made_it = False
         while not made_it:
             for parent, (child, weight) in sorted(list(heaviest_child.items())):
@@ -341,12 +341,12 @@ class Classifier(object):
                         break
             # We made it all the way through the dict without changing it.
             made_it = True
-        print "Final heaviest child:"
-        for parent, (genre, weight) in heaviest_child.items():
-            print "", parent, genre, weight
-        print "After consolidation:"
-        for genre, weight in consolidated.items():
-            print "", genre, weight
+        #print "Final heaviest child:"
+        #for parent, (genre, weight) in heaviest_child.items():
+        #    print "", parent, genre, weight
+        #print "After consolidation:"
+        #for genre, weight in consolidated.items():
+        #    print "", genre, weight
         return consolidated
 
     @classmethod
