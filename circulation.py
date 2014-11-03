@@ -60,6 +60,7 @@ if os.environ.get('TESTING') != "True":
     _db = production_session()
     lanes = LaneList.from_description(
         _db,
+        None,
         [dict(name="Fiction",
               fiction=True,
               audience=genres.Classifier.AUDIENCE_ADULT,
@@ -74,8 +75,23 @@ if os.environ.get('TESTING') != "True":
          genres.Science_Fiction,
          genres.Historical_Fiction,
          genres.Cooking,
-         dict(name="Romance",
-              genres=[genres.Romance_Erotica],
+         Lane(_db, name="Romance",
+              genres=[
+                  genres.Romance, genres.Contemporary_Romance,
+                  genres.Historical_Romance, genres.Paranormal_Romance,
+                  genres.Regency_Romance, genres.Suspense_Romance],
+              include_subgenres=False,
+              fiction=True,
+              audience=Classifier.AUDIENCE_ADULT,
+              sublanes=[
+                  Lane(_db, name="General Romance",
+                       genres=[genres.Romance, genres.Contemporary_Romance]),
+                  genres.Historical_Romance,
+                  genres.Paranormal_Romance,
+                  genres.Regency_Romance,
+                  genres.Suspense_Romance,
+                  genres.Erotica,
+              ],
           ),
          genres.Science_Technology_Nature,
          genres.Self_Help,
@@ -91,6 +107,22 @@ if os.environ.get('TESTING') != "True":
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
              audience=genres.Classifier.AUDIENCE_CHILDREN,
              genres=[]),
+         dict(
+             fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+             name="African-American",
+             genres=[genres.African_American, genres.Urban_Fiction],
+         ),
+         genres.Art_Architecture_Design,
+         genres.Crafts_Hobbies_Games,
+         # genres.Gardening,
+         genres.Health_Diet,
+         genres.Humor_Entertainment,
+         genres.Parenting_Family,
+         genres.Religion_Spirituality,
+         genres.Criticism_Philosophy,
+         genres.Business_Economics,
+         genres.Politics_Current_Events,
+         genres.Travel_Adventure_Sports,
          dict(
              name="Unclassified",
              fiction=Lane.UNCLASSIFIED,
@@ -230,7 +262,7 @@ def feed(lane):
     lane = Conf.lanes.by_name[lane]
 
     key = (lane, ",".join(languages), order)
-    if False and not last_seen_id and key in feed_cache:
+    if not last_seen_id and key in feed_cache:
         chance = random.random()
         feed, created_at = feed_cache.get(key)
         elapsed = time.time()-created_at
