@@ -230,7 +230,7 @@ def feed(lane):
     lane = Conf.lanes.by_name[lane]
 
     key = (lane, ",".join(languages), order)
-    if False and not last_seen_id and key in feed_cache:
+    if not last_seen_id and key in feed_cache:
         chance = random.random()
         feed, created_at = feed_cache.get(key)
         elapsed = time.time()-created_at
