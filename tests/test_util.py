@@ -1,7 +1,10 @@
+# encoding: utf-8
 from collections import defaultdict
 from nose.tools import eq_, set_trace
 
 from util import (
+    Bigrams,
+    english_bigrams,
     LanguageCodes,
     MetadataSimilarity,
     TitleProcessor,
@@ -327,3 +330,31 @@ class TestTitleProcessor(object):
         eq_("Princess of Mars, A", p("A Princess of Mars"))
         eq_("Unexpected Journey, An", p("An Unexpected Journey"))
         eq_("Then This Happened", p("Then This Happened"))
+
+
+class TestEnglishDetector(object):
+
+    def test_proportional_bigram_difference(self):
+        dutch_text = "Op haar nieuwe school leert de 17-jarige Bella (ik-figuur) een mysterieuze jongen kennen op wie ze ogenblikkelijk verliefd wordt. Hij blijkt een groot geheim te hebben. Vanaf ca. 14 jaar."
+        dutch = Bigrams.from_string(dutch_text)
+        assert dutch.difference_from(english_bigrams) > 1
+
+        french_text = u"Dix récits surtout féminins où s'expriment les heures douloureuses et malgré tout ouvertes à l'espérance des 70 dernières années d'Haïti."
+        french = Bigrams.from_string(french_text)
+        assert french.difference_from(english_bigrams) > 1
+
+        english_text = "After the warrior cat Clans settle into their new homes, the harmony they once had disappears as the clans start fighting each other, until the day their common enemy--the badger--invades their territory."
+        english = Bigrams.from_string(english_text)
+        assert english.difference_from(english_bigrams) < 1
+
+        # A longer text is a better fit.
+        long_english_text = "U.S. Marshal Jake Taylor has seen plenty of action during his years in law enforcement. But he'd rather go back to Iraq than face his next assignment: protection detail for federal judge Liz Michaels. His feelings toward Liz haven't warmed in the five years since she lost her husband—and Jake's best friend—to possible suicide. How can Jake be expected to care for the coldhearted workaholic who drove his friend to despair?As the danger mounts and Jake gets to know Liz better, his feelings slowly start to change. When it becomes clear that an unknown enemy may want her dead, the stakes are raised. Because now both her life—and his heart—are in mortal danger.Full of the suspense and romance Irene Hannon's fans have come to love, Fatal Judgment is a thrilling story that will keep readers turning the pages late into the night."
+        long_english = Bigrams.from_string(long_english_text)
+        assert (long_english.difference_from(english_bigrams)
+                < english.difference_from(english_bigrams))
+
+        # Difference is commutable within the limits of floating-point
+        # arithmetic.
+        diff = (dutch.difference_from(english_bigrams) -
+            english_bigrams.difference_from(dutch))
+        eq_(round(diff, 7), 0)

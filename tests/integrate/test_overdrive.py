@@ -10,8 +10,9 @@ from integration.overdrive import (
 )
 from model import (
     DataSource,
+    Measurement,
     Resource,
-    WorkIdentifier,
+    Identifier,
 )
 
 class TestOverdriveAPI(DatabaseTest):
@@ -34,24 +35,21 @@ class TestOverdriveAPI(DatabaseTest):
         raw = json.loads(data)        
 
         # Create an identifier
-        identifier = self._workidentifier(
-            identifier_type=WorkIdentifier.OVERDRIVE_ID
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID
         )
 
         # Make it look like the availability information is for the
-        # newly created WorkIdentifier.
+        # newly created Identifier.
         raw['id'] = identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-
-        pool, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(True, was_new)
 
-        # The title of the corresponding WorkRecord has been filled
+        # The title of the corresponding Edition has been filled
         # in, just to provide some basic human-readable metadata.
-        eq_("Blah blah blah", pool.work_record().title)
+        eq_("Blah blah blah", pool.edition().title)
         eq_(raw['copiesOwned'], pool.licenses_owned)
         eq_(raw['copiesAvailable'], pool.licenses_available)
         eq_(0, pool.licenses_reserved)
@@ -64,9 +62,9 @@ class TestOverdriveAPI(DatabaseTest):
         raw = json.loads(data)        
 
         # Create a LicensePool.
-        wr, pool = self._workrecord(
+        wr, pool = self._edition(
             data_source_name=DataSource.OVERDRIVE,
-            identifier_type=WorkIdentifier.OVERDRIVE_ID,
+            identifier_type=Identifier.OVERDRIVE_ID,
             with_license_pool=True
         )
 
@@ -74,17 +72,14 @@ class TestOverdriveAPI(DatabaseTest):
         # newly created LicensePool.
         raw['id'] = pool.identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-
         wr.title = "The real title."
         eq_(0, pool.licenses_owned)
         eq_(0, pool.licenses_available)
         eq_(0, pool.licenses_reserved)
         eq_(0, pool.patrons_in_hold_queue)
 
-        p2, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        p2, was_new = api.update_licensepool_with_book_info(raw)
         eq_(False, was_new)
         eq_(p2, pool)
         # The title didn't change to that title given in the availability
@@ -100,15 +95,13 @@ class TestOverdriveAPI(DatabaseTest):
             "tests.integrate",
             "files/overdrive/overdrive_availability_information_holds.json")
         raw = json.loads(data)
-        identifier = self._workidentifier(
-            identifier_type=WorkIdentifier.OVERDRIVE_ID
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID
         )
         raw['id'] = identifier.identifier
 
-        overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        pool, was_new = OverdriveAPI.update_licensepool_with_book_info(
-            self._db, overdrive, raw
-            )
+        api = OverdriveAPI(self._db, None)
+        pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(10, pool.patrons_in_hold_queue)
 
     def test_link(self):
@@ -119,16 +112,16 @@ class TestOverdriveAPI(DatabaseTest):
         expect = OverdriveAPI.make_link_safe("http://api.overdrive.com/v1/collections/collection-id/products?limit=300&offset=0&lastupdatetime=2014-04-28%2009:25:09&sort=popularity:desc&formats=ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open")
         eq_(expect, OverdriveRepresentationExtractor.link(raw, "first"))
 
-    def test_annotate_work_record_with_bibliographic_information(self):
+    def test_annotate_edition_with_bibliographic_information(self):
 
-        wr, new = self._workrecord(with_license_pool=True)
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_metadata.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
 
         # Basic bibliographic info.
@@ -143,7 +136,7 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(31, wr.published.day)
 
         # Author stuff
-        author = wr.authors[0]
+        author = wr.author_contributors[0]
         eq_(u"Rüping, Andreas", author.name)
         eq_("Andreas R&#252;ping", author.display_name)
         eq_(set(["Computer Technology", "Nonfiction"]),
@@ -158,7 +151,7 @@ class TestOverdriveAPI(DatabaseTest):
 
         # Associated resources.
         resources = wr.primary_identifier.resources
-        eq_(4, len(resources))
+        eq_(3, len(resources))
         long_description = [
             x for x in resources if x.rel==Resource.DESCRIPTION
             and x.href=="tag:full"
@@ -175,23 +168,30 @@ class TestOverdriveAPI(DatabaseTest):
         image = [x for x in resources if x.rel==Resource.IMAGE][0]
         eq_('http://images.contentreserve.com/ImageType-100/0128-1/%7B3896665D-9D81-4CAC-BD43-FFC5066DE1F5%7DImg100.jpg', image.href)
 
-        popularity = [x for x in resources if x.rel==Resource.POPULARITY][0]
-        eq_("2", popularity.content)
+        measurements = wr.primary_identifier.measurements
+        popularity = [x for x in measurements
+                      if x.quantity_measured==Measurement.POPULARITY][0]
+        eq_(2, popularity.value)
+
+        rating = [x for x in measurements
+                  if x.quantity_measured==Measurement.RATING][0]
+        eq_(1, rating.value)
 
         # Un-schematized metadata.
+
         eq_("eBook", wr.extra['medium'])
-        eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.extra['sort_title'])
+        eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.sort_title)
 
 
-    def test_annotate_work_record_with_sample(self):
-        wr, new = self._workrecord(with_license_pool=True)
+    def test_annotate_edition_with_sample(self):
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_has_sample.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
         
         i = wr.primary_identifier
@@ -200,15 +200,15 @@ class TestOverdriveAPI(DatabaseTest):
         eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.href)
         eq_(820171, sample.file_size)
 
-    def test_annotate_work_record_with_awards(self):
-        wr, new = self._workrecord(with_license_pool=True)
+    def test_annotate_edition_with_awards(self):
+        wr, new = self._edition(with_license_pool=True)
         data = pkgutil.get_data(
             "tests.integrate",
             "files/overdrive/overdrive_has_awards.json")
         info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        OverdriveBibliographicMonitor.annotate_work_record_with_bibliographic_information(
+        OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
             self._db, wr, info, input_source)
         eq_(wr.extra['awards'], [{"source":"The New York Times","value":"The New York Times Best Seller List"}])
 

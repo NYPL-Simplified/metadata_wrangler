@@ -19,8 +19,8 @@ site.addsitedir(os.path.join(d, ".."))
 from model import (
     DataSource,
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     Work,
     )
 from flask import request, url_for
@@ -170,7 +170,7 @@ class AcquisitionFeed(OPDSFeed):
         url = cls.lane_url(lane)
         links = []
         feed_size = 20
-        works = lane.quality_sample(languages, 30, 1, feed_size)
+        works = lane.quality_sample(languages, 0.8, 0.3, feed_size)
         return AcquisitionFeed(
             _db, "%s: featured" % lane.name, url, works)
 
@@ -205,7 +205,7 @@ class AcquisitionFeed(OPDSFeed):
                 if p.open_access:
                     # Make sure there's a usable link--it might be
                     # audio-only or something.
-                    if p.work_record().best_open_access_link:
+                    if p.edition().best_open_access_link:
                         open_access_license_pool = p
                 else:
                     # TODO: It's OK to have a non-open-access license pool,
@@ -235,27 +235,29 @@ class AcquisitionFeed(OPDSFeed):
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
         full_url = None
-        thumbnail_url = None
-        if work.cover:
-            full_url = URLRewriter.rewrite(work.cover.href)
-            mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
-            if mirrored_url:
-                full_url = mirrored_url
+        if not work.cover_full_url and work.primary_edition.cover:
+            work.primary_edition.set_cover(work.primary_edition.cover)
+
+        if work.cover_full_url:
+            full_url = URLRewriter.rewrite(work.cover_full_url)
+            #mirrored_url = URLRewriter.rewrite(work.cover.mirrored_path)
+            #if mirrored_url:
+            #    full_url = mirrored_url
                 
             qualities.append(("Cover quality", work.cover.quality))
             if work.cover.scaled_path:
                 thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
             elif work.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
                 thumbnail_url = mirrored_url
-        elif identifier.type == WorkIdentifier.GUTENBERG_ID:
+        elif identifier.type == Identifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
             thumbnail_url = host + urllib.quote(
                 "/Gutenberg ID/%s.png" % identifier.identifier)
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
-        if thumbnail_url:
+        if work.cover_thumbnail_url:
+            thumbnail_url = URLRewriter.rewrite(work.cover_thumbnail_url)
             links.append(E.link(rel=Resource.THUMBNAIL_IMAGE, href=thumbnail_url))
-
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
                       identifier=identifier.identifier, _external=True)
@@ -263,9 +265,13 @@ class AcquisitionFeed(OPDSFeed):
         if genre:
             qualities.append(("Genre", genre))
 
-        if work.summary:
-            summary = work.summary.content
-            qualities.append(("Summary quality", work.summary.quality))
+        if work.summary_text:
+            summary = work.summary_text
+            if work.summary:
+                qualities.append(("Summary quality", work.summary.quality))
+        elif work.summary:
+            work.summary_text = work.summary.content
+            summary = work.summary_text
         else:
             summary = ""
         summary += "<ul>"
@@ -284,7 +290,7 @@ class AcquisitionFeed(OPDSFeed):
             entry.extend([E.alternativeHeadline(work.subtitle)])
 
         entry.extend([
-            E.author(E.name(work.authors or "")),
+            E.author(E.name(work.author or "")),
             E.summary(summary),
             E.link(href=checkout_url),
             E.updated(_strftime(datetime.datetime.utcnow())),

@@ -15,6 +15,7 @@ if __name__ == '__main__':
         type_restriction = sys.argv[1]
 
     q = Subject.common_but_not_assigned_to_genre(
-        production_session(), type_restriction=type_restriction)
+        production_session(), type_restriction=type_restriction,
+        min_occurances=1000)
     for s in q.limit(10000):
         print s

@@ -7,8 +7,8 @@ from model import (
     DataSource,
     LicensePool,
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 from integration.threem import (
     CirculationParser,
@@ -137,15 +137,15 @@ class Test3MCirculationParser(object):
         event1, event2 = CirculationParser().process_all(
             self.TWO_CIRCULATION_STATUSES)
 
-        eq_('item1', event1[WorkIdentifier][WorkIdentifier.THREEM_ID])
-        eq_('900isbn1', event1[WorkIdentifier][WorkIdentifier.ISBN])
+        eq_('item1', event1[Identifier][Identifier.THREEM_ID])
+        eq_('900isbn1', event1[Identifier][Identifier.ISBN])
         eq_(2, event1[LicensePool.licenses_owned])
         eq_(0, event1[LicensePool.licenses_available])
         eq_(1, event1[LicensePool.licenses_reserved])
         eq_(0, event1[LicensePool.patrons_in_hold_queue])
 
-        eq_('item2', event2[WorkIdentifier][WorkIdentifier.THREEM_ID])
-        eq_('900isbn2', event2[WorkIdentifier][WorkIdentifier.ISBN])
+        eq_('item2', event2[Identifier][Identifier.THREEM_ID])
+        eq_('900isbn2', event2[Identifier][Identifier.ISBN])
         eq_(1, event2[LicensePool.licenses_owned])
         eq_(0, event2[LicensePool.licenses_available])
         eq_(0, event2[LicensePool.licenses_reserved])
@@ -177,16 +177,16 @@ class TestItemListParser(object):
 
         assert raw.startswith("<Item")
 
-        eq_(id, cooked[WorkIdentifier][WorkIdentifier.THREEM_ID])
-        eq_("9781250015280", cooked[WorkIdentifier][WorkIdentifier.ISBN])
-        eq_("The Incense Game", cooked[WorkRecord.title])
-        eq_("A Novel of Feudal Japan", cooked[WorkRecord.subtitle])
+        eq_(id, cooked[Identifier][Identifier.THREEM_ID])
+        eq_("9781250015280", cooked[Identifier][Identifier.ISBN])
+        eq_("The Incense Game", cooked[Edition.title])
+        eq_("A Novel of Feudal Japan", cooked[Edition.subtitle])
         eq_(["Rowland, Laura Joh"], cooked[Contributor])
-        eq_("eng", cooked[WorkRecord.language])
-        eq_("St. Martin's Press", cooked[WorkRecord.publisher])
+        eq_("eng", cooked[Edition.language])
+        eq_("St. Martin's Press", cooked[Edition.publisher])
         eq_("1.2 MB", cooked['extra']['fileSize'])
         eq_("304", cooked['extra']['numberOfPages'])
-        eq_(datetime.datetime(year=2012, month=9, day=17), cooked[WorkRecord.published])
+        eq_(datetime.datetime(year=2012, month=9, day=17), cooked[Edition.published])
 
         summary = cooked[Resource][Resource.DESCRIPTION]
         assert summary.startswith("<b>Winner")

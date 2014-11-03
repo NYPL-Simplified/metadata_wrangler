@@ -2,6 +2,7 @@
 
 from nose.tools import eq_, set_trace
 
+import classifier
 from classifier import (
     Classifier,
     DeweyDecimalClassifier as DDC,
@@ -68,6 +69,13 @@ class TestDewey(object):
         eq_(False, fic(615))
         eq_(False, fic(800))
         eq_(False, fic(814))
+
+    def test_classification(self):
+        def c(identifier):
+            i = DDC.scrub_identifier(identifier)
+            return DDC.genre(i, None)
+
+        eq_(classifier.Social_Science, c("398"))
 
 class TestLCC(object):
 
@@ -148,6 +156,90 @@ class TestLCSH(object):
         eq_(None, aud("Juvenile delinquency"))
         eq_(None, aud("Runaway children"))
         eq_(None, aud("Humor"))
+
+
+class TestKeyword(object):
+    def genre(self, keyword):
+        return Keyword.genre(None, Keyword.scrub_identifier(keyword))
+
+    def test_subgenre_wins_over_genre(self):
+        # Asian_History wins over History, even though they both
+        # have the same number of matches, because Asian_History is more
+        # specific.
+        eq_(classifier.Asian_History, self.genre("asian history"))
+        eq_(classifier.Asian_History, self.genre("history: asia"))
+
+class TestNestedSubgenres(object):
+
+    def test_parents(self):
+        eq_([classifier.Romance_Erotica],
+            list(classifier.Erotica.parents))
+
+        eq_([classifier.Crime_Thrillers_Mystery, classifier.Mystery],
+            list(classifier.Police_Procedurals.parents))
+
+    def test_self_and_subgenres(self):
+        # Romance and Erotica
+        #  - Erotica
+        #  - Romance
+        #    - Contemporary Romance
+        #    - etc.
+        eq_(
+            set([classifier.Romance_Erotica, classifier.Erotica, 
+                 classifier.Romance, classifier.Contemporary_Romance,
+                 classifier.Historical_Romance, classifier.Paranormal_Romance,
+                 classifier.Regency_Romance, classifier.Suspense_Romance]),
+            set(list(classifier.Romance_Erotica.self_and_subgenres)))
+
+class TestConsolidateWeights(object):
+
+    def test_consolidate(self):
+        # Asian History is a subcategory of the top-level category History.
+        weights = dict()
+        weights[classifier.History] = 10
+        weights[classifier.Asian_History] = 4
+        weights[classifier.Middle_East_History] = 1
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(14, w2[classifier.Asian_History])
+        eq_(1, w2[classifier.Middle_East_History])
+        assert classifier.History not in w2
+
+        # Paranormal Romance is a subcategory of Romance, which is itself
+        # a subcategory.
+        weights = dict()
+        weights[classifier.Romance] = 100
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance not in w2
+
+    def test_consolidate_through_multiple_levels(self):
+        # Romance & Erotica is the parent of the parent of Paranormal
+        # Romance, but its weight successfully flows down into
+        # Paranormal Romance.
+        weights = dict()
+        weights[classifier.Romance_Erotica] = 100
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance_Erotica not in w2
+
+    def test_consolidate_through_multiple_levels_from_multiple_sources(self):
+        weights = dict()
+        weights[classifier.Romance_Erotica] = 50
+        weights[classifier.Romance] = 50
+        weights[classifier.Paranormal_Romance] = 4
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(104, w2[classifier.Paranormal_Romance])
+        assert classifier.Romance_Erotica not in w2
+
+    def test_consolidate_fails_when_threshold_not_met(self):
+        weights = dict()
+        weights[classifier.History] = 100
+        weights[classifier.Middle_East_History] = 1
+        w2 = Classifier.consolidate_weights(weights)
+        eq_(100, w2[classifier.History])
+        eq_(1, w2[classifier.Middle_East_History])
 
 
 # TODO: This needs to be moved into model I guess?

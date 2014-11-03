@@ -10,8 +10,8 @@ from model import (
     get_one_or_create,
     Work,
     LicensePool,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
 )
 
 from tests.db import (
@@ -25,13 +25,13 @@ class TestEquivalency(DatabaseTest):
         id = "549"
 
         # We've got a record.
-        record, was_new = WorkRecord.for_foreign_id(
-            self._db, data_source, WorkIdentifier.GUTENBERG_ID, id)
+        record, was_new = Edition.for_foreign_id(
+            self._db, data_source, Identifier.GUTENBERG_ID, id)
 
         # Then we look it up and discover another identifier for it.
         data_source_2 = DataSource.lookup(self._db, DataSource.OCLC)
-        record2, was_new = WorkRecord.for_foreign_id(
-            self._db, data_source_2, WorkIdentifier.OCLC_NUMBER, "22")
+        record2, was_new = Edition.for_foreign_id(
+            self._db, data_source_2, Identifier.OCLC_NUMBER, "22")
 
         eq = record.primary_identifier.equivalent_to(
             data_source_2, record2.primary_identifier, 1)
@@ -42,29 +42,29 @@ class TestEquivalency(DatabaseTest):
 
         eq_([eq], record.primary_identifier.equivalencies)
 
-        eq_([record, record2], record.equivalent_work_records().all())
+        eq_([record, record2], record.equivalent_editions().all())
 
     def test_recursively_equivalent_identifiers(self):
 
         # We start with a Gutenberg book.
         gutenberg = DataSource.lookup(self._db, DataSource.GUTENBERG)
-        record, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "100")
+        record, ignore = Edition.for_foreign_id(
+            self._db, gutenberg, Identifier.GUTENBERG_ID, "100")
         gutenberg_id = record.primary_identifier
 
         # We use OCLC Classify to do a title/author lookup.
         oclc = DataSource.lookup(self._db, DataSource.OCLC)
-        search_id, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_WORK,
+        search_id, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_WORK,
             "60010")
         gutenberg_id.equivalent_to(oclc, search_id, 1)
 
         # The title/author lookup associates the search term with two
         # different OCLC Numbers.
-        oclc_id, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_NUMBER, "9999")
-        oclc_id_2, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.OCLC_NUMBER, "1000")
+        oclc_id, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, "9999")
+        oclc_id_2, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, "1000")
 
         search_id.equivalent_to(oclc, oclc_id, 1)
         search_id.equivalent_to(oclc, oclc_id_2, 1)
@@ -72,23 +72,23 @@ class TestEquivalency(DatabaseTest):
         # We then use OCLC Linked Data to connect one of the OCLC
         # Numbers with an ISBN.
         linked_data = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
-        isbn_id, ignore = WorkIdentifier.for_foreign_id(
-            self._db, WorkIdentifier.ISBN, "900100434X")
+        isbn_id, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.ISBN, "900100434X")
         oclc_id.equivalent_to(linked_data, isbn_id, 1)
 
         # As it turns out, we have an Overdrive work record...
         overdrive = DataSource.lookup(self._db, DataSource.OVERDRIVE)
-        overdrive_record, ignore = WorkRecord.for_foreign_id(
-            self._db, overdrive, WorkIdentifier.OVERDRIVE_ID, "{111-222}")
+        overdrive_record, ignore = Edition.for_foreign_id(
+            self._db, overdrive, Identifier.OVERDRIVE_ID, "{111-222}")
         overdrive_id = overdrive_record.primary_identifier
 
         # ...which is tied (by Overdrive) to the same ISBN.
         overdrive_id.equivalent_to(overdrive, isbn_id, 1)
 
-        # Finally, here's a completely unrelated WorkRecord, which
+        # Finally, here's a completely unrelated Edition, which
         # will not be showing up.
-        gutenberg2, ignore = WorkRecord.for_foreign_id(
-            self._db, gutenberg, WorkIdentifier.GUTENBERG_ID, "200")
+        gutenberg2, ignore = Edition.for_foreign_id(
+            self._db, gutenberg, Identifier.GUTENBERG_ID, "200")
         gutenberg2.title = "Unrelated Gutenberg record."
 
         levels = [

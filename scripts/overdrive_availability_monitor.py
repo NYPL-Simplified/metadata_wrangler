@@ -14,4 +14,4 @@ if __name__ == '__main__':
         sys.exit()
     path = sys.argv[1]      
     session = production_session()
-    OverdriveCirculationMonitor(path).run(session)
+    OverdriveCirculationMonitor(session, path).run(session)

@@ -10,7 +10,7 @@ from model import (
     DataSource,
     LicensePool,
     Resource,
-    WorkIdentifier,
+    Identifier,
     production_session,
 )
 
@@ -32,8 +32,8 @@ class Importer(object):
         if gutenberg_id in self.pools:
             pool, identifier = self.pools[gutenberg_id]
         else:
-            identifier, ignore = WorkIdentifier.for_foreign_id(
-                self._db, WorkIdentifier.GUTENBERG_ID, gutenberg_id,
+            identifier, ignore = Identifier.for_foreign_id(
+                self._db, Identifier.GUTENBERG_ID, gutenberg_id,
                 autocreate=False)
             pool = self._db.query(LicensePool).filter(
                 LicensePool.identifier==identifier).filter(
@@ -58,6 +58,7 @@ if __name__ == '__main__':
     importer = Importer(_db)
     a = 0
     old_id = None
+    started = False
     for i in open(path):
         id, url = i.strip().split("\t")
         if id != old_id:

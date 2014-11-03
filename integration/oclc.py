@@ -6,7 +6,6 @@ import md5
 import os
 import pprint
 import re
-import requests
 import time
 import urllib
 
@@ -25,9 +24,10 @@ from model import (
     CoverageProvider,
     get_one,
     get_one_or_create,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     DataSource,
+    Representation,
     Resource,
     Subject,
 )
@@ -44,17 +44,21 @@ class ldq(object):
     
     @classmethod
     def for_type(self, g, search):
-        check = { "@id": search }
+        check = [search, { "@id": search }]
         for node in g:
             if not isinstance(node, dict):
                 continue
-            node_type = node.get('rdf:type')
-            if not node_type:
-                continue
-            if node_type == check:
-                yield node
-            elif isinstance(node_type, list) and check in node_type:
-                yield node
+            for key in ('rdf:type', '@type'):
+                node_type = node.get(key)
+                if not node_type:
+                    continue
+                for c in check:
+                    if node_type == c:
+                        yield node
+                        break
+                    elif isinstance(node_type, list) and c in node_type:
+                        yield node
+                        break
 
     @classmethod
     def restrict_to_language(self, values, code_2):
@@ -81,6 +85,7 @@ class ldq(object):
             elif '@value' in v:
                 yield v['@value']
 
+
 class OCLCLinkedData(object):
 
     BASE_URL = 'http://www.worldcat.org/%(type)s/%(id)s.jsonld'
@@ -92,103 +97,76 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
-    CAN_HANDLE = set([WorkIdentifier.OCLC_WORK, WorkIdentifier.OCLC_NUMBER,
-                      WorkIdentifier.ISBN])
+    CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
+                      Identifier.ISBN])
 
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.OCLC_LINKED_DATA, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
-        for identifier_type in self.CAN_HANDLE:
-            p = os.path.join(self.cache_directory, identifier_type)
-            if not os.path.exists(p):
-                os.makedirs(p)
+    def __init__(self, _db):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
-    def cache_key(self, id, type):
-        if type == WorkIdentifier.ISBN:
-            extension = ".url"
-        else:
-            extension = ".jsonld"
-        return os.path.join(type, id + extension)
-
-    def request(self, url):
-        """Make a request to OCLC Linked Data."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return ''
-        elif response.status_code == 500:
-            return None
-        elif response.status_code != 200:
-            raise IOError("OCLC Linked Data returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
-    def redirect_location(self, url):
-        """Make a request to OCLC Linked Data to see where it redirects."""
-        return requests.get(url, allow_redirects=False)
-
-    def lookup(self, work_identifier):
+    def lookup(self, identifier_or_uri):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
-        if isinstance(work_identifier, basestring):
-            match = self.URI_WITH_OCLC_NUMBER.search(work_identifier)
+        if isinstance(identifier_or_uri, basestring):
+            # e.g. http://experiment.worldcat.org/oclc/1862341597.json
+            match = self.URI_WITH_OCLC_NUMBER.search(identifier_or_uri)
             if match:
-                type = WorkIdentifier.OCLC_NUMBER
-                identifier = match.groups()[0]
+                type = Identifier.OCLC_NUMBER
+                id = match.groups()[0]
+                if not type or not id:
+                    return None, None
+                identifier, is_new = Identifier.for_foreign_id(
+                    self._db, type, id)
         else:
-            type = work_identifier.type
-            identifier = work_identifier.identifier
+            identifier = identifier_or_uri
         if not type or not identifier:
             return None, None
-        return self.lookup_by_identifier(type, identifier)
+        return self.lookup_by_identifier(identifier)
 
-    def lookup_by_identifier(self, type, identifier):
-        if type == WorkIdentifier.OCLC_WORK:
+    def lookup_by_identifier(self, identifier):
+        """Turn an Identifier into a JSON-LD document."""
+        if identifier.type == Identifier.OCLC_WORK:
             foreign_type = 'work'
             url = self.WORK_BASE_URL
-        elif type == WorkIdentifier.OCLC_NUMBER:
+        elif identifier.type == Identifier.OCLC_NUMBER:
             foreign_type = "oclc"
             url = self.BASE_URL
-        else:
-            set_trace()
 
-        cache_key = self.cache_key(identifier, type)
-        cached = False
-        if self.cache.exists(cache_key):
-            cached = True
-        else:
-            url = url % dict(id=identifier, type=foreign_type)
-            #print " %s => %s" % (url, self.cache._filename(cache_key))
-            print "", url
-            raw = self.request(url) or ''
-            self.cache.store(cache_key, raw)
-        f = self.cache._filename(cache_key)
-        url = "file://" + f
+        url = url % dict(id=identifier.identifier, type=foreign_type)
+        representation, cached = Representation.get(
+            self._db, url, data_source=self.source,
+            identifier=identifier)
         data = jsonld.load_document(url)
-        return data, cached
+        if cached and not representation.content:
+            representation, cached = Representation.get(
+                self._db, url, data_source=self.source,
+                identifier=identifier, max_age=0)
+            
+        doc = {
+            'contextUrl': None,
+            'documentUrl': url,
+            'document': representation.content.decode('utf8')
+        }
+        return doc, cached
 
     def oclc_number_for_isbn(self, isbn):
-        """Find an OCLC Number for the given ISBN."""
-        cache_key = self.cache_key(isbn, WorkIdentifier.ISBN)
-        cached = False
-        if self.cache.exists(cache_key):
-            cached = True
-            location = self.cache.open(cache_key).read()
-        else:
-            url = self.ISBN_BASE_URL % dict(id=isbn)
-            # print "%s => %s" % (url, self.cache._filename(cache_key))
-            raw = self.redirect_location(url)
-            if not 'Location' in raw.headers:
-                raise IOError("Expected %s to redirect, but couldn't find location." % url)
-            location = raw.headers['Location']
-            self.cache.store(cache_key, location)
-
+        """Turn an ISBN identifier into an OCLC Number identifier."""
+        url = self.ISBN_BASE_URL % dict(id=isbn.identifier)
+        representation, cached = Representation.get(
+            self._db, url, Representation.http_get_no_redirect, 
+            data_source=self.source, identifier=isbn)
+        if not representation.location:
+            raise IOError(
+                "Expected %s to redirect, but couldn't find location." % url)
+        location = representation.location
         match = self.URI_WITH_OCLC_NUMBER.match(location)
         if not match:
-            raise IOError("OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
+            raise IOError(
+                "OCLC redirected ISBN lookup, but I couldn't make sense of the destination, %s" % location)
         oclc_number = match.groups()[0]
-        return oclc_number
+        return Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, oclc_number)[0]
 
     def oclc_works_for_isbn(self, isbn):
         """Yield every OCLC Work graph for the given ISBN."""
@@ -196,18 +174,18 @@ class OCLCLinkedData(object):
         oclc_number = self.oclc_number_for_isbn(isbn)
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
-        oclc_number_data, cached = self.lookup_by_identifier(
-            WorkIdentifier.OCLC_NUMBER, oclc_number)
+        oclc_number_data, was_new = self.lookup_by_identifier(oclc_number)
 
         # Look up every work referenced in that document and yield its data.
-        graph = oclc_linked_data.graph(oclc_number_data)
-        works = oclc_linked_data.extract_works(graph)
+        graph = OCLCLinkedData.graph(oclc_number_data)
+        works = OCLCLinkedData.extract_works(graph)
         for work_uri in works:
             m = self.URI_WITH_OCLC_WORK_ID.match(work_uri)
             if m:
                 work_id = m.groups()[0]
-                oclc_work_data, cached = self.lookup_by_identifier(
-                    WorkIdentifier.OCLC_WORK, work_id)
+                identifier, was_new = Identifier.for_foreign_id(
+                    self._db, Identifier.OCLC_WORK, work_id)
+                oclc_work_data, cached = self.lookup_by_identifier(identifier)
                 yield oclc_work_data
                
     @classmethod
@@ -289,10 +267,10 @@ class OCLCLinkedData(object):
 
         id_type, id = m.groups()
         if id_type == 'oclc':
-            id_type = WorkIdentifier.OCLC_NUMBER
+            id_type = Identifier.OCLC_NUMBER
         elif id_type == 'work':
             # Kind of weird, but okay.
-            id_type = WorkIdentifier.OCLC_WORK
+            id_type = Identifier.OCLC_WORK
         else:
             print "EXPECTED OCLC ID, got %s" % id_type
             return no_value
@@ -331,23 +309,32 @@ class OCLCLinkedData(object):
             if 'schema:name' in result:
                 name = result['schema:name']
             else:
-                print "WEIRD INTERNAL LOOKUP: %r" % result
+                # print "WEIRD INTERNAL LOOKUP: %r" % result
                 continue
             use_type = None
-            if 'rdf:type' in result:
-                types = result.get('rdf:type', [])
-                if isinstance(types, dict):
-                    types = [types]
-                for rdf_type in types:
-                    if '@id' in rdf_type:
-                        type_id = rdf_type['@id']
-                    if type_id in cls.ACCEPTABLE_TYPES:
-                        use_type = type_id
-                        break
-                    elif type_id == 'schema:Intangible':
-                        use_type = Subject.TAG
-                        break
-                    print "", type_id, result
+            type_objs = []
+            for type_name in ('rdf:type', '@type'):
+                these_type_objs = result.get(type_name, [])
+                if not isinstance(these_type_objs, list):
+                    these_type_objs = [these_type_objs]
+                for this_type_obj in these_type_objs:
+                    if isinstance(this_type_obj, dict):
+                        type_objs.append(this_type_obj)
+                    elif isinstance(this_type_obj, basestring):
+                        type_objs.append({"@id": this_type_obj})
+
+            for rdf_type in type_objs:
+                if '@id' in rdf_type:
+                    type_id = rdf_type['@id']
+                else:
+                    type_id = rdf_type
+                if type_id in cls.ACCEPTABLE_TYPES:
+                    use_type = type_id
+                    break
+                elif type_id == 'schema:Intangible':
+                    use_type = Subject.TAG
+                    break
+                # print "", type_id, result
                     
             if use_type:
                 for value in ldq.values(name):
@@ -361,69 +348,15 @@ class OCLCLinkedData(object):
         return [x for x in graph if x['@id'] in uris]
 
 
-oclc_linked_data = None
-if 'DATA_DIRECTORY' in os.environ:
-    oclc_linked_data = OCLCLinkedData(os.environ['DATA_DIRECTORY'])
-
-
-class XIDAPI(object):
-
-    OCLC_ID_TYPE = "oclcnum"
-    ISBN_ID_TYPE = "isbn"
-
-    BASE_URL = 'http://xisbn.worldcat.org/webservices/xid/%(type)s/%(id)s'
-
-    ARGUMENTS = '?method=getEditions&format=json&fl=*'
-
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.XID, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
-
-    def cache_key(self, id, type):
-        return "%s-%s" % (type, id)
-
-    def request(self, url):
-        """Make a request to the xID API."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return None
-        elif response.status_code != 200:
-            raise IOError("xID API returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
-    def get_editions(self, id, type=None):
-        """Perform an OCLC lookup."""
-        type = type or self.OCLC_ID_TYPE
-        cache_key = self.cache_key(id, type)
-        raw = None
-        cached = False
-        if self.cache.exists(cache_key):
-            # Don't go over the wire. Get the raw XML from cache
-            # and process it fresh.
-            raw = self.cache.open(cache_key).read()
-            cached = True
-        if not raw:
-            url = self.BASE_URL % dict(id=id, type=type)
-            url += self.ARGUMENTS
-            print "Requesting %s" % url
-            raw = self.request(url) or ''
-            print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
-        return raw, cached
-
 class OCLCClassifyAPI(object):
 
     BASE_URL = 'http://classify.oclc.org/classify2/Classify?'
 
     NO_SUMMARY = '&summary=false'
 
-    def __init__(self, data_directory):
-        self.cache_directory = os.path.join(
-            data_directory, DataSource.OCLC, "cache")
-        self.cache = FilesystemCache(self.cache_directory)
-        self.last_access = None
+    def __init__(self, _db):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
         args = dict()
@@ -432,41 +365,15 @@ class OCLCClassifyAPI(object):
                 v = v.encode("utf8")
             args[k] = v
         return urllib.urlencode(sorted(args.items()))
-        
-    def cache_key(self, **kwargs):
-        qs = self.query_string(**kwargs)
-        if len(qs) > 18: # Length of "isbn=[isbn13]"
-            return md5.md5(qs).hexdigest()
-        return qs
-
-    def request(self, url):
-        """Make a request to the OCLC classification API."""
-        response = requests.get(url)
-        content = response.content
-        if response.status_code == 404:
-            return None
-        elif response.status_code != 200:
-            raise IOError("OCLC API returned status code %s: %s" % (response.status_code, response.content))
-        return content
-
+       
     def lookup_by(self, **kwargs):
-        """Perform an OCLC lookup."""
+        """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
-        cache_key = self.cache_key(**kwargs)
-        #print " Query string: %s" % query_string
-        raw = None
-        if self.cache.exists(cache_key):
-            # Don't go over the wire. Get the raw XML from cache
-            # and process it fresh.
-            raw = self.cache.open(cache_key).read()
-        if not raw:
-            url = self.BASE_URL + query_string + self.NO_SUMMARY
-            #print " URL: %s" % url
-            raw = self.request(url) or ''
-            #print " Retrieved over the net."
-            self.cache.store(cache_key, raw)
+        url = self.BASE_URL + query_string
+        representation, cached = Representation.get(
+            self._db, url, data_source=self.source)
+        return representation.content
 
-        return raw
 
 class OCLCXMLParser(XMLParser):
 
@@ -488,7 +395,7 @@ class OCLCXMLParser(XMLParser):
     @classmethod
     def parse(cls, _db, xml, **restrictions):
         """Turn XML data from the OCLC lookup service into a list of SWIDs
-        (for a multi-work response) or a list of WorkRecord
+        (for a multi-work response) or a list of Edition
         objects (for a single-work response).
         """
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
@@ -496,7 +403,7 @@ class OCLCXMLParser(XMLParser):
         representation_type = int(response.get('code'))
 
         workset_record = None
-        work_records = []
+        editions = []
         edition_records = [] 
 
         if representation_type == cls.UNEXPECTED_ERROR_STATUS:
@@ -508,18 +415,25 @@ class OCLCXMLParser(XMLParser):
             raise IOError("Got single-work summary from OCLC despite requesting detail: %s" % xml)
 
         # The real action happens here.
+
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
             authors_tag = cls._xpath1(tree, "//oclc:authors")
-            existing_authors = cls.extract_authors(_db, authors_tag)
+            
+            work_tag = cls._xpath1(tree, "//oclc:work")
+            if work_tag is not None:
+                author_string = work_tag.get('author')
+                primary_author = cls.primary_author_from_author_string(_db, author_string)
+
+            existing_authors = cls.extract_authors(
+                _db, authors_tag, primary_author=primary_author)
 
             # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
-            work_tag = cls._xpath1(tree, "//oclc:work")
-            work_record, ignore = cls.extract_work_record(
+            edition, ignore = cls.extract_edition(
                 _db, work_tag, existing_authors, **restrictions)
             records = []
-            if work_record:
-                records.append(work_record)
+            if edition:
+                records.append(edition)
             else:
                 # The work record itself failed one of the
                 # restrictions. None of its editions are likely to
@@ -531,16 +445,16 @@ class OCLCXMLParser(XMLParser):
             #     edition_record, ignore = cls.extract_edition_record(
             #         _db, edition_tag, existing_authors, **restrictions)
             #     if not edition_record:
-            #         # This edition did not become a WorkRecord because it
+            #         # This edition did not become a Edition because it
             #         # didn't meet one of the restrictions.
             #         continue
             #     records.append(edition_record)
             #     # Identify the edition with the work based on its
             #     # primary identifier.
-            #     work_record.primary_identifier.equivalent_to(
+            #     edition.primary_identifier.equivalent_to(
             #         data_source, edition_record.primary_identifier)
             #     edition_record.primary_identifier.equivalent_to(
-            #         data_source, work_record.primary_identifier)
+            #         data_source, edition.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
@@ -575,14 +489,15 @@ class OCLCXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def extract_authors(cls, _db, authors_tag):
+    def extract_authors(cls, _db, authors_tag, primary_author=None):
         results = []
         if authors_tag is not None:
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
                 lc = author_tag.get('lc', None)
                 viaf = author_tag.get('viaf', None)
-                contributor, roles = cls._parse_single_author(
-                    _db, author_tag.text, lc=lc, viaf=viaf)
+                contributor, roles, default_role_used = cls._parse_single_author(
+                    _db, author_tag.text, lc=lc, viaf=viaf,
+                    primary_author=primary_author)
                 if contributor:
                     results.append(contributor)
         
@@ -600,7 +515,9 @@ class OCLCXMLParser(XMLParser):
     def _parse_single_author(cls, _db, author, 
                              lc=None, viaf=None,
                              existing_authors=[],
-                             default_role=Contributor.AUTHOR_ROLE):
+                             default_role=Contributor.AUTHOR_ROLE,
+                             primary_author=None):
+        default_role_used = False
         # First find roles if present
         # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
         author = author.strip()
@@ -609,6 +526,9 @@ class OCLCXMLParser(XMLParser):
             author = author[:m.start()].strip()
             role_string = m.groups()[0]
             roles = [x.strip() for x in role_string.split(";")]
+        elif default_role:
+            roles = [default_role]
+            default_role_used = True
         else:
             roles = []
 
@@ -632,7 +552,15 @@ class OCLCXMLParser(XMLParser):
         contributor = None
         if not author:
             # No name was given for the author.
-            return None, roles
+            return None, roles, default_role_used
+
+        if primary_author and author == primary_author.name:
+            if Contributor.AUTHOR_ROLE in roles:
+                roles.remove(Contributor.AUTHOR_ROLE)
+            if Contributor.UNKNOWN_ROLE in roles:
+                roles.remove(Contributor.UNKNOWN_ROLE)
+            roles.insert(0, Contributor.PRIMARY_AUTHOR_ROLE)
+
         if existing_authors:
             # Calling Contributor.lookup will result in a database
             # hit, and looking up a contributor based on name may
@@ -675,24 +603,50 @@ class OCLCXMLParser(XMLParser):
                     contributor = with_id[0]
                 else:
                     contributor = contributor[0]
-        return contributor, roles
+        return contributor, roles, default_role_used
 
     @classmethod
-    def parse_author_string(cls, _db, author_string, existing_authors=[]):
-        default_role = Contributor.AUTHOR_ROLE
+    def primary_author_from_author_string(cls, _db, author_string):
+        # If the first author mentioned in the author string
+        # does not have an explicit role set, treat them as the primary
+        # author.
+        if not author_string:
+            return None
+        authors = author_string.split("|")
+        if not authors:
+            return None
+        author, roles, default_role_used = cls._parse_single_author(
+            _db, authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
+        if roles == [Contributor.PRIMARY_AUTHOR_ROLE]:
+            return author
+        return None
+
+    @classmethod
+    def parse_author_string(cls, _db, author_string, existing_authors=[],
+                            primary_author=None):
+        default_role = Contributor.PRIMARY_AUTHOR_ROLE
         authors = []
         if not author_string:
             return authors
         for author in author_string.split("|"):            
-            author, roles = cls._parse_single_author(
+            author, roles, default_role_used = cls._parse_single_author(
                 _db, author, existing_authors=existing_authors,
-                default_role=default_role)
+                default_role=default_role,
+                primary_author=primary_author)
             if roles:
-                # If we see someone with no explicit role after this
-                # point, it's probably because their role is so minor
-                # as to not be worth mentioning, not because it's so
-                # major that we can assume they're an author.
-                default_role = Contributor.UNKNOWN_ROLE
+                if Contributor.PRIMARY_AUTHOR_ROLE in roles:
+                    # That was the primary author.  If we see someone
+                    # with no explicit role after this point, they're
+                    # just a regular author.
+                    default_role = Contributor.AUTHOR_ROLE
+                elif not default_role_used:
+                    # We're dealing with someone whose role was
+                    # explicitly specified. If we see someone with no
+                    # explicit role after this point, it's probably
+                    # because their role is so minor as to not be
+                    # worth mentioning, not because it's so major that
+                    # we can assume they're an author.
+                    default_role = Contributor.UNKNOWN_ROLE
             roles = roles or [default_role]
             if author:
                 authors.append((author, roles))
@@ -734,7 +688,7 @@ class OCLCXMLParser(XMLParser):
         # Apply restrictions. If they're not met, return None.
         if 'language' in restrictions and language:
             # We know which language this record is for. Match it
-            # against the language used in the WorkRecord we're
+            # against the language used in the Edition we're
             # matching against.
             restrict_to_language = set(restrictions['language'])
             if language != restrict_to_language:
@@ -743,25 +697,50 @@ class OCLCXMLParser(XMLParser):
 
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
-            authors_per_se = set([
-                a.name for a, roles in authors_and_roles if Contributor.AUTHOR_ROLE in roles
-            ])
-            for restrict_to_author in restrict_to_authors:
-                if not restrict_to_author.name in authors_per_se:
-                    # The given author did not show up as one of the
-                    # per se 'authors' of this book. They may have had
+            if restrict_to_authors and isinstance(restrict_to_authors[0], Contributor):
+                restrict_to_authors = [x.name for x in restrict_to_authors]
+            primary_author = None
+
+            for a, roles in authors_and_roles:
+                if Contributor.PRIMARY_AUTHOR_ROLE in roles:
+                    primary_author = a
+                    break
+            if (not primary_author
+                or (primary_author not in restrict_to_authors
+                    and primary_author.name not in restrict_to_authors)):
+                    # None of the given authors showed up as the
+                    # primary author of this book. They may have had
                     # some other role in it, or the book may be about
-                    # them, but this book is not *by* them.
-                    return None
+                    # them, or incorporate their work, but this book
+                    # is not *by* them.
+                return None
 
         author_names = ", ".join([x.name for x, y in authors_and_roles])
 
         print u" SUCCESS %s, %r, %s" % (title, author_names, language)
         return title, authors_and_roles, language
 
+    UNUSED_MEDIA = set([
+        "itemtype-intmm",
+        "itemtype-msscr",
+        "itemtype-artchap-artcl",
+        "itemtype-jrnl",
+        "itemtype-map",
+        "itemtype-vis",
+        "itemtype-jrnl-digital",
+        "itemtype-image-2d",
+        "itemtype-artchap-digital",
+        "itemtype-intmm-digital",
+        "itemtype-archv",
+        "itemtype-msscr-digital",
+        "itemtype-game",
+        "itemtype-web-digital",
+        "itemtype-map-digital",
+    ])
+
     @classmethod
-    def extract_work_record(cls, _db, work_tag, existing_authors, **restrictions):
-        """Create a new WorkRecord object with information about a
+    def extract_edition(cls, _db, work_tag, existing_authors, **restrictions):
+        """Create a new Edition object with information about a
         work (identified by OCLC Work ID).
         """
         oclc_work_id = unicode(work_tag.get('pswid'))
@@ -775,6 +754,29 @@ class OCLCXMLParser(XMLParser):
             int(oclc_work_id)
         except ValueError, e:
             # This record does not have a valid OCLC Work ID.
+            oclc_work_id = None
+
+        item_type = work_tag.get("itemtype")
+        if (item_type.startswith('itemtype-book') 
+            or item_type.startswith('itemtype-compfile')):
+            medium = Edition.BOOK_MEDIUM
+        elif item_type.startswith('itemtype-audiobook') or item_type.startswith('itemtype-music'):
+            # Pretty much all Gutenberg texts, even the audio texts,
+            # are based on a book, and the ones that aren't
+            # (recordings of individual songs) probably aren't in OCLC
+            # anyway. So we just want to get the books.
+            medium = Edition.AUDIO_MEDIUM
+            medium = None
+        elif item_type.startswith('itemtype-video'):
+            #medium = Edition.VIDEO_MEDIUM
+            medium = None
+        elif item_type in cls.UNUSED_MEDIA:
+            medium = None
+        else:
+            medium = None
+
+        # Only create Editions for books with a recognized medium
+        if medium is None:
             return None, False
 
         result = cls._extract_basic_info(_db, work_tag, existing_authors, **restrictions)
@@ -784,23 +786,21 @@ class OCLCXMLParser(XMLParser):
 
         title, authors_and_roles, language = result
 
-
         # Record some extra OCLC-specific information
         extra = {
             OCLC.EDITION_COUNT : work_tag.get('editions'),
             OCLC.HOLDING_COUNT : work_tag.get('holdings'),
-            OCLC.FORMAT : work_tag.get('itemtype'),
         }
         
         # Get an identifier for this work.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.OCLC_WORK, oclc_work_id
+        identifier, ignore = Identifier.for_foreign_id(
+            _db, Identifier.OCLC_WORK, oclc_work_id
         )
 
-        # Create a WorkRecord for source + identifier
+        # Create a Edition for source + identifier
         data_source=DataSource.lookup(_db, DataSource.OCLC)
-        work_record, new = get_one_or_create(
-            _db, WorkRecord,
+        edition, new = get_one_or_create(
+            _db, Edition,
             data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
@@ -833,16 +833,16 @@ class OCLCXMLParser(XMLParser):
             identifier.classify(
                 data_source, Subject.FAST, id, value, weight)
 
-        # Associate the authors with the WorkRecord.
+        # Associate the authors with the Edition.
         for contributor, roles in authors_and_roles:
-            work_record.add_contributor(contributor, roles)
-        return work_record, new
+            edition.add_contributor(contributor, roles)
+        return edition, new
 
     @classmethod
     def extract_edition_record(cls, _db, edition_tag,
                                existing_authors,
                                **restrictions):
-        """Create a new WorkRecord object with information about an
+        """Create a new Edition object with information about an
         edition of a book (identified by OCLC Number).
         """
         oclc_number = unicode(edition_tag.get('oclc'))
@@ -868,14 +868,14 @@ class OCLCXMLParser(XMLParser):
         }
 
         # Get an identifier for this edition.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.OCLC_NUMBER, oclc_number
+        identifier, ignore = Identifier.for_foreign_id(
+            _db, Identifier.OCLC_NUMBER, oclc_number
         )
 
-        # Create a WorkRecord for source + identifier
+        # Create a Edition for source + identifier
         data_source = DataSource.lookup(_db, DataSource.OCLC)
         edition_record, new = get_one_or_create(
-            _db, WorkRecord,
+            _db, Edition,
             data_source=data_source,
             primary_identifier=identifier,
             create_method_kwargs=dict(
@@ -911,13 +911,13 @@ class LinkedDataURLLister:
         self.db = db
         self.data_directory = data_directory
         self.output_file = output_file
-        self.oclc = OCLCLinkedData(self.data_directory)        
+        self.oclc = OCLCLinkedData(db)
 
     def run(self):
         a = 0
         with open(self.output_file, "w") as output:
-            for wi in self.db.query(WorkIdentifier).filter(
-                    WorkIdentifier.type==WorkIdentifier.OCLC_WORK).yield_per(100):
+            for wi in self.db.query(Identifier).filter(
+                    Identifier.type==Identifier.OCLC_WORK).yield_per(100):
                 data, cached = self.oclc.lookup(wi)
                 graph = self.oclc.graph(data)
                 examples = self.oclc.extract_workexamples(graph)
@@ -929,9 +929,9 @@ class LinkedDataURLLister:
 
 class LinkedDataCoverageProvider(CoverageProvider):
 
-    """Runs WorkRecords obtained from OCLC Lookup through OCLC Linked Data.
+    """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
     
-    This (maybe) associates a workrecord with a (potentially) large
+    This (maybe) associates a edition with a (potentially) large
     number of ISBNs, which can be used as input into other services.
     """
 
@@ -970,40 +970,43 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, db, data_directory):
-        self.oclc = OCLCLinkedData(data_directory)
-        self.db = db
-        self.oclc_classify = DataSource.lookup(db, DataSource.OCLC)
-        self.overdrive = DataSource.lookup(db, DataSource.OVERDRIVE)
-        self.threem = DataSource.lookup(db, DataSource.THREEM)
-        self.oclc_linked_data = DataSource.lookup(db, DataSource.OCLC_LINKED_DATA)
+    def __init__(self, _db, services=None):
+        self.oclc = OCLCLinkedData(_db)
+        self.db = _db
+        self.oclc_linked_data = DataSource.lookup(
+            _db, DataSource.OCLC_LINKED_DATA)
+        if not services:
+            services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
+        services = [DataSource.lookup(self.db, x) for x in services]
 
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME,
-            [self.oclc_classify, self.overdrive, self.threem],
+            services,
             self.oclc_linked_data,
             workset_size=3)
 
-    def process_work_record(self, wr):
+    def process_edition(self, wr):
         try:
             original_identifier = wr.primary_identifier
             new_records = 0
             new_isbns = 0
             new_descriptions = 0
+            new_subjects = 0
             print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
             editions = 0
             for edition in self.info_for(original_identifier):
-                workrecord, isbns, descriptions, subjects = self.process_edition(original_identifier, edition)
-                if workrecord:
+                edition, isbns, descriptions, subjects = self.process_oclc_edition(original_identifier, edition)
+                if edition:
                     new_records += 1
-                    print "", workrecord.publisher, len(isbns), len(descriptions)
+                    print "", edition.publisher, len(isbns), len(descriptions)
                 new_isbns += len(isbns)
-                for isbn in isbns:
-                    print " NEW ISBN: %s" % isbn
+                #for isbn in isbns:
+                #    print " NEW ISBN: %s" % isbn
                 new_descriptions += len(descriptions)
+                new_subjects += len(subjects)
 
-            print "Total: %s editions, %s ISBNs, %s descriptions." % (
-                editions, new_isbns, new_descriptions)
+            print "Total: %s editions, %s ISBNs, %s descriptions, %s classifications." % (
+                editions, new_isbns, new_descriptions, new_subjects)
         except IOError, e:
             if ", but couldn't find location" in e.message:
                 # OCLC doesn't know about an ISBN.
@@ -1011,7 +1014,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             return False
         return True
 
-    def process_edition(self, original_identifier, edition):
+    def process_oclc_edition(self, original_identifier, edition):
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
@@ -1032,7 +1035,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             except Exception, e:
                 pass
 
-        oclc_number, new = WorkIdentifier.for_foreign_id(
+        oclc_number, new = Identifier.for_foreign_id(
             self.db, edition['oclc_id_type'],
             edition['oclc_id'])
 
@@ -1049,14 +1052,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # sources that use ISBN as input.
         new_isbns_for_this_oclc_number = []
         for isbn in edition['isbns']:
-            isbn_identifier, new = WorkIdentifier.for_foreign_id(
-                self.db, WorkIdentifier.ISBN, isbn)
+            isbn_identifier, new = Identifier.for_foreign_id(
+                self.db, Identifier.ISBN, isbn)
             if new:
                 new_isbns_for_this_oclc_number.append(isbn_identifier)
 
         # If this OCLC Number didn't tell us about any ISBNs
         # we didn't already know, and there is no description,
-        # we don't need to create a WorkRecord for it--it's
+        # we don't need to create a Edition for it--it's
         # redundant.
         if (len(new_isbns_for_this_oclc_number) == 0
             and not len(edition['descriptions'])):
@@ -1078,6 +1081,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                                    if c.viaf])
             author_strength = MetadataSimilarity._proportion(
                 original_identifier_viafs, set(edition['creator_viafs']))
+            original_identifier_viafs, edition['creator_viafs'], author_strength
             strength = (title_strength * 0.8) + (author_strength * 0.2)
         else:
             strength = 1
@@ -1109,8 +1113,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def info_for(self, work_identifier):
         for data in self.graphs_for(work_identifier):
-            subgraph = oclc_linked_data.graph(data)
-            for book in oclc_linked_data.books(subgraph):
+            subgraph = self.oclc.graph(data)
+            for book in self.oclc.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
                     yield info
@@ -1154,10 +1158,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
         isbns = set([])
         descriptions = []
 
-        types = []
-        type_objs = book.get('rdf:type', [])
-        if isinstance(type_objs, dict):
-            type_objs = [type_objs]
+        type_objs = []
+        for type_name in ('rdf:type', '@type'):
+            these_type_objs = book.get(type_name, [])
+            if not isinstance(these_type_objs, list):
+                these_type_objs = [these_type_objs]
+            for this_type_obj in these_type_objs:
+                if isinstance(this_type_obj, dict):
+                    type_objs.append(this_type_obj)
+                elif isinstance(this_type_obj, basestring):
+                    type_objs.append({"@id": this_type_obj})
         types = [i['@id'] for i in type_objs if 
                  i['@id'] not in self.UNUSED_TYPES]
         if not types:
@@ -1249,16 +1259,15 @@ class LinkedDataCoverageProvider(CoverageProvider):
         )
         return r
 
-    def graphs_for(self, work_identifier):
-        if work_identifier.type in OCLCLinkedData.CAN_HANDLE:
-            if work_identifier.type == WorkIdentifier.ISBN:
-                work_data = list(oclc_linked_data.oclc_works_for_isbn(
-                    work_identifier.identifier))
-            elif work_identifier.type == WorkIdentifier.OCLC_WORK:
-                work_data, cached = oclc_linked_data.lookup(work_identifier)
+    def graphs_for(self, identifier):
+        if identifier.type in OCLCLinkedData.CAN_HANDLE:
+            if identifier.type == Identifier.ISBN:
+                work_data = list(self.oclc.oclc_works_for_isbn(identifier))
+            elif identifier.type == Identifier.OCLC_WORK:
+                work_data, cached = self.oclc.lookup(identifier)
             else:
                 # Look up and yield a single edition.
-                edition_data, cached = oclc_linked_data.lookup(work_identifier)                
+                edition_data, cached = self.oclc.lookup(identifier)
                 yield edition_data
                 work_data = None
 
@@ -1268,16 +1277,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     work_data = [work_data]
                 for data in work_data:
                     # Turn the work graph into a bunch of edition graphs.
-                    graph = oclc_linked_data.graph(data)
-                    examples = oclc_linked_data.extract_workexamples(graph)
+                    graph = self.oclc.graph(data)
+                    examples = self.oclc.extract_workexamples(graph)
                     for uri in examples:
-                        data, cached = oclc_linked_data.lookup(uri)
+                        data, cached = self.oclc.lookup(uri)
                         yield data
 
         else:
             # We got an identifier we can't handle. Turn it into a number
             # of identifiers we can handle.
-            for i in work_identifier.equivalencies:
+            for i in identifier.equivalencies:
                 if i.output.type in OCLCLinkedData.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph

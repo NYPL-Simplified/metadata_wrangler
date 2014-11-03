@@ -3,6 +3,7 @@ from datetime import datetime
 from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 from model import (
+    Contributor,
     CoverageRecord,
     DataSource,
     Genre,
@@ -10,8 +11,8 @@ from model import (
     LicensePool,
     Patron,
     Resource,
-    WorkIdentifier,
-    WorkRecord,
+    Identifier,
+    Edition,
     Work,
     get_one_or_create
 )
@@ -51,17 +52,28 @@ class DatabaseTest(object):
         return get_one_or_create(
             self._db, Patron, external_identifier=external_identifier)[0]
 
-    def _workidentifier(self, identifier_type=WorkIdentifier.GUTENBERG_ID):
-        id = self._str
-        return WorkIdentifier.for_foreign_id(self._db, identifier_type, id)[0]
+    def _contributor(self, name=None):
+        name = name or self._str
+        return get_one_or_create(self._db, Contributor, name=name)
 
-    def _workrecord(self, data_source_name=DataSource.GUTENBERG,
-                    identifier_type=WorkIdentifier.GUTENBERG_ID,
-                    with_license_pool=False, with_open_access_download=False):
+    def _identifier(self, identifier_type=Identifier.GUTENBERG_ID):
+        id = self._str
+        return Identifier.for_foreign_id(self._db, identifier_type, id)[0]
+
+    def _edition(self, data_source_name=DataSource.GUTENBERG,
+                    identifier_type=Identifier.GUTENBERG_ID,
+                    with_license_pool=False, with_open_access_download=False,
+                    title=None, language=None, authors=None):
         id = self._str
         source = DataSource.lookup(self._db, data_source_name)
-        wr = WorkRecord.for_foreign_id(
+        wr = Edition.for_foreign_id(
             self._db, source, identifier_type, id)[0]
+        if title:
+            wr.title = title
+        if language:
+            wr.language = language
+        if authors:
+            wr.author = authors
         if with_license_pool or with_open_access_download:
             pool = self._licensepool(wr, data_source_name=data_source_name,
                                      with_open_access_download=with_open_access_download)                
@@ -70,7 +82,8 @@ class DatabaseTest(object):
 
     def _work(self, title=None, authors=None, genre=None, language=None,
               audience=None, fiction=True, with_license_pool=False, 
-              with_open_access_download=False, quality=100):
+              with_open_access_download=False, quality=0.5,
+              primary_edition=None):
         if with_open_access_download:
             with_license_pool = True
         language = language or "eng"
@@ -79,44 +92,48 @@ class DatabaseTest(object):
         audience = audience or Classifier.AUDIENCE_ADULT
         if fiction is None:
             fiction = True
-        wr = self._workrecord(with_license_pool=with_license_pool,
-                              with_open_access_download=with_open_access_download)
+        if not primary_edition:
+            primary_edition = self._edition(
+                title=title, language=language,
+                authors=authors,
+                with_license_pool=with_license_pool,
+                with_open_access_download=with_open_access_download)
         if with_license_pool:
-            wr, pool = wr
+            primary_edition, pool = primary_edition
         work, ignore = get_one_or_create(
             self._db, Work, create_method_kwargs=dict(
-                title=title, language=language,
                 audience=audience,
                 fiction=fiction,
-                authors=authors, quality=quality), id=self._id)
+                quality=quality), id=self._id)
         if not isinstance(genre, Genre):
             genre, ignore = Genre.lookup(self._db, genre, autocreate=True)
         work.genres = [genre]
         if with_license_pool:
             work.license_pools.append(pool)
-        work.primary_work_record = wr
+        work.editions = [primary_edition]
+        primary_edition.is_primary_for_work = True
         return work
 
-    def _coverage_record(self, workrecord, coverage_source):
+    def _coverage_record(self, edition, coverage_source):
         record, ignore = get_one_or_create(
             self._db, CoverageRecord,
-            work_record=workrecord,
+            identifier=edition.primary_identifier,
             data_source=coverage_source,
             create_method_kwargs = dict(date=datetime.utcnow()))
         return record
 
-    def _licensepool(self, workrecord, open_access=True, 
+    def _licensepool(self, edition, open_access=True, 
                      data_source_name=DataSource.GUTENBERG,
                      with_open_access_download=False):
         source = DataSource.lookup(self._db, data_source_name)
-        if not workrecord:
-            workrecord = self._workrecord(data_source_name)
+        if not edition:
+            edition = self._edition(data_source_name)
 
         pool, ignore = get_one_or_create(
             self._db, LicensePool,
             create_method_kwargs=dict(
                 open_access=open_access),
-            identifier=workrecord.primary_identifier, data_source=source)
+            identifier=edition.primary_identifier, data_source=source)
 
         if with_open_access_download:
             pool.open_access = True

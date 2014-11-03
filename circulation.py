@@ -21,10 +21,10 @@ from model import (
     Lane,
     LicensePool,
     Patron,
-    WorkIdentifier,
+    Identifier,
     Work,
     WorkFeed,
-    WorkRecord,
+    Edition,
     )
 from opensearch import OpenSearchDocument
 from opds import (
@@ -253,10 +253,10 @@ def feed(lane):
         opds_feed.add_link(**search_link)
         work_feed = None
     elif order == 'title':
-        work_feed = WorkFeed(lane, languages, Work.title)
+        work_feed = WorkFeed(lane, languages, Edition.title)
         title = "%s: By title" % lane.name
     elif order == 'author':
-        work_feed = WorkFeed(lane, languages, Work.authors)
+        work_feed = WorkFeed(lane, languages, Edition.author)
         title = "%s: By author" % lane.name
     else:
         return "I don't know how to order a feed by '%s'" % order
@@ -339,7 +339,7 @@ def checkout(data_source, identifier):
         return problem("No such data source!", 404)
     identifier_type = source.primary_identifier_type
 
-    id_obj, ignore = WorkIdentifier.for_foreign_id(
+    id_obj, ignore = Identifier.for_foreign_id(
         Conf.db, identifier_type, identifier, autocreate=False)
     if not id_obj:
         # TODO
@@ -363,7 +363,7 @@ def checkout(data_source, identifier):
 
 @app.route('/work/<identifier_type>/<identifier>')
 def work(identifier_type, identifier):
-    wid, ignore = WorkIdentifier.for_foreign_id(
+    wid, ignore = Identifier.for_foreign_id(
         Conf.db, identifier_type, identifier, False)
     pool = Conf.db.query(LicensePool).filter(
             LicensePool.identifier==wid).one()

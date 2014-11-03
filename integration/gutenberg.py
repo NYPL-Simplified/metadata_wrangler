@@ -3,8 +3,8 @@ import os
 import json
 import random
 import re
-import requests
 import random
+import requests
 import time
 import shutil
 import tarfile
@@ -24,10 +24,12 @@ from model import (
     CirculationEvent,
     CoverageProvider,
     Contributor,
-    WorkRecord,
+    Edition,
     DataSource,
+    Measurement,
+    Representation,
     Resource,
-    WorkIdentifier,
+    Identifier,
     LicensePool,
     Subject,
 )
@@ -54,17 +56,25 @@ class GutenbergAPI(object):
 
     ONE_DAY = 60 * 60 * 24
 
+
     MIRRORS = [
         "http://www.gutenberg.org/cache/epub/feeds/rdf-files.tar.bz2",
         "http://gutenberg.readingroo.ms/cache/generated/feeds/rdf-files.tar.bz2",
-        "http://snowy.arsc.alaska.edu/gutenberg/cache/generated/feeds/rdf-files.tar.bz2",        
     ] 
+
+    # This will be passed in to Representation.get when downloading
+    # the mirror.
+    def http_get_from_random_mirror(self, url, headers):
+        actual_url = random.choice(MIRRORS)
+        return Representations.simple_http_get(actual_url, headers)
 
     GUTENBERG_ORIGINAL_MIRROR = "%(gutenberg_original_mirror)s"
     GUTENBERG_EBOOK_MIRROR = "%(gutenberg_ebook_mirror)s"
     EPUB_ID = re.compile("/([0-9]+)")
 
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
+        self._db = _db
+        self.source = DataSource.lookup(self._db, DataSource.GUTENBERG)
         self.data_directory = data_directory
         self.catalog_path = os.path.join(self.data_directory, self.FILENAME)
 
@@ -122,19 +132,22 @@ class GutenbergAPI(object):
             #     =>
             # /38044/pg38044.cover.medium.jpg 
             new_path = parsed.path.replace('/cache/epub/', '/', 1)
-        else:
-            set_trace()
 
         return mirror, new_path
 
     def update_catalog(self):
         """Download the most recent Project Gutenberg catalog
-        from a randomly selected mirror."""
+        from a randomly selected mirror.
+
+        We don't use Representation (for now) because the file is huge
+        and the tarfile module only supports reading from a file on
+        disk.
+        """
         url = random.choice(self.MIRRORS)
         print "Refreshing %s" % url
-        data = requests.get(url)
+        response = requests.get(url)
         tmp_path = self.catalog_path + ".tmp"
-        open(tmp_path, "wb").write(data.content)
+        open(tmp_path, "wb").write(response.content)
         shutil.move(tmp_path, self.catalog_path)
 
     def needs_refresh(self):
@@ -153,48 +166,49 @@ class GutenbergAPI(object):
         a = 0
         while next_item:
             if next_item.isfile() and next_item.name.endswith(".rdf"):
+
                 pg_id = self.ID_IN_FILENAME.search(next_item.name).groups()[0]
                 yield pg_id, archive, next_item
             next_item = archive.next()
 
-    def create_missing_books(self, _db, subset=None):
-        """Finds books present in the PG catalog but missing from WorkRecord.
+    def create_missing_books(self, subset=None):
+        """Finds books present in the PG catalog but missing from Edition.
 
-        Yields (WorkRecord, LicensePool) 2-tuples.
+        Yields (Edition, LicensePool) 2-tuples.
         """
         books = self.all_books()
-        source = DataSource.lookup(_db, DataSource.GUTENBERG)
         for pg_id, archive, archive_item in books:
             if subset is not None and not subset(pg_id, archive, archive_item):
                 continue
             print "Considering %s" % pg_id
-            # Find an existing WorkRecord for the book.
-            book = WorkRecord.for_foreign_id(
-                _db, source, WorkIdentifier.GUTENBERG_ID, pg_id,
+            # Find an existing Edition for the book.
+            book = Edition.for_foreign_id(
+                self._db, self.source, Identifier.GUTENBERG_ID, pg_id,
                 create_if_not_exists=False)
 
             if not book:
-                # Create a new WorkRecord object with bibliographic
+                # Create a new Edition object with bibliographic
                 # information from the Project Gutenberg RDF file.
                 fh = archive.extractfile(archive_item)
                 data = fh.read()
                 fake_fh = StringIO(data)
-                book, new = GutenbergRDFExtractor.book_in(_db, pg_id, fake_fh)
+                book, new = GutenbergRDFExtractor.book_in(
+                    self._db, pg_id, fake_fh)
 
                 if book:
                     # Ensure that an open-access LicensePool exists for this book.
-                    license, new = self.pg_license_for(_db, book)
+                    license, new = self.pg_license_for(self._db, book)
                     yield (book, license)
 
     @classmethod
-    def pg_license_for(cls, _db, work_record):
+    def pg_license_for(cls, _db, edition):
         """Retrieve a LicensePool for the given Project Gutenberg work,
         creating it (but not committing it) if necessary.
         """
         return get_one_or_create(
             _db, LicensePool,
-            data_source=work_record.data_source,
-            identifier=work_record.primary_identifier,
+            data_source=edition.data_source,
+            identifier=edition.primary_identifier,
             create_method_kwargs=dict(
                 open_access=True,
                 last_checked=datetime.datetime.now(),
@@ -205,7 +219,7 @@ class GutenbergAPI(object):
 class GutenbergRDFExtractor(object):
 
     """Transform a Project Gutenberg RDF description of a title into a
-    WorkRecord object and an open-access LicensePool object.
+    Edition object and an open-access LicensePool object.
     """
 
     dcterms = Namespace("http://purl.org/dc/terms/")
@@ -235,7 +249,7 @@ class GutenbergRDFExtractor(object):
     @classmethod
     def book_in(cls, _db, pg_id, fh):
 
-        """Yield a WorkRecord object for the book described by the given
+        """Yield a Edition object for the book described by the given
         filehandle, creating it (but not committing it) if necessary.
 
         This assumes that there is at most one book per
@@ -259,7 +273,6 @@ class GutenbergRDFExtractor(object):
                     # Each filehandle is associated with one Project
                     # Gutenberg ID and should thus describe at most
                     # one title.
-                    set_trace()
                     raise ValueError(
                         "More than one book in file for Project Gutenberg ID %s" % pg_id)
                 else:
@@ -277,7 +290,7 @@ class GutenbergRDFExtractor(object):
 
     @classmethod
     def parse_book(cls, _db, g, uri, title):
-        """Turn an RDF graph into a WorkRecord for the given `uri` and
+        """Turn an RDF graph into a Edition for the given `uri` and
         `title`.
         """
         source_id = unicode(cls.ID_IN_URI.search(uri).groups()[0])
@@ -325,12 +338,12 @@ class GutenbergRDFExtractor(object):
             contributor = matches[0]
             contributors.append(contributor)
 
-        # Create or fetch a WorkRecord for this book.
+        # Create or fetch a Edition for this book.
         source = DataSource.lookup(_db, DataSource.GUTENBERG)
-        identifier, new = WorkIdentifier.for_foreign_id(
-            _db, WorkIdentifier.GUTENBERG_ID, source_id)
+        identifier, new = Identifier.for_foreign_id(
+            _db, Identifier.GUTENBERG_ID, source_id)
         book, new = get_one_or_create(
-            _db, WorkRecord,
+            _db, Edition,
             create_method_kwargs=dict(
                 title=title,
                 subtitle=subtitle,
@@ -342,7 +355,7 @@ class GutenbergRDFExtractor(object):
             primary_identifier=identifier,
         )
 
-        # Classify the WorkRecord.
+        # Classify the Edition.
         if new:
             subject_links = cls._values(g, (uri, cls.dcterms.subject, None))
             for subject in subject_links:
@@ -359,8 +372,10 @@ class GutenbergRDFExtractor(object):
             identifier.add_resource(
                 rel, None, source, media_type="text/plain", content=summary)
 
+        medium = Edition.BOOK_MEDIUM
+
         # Turn the Gutenberg download links into Resources associated 
-        # with the new WorkRecord. They will serve either as open access
+        # with the new Edition. They will serve either as open access
         # downloads or cover images.
         download_links = cls._values(g, (uri, cls.dcterms.hasFormat, None))
         for href in download_links:
@@ -376,11 +391,17 @@ class GutenbergRDFExtractor(object):
                         # We don't care about thumbnail images--we
                         # make our own.
                         rel = None
+                elif media_type.startswith('audio/'):
+                    medium = Edition.AUDIO_MEDIUM
+                elif media_type.startswith('video/'):
+                    medium = Edition.VIDEO_MEDIUM
                 if rel:
                     identifier.add_resource(
                         rel, unicode(href), source, media_type=media_type)
                 identifier.add_resource(
                     Resource.CANONICAL, unicode(uri), source)
+
+        book.medium = medium
 
         # Associate the appropriate contributors with the book.
         for contributor in contributors:
@@ -392,26 +413,26 @@ class GutenbergMonitor(Monitor):
     """Maintain license pool and metadata info for Gutenberg titles.
     """
 
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
+        self._db = _db
         path = os.path.join(data_directory, DataSource.GUTENBERG)
         if not os.path.exists(path):
             os.makedirs(path)
-        self.source = GutenbergAPI(path)
+        self.source = GutenbergAPI(_db, path)
 
-    def run(self, _db, subset=None):
+    def run(self, subset=None):
         added_books = 0
-        for work, license_pool in self.source.create_missing_books(
-                _db, subset):
+        for work, license_pool in self.source.create_missing_books(subset):
             # Log a circulation event for this work.
             event = get_one_or_create(
-                _db, CirculationEvent,
+                self._db, CirculationEvent,
                 type=CirculationEvent.TITLE_ADD,
                 license_pool=license_pool,
                 create_method_kwargs=dict(
                     start=license_pool.last_checked
                 )
             )
-            _db.commit()
+            self._db.commit()
 
 
 class OCLCMonitorForGutenberg(CoverageProvider):
@@ -429,10 +450,11 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
     
     def __init__(self, _db, data_directory):
-        self.gutenberg = GutenbergMonitor(data_directory)
-        self.oclc = OCLCClassifyAPI(data_directory)
-        input_source = DataSource.lookup(_db, DataSource.GUTENBERG)
-        output_source = DataSource.lookup(_db, DataSource.OCLC)
+        self._db = _db
+        self.gutenberg = GutenbergMonitor(self._db, data_directory)
+        self.oclc_classify = OCLCClassifyAPI(self._db)
+        input_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        output_source = DataSource.lookup(self._db, DataSource.OCLC)
         super(OCLCMonitorForGutenberg, self).__init__(
             "OCLC Monitor for Gutenberg", input_source, output_source)
 
@@ -442,20 +464,20 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     def title_and_author(self, book):
         title = self.oclc_safe_title(book.title)
 
-        authors = book.authors
+        authors = book.author_contributors
         if len(authors) == 0:
             author = ''
         else:
             author = authors[0].name
         return title, author
 
-    def process_work_record(self, book):
+    def process_edition(self, book):
         title, author = self.title_and_author(book)
         language = book.language
 
         print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, language)
         # Perform a title/author lookup
-        xml = self.oclc.lookup_by(title=title, author=author)
+        xml = self.oclc_classify.lookup_by(title=title, author=author)
 
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
@@ -465,7 +487,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # works.
         restrictions = dict(language=language,
                             title=title,
-                            authors=book.authors)
+                            authors=book.author_contributors)
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = OCLCXMLParser.parse(
@@ -473,15 +495,14 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         if representation_type == OCLCXMLParser.MULTI_WORK_STATUS:
             # `records` contains a bunch of SWIDs, not
-            # WorkRecords. Do another lookup to turn each SWID
-            # into a set of WorkRecords.
+            # Editions. Do another lookup to turn each SWID
+            # into a set of Editions.
             swids = records
             records = []
             for swid in swids:
-                swid_xml = self.oclc.lookup_by(swid=swid)
+                swid_xml = self.oclc_classify.lookup_by(swid=swid)
                 representation_type, editions = OCLCXMLParser.parse(
                     self._db, swid_xml, **restrictions)
-
 
                 if representation_type == OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS:
                     records.extend(editions)
@@ -502,19 +523,19 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         # First, find any authors associated with this book that
         # have not been given VIAF or LC IDs.
         gutenberg_authors_to_merge = [
-            x for x in book.authors if not x.viaf or not x.lc
+            x for x in book.author_contributors if not x.viaf or not x.lc
         ]
-        gutenberg_names = set([x.name for x in book.authors])
+        gutenberg_names = set([x.name for x in book.author_contributors])
         for r in records:
             if gutenberg_authors_to_merge:
-                oclc_names = set([x.name for x in r.authors])
+                oclc_names = set([x.name for x in r.author_contributors])
                 if gutenberg_names == oclc_names:
                     # Perfect overlap. We've found an OCLC record
                     # for a book written by exactly the same
                     # people as the Gutenberg book. Merge each
                     # Gutenberg author into its OCLC equivalent.
                     for gutenberg_author in gutenberg_authors_to_merge:
-                        oclc_authors = [x for x in r.authors 
+                        oclc_authors = [x for x in r.author_contributors
                                         if x.name==gutenberg_author.name]
                         if len(oclc_authors) == 1:
                             oclc_author = oclc_authors[0]
@@ -533,36 +554,227 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         print " Created %s records(s)." % len(records)
         return True
 
-class PopularityScraper(object):
+class GutenbergBookshelfClient(object):
+    """Get classifications and measurements of popularity from Gutenberg
+    bookshelves.
+    """
 
-    start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
+    BASE_URL = "http://www.gutenberg.org/wiki/Category:Bookshelf"
+    MOST_POPULAR_URL = 'http://www.gutenberg.org/ebooks/search/%3Fsort_order%3Ddownloads'
+    gutenberg_text_number = re.compile("/ebooks/([0-9]+)")
+    number_of_downloads = re.compile("([0-9]+) download")
 
-    def scrape(self):
-        previous_page = None
-        next_page = self.start_url
-        while next_page:
-            previous_page, next_page = self.scrape_page(
-                previous_page, next_page)
-            time.sleep(5 + random.random())
+    def __init__(self, _db):
+        self._db = _db
+        self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
 
-    def scrape_page(self, referer, url):
+    def do_get_with_captcha_trapdoor(self, *args, **kwargs):
+        status_code, headers, content = Representation.browser_http_get(*args, **kwargs)
+        if 'captcha' in content:
+            raise IOError("Triggered CAPTCHA.")
+        return status_code, headers, content
+
+    def do_get(self, referer, url, handled):
         headers = dict()
         if referer:
-            headers['Referer']=referer
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            raise Exception("Request to %s got status code %s: %s" % (
-                url, response.status_code, response.content))
-        soup = BeautifulSoup(response.content, 'lxml')
-        set_trace()
-        for book in soup.find_all('li', 'booklink'):
-            id = book.find('a')['href']
-            downloads = book.find('span', 'extra')
-            print id, downloads
+            headers['Referer'] = referer
+        if not url.startswith('http'):
+            url = urljoin(self.BASE_URL, url)
+        if url in handled:
+            return None
+        representation, cached = Representation.get(
+            self._db, url, self.do_get_with_captcha_trapdoor,
+            headers, data_source=self.data_source,
+            pause_before=random.random()*5)
+        if not cached:
+            self._db.commit()
+        handled.add(url)
+        return representation
 
-        next_page = soup.find(accesskey='+')
-        if next_page:
-            return url, urljoin(url, next_page['href'])
+    def full_update(self):
+        all_classifications = dict()
+        all_favorites = set()
+        handled = set()
+        ignore, all_download_counts = self.process_catalog_search(
+            None, self.MOST_POPULAR_URL, handled)
+
+        lists_of_shelves = [(None, self.BASE_URL)]
+        shelves = []
+        while lists_of_shelves:
+            referer, url = lists_of_shelves.pop()
+            representation = self.do_get(referer, url, handled)
+            if not representation:
+                # Already handled
+                continue
+            new_lists, new_shelves = self.process_bookshelf_list_page(
+                representation)
+            for i in new_lists:
+                lists_of_shelves.append((url, i))
+            for shelf_url, shelf_name in new_shelves:
+                shelves.append((url, shelf_url, shelf_name))
+
+        # Now get the contents of each bookshelf.
+        for referer, url, bookshelf_name in shelves:
+            representation = self.do_get(referer, url, handled) 
+            if not representation:
+                # Already handled
+                continue
+            texts, favorites, downloads = self.process_shelf(
+                representation, handled)
+            all_classifications[bookshelf_name] = texts
+            all_favorites = all_favorites.union(favorites)
+            all_download_counts.update(downloads)
+        # Favorites turns out not to be that useful.
+        # self.set_favorites(all_favorites)
+        self.set_download_counts(all_download_counts)
+        self.classify(all_classifications)
+
+    def _title(self, identifier):
+        a = identifier.primarily_identifies
+        if not a:
+            return "(unknown)"
         else:
-            return None, None
+            return a[0].title.encode("utf8")
+
+    def _gutenberg_id_lookup(self, ids):
+        return self._db.query(Identifier).filter(
+            Identifier.identifier.in_(ids)).filter(
+                Identifier.type==Identifier.GUTENBERG_ID)
+
+    def set_favorites(self, ids):
+        # TODO: Once we have lists this should be a list.
+        print "%d Favorites:" % len(ids)
+        identifiers = self._gutenberg_id_lookup(ids)
+        for identifier in identifiers:
+            identifier.add_measurement(
+                self.data_source, Measurement.GUTENBERG_FAVORITE,
+                1)
+            print "", self._title(identifier)
+
+    def set_download_counts(self, all_download_counts):
+        print "Downloads:"
+        identifiers = self._gutenberg_id_lookup(all_download_counts.keys())
+        for identifier in identifiers:
+            identifier.add_measurement(
+                self.data_source, Measurement.DOWNLOADS,
+                all_download_counts[identifier.identifier])
+            print "%d\t%s" % (
+                all_download_counts[identifier.identifier],
+                self._title(identifier))
+
+    def classify(self, all_classifications):
+        for classification, ids in all_classifications.items():
+            identifiers = self._gutenberg_id_lookup(ids)
+            for identifier in identifiers:
+                identifier.classify(
+                    self.data_source, Subject.GUTENBERG_BOOKSHELF, 
+                    classification)
+                print "%s\t%s" % (classification.encode("utf8"), self._title(identifier))
+
+    def process_shelf(self, representation, handled):
+        texts = set()
+        favorites = set()
+        downloads = dict()
+        soup = BeautifulSoup(representation.content, "lxml")
+        for book in soup.find_all("a", href=self.gutenberg_text_number):
+            is_favorite = book.parent.find(
+                'img', src=re.compile("Favorite-icon")) is not None
+            m = self.gutenberg_text_number.search(book['href'])
+            if m:
+                identifier = m.groups()[0]
+            else:
+                set_trace()
+
+            texts.add(identifier)
+            if is_favorite:
+                favorites.add(identifier)
+
+        catalog_search_link = soup.find('a', text="catalog search", href=True)
+        if catalog_search_link:
+            url = catalog_search_link['href']
+            new_texts, downloads = self.process_catalog_search(
+                representation.url, url, handled)
+            texts = texts.union(new_texts)
+
+        return texts, favorites, downloads
+
+    def process_catalog_search(self, referer, url, handled):
+        texts = set()
+        downloads = dict()
+        while url:
+            representation = self.do_get(referer, url, handled)
+            if not representation:
+                return texts, downloads
+            soup = BeautifulSoup(representation.content, "lxml")
+            for book in soup.find_all('li', 'booklink'):
+                link = book.find('a', 'link', href=self.gutenberg_text_number)
+                identifier = self.gutenberg_text_number.search(link['href']).groups()[0]
+                texts.add(identifier)
+                download_count_tag = book.find(
+                    'span', 'extra', text=self.number_of_downloads)
+                if download_count_tag:
+                    download_count = self.number_of_downloads.search(
+                        download_count_tag.text).groups()[0]
+                    downloads[identifier] = int(download_count)
+
+            next_link = soup.find('a', accesskey='+')
+            if next_link:
+                url = next_link['href']
+            else:
+                url = None
+        return texts, downloads
+
+    def process_bookshelf_list_page(self, representation):
+        lists = []
+        shelves = []
+        soup = BeautifulSoup(representation.content, "lxml")
+        # If this is a multi-page list, the next page counts as a list.
+        next_link = soup.find("a", text="next 200", href=True)
+        if next_link:
+            lists.append(next_link['href'])
+        for i in soup.find_all("a", href=re.compile("^/wiki/.*Bookshelf")):
+            new_url = i['href']
+            if '/wiki/Category:' in new_url:
+                lists.append(new_url)
+            elif new_url.endswith("Bookshelf)"):
+                bookshelf_name = i.text
+                if bookshelf_name.endswith("(Bookshelf)"):
+                    bookshelf_name = bookshelf_name[:-len("(Bookshelf)")]
+                bookshelf_name = bookshelf_name.strip()
+                shelves.append((new_url, bookshelf_name))
+        return lists, shelves
+
+
+# class PopularityScraper(object):
+
+#     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
+
+#     def scrape(self):
+#         previous_page = None
+#         next_page = self.start_url
+#         while next_page:
+#             previous_page, next_page = self.scrape_page(
+#                 previous_page, next_page)
+#             time.sleep(5 + random.random())
+
+#     def scrape_page(self, referer, url):
+#         headers = dict()
+#         if referer:
+#             headers['Referer']=referer
+#         response = requests.get(url, headers=headers)
+#         if response.status_code != 200:
+#             raise Exception("Request to %s got status code %s: %s" % (
+#                 url, response.status_code, response.content))
+#         soup = BeautifulSoup(response.content, 'lxml')
+#         set_trace()
+#         for book in soup.find_all('li', 'booklink'):
+#             id = book.find('a')['href']
+#             downloads = book.find('span', 'extra')
+#             print id, downloads
+
+#         next_page = soup.find(accesskey='+')
+#         if next_page:
+#             return url, urljoin(url, next_page['href'])
+#         else:
+#             return None, None
             

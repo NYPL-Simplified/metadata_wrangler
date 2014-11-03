@@ -9,7 +9,7 @@ from model import (
 )
 from integration.threem import ThreeMCoverImageMirror
 from integration.overdrive import OverdriveCoverImageMirror
-from integration.content_cafe import ContentCafeMirror
+# from integration.content_cafe import ContentCafeMirror
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -17,6 +17,6 @@ if __name__ == '__main__':
         sys.exit()
     path = sys.argv[1]      
     force = (len(sys.argv) == 3 and sys.argv[2] == 'force')
-    mirrors = [OverdriveCoverImageMirror, ContentCafeMirror, ThreeMCoverImageMirror]
+    mirrors = [OverdriveCoverImageMirror, ThreeMCoverImageMirror]
     ImageScaler(production_session(), path, mirrors).run(
         destination_width=200, destination_height=300, force=force)

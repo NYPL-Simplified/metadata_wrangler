@@ -3,13 +3,17 @@ from collections import (
     Counter,
     defaultdict,
 )
+import bisect
 from cStringIO import StringIO
 import datetime
+import json
 import os
 from nose.tools import set_trace
 import random
 import re
+import requests
 import time
+from integration.s3 import S3Uploader
 
 from PIL import (
     Image,
@@ -46,6 +50,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy import (
     create_engine, 
+    Binary,
     Boolean,
     Column,
     Date,
@@ -224,11 +229,13 @@ class DataSource(Base):
     THREEM = "3M"
     OCLC = "OCLC Classify"
     OCLC_LINKED_DATA = "OCLC Linked Data"
+    AMAZON = "Amazon"
     XID = "WorldCat xID"
     AXIS_360 = "Axis 360"
     WEB = "Web"
     OPEN_LIBRARY = "Open Library"
     CONTENT_CAFE = "Content Cafe"
+    VIAF = "Content Cafe"
     GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
     MANUAL = "Manual intervention"
 
@@ -239,8 +246,8 @@ class DataSource(Base):
     primary_identifier_type = Column(String, index=True)
     extra = Column(MutableDict.as_mutable(JSON), default={})
 
-    # One DataSource can generate many WorkRecords.
-    work_records = relationship("WorkRecord", backref="data_source")
+    # One DataSource can generate many Editions.
+    editions = relationship("Edition", backref="data_source")
 
     # One DataSource can generate many CoverageRecords.
     coverage_records = relationship("CoverageRecord", backref="data_source")
@@ -254,6 +261,12 @@ class DataSource(Base):
 
     # One DataSource can provide many Resources.
     resources = relationship("Resource", backref="data_source")
+
+    # One DataSource can provide many Representations.
+    representations = relationship("Representation", backref="data_source")
+
+    # One DataSource can generate many Measurements.
+    measurements = relationship("Measurement", backref="data_source")
 
     # One DataSource can provide many Classifications.
     classifications = relationship("Classification", backref="data_source")
@@ -272,15 +285,17 @@ class DataSource(Base):
         """Make sure all the well-known sources exist."""
 
         for (name, offers_licenses, primary_identifier_type, refresh_rate) in (
-                (cls.GUTENBERG, True, WorkIdentifier.GUTENBERG_ID, None),
-                (cls.OVERDRIVE, True, WorkIdentifier.OVERDRIVE_ID, 0),
-                (cls.THREEM, True, WorkIdentifier.THREEM_ID, 60*60*6),
-                (cls.AXIS_360, True, WorkIdentifier.AXIS_360_ID, 0),
-                (cls.OCLC, False, WorkIdentifier.OCLC_NUMBER, None),
-                (cls.OCLC_LINKED_DATA, False, WorkIdentifier.OCLC_NUMBER, None),
-                (cls.OPEN_LIBRARY, False, WorkIdentifier.OPEN_LIBRARY_ID, None),
-                (cls.GUTENBERG_COVER_GENERATOR, False, WorkIdentifier.GUTENBERG_ID, None),
-                (cls.WEB, True, WorkIdentifier.URI, None),
+                (cls.GUTENBERG, True, Identifier.GUTENBERG_ID, None),
+                (cls.OVERDRIVE, True, Identifier.OVERDRIVE_ID, 0),
+                (cls.THREEM, True, Identifier.THREEM_ID, 60*60*6),
+                (cls.AXIS_360, True, Identifier.AXIS_360_ID, 0),
+                (cls.OCLC, False, Identifier.OCLC_NUMBER, None),
+                (cls.OCLC_LINKED_DATA, False, Identifier.OCLC_NUMBER, None),
+                (cls.AMAZON, False, Identifier.ASIN, None),
+                (cls.OPEN_LIBRARY, False, Identifier.OPEN_LIBRARY_ID, None),
+                (cls.GUTENBERG_COVER_GENERATOR, False, Identifier.GUTENBERG_ID, None),
+                (cls.WEB, True, Identifier.URI, None),
+                (cls.VIAF, False, None, None),
                 (cls.CONTENT_CAFE, False, None, None),
                 (cls.MANUAL, False, None, None),
         ):
@@ -302,23 +317,22 @@ class DataSource(Base):
 
 
 class CoverageRecord(Base):
-    """A record of a WorkRecord being used as input into another data source.
-
-    TODO: Should probably be a record of a WorkIdentifier being used as input
-    into another source.
+    """A record of a Identifier being used as input into another data
+    source.
     """
     __tablename__ = 'coveragerecords'
 
     id = Column(Integer, primary_key=True)
-    work_record_id = Column(
-        Integer, ForeignKey('workrecords.id'), index=True)
+    identifier_id = Column(
+        Integer, ForeignKey('identifiers.id'), index=True)
     data_source_id = Column(
         Integer, ForeignKey('datasources.id'), index=True)
     date = Column(Date, index=True)
+    exception = Column(Unicode, index=True)
 
 
 class Equivalency(Base):
-    """An assertion that two WorkIdentifiers identify the same work.
+    """An assertion that two Identifiers identify the same work.
 
     This assertion comes with a 'strength' which represents how confident
     the data source is in the assertion.
@@ -328,10 +342,10 @@ class Equivalency(Base):
     # 'input' is the ID that was used as input to the datasource.
     # 'output' is the output
     id = Column(Integer, primary_key=True)
-    input_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
-    input = relationship("WorkIdentifier", foreign_keys=input_id)
-    output_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
-    output = relationship("WorkIdentifier", foreign_keys=output_id)
+    input_id = Column(Integer, ForeignKey('identifiers.id'), index=True)
+    input = relationship("Identifier", foreign_keys=input_id)
+    output_id = Column(Integer, ForeignKey('identifiers.id'), index=True)
+    output = relationship("Identifier", foreign_keys=output_id)
 
     # Who says?
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
@@ -342,7 +356,7 @@ class Equivalency(Base):
     votes = Column(Integer, default=1)
 
     # How strong is this assertion (-1..1)? A negative number is an
-    # assertion that the two WorkIdentifiers do *not* identify the
+    # assertion that the two Identifiers do *not* identify the
     # same work.
     strength = Column(Float, index=True)
 
@@ -355,23 +369,22 @@ class Equivalency(Base):
         return r.encode("utf8")
 
     @classmethod
-    def for_identifiers(self, _db, workidentifiers, exclude_ids=None):
-        """Find all Equivalencies for the given WorkIdentifiers."""
-        if not workidentifiers:
+    def for_identifiers(self, _db, identifiers, exclude_ids=None):
+        """Find all Equivalencies for the given Identifiers."""
+        if not identifiers:
             return []
-        if isinstance(workidentifiers, list) and isinstance(workidentifiers[0], WorkIdentifier):
-            workidentifiers = [x.id for x in workidentifiers]
+        if isinstance(identifiers, list) and isinstance(identifiers[0], Identifier):
+            identifiers = [x.id for x in identifiers]
         q = _db.query(Equivalency).distinct().filter(
-            or_(Equivalency.input_id.in_(workidentifiers),
-                Equivalency.output_id.in_(workidentifiers))
+            or_(Equivalency.input_id.in_(identifiers),
+                Equivalency.output_id.in_(identifiers))
         )
         if exclude_ids:
             q = q.filter(~Equivalency.id.in_(exclude_ids))
         return q
 
-class WorkIdentifier(Base):
-    """A way of uniquely referring to a particular text.
-    Whatever "text" means.
+class Identifier(Base):
+    """A way of uniquely referring to a particular edition.
     """
     
     # Common types of identifiers.
@@ -379,33 +392,37 @@ class WorkIdentifier(Base):
     THREEM_ID = "3M ID"
     GUTENBERG_ID = "Gutenberg ID"
     AXIS_360_ID = "Axis 360 ID"
-    QUERY_STRING = "Query string"
     ASIN = "ASIN"
     ISBN = "ISBN"
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
+    OPEN_LIBRARY_ID = "OLID"
     URI = "URI"
     DOI = "DOI"
     UPC = "UPC"
 
-    OPEN_LIBRARY_ID = "OLID"
-
-    __tablename__ = 'workidentifiers'
+    __tablename__ = 'identifiers'
     id = Column(Integer, primary_key=True)
     type = Column(String(64), index=True)
     identifier = Column(String, index=True)
 
     equivalencies = relationship(
         "Equivalency",
-        primaryjoin=("WorkIdentifier.id==Equivalency.input_id"),
+        primaryjoin=("Identifier.id==Equivalency.input_id"),
         backref="input_identifiers",
     )
 
     inbound_equivalencies = relationship(
         "Equivalency",
-        primaryjoin=("WorkIdentifier.id==Equivalency.output_id"),
+        primaryjoin=("Identifier.id==Equivalency.output_id"),
         backref="output_identifiers",
     )
+
+    # One Identifier may have many associated CoverageRecords.
+    coverage_records = relationship("CoverageRecord", backref="identifier")
+
+    # One Identifier can have many Representations.
+    representations = relationship("Representation", backref="identifier")
 
     def __repr__(self):
         records = self.primarily_identifies
@@ -416,26 +433,31 @@ class WorkIdentifier(Base):
         return (u"%s/%s ID=%s%s" % (self.type, self.identifier, self.id,
                                     title)).encode("utf8")
 
-    # One WorkIdentifier may serve as the primary identifier for
-    # several WorkRecords.
+    # One Identifier may serve as the primary identifier for
+    # several Editions.
     primarily_identifies = relationship(
-        "WorkRecord", backref="primary_identifier"
+        "Edition", backref="primary_identifier"
     )
 
-    # One WorkIdentifier may serve as the identifier for
+    # One Identifier may serve as the identifier for
     # a single LicensePool.
     licensed_through = relationship(
         "LicensePool", backref="identifier", uselist=False, lazy='joined',
     )
 
-    # One WorkIdentifier may serve to identify many Resources.
+    # One Identifier may serve to identify many Resources.
     resources = relationship(
-        "Resource", backref="work_identifier"
+        "Resource", backref="identifier"
     )
 
-    # One WorkIdentifier may participate in many Classifications.
+    # One Identifier may be the subject of many Measurements.
+    measurements = relationship(
+        "Measurement", backref="identifier"
+    )
+
+    # One Identifier may participate in many Classifications.
     classifications = relationship(
-        "Classification", backref="work_identifier"
+        "Classification", backref="identifier"
     )
 
     # Type + identifier is unique.
@@ -446,6 +468,7 @@ class WorkIdentifier(Base):
     @classmethod
     def for_foreign_id(cls, _db, foreign_identifier_type, foreign_id,
                        autocreate=True):
+        """Turn a foreign ID into an Identifier."""
         was_new = None
         if autocreate:
             m = get_one_or_create
@@ -460,8 +483,8 @@ class WorkIdentifier(Base):
         else:
             return result, False
 
-    def equivalent_to(self, data_source, work_identifier, strength):
-        """Make one WorkIdentifier equivalent to another.
+    def equivalent_to(self, data_source, identifier, strength):
+        """Make one Identifier equivalent to another.
         
         `data_source` is the DataSource that believes the two 
         identifiers are equivalent.
@@ -471,14 +494,14 @@ class WorkIdentifier(Base):
             _db, Equivalency,
             data_source=data_source,
             input=self,
-            output=work_identifier,
+            output=identifier,
             create_method_kwargs=dict(strength=strength))
         return eq
 
     @classmethod
     def recursively_equivalent_identifier_ids(
             cls, _db, identifier_ids, levels=5, threshold=0.50, debug=False):
-        """All WorkIdentifier IDs equivalent to the given set of WorkIdentifier
+        """All Identifier IDs equivalent to the given set of Identifier
         IDs at the given confidence threshold.
 
         This is an inefficient but simple implementation, performing
@@ -495,7 +518,7 @@ class WorkIdentifier(Base):
         if not identifier_ids:
             return {}
 
-        if isinstance(identifier_ids[0], WorkIdentifier):
+        if isinstance(identifier_ids[0], Identifier):
             identifier_ids = [x.id for x in identifier_ids]
 
         (working_set, seen_equivalency_ids, seen_identifier_ids,
@@ -563,13 +586,13 @@ class WorkIdentifier(Base):
 
             if e.output_id not in seen_identifier_ids:
                 # This is our first time encountering the
-                # WorkIdentifier that is the output of this
+                # Identifier that is the output of this
                 # Equivalency. We will look at its equivalencies
                 # in the next round.
                 new_working_set.add(e.output_id)
             if e.input_id not in seen_identifier_ids:
                 # This is our first time encountering the
-                # WorkIdentifier that is the input to this
+                # Identifier that is the input to this
                 # Equivalency. We will look at its equivalencies
                 # in the next round.
                 new_working_set.add(e.input_id)
@@ -583,7 +606,7 @@ class WorkIdentifier(Base):
 
         if debug and new_working_set:
             print " Here's the new working set:",
-            for i in _db.query(WorkIdentifier).filter(WorkIdentifier.id.in_(new_working_set)):
+            for i in _db.query(Identifier).filter(Identifier.id.in_(new_working_set)):
                 print "", i
 
         surviving_working_set = set()
@@ -641,15 +664,15 @@ class WorkIdentifier(Base):
 
     def equivalent_identifier_ids(self, levels=5, threshold=0.5):
         _db = Session.object_session(self)
-        return WorkIdentifier.recursively_equivalent_identifier_ids_flat(
+        return Identifier.recursively_equivalent_identifier_ids_flat(
             _db, [self.id], levels, threshold)
 
     def add_resource(self, rel, href, data_source, license_pool=None,
                      media_type=None, content=None):
-        """Associated a resource with this WorkIdentifier."""
+        """Associated a resource with this Identifier."""
         _db = Session.object_session(self)
         resource, new = get_one_or_create(
-            _db, Resource, work_identifier=self,
+            _db, Resource, identifier=self,
             rel=rel,
             href=href,
             media_type=media_type,
@@ -661,9 +684,37 @@ class WorkIdentifier(Base):
             resource.set_content(content, media_type)
         return resource, new
 
+    def add_measurement(self, data_source, quantity_measured, value,
+                        weight=1, taken_at=None):
+        """Associate a new Measurement with this Identifier."""
+        _db = Session.object_session(self)
+
+        now = datetime.datetime.now()
+        taken_at = taken_at or now
+        # Is there an existing most recent measurement?
+        most_recent = get_one(
+            _db, Measurement, identifier=self,
+            data_source=data_source,
+            quantity_measured=quantity_measured,
+            is_most_recent=True,
+        )
+        if most_recent and most_recent.value == value and taken_at == now:
+            # The value hasn't changed since last time. Just update
+            # the timestamp of the existing measurement.
+            self.taken_at = taken_at
+
+        if most_recent and most_recent.taken_at < taken_at:
+            most_recent.is_most_recent = False
+
+        return create(
+            _db, Measurement,
+            identifier=self, data_source=data_source,
+            quantity_measured=quantity_measured, taken_at=taken_at,
+            value=value, weight=weight, is_most_recent=True)[0]
+
     def classify(self, data_source, subject_type, subject_identifier,
                  subject_name=None, weight=1):
-        """Classify this WorkIdentifier under a Subject.
+        """Classify this Identifier under a Subject.
 
         :param type: Classification scheme; one of the constants from Subject.
         :param subject_identifier: Internal ID of the subject according to that classification scheme.
@@ -684,11 +735,11 @@ class WorkIdentifier(Base):
         if is_new:
             print repr(subject)
 
-        # Use a Classification to connect the WorkIdentifier to the
+        # Use a Classification to connect the Identifier to the
         # Subject.
         classification, is_new = get_one_or_create(
             _db, Classification,
-            work_identifier=self,
+            identifier=self,
             subject=subject,
             data_source_id=data_source.id)
         classification.weight = weight
@@ -697,7 +748,7 @@ class WorkIdentifier(Base):
     @classmethod
     def resources_for_identifier_ids(self, _db, identifier_ids, rel=None):
         resources = _db.query(Resource).filter(
-                Resource.work_identifier_id.in_(identifier_ids))
+                Resource.identifier_id.in_(identifier_ids))
         if rel:
             resources = resources.filter(Resource.rel==rel)
         return resources
@@ -705,7 +756,7 @@ class WorkIdentifier(Base):
     @classmethod
     def classifications_for_identifier_ids(self, _db, identifier_ids):
         classifications = _db.query(Classification).filter(
-                Classification.work_identifier_id.in_(identifier_ids))
+                Classification.identifier_id.in_(identifier_ids))
         return classifications.options(joinedload('subject'))
 
     IDEAL_COVER_ASPECT_RATIO = 2.0/3
@@ -717,7 +768,7 @@ class WorkIdentifier(Base):
     MINIMUM_IMAGE_QUALITY = 0.25
 
     @classmethod
-    def evaluate_cover_quality(cls, _db, identifier_data, identifier_ids):
+    def best_cover_for(cls, _db, identifier_ids):
         # Find all image resources associated with any of
         # these identifiers.
         images = cls.resources_for_identifier_ids(
@@ -733,7 +784,8 @@ class WorkIdentifier(Base):
 
         images = images.filter(mirrored_or_embeddable).all()
 
-        champion = None
+        champions = []
+        champion_score = None
         # Judge the image resource by its deviation from the ideal
         # aspect ratio, and by its deviation (in the "too small"
         # direction only) from the ideal resolution.
@@ -776,24 +828,33 @@ class WorkIdentifier(Base):
             # TODO: that says how good the image is as an image. But
             # how good is it as an image for this particular book?
             # Determining this requires measuring the conceptual
-            # distance from the image to a WorkRecord, and then from
-            # the WorkRecord to the Work in question. This is much
+            # distance from the image to a Edition, and then from
+            # the Edition to the Work in question. This is much
             # too big a project to work on right now.
 
-            if (r.quality >= cls.MINIMUM_IMAGE_QUALITY and
-                (not champion or r.quality > champion.quality)):
-                champion = r
+            if not r.quality >= cls.MINIMUM_IMAGE_QUALITY:
+                continue
+            if r.quality > champion_score:
+                champions = [r]
+                champion_score = r.quality
+            elif r.quality == champion_score:
+                champions.append(r)
+        if champions:
+            champion = random.choice(champions)
+        else:
+            champion = None
+            
         return champion, images
 
     @classmethod
-    def evaluate_summary_quality(cls, _db, identifier_data, identifier_ids):
-        """Evaluate the summaries for the given group of WorkIdentifier IDs.
+    def evaluate_summary_quality(cls, _db, identifier_ids):
+        """Evaluate the summaries for the given group of Identifier IDs.
 
         This is an automatic evaluation based solely on the content of
         the summaries. It will be combined with human-entered ratings
         to form an overall quality score.
 
-        We need to evaluate summaries from a set of WorkIdentifiers
+        We need to evaluate summaries from a set of Identifiers
         (typically those associated with a single work) because we
         need to see which noun phrases are most frequently used to
         describe the underlying work.
@@ -835,6 +896,18 @@ class WorkIdentifier(Base):
                 champion = r
         return champion, summaries
 
+    @classmethod
+    def missing_coverage_from(
+            cls, _db, identifier_types, coverage_data_source):
+        """Find identifiers of the given types which have no CoverageRecord
+        from `coverage_data_source`.
+        """
+        q = _db.query(Identifier).outerjoin(
+            CoverageRecord, Identifier.id==CoverageRecord.identifier_id).filter(
+                Identifier.type.in_(identifier_types))
+        q2 = q.filter(CoverageRecord.id==None)
+        return q2
+
 class Contributor(Base):
     """Someone (usually human) who contributes to books."""
     __tablename__ = 'contributors'
@@ -870,7 +943,9 @@ class Contributor(Base):
                                       )
     # Types of roles
     AUTHOR_ROLE = "Author"
+    PRIMARY_AUTHOR_ROLE = "Primary Author"
     UNKNOWN_ROLE = 'Unknown'
+    AUTHOR_ROLES = set([PRIMARY_AUTHOR_ROLE, AUTHOR_ROLE])
 
     # Extra fields
     BIRTH_DATE = 'birthDate'
@@ -978,12 +1053,12 @@ class Contributor(Base):
         _db = Session.object_session(self)
         for contribution in self.contributions:
             # Is the new contributor already associated with this
-            # WorkRecord in the given role (in which case we delete
+            # Edition in the given role (in which case we delete
             # the old contribution) or not (in which case we switch the
             # contributor ID)?
             existing_record = _db.query(Contribution).filter(
                 Contribution.contributor_id==destination.id,
-                Contribution.workrecord_id==contribution.workrecord.id,
+                Contribution.edition_id==contribution.edition.id,
                 Contribution.role==contribution.role)
             if existing_record.count():
                 _db.delete(contribution)
@@ -992,7 +1067,7 @@ class Contributor(Base):
         for contribution in self.work_contributions:
             existing_record = _db.query(WorkContribution).filter(
                 WorkContribution.contributor_id==destination.id,
-                WorkContribution.workrecord_id==contribution.workrecord.id,
+                WorkContribution.edition_id==contribution.edition.id,
                 WorkContribution.role==contribution.role)
             if existing_record.count():
                 _db.delete(contribution)
@@ -1077,16 +1152,16 @@ class Contributor(Base):
 
 
 class Contribution(Base):
-    """A contribution made by a Contributor to a WorkRecord."""
+    """A contribution made by a Contributor to a Edition."""
     __tablename__ = 'contributions'
     id = Column(Integer, primary_key=True)
-    workrecord_id = Column(Integer, ForeignKey('workrecords.id'), index=True,
+    edition_id = Column(Integer, ForeignKey('editions.id'), index=True,
                            nullable=False)
     contributor_id = Column(Integer, ForeignKey('contributors.id'), index=True,
                             nullable=False)
     role = Column(Unicode, index=True, nullable=False)
     __table_args__ = (
-        UniqueConstraint('workrecord_id', 'contributor_id', 'role'),
+        UniqueConstraint('edition_id', 'contributor_id', 'role'),
     )
 
 
@@ -1104,40 +1179,46 @@ class WorkContribution(Base):
     )
 
 
-class WorkRecord(Base):
+class Edition(Base):
 
     """A lightly schematized collection of metadata for a work, or an
     edition of a work, or a book, or whatever. If someone thinks of it
     as a "book" with a "title" it can go in here.
     """
 
-    __tablename__ = 'workrecords'
+    __tablename__ = 'editions'
     id = Column(Integer, primary_key=True)
 
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
 
-    # This WorkRecord is associated with one particular
+    # This Edition is associated with one particular
     # identifier--the one used by its data source to identify
     # it. Through the Equivalency class, it is associated with a
     # (probably huge) number of other identifiers.
     primary_identifier_id = Column(
-        Integer, ForeignKey('workidentifiers.id'), index=True)
+        Integer, ForeignKey('identifiers.id'), index=True)
 
-    # A WorkRecord may be associated with a single Work.
+    # A Edition may be associated with a single Work.
     work_id = Column(Integer, ForeignKey('works.id'), index=True)
 
-    # One WorkRecord may have many associated CoverageRecords.
-    coverage_records = relationship("CoverageRecord", backref="work_record")
+    # A Edition may be the primary identifier associated with its
+    # Work, or it may not be.
+    is_primary_for_work = Column(Boolean, index=True, default=False)
 
-    title = Column(Unicode)
-    subtitle = Column(Unicode)
-    series = Column(Unicode)
+    title = Column(Unicode, index=True)
+    sort_title = Column(Unicode, index=True)
+    subtitle = Column(Unicode, index=True)
+    series = Column(Unicode, index=True)
 
-    contributions = relationship("Contribution", backref="workrecord")
+    # A string depiction of the authors' names.
+    author = Column(Unicode, index=True)
+    sort_author = Column(Unicode, index=True)
+
+    contributions = relationship("Contribution", backref="edition")
 
     language = Column(Unicode, index=True)
-    publisher = Column(Unicode)
-    imprint = Column(Unicode)
+    publisher = Column(Unicode, index=True)
+    imprint = Column(Unicode, index=True)
 
     # `published is the original publication date of the
     # text. `issued` is when made available in this ebook edition. A
@@ -1146,38 +1227,70 @@ class WorkRecord(Base):
     issued = Column(Date)
     published = Column(Date)
 
+    BOOK_MEDIUM = "Book"
+    PERIODICAL_MEDIUM = "Periodical"
+    AUDIO_MEDIUM = "Audio"
+    VIDEO_MEDIUM = "Video"
+
+    medium = Column(
+        Enum(BOOK_MEDIUM, PERIODICAL_MEDIUM, AUDIO_MEDIUM,
+             VIDEO_MEDIUM, name="medium"),
+        default=BOOK_MEDIUM, index=True
+    )
+
+    cover_id = Column(
+        Integer, ForeignKey(
+            'resources.id', use_alter=True, name='fk_editions_summary_id'), 
+        index=True)
+    # These two let us avoid actually loading up the cover Resource
+    # every time.
+    cover_full_url = Column(Unicode)
+    cover_thumbnail_url = Column(Unicode)
+
+    # Information kept in here probably won't be used.
     extra = Column(MutableDict.as_mutable(JSON), default={})
-    
+
     def __repr__(self):
-        return (u"WorkRecord %s (%s/%s/%s)" % (
-            self.id, self.title, ", ".join([x.name for x in self.contributors]),
-            self.language)).encode("utf8")
+        id_repr = repr(self.primary_identifier).decode("utf8")
+        a = (u"Edition %s [%r] (%s/%s/%s)" % (
+            self.id, id_repr, self.title,
+            ", ".join([x.name for x in self.contributors]),
+            self.language))
+        try:
+            a.encode("utf8")
+        except Exception, e:
+            set_trace()
+        return a.encode("utf8")
+
+    @property
+    def language_code(self):
+        return LanguageCodes.three_to_two.get(self.language, self.language)
 
     @property
     def contributors(self):
         return [x.contributor for x in self.contributions]
 
     @property
-    def authors(self):
+    def author_contributors(self):
         return [x.contributor for x in self.contributions
-                if x.role == Contributor.AUTHOR_ROLE]
+                if x.role in Contributor.AUTHOR_ROLES]
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
                        foreign_id_type, foreign_id,
                        create_if_not_exists=True):
-        """Find the WorkRecord representing the given data source's view of
+        """Find the Edition representing the given data source's view of
         the work that it primarily identifies by foreign ID.
 
         e.g. for_foreign_id(_db, DataSource.OVERDRIVE,
-                            WorkIdentifier.OVERDRIVE_ID, uuid)
+                            Identifier.OVERDRIVE_ID, uuid)
 
-        finds the WorkRecord for Overdrive's view of a book identified
+        finds the Edition for Overdrive's view of a book identified
         by Overdrive UUID.
 
         This:
 
-        for_foreign_id(_db, DataSource.OVERDRIVE, WorkIdentifier.ISBN, isbn)
+        for_foreign_id(_db, DataSource.OVERDRIVE, Identifier.ISBN, isbn)
 
         will probably return nothing, because although Overdrive knows
         that books have ISBNs, it doesn't use ISBN as a primary
@@ -1187,56 +1300,56 @@ class WorkRecord(Base):
         if isinstance(data_source, basestring):
             data_source = DataSource.lookup(_db, data_source)
 
-        work_identifier, ignore = WorkIdentifier.for_foreign_id(
+        identifier, ignore = Identifier.for_foreign_id(
             _db, foreign_id_type, foreign_id)
 
-        # Combine the two to get/create a WorkRecord.
+        # Combine the two to get/create a Edition.
         if create_if_not_exists:
             f = get_one_or_create
             kwargs = dict()
         else:
             f = get_one
             kwargs = dict()
-        r = f(_db, WorkRecord, data_source=data_source,
-                 primary_identifier=work_identifier,
+        r = f(_db, Edition, data_source=data_source,
+                 primary_identifier=identifier,
                  **kwargs)
         return r
 
     @property
     def license_pool(self):
-        """The WorkRecord's corresponding LicensePool, if any.
+        """The Edition's corresponding LicensePool, if any.
         """
         _db = Session.object_session(self)
-        return _db.query(LicensePool).filter(
-            LicensePool.data_source==self.data_source).filter(
-                LicensePool.identifier==self.primary_identifier).one()
+        return get_one(_db, LicensePool,
+                       data_source=self.data_source,
+                       identifier=self.primary_identifier)
 
     def equivalencies(self, _db):
         """All the direct equivalencies between this record's primary
-        identifier and other WorkIdentifiers.
+        identifier and other Identifiers.
         """
         return self.primary_identifier.equivalencies
         
     def equivalent_identifier_ids(self, levels=3, threshold=0.5):
-        """All WorkIdentifiers equivalent to this record's primary identifier,
+        """All Identifiers equivalent to this record's primary identifier,
         at the given level of recursion."""
         return self.primary_identifier.equivalent_identifier_ids(
             levels, threshold)
 
     def equivalent_identifiers(self, levels=3, threshold=0.5, type=None):
-        """All WorkIdentifiers equivalent to this
-        WorkRecord's primary identifier, at the given level of recursion.
+        """All Identifiers equivalent to this
+        Edition's primary identifier, at the given level of recursion.
         """
         _db = Session.object_session(self)
         identifier_ids = self.equivalent_identifier_ids(levels, threshold)
-        q = _db.query(WorkIdentifier).filter(
-            WorkIdentifier.id.in_(identifier_ids))
+        q = _db.query(Identifier).filter(
+            Identifier.id.in_(identifier_ids))
         if type:
-            q = q.filter(WorkIdentifier.type==type)
+            q = q.filter(Identifier.type==type)
         return q
 
-    def equivalent_work_records(self, levels=5, threshold=0.5):
-        """All WorkRecords whose primary ID is equivalent to this WorkRecord's
+    def equivalent_editions(self, levels=5, threshold=0.5):
+        """All Editions whose primary ID is equivalent to this Edition's
         primary ID, at the given level of recursion.
 
         Five levels is enough to go from a Gutenberg ID to an Overdrive ID
@@ -1244,14 +1357,15 @@ class WorkRecord(Base):
         """
         _db = Session.object_session(self)
         identifier_ids = self.equivalent_identifier_ids(levels, threshold)
-        return _db.query(WorkRecord).filter(
-            WorkRecord.primary_identifier_id.in_(identifier_ids))
+        return _db.query(Edition).filter(
+            Edition.primary_identifier_id.in_(identifier_ids))
 
     @classmethod
     def missing_coverage_from(
-            cls, _db, workrecord_data_sources, coverage_data_source):
-        """Find WorkRecords from `workrecord_data_source` which have no
-        CoverageRecord from `coverage_data_source`.
+            cls, _db, edition_data_sources, coverage_data_source):
+        """Find Editions from `edition_data_source` whose primary
+        identifiers have no CoverageRecord from
+        `coverage_data_source`.
 
         e.g.
 
@@ -1259,19 +1373,20 @@ class WorkRecord(Base):
          oclc_classify = DataSource.lookup(_db, DataSource.OCLC)
          missing_coverage_from(_db, gutenberg, oclc_classify)
 
-        will find WorkRecords that came from Project Gutenberg and
+        will find Editions that came from Project Gutenberg and
         have never been used as input to the OCLC Classify web
         service.
+
         """
-        if isinstance(workrecord_data_sources, DataSource):
-            workrecord_data_sources = [workrecord_data_sources]
-        workrecord_data_source_ids = [x.id for x in workrecord_data_sources]
-        join_clause = ((WorkRecord.id==CoverageRecord.work_record_id) &
+        if isinstance(edition_data_sources, DataSource):
+            edition_data_sources = [edition_data_sources]
+        edition_data_source_ids = [x.id for x in edition_data_sources]
+        join_clause = ((Edition.primary_identifier_id==CoverageRecord.identifier_id) &
                        (CoverageRecord.data_source_id==coverage_data_source.id))
         
-        q = _db.query(WorkRecord).outerjoin(
+        q = _db.query(Edition).outerjoin(
             CoverageRecord, join_clause).filter(
-                WorkRecord.data_source_id.in_(workrecord_data_source_ids))
+                Edition.data_source_id.in_(edition_data_source_ids))
         q2 = q.filter(CoverageRecord.id==None)
         return q2
 
@@ -1289,10 +1404,16 @@ class WorkRecord(Base):
         else:
             type = "text"
         return dict(type=type, value=content)
-              
+
+    def set_cover(self, resource):
+        self.cover = resource
+        self.cover_full_url = resource.final_url
+        self.cover_thumbnail_url = resource.scaled_url
+        print self.cover_full_url, self.cover_thumbnail_url
+
     def add_contributor(self, name, roles, aliases=None, lc=None, viaf=None,
                         **kwargs):
-        """Assign a contributor to this WorkRecord."""
+        """Assign a contributor to this Edition."""
         _db = Session.object_session(self)
         if isinstance(roles, basestring):
             roles = [roles]            
@@ -1311,7 +1432,7 @@ class WorkRecord(Base):
         # Then add their Contributions.
         for role in roles:
             get_one_or_create(
-                _db, Contribution, workrecord=self, contributor=contributor,
+                _db, Contribution, edition=self, contributor=contributor,
                 role=role)
         return contributor
 
@@ -1328,17 +1449,17 @@ class WorkRecord(Base):
         suppose that the two records are related (e.g. OCLC said
         they were).
 
-        Most of the WorkRecords are from OCLC Classify, and we expect
+        Most of the Editions are from OCLC Classify, and we expect
         to get some of them wrong (e.g. when a single OCLC work is a
         compilation of several novels by the same author). That's okay
-        because those WorkRecords aren't backed by
+        because those Editions aren't backed by
         LicensePools. They're purely informative. We will have some
         bad information in our database, but the clear-cut cases
         should outnumber the fuzzy cases, so we we should still group
-        the WorkRecords that really matter--the ones backed by
+        the Editions that really matter--the ones backed by
         LicensePools--together correctly.
         
-        TODO: apply much more lenient terms if the two WorkRecords are
+        TODO: apply much more lenient terms if the two Editions are
         identified by the same ISBN or other unique identifier.
         """
         if other_record == self:
@@ -1369,7 +1490,7 @@ class WorkRecord(Base):
             self.title, other_record.title)
 
         author_quotient = MetadataSimilarity.author_similarity(
-            self.authors, other_record.authors)
+            self.author_contributors, other_record.author_contributors)
         if author_quotient == 0:
             # The two works have no authors in common. Immediate
             # disqualification.
@@ -1382,7 +1503,7 @@ class WorkRecord(Base):
             (title_quotient * 0.80) + (author_quotient * 0.20))
 
     def apply_similarity_threshold(self, candidates, threshold=0.5):
-        """Yield the WorkRecords from the given list that are similar 
+        """Yield the Editions from the given list that are similar 
         enough to this one.
         """
         for candidate in candidates:
@@ -1410,6 +1531,48 @@ class WorkRecord(Base):
                     break
         return best
 
+    def best_cover_within_distance(self, distance, threshold=0.5):
+        _db = Session.object_session(self)
+        flattened_data = [self.primary_identifier.id]
+        if distance > 0:
+            data = Identifier.recursively_equivalent_identifier_ids(
+                _db, flattened_data, distance, threshold=threshold)
+            flattened_data = Identifier.flatten_identifier_ids(data)
+
+        return Identifier.best_cover_for(_db, flattened_data)
+        
+
+    def calculate_presentation(self, debug=False):
+        if not self.sort_title:
+            self.sort_title = TitleProcessor.sort_title_for(self.title)
+        sort_names = []
+        display_names = []
+        for author in self.author_contributors:
+            display_name = author.display_name or author.name
+            family_name = author.family_name or author.name
+            display_names.append([family_name, display_name])
+            sort_names.append(author.name)
+        self.author = ", ".join([x[1] for x in sorted(display_names)])
+        self.sort_author = " ; ".join(sorted(sort_names))
+
+        for distance in (0, 5):
+            # If there's a cover directly associated with the
+            # Edition's primary ID, use it. Otherwise, find the
+            # best cover associated with any related identifier.
+            best_cover, covers = self.best_cover_within_distance(distance)
+            if best_cover:
+                self.set_cover(best_cover)
+                break
+
+        # Now that everything's calculated, print it out.
+        if debug:
+            t = u"%s (by %s, pub=%s)" % (
+                self.title, self.author, self.publisher)
+            print t.encode("utf8")
+            print " language=%s" % self.language
+            if self.cover:
+                print " cover=" + self.cover.mirrored_path
+            print
 
 
 class WorkGenre(Base):
@@ -1439,58 +1602,134 @@ class Work(Base):
     # One Work may have copies scattered across many LicensePools.
     license_pools = relationship("LicensePool", backref="work", lazy='joined')
 
-    # A single Work may claim many WorkRecords.
-    work_records = relationship("WorkRecord", backref="work")
-    
-    # A single Work may be built of many Contributions
-    contributions = relationship("WorkContribution", backref="work")
+    # A single Work may claim many Editions.
+    editions = relationship("Edition", backref="work")
+
+    # But for consistency's sake, a Work takes its presentation
+    # metadata from a single Edition.
+
+    clause = "and_(Edition.work_id==Work.id, Edition.is_primary_for_work==True)"
+    primary_edition = relationship(
+        "Edition", primaryjoin=clause, uselist=False, lazy='joined')
 
     # One Work may participate in many WorkGenre assignments.
     genres = association_proxy('work_genres', 'genre',
                                creator=WorkGenre.from_genre)
     work_genres = relationship("WorkGenre", backref="work",
                                cascade="all, delete-orphan")
+    audience = Column(Unicode, index=True)
+    fiction = Column(Boolean, index=True)
+
+    summary_id = Column(
+        Integer, ForeignKey(
+            'resources.id', use_alter=True, name='fk_works_summary_id'), 
+        index=True)
+    # This gives us a convenient place to store a cleaned-up version of
+    # the content of the summary Resource.
+    summary_text = Column(Unicode)
+
+    # The overall suitability of this work for unsolicited
+    # presentation to a patron. This is a calculated value taking both
+    # rating and popularity into account.
+    quality = Column(Float, index=True)
+
+    # The overall rating given to this work.
+    rating = Column(Float, index=True)
+
+    # The overall current popularity of this work.
+    popularity = Column(Float, index=True)
 
     # A Work may be merged into one other Work.
     was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
     was_merged_into = relationship("Work", remote_side = [id])
 
-    title = Column(Unicode)
-    subtitle = Column(Unicode)
-    sort_title = Column(Unicode, index=True)
-    sort_author = Column(Unicode, index=True)
-    authors = Column(Unicode, index=True)
-    language = Column(Unicode, index=True)
-    summary_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_summary_id'), index=True)
-    audience = Column(Unicode, index=True)
-    fiction = Column(Boolean, index=True)
+    @property
+    def title(self):
+        if self.primary_edition:
+            return self.primary_edition.title
+        return None
 
-    cover_id = Column(Integer, ForeignKey('resources.id', use_alter=True, name='fk_works_cover_id'), index=True)
-    quality = Column(Float, index=True)
+    @property
+    def sort_title(self):
+        return self.primary_edition.sort_title
 
-    def __repr__(self):
-        return ('%s "%s" (%s) %s %s (%s wr, %s lp)' % (
-            self.id, self.title, self.authors, ", ".join([g.name for g in self.genres]), self.language,
-            len(self.work_records), len(self.license_pools))).encode("utf8")
+    @property
+    def subtitle(self):
+        return self.primary_edition.subtitle
+
+    @property
+    def series(self):
+        return self.primary_edition.series
+
+    @property
+    def author(self):
+        if self.primary_edition:
+            return self.primary_edition.author
+        return None
+
+    @property
+    def sort_author(self):
+        return self.primary_edition.sort_author
+
+    @property
+    def language(self):
+        if self.primary_edition:
+            return self.primary_edition.language
+        return None
 
     @property
     def language_code(self):
-        return LanguageCodes.three_to_two.get(self.language, self.language)
+        return self.primary_edition.language_code
 
-    def all_workrecords(self, recursion_level=5):
-        """All WorkRecords identified by a WorkIdentifier equivalent to 
-        any of the primary identifiers of this Work's WorkRecords.
+    @property
+    def publisher(self):
+        return self.primary_edition.publisher
+
+    @property
+    def imprint(self):
+        return self.primary_edition.imprint
+
+    @property
+    def cover_full_url(self):
+        return self.primary_edition.cover_full_url
+
+    @property
+    def cover_thumbnail_url(self):
+        return self.primary_edition.cover_thumbnail_url
+
+    def __repr__(self):
+        return (u'%s "%s" (%s) %s %s (%s wr, %s lp)' % (
+                self.id, self.title, self.author, ", ".join([g.name for g in self.genres]), self.language,
+                len(self.editions), len(self.license_pools))).encode("utf8")
+
+    def set_summary(self, resource):
+        self.summary = resource
+        # TODO: clean up the content
+        if resource:
+            self.summary_text = resource.content
+
+    @classmethod
+    def with_no_genres(self, q):
+        """Modify a query so it finds only Works that are not classified under
+        any genre."""
+        q = q.outerjoin(Work.work_genres)
+        q = q.filter(WorkGenre.genre==None)
+        return q
+
+    def all_editions(self, recursion_level=5):
+        """All Editions identified by a Identifier equivalent to 
+        any of the primary identifiers of this Work's Editions.
 
         `recursion_level` controls how far to go when looking for equivalent
-        WorkIdentifiers.
+        Identifiers.
         """
         _db = Session.object_session(self)
         primary_identifier_ids = [
-            x.primary_identifier.id for x in self.work_records]
-        identifier_ids = WorkIdentifier.recursively_equivalent_identifier_ids_flat(
+            x.primary_identifier.id for x in self.editions]
+        identifier_ids = Identifier.recursively_equivalent_identifier_ids_flat(
             _db, primary_identifier_ids, recursion_level)
-        q = _db.query(WorkRecord).filter(
-            WorkRecord.primary_identifier_id.in_(identifier_ids))
+        q = _db.query(Edition).filter(
+            Edition.primary_identifier_id.in_(identifier_ids))
         return q
 
     @property
@@ -1505,10 +1744,10 @@ class Work(Base):
 
     def similarity_to(self, other_work):
         """How likely is it that this Work describes the same book as the
-        given Work (or WorkRecord)?
+        given Work (or Edition)?
 
-        This is more accurate than WorkRecord.similarity_to because we
-        (hopefully) have a lot of WorkRecords associated with each
+        This is more accurate than Edition.similarity_to because we
+        (hopefully) have a lot of Editions associated with each
         Work. If their metadata has a lot of overlap, the two Works
         are probably the same.
         """
@@ -1522,26 +1761,26 @@ class Work(Base):
         other_titles = []
         other_authors = Counter()
         total_other_authors = 0
-        for record in self.work_records:
+        for record in self.editions:
             if record.language:
                 my_languages[record.language] += 1
                 total_my_languages += 1
             my_titles.append(record.title)
-            for author in record.authors:
+            for author in record.author_contributors:
                 my_authors[author] += 1
                 total_my_authors += 1
 
         if isinstance(other_work, Work):
-            other_work_records = other_work.work_records
+            other_editions = other_work.editions
         else:
-            other_work_records = [other_work]
+            other_editions = [other_work]
 
-        for record in other_work_records:
+        for record in other_editions:
             if record.language:
                 other_languages[record.language] += 1
                 total_other_languages += 1
             other_titles.append(record.title)
-            for author in record.authors:
+            for author in record.author_contributors:
                 other_authors[author] += 1
                 total_other_authors += 1
 
@@ -1579,7 +1818,7 @@ class Work(Base):
         The two works must be similar to within similarity_threshold,
         or nothing will happen.
 
-        All of this work's WorkRecords will be assigned to target_work,
+        All of this work's Editions will be assigned to target_work,
         and it will be marked as merged into target_work.
         """
         _db = Session.object_session(self)
@@ -1591,79 +1830,21 @@ class Work(Base):
             print "MERGING %r into %r, similarity is %.3f." % (
                 self, target_work, similarity)
             target_work.license_pools.extend(self.license_pools)
-            target_work.work_records.extend(self.work_records)
+            target_work.editions.extend(self.editions)
             target_work.calculate_presentation()
             print "The resulting work: %r" % target_work
             self.was_merged_into = target_work
             self.license_pools = []
-            self.work_records = []
-
-    def gather_presentation_information(self):
-        """Consolidate presentation information from multiple sources.
-
-        The main sources are WorkRecord rows and OCLC Linked Data
-        documents.
-        """
-        from integration.oclc import oclc_linked_data
-        license_pools = self.license_pools
-
-        license_pool_work_records = set(
-            [p.work_record() for p in self.license_pools])
-
-        all_work_records = set(self.all_workrecords(recursion_level=5).all())
-        all_work_records = all_work_records.union(license_pool_work_records)
-
-        authors = Counter()
-        languages = Counter()
-        image_links = Counter()
-
-        # Go through the privileged subset of work records
-        # directly associated with a license pool.
-        #
-        # These work records set the parameters for the
-        # information we display to patrons. For instance, we will
-        # look at other records to decide which title is most
-        # commonly used, but we will only consider titles that are
-        # associated with one license pool or another.
-        #
-        # Similarly, only work records associated with a license
-        # pool are allowed to suggest authors or languages for the
-        # work.
-        usable_titles = set()
-        usable_authors = set()
-        usable_languages = set()
-        for wr in license_pool_work_records:
-            if wr.title:
-                usable_titles.add(wr.title)
-            for a in wr.contributors:
-                usable_authors.add(a)
-            if wr.language:
-                usable_languages.add(wr.language)
-
-        title_counter = Counter()
-        author_counter = Counter()
-        language_counter = Counter()
-        # Go through all work records to see which titles, authors
-        # and languages are most common.
-        for wr in all_work_records:
-            if wr.title in usable_titles:
-                title_counter[(wr.title, wr.subtitle)] += 1
-            for a in wr.contributors:
-                if a in usable_authors:
-                    author_counter[a] += 1
-            if wr.language in usable_languages:
-                language_counter[wr.language] += 1
-
-        return (title_counter, author_counter, language_counter)
+            self.editions = []
 
     def all_cover_images(self):
         _db = Session.object_session(self)
         primary_identifier_ids = [
-            x.primary_identifier.id for x in self.work_records]
-        data = WorkIdentifier.recursively_equivalent_identifier_ids(
+            x.primary_identifier.id for x in self.editions]
+        data = Identifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
-        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
-        return WorkIdentifier.resources_for_identifier_ids(
+        flattened_data = Identifier.flatten_identifier_ids(data)
+        return Identifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.IMAGE).filter(
                 Resource.mirrored==True).filter(Resource.scaled==True).order_by(
                 Resource.quality.desc())
@@ -1671,82 +1852,147 @@ class Work(Base):
     def all_descriptions(self):
         _db = Session.object_session(self)
         primary_identifier_ids = [
-            x.primary_identifier.id for x in self.work_records]
-        data = WorkIdentifier.recursively_equivalent_identifier_ids(
+            x.primary_identifier.id for x in self.editions]
+        data = Identifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
-        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
-        return WorkIdentifier.resources_for_identifier_ids(
+        flattened_data = Identifier.flatten_identifier_ids(data)
+        return Identifier.resources_for_identifier_ids(
             _db, flattened_data, Resource.DESCRIPTION).filter(
                 Resource.content != None).order_by(
                 Resource.quality.desc())
 
-    def calculate_presentation(self):
+    def set_primary_edition(self):
+        """Which of this Work's Editions should be used as the default?
+        """
+        old_primary = self.primary_edition
+        champion = None
+        for wr in self.editions:
+            # Something is better than nothing.
+            if not champion:
+                champion = wr
+                continue
 
-        titles, authors, languages = (
-            self.gather_presentation_information())
-        if titles:
-            self.title, self.subtitle = titles.most_common(1)[0][0]
-            self.sort_title = TitleProcessor.sort_title_for(self.title)
-        if languages:
-            self.language = languages.most_common(1)[0][0]
-        if authors:
-            author = authors.most_common(1)[0][0]
-            self.authors = author.display_name or author.name
-            self.sort_author = author.name
+            # A edition with no license pool will only be chosen if
+            # there is no other alternatice.
+            if not wr.license_pool:
+                continue
 
-        # Find all related IDs that might have associated resources
+            # Something with a license pool is better than something
+            # without.
+            if not champion.license_pool:
+                champion = wr
+
+            # Open access is better than not.
+            if (wr.license_pool.open_access
+                and not champion.license_pool.open_access):
+                champion = wr
+                continue
+
+            # Higher Gutenberg numbers beat lower Gutenberg numbers.
+            if (wr.data_source.name == DataSource.GUTENBERG
+                and champion.data_source.name == DataSource.GUTENBERG):
+                champion_id = int(champion.primary_identifier.identifier)
+                competitor_id = int(wr.primary_identifier.identifier)
+                if competitor_id > champion_id:
+                    champion = wr
+                    continue
+
+            # At the moment, anything is better than 3M, because we
+            # can't actually check out 3M books.
+            if (champion.data_source.name == DataSource.THREEM
+                and wr.data_source.name != DataSource.THREEM):
+                champion = wr
+                continue
+
+            # More licenses is better than fewer.
+            if (wr.license_pool.licenses_owned
+                > champion.license_pool.licenses_owned):
+                champion = wr
+                continue
+
+            # More available licenses is better than fewer.
+            if (wr.license_pool.licenses_available
+                > champion.license_pool.licenses_available):
+                champion = wr
+                continue
+
+            # Fewer patrons in the hold queue is better than more.
+            if (wr.license_pool.patrons_in_hold_queue
+                < champion.license_pool.patrons_in_hold_queue):
+                champion = wr
+                continue
+
+        if old_primary and old_primary != champion:
+            old_primary.is_primary_for_work = False
+        if champion:
+            champion.is_primary_for_work = True
+        self.primary_edition = champion
+
+
+    def calculate_presentation(self, choose_edition=True,
+                               classify=True, choose_summary=True,
+                               calculate_quality=True, debug=True):
+        """Determine the following information:
+        
+        * Which Edition is the 'primary'. The default view of the
+        Work will be taken from the primary Edition.
+
+        * Subject-matter classifications for the work.
+        * Whether or not the work is fiction.
+        * The intended audience for the work.
+        * The best available summary for the work.
+        * The overall popularity of the work.
+        """
+        if choose_edition or not self.primary_edition:
+            self.set_primary_edition()
+
+        if self.primary_edition:
+            self.primary_edition.calculate_presentation()
+
+        if not (classify or choose_summary or calculate_quality):
+            return
+
+        # Find all related IDs that might have associated descriptions
         # or classifications.
         _db = Session.object_session(self)
         primary_identifier_ids = [
-            x.primary_identifier.id for x in self.work_records]
-        data = WorkIdentifier.recursively_equivalent_identifier_ids(
+            x.primary_identifier.id for x in self.editions]
+        data = Identifier.recursively_equivalent_identifier_ids(
             _db, primary_identifier_ids, 5, threshold=0.5)
-        flattened_data = WorkIdentifier.flatten_identifier_ids(data)
+        flattened_data = Identifier.flatten_identifier_ids(data)
 
-        workgenres, self.fiction, self.audience = self.assign_genres(
-            data, flattened_data)
-        self.summary, summaries = WorkIdentifier.evaluate_summary_quality(
-            _db, data, flattened_data)
-        self.cover, covers = WorkIdentifier.evaluate_cover_quality(
-            _db, data, flattened_data)
-        covers = []
-        summaries = []
+        if classify:
+            workgenres, self.fiction, self.audience = self.assign_genres(
+                flattened_data)
 
-        if self.summary:
-            o = "%.2f - %s" % (self.summary.quality, self.summary.content[:100])
-            print o.encode("utf8")
-        if self.cover:
-            print self.cover.mirrored_path
+        if choose_summary:
+            summary, summaries = Identifier.evaluate_summary_quality(
+                _db, flattened_data)
+            # TODO: clean up the content
+            self.set_summary(summary)
 
-        non_generated_covers = [
-            x for x in covers
-            if x.data_source.name != DataSource.GUTENBERG_COVER_GENERATOR
-        ]
+        # If this is a Project Gutenberg book, treat the number of IDs
+        # associated with the work (~the number of editions of the
+        # work published in modern times) as a measurement of
+        # popularity.
+        if self.primary_edition and self.primary_edition.data_source.name==DataSource.GUTENBERG:
+            oclc_linked_data = DataSource.lookup(
+                _db, DataSource.OCLC_LINKED_DATA)
+            self.primary_edition.primary_identifier.add_measurement(
+                oclc_linked_data, Measurement.POPULARITY, 
+                len(flattened_data)/3.0)
+            # Only consider the quality signals associated with the
+            # primary edition. Otherwise texts that have multiple
+            # Gutenberg editions will drag down the quality of popular
+            # books.
+            flattened_data = [self.primary_edition.primary_identifier.id]
 
-        self.quality = len(self.license_pools) * (
-            len(flattened_data)/3.0 + len(summaries) / 3.0 +len(non_generated_covers) / 3.0)
-
-        # Boost license content significantly.
-        licensed_pools = [
-            x for x in self.license_pools
-            if not x.open_access
-        ]
-        if licensed_pools:
-            self.quality *= (20 * len(licensed_pools))
-
-        # Scale Overdrive content by popularity.
-        popularities = WorkIdentifier.resources_for_identifier_ids(
-            _db, flattened_data, Resource.POPULARITY)
-        popularities = popularities.filter(
-            Resource.content != None).all()
-        import numpy
-        if popularities:
-            avg_popularity = numpy.mean([int(x.content) for x in popularities])
-            self.quality *= (avg_popularity/100.0)
+        if calculate_quality:
+            self.calculate_quality(flattened_data)
 
         # Now that everything's calculated, print it out.
-        if True:
-            t = u"%s (by %s)" % (self.title, self.authors)
+        if debug:
+            t = u"WORK %s (by %s)" % (self.title, self.author)
             print t.encode("utf8")
             print " language=%s" % self.language
             print " quality=%s" % self.quality
@@ -1766,10 +2012,21 @@ class Work(Base):
                 print d.encode("utf8")
             print
 
-    def assign_genres(self, identifier_data, identifier_ids, cutoff=0.15):
+    def calculate_quality(self, flattened_data):
+        _db = Session.object_session(self)
+        quantities = [Measurement.POPULARITY, Measurement.RATING,
+                      Measurement.DOWNLOADS]
+        measurements = _db.query(Measurement).filter(
+            Measurement.identifier_id.in_(flattened_data)).filter(
+                Measurement.is_most_recent==True).filter(
+                    Measurement.quantity_measured.in_(quantities)).all()
+
+        self.quality = Measurement.overall_quality(measurements)
+
+    def assign_genres(self, identifier_ids, cutoff=0.15):
         _db = Session.object_session(self)
 
-        classifications = WorkIdentifier.classifications_for_identifier_ids(
+        classifications = Identifier.classifications_for_identifier_ids(
             _db, identifier_ids)
         fiction_s = Counter()
         genre_s = Counter()
@@ -1803,6 +2060,8 @@ class Work(Base):
             _db.delete(i)
         self.work_genres = []
 
+        # Consolidate parent genres into their heaviest subgenre.
+        genre_s = Classifier.consolidate_weights(genre_s)
         total_weight = float(sum(genre_s.values()))
         workgenres = []
 
@@ -1817,13 +2076,165 @@ class Work(Base):
         for g, score in genre_s.items():
             affinity = score / total_weight
             if not isinstance(g, Genre):
-                g = Genre.lookup(_db, g)
+                g, ignore = Genre.lookup(_db, g.name)
             wg, ignore = get_one_or_create(
                 _db, WorkGenre, work=self, genre=g)
             wg.affinity = score/total_weight
             workgenres.append(wg)
 
         return workgenres, fiction, audience
+
+
+class Measurement(Base):
+    """A  measurement of some numeric quantity associated with a
+    Identifier.
+    """
+    __tablename__ = 'measurements'
+
+    # Some common measurement types
+    POPULARITY = "http://library-simplified.com/rel/popularity"
+    RATING = "http://schema.org/ratingValue"
+    DOWNLOADS = "https://schema.org/UserDownloads"
+    PAGE_COUNT = "https://schema.org/numberOfPages"
+
+    GUTENBERG_FAVORITE = "http://library-simplified.com/rel/lists/gutenberg-favorite"
+
+    # If a book's popularity measurement is found between index n and
+    # index n+1 on this list, it is in the nth percentile for
+    # popularity and its 'popularity' value should be n * 0.01.
+    # 
+    # These values are empirically determined and may change over
+    # time.
+    POPULARITY_PERCENTILES = {
+        DataSource.OVERDRIVE : [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 13, 14, 15, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 33, 35, 37, 39, 41, 43, 46, 48, 51, 53, 56, 59, 63, 66, 70, 74, 78, 82, 87, 92, 97, 102, 108, 115, 121, 128, 135, 142, 150, 159, 168, 179, 190, 202, 216, 230, 245, 260, 277, 297, 319, 346, 372, 402, 436, 478, 521, 575, 632, 702, 777, 861, 965, 1100, 1248, 1428, 1665, 2020, 2560, 3535, 5805],
+        DataSource.AMAZON : [14937330, 1974074, 1702163, 1553600, 1432635, 1327323, 1251089, 1184878, 1131998, 1075720, 1024272, 978514, 937726, 898606, 868506, 837523, 799879, 770211, 743194, 718052, 693932, 668030, 647121, 627642, 609399, 591843, 575970, 559942, 540713, 524397, 511183, 497576, 483884, 470850, 458438, 444475, 432528, 420088, 408785, 398420, 387895, 377244, 366837, 355406, 344288, 333747, 324280, 315002, 305918, 296420, 288522, 279185, 270824, 262801, 253865, 246224, 238239, 230537, 222611, 215989, 208641, 202597, 195817, 188939, 181095, 173967, 166058, 160032, 153526, 146706, 139981, 133348, 126689, 119201, 112447, 106795, 101250, 96534, 91052, 85837, 80619, 75292, 69957, 65075, 59901, 55616, 51624, 47598, 43645, 39403, 35645, 31795, 27990, 24496, 20780, 17740, 14102, 10498, 7090, 3861],
+        # This is a percentile list of OCLC Work IDs and OCLC Numbers
+        # associated with Project Gutenberg texts via OCLC Linked
+        # Data.
+        DataSource.OCLC_LINKED_DATA : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11, 12, 14, 15, 18, 21, 29, 41, 81],
+    }
+
+    DOWNLOAD_PERCENTILES = {
+        DataSource.GUTENBERG : [0, 1, 2, 3, 4, 5, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 12, 12, 13, 14, 14, 15, 15, 16, 16, 17, 18, 18, 19, 19, 20, 21, 21, 22, 23, 23, 24, 25, 26, 27, 28, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 40, 41, 43, 45, 46, 48, 50, 52, 55, 57, 60, 62, 65, 69, 72, 76, 79, 83, 87, 93, 99, 106, 114, 122, 130, 140, 152, 163, 179, 197, 220, 251, 281, 317, 367, 432, 501, 597, 658, 718, 801, 939, 1065, 1286, 1668, 2291, 4139]
+    }
+
+    RATING_SCALES = {
+        DataSource.OVERDRIVE : [1, 5],
+        DataSource.AMAZON : [1, 5],
+    }
+
+    id = Column(Integer, primary_key=True)
+
+    # A Measurement is always associated with some Identifier.
+    identifier_id = Column(
+        Integer, ForeignKey('identifiers.id'), index=True)
+
+    # A Measurement always comes from some DataSource.
+    data_source_id = Column(
+        Integer, ForeignKey('datasources.id'), index=True)
+
+    # The quantity being measured.
+    quantity_measured = Column(Unicode, index=True)
+
+    # The measurement itself.
+    value = Column(Float)
+
+    # The measurement normalized to a 0...1 scale.
+    _normalized_value = Column(Float, name="normalized_value")
+
+    # How much weight should be assigned this measurement, relative to
+    # other measurements of the same quantity from the same source.
+    weight = Column(Float, default=1)
+
+    # When the measurement was taken
+    taken_at = Column(DateTime, index=True)
+    
+    # True if this is the most recent measurement of this quantity for
+    # this Identifier.
+    #
+    is_most_recent = Column(Boolean, index=True)
+
+    def __repr__(self):
+        return "%s(%r)=%s (norm=%.2f)" % (
+            self.quantity_measured, self.identifier, self.value,
+            self.normalized_value or 0)
+
+    @classmethod
+    def overall_quality(cls, measurements, popularity_weight=0.3,
+                        rating_weight=0.7):
+        """Turn a bunch of measurements into an overall measure of quality."""
+        if popularity_weight + rating_weight != 1.0:
+            raise ValueError(
+                "Popularity weight and rating weight must sum to 1! (%.2f + %.2f)" % (
+                    popularity_weight, rating_weight)
+        )
+        popularities = []
+        ratings = []
+        for m in measurements:
+            l = None
+            if m.quantity_measured in (cls.POPULARITY, cls.DOWNLOADS):
+                l = popularities
+            elif m.quantity_measured == cls.RATING:
+                l = ratings
+            if l is not None:
+                l.append(m)
+        popularity = cls._average_normalized_value(popularities)
+        rating = cls._average_normalized_value(ratings)
+        if popularity is None and rating is None:
+            # We have absolutely no idea about the quality of this work.
+            return 0
+        if popularity is not None and rating is None:
+            # Our idea of the quality depends entirely on the work's popularity.
+            return popularity
+        if rating is not None and popularity is None:
+            # Our idea of the quality depends entirely on the work's rating.
+            return rating
+
+        # We have both popularity and rating.
+        final = (popularity * popularity_weight) + (rating * rating_weight)
+        print "(%.2f * %.2f) + (%.2f * %.2f) = %.2f" % (
+            popularity, popularity_weight, rating, rating_weight, final)
+        return final
+
+    @classmethod
+    def _average_normalized_value(cls, measurements):
+        num_measurements = 0
+        measurement_total = 0
+        for m in measurements:
+            v = m.normalized_value
+            if v is None:
+                continue
+            num_measurements += m.weight
+            measurement_total += (v * m.weight)
+        if num_measurements:
+            return measurement_total / num_measurements
+        else:
+            return None
+
+    @property
+    def normalized_value(self):
+        if self._normalized_value:
+            pass
+        elif not self.value:
+            return None
+        elif (self.quantity_measured == self.POPULARITY
+              and self.data_source.name in self.POPULARITY_PERCENTILES):
+            d = self.POPULARITY_PERCENTILES[self.data_source.name]
+            position = bisect.bisect_left(d, self.value)
+            self._normalized_value = position * 0.01            
+        elif (self.quantity_measured == self.DOWNLOADS
+              and self.data_source.name in self.DOWNLOAD_PERCENTILES):
+            d = self.DOWNLOAD_PERCENTILES[self.data_source.name]
+            position = bisect.bisect_left(d, self.value)
+            self._normalized_value = position * 0.01            
+        elif (self.quantity_measured == self.RATING
+              and self.data_source.name in self.RATING_SCALES):
+            scale_min, scale_max = self.RATING_SCALES[self.data_source.name]
+            width = float(scale_max-scale_min)
+            value = self.value-scale_min
+            self._normalized_value = value / width
+
+        return self._normalized_value
 
 
 class Resource(Base):
@@ -1839,8 +2250,6 @@ class Resource(Base):
     SAMPLE = "http://opds-spec.org/acquisition/sample"
     ILLUSTRATION = "http://library-simplified.com/rel/illustration"
     REVIEW = "http://schema.org/Review"
-    RATING = "http://schema.org/reviewRating"
-    POPULARITY = "http://library-simplified.com/rel/popularity"
     DESCRIPTION = "http://schema.org/description"
     AUTHOR = "http://schema.org/author"
 
@@ -1852,9 +2261,9 @@ class Resource(Base):
 
     id = Column(Integer, primary_key=True)
 
-    # A Resource is always associated with some WorkIdentifier.
-    work_identifier_id = Column(
-        Integer, ForeignKey('workidentifiers.id'), index=True)
+    # A Resource is always associated with some Identifier.
+    identifier_id = Column(
+        Integer, ForeignKey('identifiers.id'), index=True)
 
     # A Resource may also be associated with some LicensePool which
     # controls scarce access to it.
@@ -1865,21 +2274,18 @@ class Resource(Base):
     data_source_id = Column(
         Integer, ForeignKey('datasources.id'), index=True)
 
-    # Many works may use this resource as their cover image.
-    cover_works = relationship("Work", backref="cover", foreign_keys=[Work.cover_id])
+    # Many Editions may use this resource as their cover image.
+    cover_editions = relationship("Edition", backref="cover", foreign_keys=[Edition.cover_id])
 
-    # Many works may use this resource as their summary.
+    # Many Works may use this resource as their summary.
     summary_works = relationship("Work", backref="summary", foreign_keys=[Work.summary_id])
 
-    # The relation between the book identified by the WorkIdentifier
+    # The relation between the book identified by the Identifier
     # and the resource.
     rel = Column(Unicode, index=True)
 
     # The actual URL to the resource.
     href = Column(Unicode)
-
-    # The URL to a scaled-down version of the resource.
-    scaled_href = Column(Unicode)
 
     # Whether or not we have a local copy of the representation.
     mirrored = Column(Boolean, default=False, index=True)
@@ -1956,10 +2362,10 @@ class Resource(Base):
         This link will be served to the client.
         """
         if self.mirrored_path:
-            url = self.mirrored_path
+            url = self.mirrored_path % self.URL_ROOTS
         else:
             url = self.href
-        return url % self.URL_ROOTS
+        return url
 
     @property
     def scaled_url(self):        
@@ -2072,8 +2478,10 @@ class Resource(Base):
             original_variable_to_scaled_variable)
         scaled_path = scaled_path_template % scaled_path_expansions
 
+        already_scaled = False
         if os.path.exists(scaled_path) and not force:
             scaled_image = Image.open(scaled_path)
+            already_scaled = True
         else:
             path = self.local_path(original_path_expansions)
             try:
@@ -2101,18 +2509,18 @@ class Resource(Base):
 
         # Save the scaled image.
         if scaled_image:
-            d, f = os.path.split(scaled_path)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            scaled_image.save(scaled_path)
+            if not already_scaled:
+                d, f = os.path.split(scaled_path)
+                if not os.path.exists(d):
+                    os.makedirs(d)
+                scaled_image.save(scaled_path)
             self.scaled = True
             self.scaled_path = scaled_path_template
             self.scaled_width, self.scaled_height = scaled_image.size
         else:
             self.scaled_path = None
             self.scaled = False
-
-        # TODO: We can also dump it to S3 at this point.
+        return already_scaled
 
 class Genre(Base):
     """A subject-matter classification for a book.
@@ -2154,8 +2562,8 @@ class Genre(Base):
     @property
     def self_and_subgenres(self):
         _db = Session.object_session(self)
-        genres = [self]
-        for genre_data in classifier.genres[self.name].subgenres:
+        genres = []
+        for genre_data in classifier.genres[self.name].self_and_subgenres:
             genres.append(self.lookup(_db, genre_data.name)[0])
         return genres
 
@@ -2173,6 +2581,7 @@ class Subject(Base):
     DDC = Classifier.DDC              # Dewey Decimal Classification
     OVERDRIVE = Classifier.OVERDRIVE  # Overdrive's classification system
     TAG = "tag"   # Folksonomic tags.
+    GUTENBERG_BOOKSHELF = "gutenberg:bookshelf"
     TOPIC = "schema:Topic"
     PLACE = "schema:Place"
     PERSON = "schema:Person"
@@ -2220,6 +2629,11 @@ class Subject(Base):
     # One Subject may participate in many Classifications.
     classifications = relationship(
         "Classification", backref="subject"
+    )
+
+    # Type + identifier must be unique.
+    __table_args__ = (
+        UniqueConstraint('type', 'identifier'),
     )
 
     def __repr__(self):
@@ -2317,11 +2731,11 @@ class Subject(Base):
         _db.commit()
 
 class Classification(Base):
-    """The assignment of a WorkIdentifier to a Subject."""
+    """The assignment of a Identifier to a Subject."""
     __tablename__ = 'classifications'
     id = Column(Integer, primary_key=True)
-    work_identifier_id = Column(
-        Integer, ForeignKey('workidentifiers.id'), index=True)
+    identifier_id = Column(
+        Integer, ForeignKey('identifiers.id'), index=True)
     subject_id = Column(Integer, ForeignKey('subjects.id'), index=True)
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
 
@@ -2405,10 +2819,8 @@ class Lane(object):
             # Turn names or GenreData objects into Genre objects. 
             self.genres = []
             for genre in genres:
-                if isinstance(genre, basestring):
+                if not isinstance(genre, Genre):
                     genre, ignore = Genre.lookup(_db, genre)
-                elif isinstance(genre, GenreData):
-                    genre, ignore = Genre.lookup(_db, genre.name)
                 self.genres.append(genre)
             self.include_subgenres=include_subgenres
         self.fiction = fiction
@@ -2425,8 +2837,8 @@ class Lane(object):
 
         k = "%" + query + "%"
         q = self.works(languages=languages, fiction=None).filter(
-            or_(Work.title.ilike(k),
-                Work.authors.ilike(k)))
+            or_(Edition.title.ilike(k),
+                Edition.author.ilike(k)))
         q = q.order_by(Work.quality.desc())
         return q
 
@@ -2499,15 +2911,14 @@ class Lane(object):
         """
         audience = self.audience
         fiction = fiction or self.fiction
-        q = self._db.query(Work).options(
+        q = self._db.query(Work).join(Work.primary_edition).options(
             joinedload('license_pools', 'resources').joinedload('data_source'),
             joinedload('work_genres')
         )
         if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
             # No genre plus a boolean value for `fiction` means
             # fiction or nonfiction not associated with any genre.
-            q = q.outerjoin(Work.work_genres)
-            q = q.filter(WorkGenre.genre==None)
+            q = Work.with_no_genres(q)
         else:
             # Find works that are assigned to the given genres. This
             # may also turn into a restriction on the fiction status.
@@ -2543,7 +2954,7 @@ class Lane(object):
             q = q.filter(Work.fiction==fiction)
 
         q = q.filter(
-            Work.language.in_(languages),
+            Edition.language.in_(languages),
             Work.was_merged_into == None,
         )
         return q
@@ -2554,10 +2965,10 @@ class WorkFeed(object):
     """Identify a certain page in a certain feed."""
 
     active_facet_for_field = {
-        Work.title : "title",
-        Work.sort_title : "title",
-        Work.sort_author : "author",
-        Work.authors : "author"
+        Edition.title : "title",
+        Edition.sort_title : "title",
+        Edition.sort_author : "author",
+        Edition.author : "author"
     }
 
     def __init__(self, lane, languages, order_by=None):
@@ -2565,26 +2976,29 @@ class WorkFeed(object):
             languages = [languages]
         self.languages = languages
         self.lane = lane
-        if not isinstance(order_by, list):
+        if not order_by:
+            order_by = []
+        elif not isinstance(order_by, list):
             order_by = [order_by]
         self.order_by = order_by
         # In addition to the given order, we order by author,
         # then title, then work ID.
-        for i in (Work.sort_author, Work.authors, Work.sort_title, Work.title, 
-                  Work.id):
+        for i in (Edition.sort_author, Edition.author,
+                  Edition.sort_title, Edition.title, 
+                  Edition.id):
             if i not in self.order_by:
                 self.order_by.append(i)
         self.active_facet = self.active_facet_for_field.get(order_by[0], None)
 
-    def page_query(self, _db, last_work_seen, page_size):
+    def page_query(self, _db, last_edition_seen, page_size):
         """A page of works."""
 
         query = self.lane.works(self.languages)
 
-        if last_work_seen:
-            # Only find works that show up after the last work seen.
+        if last_edition_seen:
+            # Only find records that show up after the last one seen.
             primary_order_field = self.order_by[0]
-            last_value = getattr(last_work_seen, primary_order_field.name)
+            last_value = getattr(last_edition_seen, primary_order_field.name)
 
             # This means works where the primary ordering field has a
             # higher value.
@@ -2595,7 +3009,7 @@ class WorkFeed(object):
                 # OR, it means works where all the previous ordering
                 # fields have the same value as the last work seen,
                 # and this next ordering field has a higher value.
-                new_value = getattr(last_work_seen, next_order_field.name)
+                new_value = getattr(last_edition_seen, next_order_field.name)
                 if new_value != None:
                     clause = or_(clause,
                                  and_(base_and_clause, 
@@ -2619,12 +3033,15 @@ class LicensePool(Base):
     work_id = Column(Integer, ForeignKey('works.id'), index=True)
 
     # Each LicensePool is associated with one DataSource and one
-    # WorkIdentifier, and therefore with one original WorkRecord.
+    # Identifier, and therefore with one original Edition.
     data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
-    identifier_id = Column(Integer, ForeignKey('workidentifiers.id'), index=True)
+    identifier_id = Column(Integer, ForeignKey('identifiers.id'), index=True)
 
     # One LicensePool can have many Loans.
     loans = relationship('Loan', backref='license_pool')
+
+    # One LicensePool can have many Representations.
+    representations = relationship("Representation", backref="license_pool")
 
     # One LicensePool can have many CirculationEvents
     circulation_events = relationship(
@@ -2640,7 +3057,7 @@ class LicensePool(Base):
     licenses_reserved = Column(Integer,default=0)
     patrons_in_hold_queue = Column(Integer,default=0)
 
-    # A WorkIdentifier should have at most one LicensePool.
+    # A Identifier should have at most one LicensePool.
     __table_args__ = (UniqueConstraint('identifier_id'),)
 
     @classmethod
@@ -2667,25 +3084,25 @@ class LicensePool(Base):
             )
 
  
-        # Get the WorkIdentifier.
-        identifier, ignore = WorkIdentifier.for_foreign_id(
+        # Get the Identifier.
+        identifier, ignore = Identifier.for_foreign_id(
             _db, foreign_id_type, foreign_id
             )
 
         # Get the LicensePool that corresponds to the DataSource and
-        # the WorkIdentifier.
+        # the Identifier.
         license_pool, was_new = get_one_or_create(
             _db, LicensePool, data_source=data_source, identifier=identifier)
         return license_pool, was_new
 
-    def work_record(self):
-        """The LicencePool's primary WorkRecord.
+    def edition(self):
+        """The LicencePool's primary Edition.
 
         This is (our view of) the book's entry on whatever website
         hosts the licenses.
         """
         _db = Session.object_session(self)
-        return _db.query(WorkRecord).filter_by(
+        return _db.query(Edition).filter_by(
             data_source=self.data_source,
             primary_identifier=self.identifier).one()
 
@@ -2763,8 +3180,8 @@ class LicensePool(Base):
             d[Event.OLD_VALUE] = estimated_value
             d[Event.NEW_VALUE] = actual_value
             d[Event.DELTA] = actual_value-estimated_value
-            d[Event.SOURCE] = self.work_record().source
-            d[Event.SOURCE_BOOK_ID] = self.work_record.source_id
+            d[Event.SOURCE] = self.edition().source
+            d[Event.SOURCE_BOOK_ID] = self.edition.source_id
             d[Event.START_TIME] = datetime.datetime.strptime(
                 reality[LicensedWork.LAST_CHECKED], Event.TIME_FORMAT)
             d[Event.EVENT_TYPE] = name
@@ -2810,75 +3227,92 @@ class LicensePool(Base):
 
     def potential_works(self, initial_threshold=0.2, final_threshold=0.8):
         """Find all existing works that have claimed this pool's 
-        work records.
+        editions.
 
-        :return: A 3-tuple ({Work: [WorkRecord]}, [WorkRecord])
-        Element 0 is a mapping of Works to the WorkRecords they've claimed.
-        Element 1 is a list of WorkRecords that are unclaimed by any Work.
+        :return: A 3-tuple ({Work: [Edition]}, [Edition])
+        Element 0 is a mapping of Works to the Editions they've claimed.
+        Element 1 is a list of Editions that are unclaimed by any Work.
         """
         _db = Session.object_session(self)
-        primary_work_record = self.work_record()
+        primary_edition = self.edition()
 
         claimed_records_by_work = defaultdict(list)
         unclaimed_records = []
 
-        # Find all work records connected to this LicensePool's
-        # primary work record. We are very lenient about scooping up
-        # as many work records as possible here, but we will be very
-        # strict when we apply the similarity threshold.
-        equivalent_work_records = primary_work_record.equivalent_work_records(
+        # If this pool is not an open-access pool, it will never be
+        # grouped together with any other pools.
+        if not self.open_access:
+            if self.work:
+                claimed_records_by_work[self.work] = [primary_edition]
+            else:
+                unclaimed_records.append(primary_edition)
+            return claimed_records_by_work, unclaimed_records
+
+        # Beyond this point we can assume this is an open-access pool.
+        # It will only be combined with other open-access pools.
+
+        # Find all editions connected to this LicensePool's primary
+        # editions. We are very lenient about scooping up as many
+        # editions as possible here, but we will be very strict when
+        # we apply the similarity threshold.
+        equivalent_editions = primary_edition.equivalent_editions(
             threshold=initial_threshold)
 
-        for r in equivalent_work_records:
-            if r.work:
-                # This work record has been claimed by a Work. This
+        for e in equivalent_editions:
+            if e.work:
+                # This edition has been claimed by a Work. This
                 # strengthens the tie between this LicensePool and that
                 # Work.
-                l = claimed_records_by_work[r.work]
-                check_against = r.work
+                l = claimed_records_by_work[e.work]
+                check_against = e.work
             else:
-                # This work record has not been claimed by anyone. 
+                # This edition has not been claimed by anyone. 
                 l = unclaimed_records
-                check_against = primary_work_record
+                check_against = primary_edition
 
             # Apply the similarity threshold filter.
-            if check_against.similarity_to(r) >= final_threshold:
-                l.append(r)
+            if check_against.similarity_to(e) >= final_threshold:
+                other_pool = e.license_pool
+                if other_pool and not other_pool.open_access:
+                    # An open access pool will never be combined
+                    # with a non-open-access pool.
+                    continue
+                l.append(e)
         return claimed_records_by_work, unclaimed_records
 
     def calculate_work(self, record_similarity_threshold=0.4,
                        work_similarity_threshold=0.4):
         """Find or create a Work for this LicensePool."""
         try:
-            primary_work_record = self.work_record()
+            primary_edition = self.edition()
         except NoResultFound, e:
             return None, False
-        self.language = primary_work_record.language
-        if primary_work_record.work is not None:
+        self.language = primary_edition.language
+        if primary_edition.work is not None:
             # That was a freebie.
             #print "ALREADY CLAIMED: %s by %s" % (
-            #    primary_work_record.title, self.work
+            #    primary_edition.title, self.work
             #)
-            self.work = primary_work_record.work
-            return primary_work_record.work, False
+            self.work = primary_edition.work
+            return primary_edition.work, False
 
         # Figure out what existing works have claimed this
-        # LicensePool's WorkRecords, and which WorkRecords are still
+        # LicensePool's Editions, and which Editions are still
         # unclaimed.
         claimed, unclaimed = self.potential_works(
             final_threshold=record_similarity_threshold)
         # We're only going to consider records that meet a similarity
         # threshold vis-a-vis this LicensePool's primary work.
-        print "Calculating work for %r" % primary_work_record
+        print "Calculating work for %r" % primary_edition
         print " There are %s unclaimed work records" % len(unclaimed)
         for i in unclaimed:
             print "  %.3f %r" % (
-                primary_work_record.similarity_to(i), i)
+                primary_edition.similarity_to(i), i)
         print
 
-        # Now we know how many unclaimed WorkRecords this LicensePool
+        # Now we know how many unclaimed Editions this LicensePool
         # will claim if it becomes a new Work. Find all existing Works
-        # that claimed *more* WorkRecords than that. These are all
+        # that claimed *more* Editions than that. These are all
         # better choices for this LicensePool than creating a new
         # Work. In fact, there's a good chance they are all the same
         # Work, and should be merged.
@@ -2888,13 +3322,13 @@ class LicensePool(Base):
             if len(records) > len(unclaimed)
             and work.language
             and work.language == self.language
-            and work.similarity_to(primary_work_record) >= work_similarity_threshold
+            and work.similarity_to(primary_edition) >= work_similarity_threshold
         ]
         for work, records in claimed.items():
-            sim = work.similarity_to(primary_work_record)
+            sim = work.similarity_to(primary_edition)
             if sim < work_similarity_threshold:
                 print " REJECTED %r as more popular choice for\n %r (similarity: %.2f)" % (
-                    work, primary_work_record, sim
+                    work, primary_edition, sim
                     )
 
         if more_popular_choices:
@@ -2904,19 +3338,19 @@ class LicensePool(Base):
             by_popularity = sorted(
                 more_popular_choices, key=lambda x: x[1], reverse=True)
 
-            # This is the work with the most claimed WorkRecords, so
+            # This is the work with the most claimed Editions, so
             # it's the one we'll merge the others into. We chose
             # the most popular because we have the most data for it, so 
             # it's the most accurate choice when calculating similarity.
             work = by_popularity[0][0]
             print " MORE POPULAR CHOICE for %s: %r" % (
-                primary_work_record.title.encode("utf8"), work)
+                primary_edition.title.encode("utf8"), work)
             for less_popular, claimed_records in by_popularity[1:]:
                 less_popular.merge_into(work, work_similarity_threshold)
             created = False
         else:
             # There is no better choice than creating a brand new Work.
-            # print "NEW WORK for %r" % primary_work_record.title
+            # print "NEW WORK for %r" % primary_edition.title
             work = Work()
             _db = Session.object_session(self)
             _db.add(work)
@@ -2927,13 +3361,13 @@ class LicensePool(Base):
         # created.
         work.license_pools.append(self)
 
-        # Associate the unclaimed WorkRecords with the Work.
-        work.work_records.extend(unclaimed)
+        # Associate the unclaimed Editions with the Work.
+        work.editions.extend(unclaimed)
         for wr in unclaimed:
             wr.work = work
 
         # Recalculate the display information for the Work, since the
-        # associated WorkRecords have changed.
+        # associated Editions have changed.
         # work.calculate_presentation()
         #if created:
         #    print "Created %r" % work
@@ -2945,7 +3379,7 @@ class LicensePool(Base):
         """Find the best available licensing link for the work associated
         with this LicensePool.
         """
-        wr = self.work_record()
+        wr = self.edition()
         link = wr.best_open_access_link
         if link:
             return self, link
@@ -2954,7 +3388,7 @@ class LicensePool(Base):
         # link associated with it.
         work = self.work
         for pool in work.license_pools:
-            wr = pool.work_record()
+            wr = pool.edition()
             link = wr.best_open_access_link
             if link:
                 return pool, link
@@ -3105,12 +3539,220 @@ class Timestamp(Base):
             stamp.timestamp = now
         return stamp
 
+class Representation(Base):
+    """A cached document from the Web at large."""
+
+    __tablename__ = 'representations'
+    id = Column(Integer, primary_key=True)
+
+    # URL from which the representation was fetched.
+    url = Column(Unicode, index=True)
+
+    # The representation is probably obtained from a particular data source.
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+
+    # The representation may be the data source's representation of a
+    # particular identifier.
+    identifier_id = Column(Integer, ForeignKey('identifiers.id'), index=True)
+
+    # Or (less likely) the representation may be the data source's
+    # representation of a particular license pool.
+    license_pool_id = Column(Integer, ForeignKey('licensepools.id'), index=True)
+
+    # When the representation was fetched.
+    fetched_at = Column(DateTime, index=True)
+
+    # The HTTP status code from the last representation.
+    status_code = Column(Integer)
+
+    # A textual description of the error encountered the last time
+    # we tried to fetch the representation
+    exception = Column(Unicode, index=True)
+
+    # A textual representation of the HTTP headers sent along with the
+    # representation.
+    headers = Column(Unicode)
+
+    # The Content-Type header from the last representation.
+    content_type = Column(Unicode)
+
+    # The Location header from the last representation.
+    location = Column(Unicode)
+
+    # The Last-Modified header from the last representation.
+    last_modified = Column(Unicode)
+
+    # The Etag header from the last representation.
+    etag = Column(Unicode)
+
+    # The representation itself.
+    content = Column(Binary)
+
+    BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36 (Simplified)"
+
+    @property
+    def age(self):
+        if not self.fetched_at:
+            return 1000000
+        return (datetime.datetime.utcnow() - self.fetched_at).total_seconds()
+
+    @property
+    def has_content(self):
+        return (self.status_code == 200 and self.exception == None
+                and self.content is not None)
+
+    @classmethod
+    def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
+            identifier=None, license_pool=None, max_age=None, pause_before=0,
+            allow_redirects=True, debug=True):
+        """Retrieve a representation from the cache if possible.
+        
+        If not possible, retrieve it from the web and store it in the
+        cache.
+        
+        :param do_get: A function that takes arguments (url, headers)
+        and retrieves a representation over the network.
+
+        :param max_age: A timedelta object representing the maximum
+        time to consider a cached representation fresh. (We ignore the
+        caching directives from the server because they're usually far
+        too conservative for our purposes.)
+
+        :return: A 2-tuple (representation, obtained_from_cache)
+
+        """
+        do_get = do_get or cls.simple_http_get
+
+        representation = None
+        try:
+            representation = get_one(_db, Representation, url=url, data_source=data_source)
+        except Exception, e:
+            print "ERROR: more than one representation for %s" % url
+            representations = _db.query(Representation).filter(Representation.url==url).filter(Representation.data_source==data_source).all()
+            if representations:
+                representation = representations[0]
+
+        # Do we already have a usable representation?
+        usable_representation = (
+            representation and not representation.exception)
+
+        if isinstance(max_age, datetime.timedelta):
+            max_age = max_age.total_seconds()
+        if usable_representation and (
+                max_age is None or max_age > representation.age):
+            if debug:
+                print "Cached %s" % url
+            return representation, True
+
+        if debug:
+            print "Fetching %s" % url
+        headers = {}
+        if extra_request_headers:
+            headers.update(extra_request_headers)
+        if usable_representation:
+            if representation.last_modified:
+                headers['If-Modified-Since'] = representation.last_modified
+            if representation.etag:
+                headers['If-None-Match'] = representation.etag
+        # Either the representation was not cached, or the cache is stale.
+        # We need to get a new representation.
+        fetched_at = datetime.datetime.utcnow()
+        if pause_before:
+            time.sleep(pause_before)
+        try:
+            status_code, headers, content = do_get(url, headers)
+            exception = None
+        except Exception, e:
+            exception = str(e)
+            status_code = None
+            headers = None
+            content = None
+
+        if exception:
+            print "EXCEPTION: %s" % exception
+        
+        if not status_code:
+            raise IOError("No status code!")
+
+        if status_code / 100 == 4 and status_code != 404:
+            raise IOError("%s status code" % status_code)
+
+        if status_code / 100 == 5:
+            raise IOError("%s status code" % status_code)
+
+        if usable_representation and status_code == 304:
+            # The representation has not been modified since the last
+            # time we retrieved it. Return the cached version.
+            representation.fetched_at = fetched_at
+            return representation, True
+
+        if not representation:
+            # This is our first time retrieving a representation of
+            # this url.
+            representation = Representation(
+                url=url, data_source=data_source, identifier=identifier,
+                license_pool=license_pool)
+
+        if exception:
+            representation.exception = exception
+        else:
+            representation.exception = None
+
+        representation.status_code = status_code
+        if 'content-type' in headers:
+            representation.content_type = headers['content-type']
+        if 'etag' in headers:
+            representation.etag = headers['etag']
+        if 'last-modified' in headers:
+            representation.last_modified = headers['last-modified']
+        if 'location' in headers:
+            representation.location = headers['location']
+        representation.headers = cls.headers_to_string(headers)
+        representation.content = content
+        representation.fetched_at = fetched_at
+        return representation, False
+
+    @classmethod
+    def headers_to_string(cls, d):
+        if d is None:
+            return None
+        return json.dumps(dict(d))
+
+    @classmethod
+    def simple_http_get(cls, url, headers, **kwargs):
+        """The most simple HTTP-based GET."""
+        if not 'timeout' in kwargs:
+            kwargs['timeout'] = 20
+        
+        if not 'allow_redirects' in kwargs:
+            kwargs['allow_redirects'] = True
+        response = requests.get(url, headers=headers, **kwargs)
+        return response.status_code, response.headers, response.content
+
+    @classmethod
+    def http_get_no_timeout(cls, url, headers, **kwargs):
+        return Representation.simple_http_get(url, headers, timeout=None, **kwargs)
+
+    @classmethod
+    def http_get_no_redirect(cls, url, headers, **kwargs):
+        """HTTP-based GET with no redirects."""
+        return cls.simple_http_get(url, headers, allow_redirects=False, **kwargs)
+
+    @classmethod
+    def browser_http_get(cls, url, headers, **kwargs):
+        """GET the representation that would be displayed to a web browser.
+        """
+        headers = dict(headers)
+        headers['User-Agent'] = cls.BROWSER_USER_AGENT
+        return cls.simple_http_get(url, headers, **kwargs)
+
+
 class CoverageProvider(object):
 
-    """Run WorkRecords from one DataSource (the input DataSource) through
+    """Run Editions from one DataSource (the input DataSource) through
     code associated with another DataSource (the output
     DataSource). If the code returns success, add a CoverageRecord for
-    the WorkRecord and the output DataSource, so that the record
+    the Edition and the output DataSource, so that the record
     doesn't get processed next time.
     """
 
@@ -3123,32 +3765,36 @@ class CoverageProvider(object):
         self.workset_size = workset_size
 
     @property
-    def workrecords_that_need_coverage(self):
-        return WorkRecord.missing_coverage_from(
+    def editions_that_need_coverage(self):
+        return Edition.missing_coverage_from(
             self._db, self.input_sources, self.output_source).order_by(func.random())
 
     def run(self):
         remaining = True
         failures = set([])
-        print "%d records need coverage." % (self.workrecords_that_need_coverage.count())
+        print "%d records need coverage." % (self.editions_that_need_coverage.count())
         while remaining:
             successes = 0
             if len(failures) >= self.workset_size:
                 raise Exception(
                     "Number of failures equals workset size, cannot continue.")
-            workset = self.workrecords_that_need_coverage.limit(
+            workset = self.editions_that_need_coverage.limit(
                 self.workset_size)
             remaining = False
             for record in workset:
                 if record in failures:
                     continue
                 remaining = True
-                if self.process_work_record(record):
+                if self.process_edition(record):
                     # Success! Now there's coverage! Add a CoverageRecord.
                     successes += 1
+                    if isinstance(record, Identifier):
+                        identifier = record
+                    else:
+                        identifier = record.primary_identifier
                     get_one_or_create(
                         self._db, CoverageRecord,
-                        work_record=record,
+                        identifier=identifier,
                         data_source=self.output_source,
                         create_method_kwargs = dict(date=datetime.datetime.utcnow()))
                 else:
@@ -3162,7 +3808,7 @@ class CoverageProvider(object):
         Timestamp.stamp(self._db, self.service_name)
         self._db.commit()
 
-    def process_work_record(self, work_record):
+    def process_edition(self, edition):
         raise NotImplementedError()
 
     def commit_workset(self):
@@ -3188,7 +3834,8 @@ class ImageScaler(object):
             self.scaled_expansions[scaled] = mirror.scaled_image_directory(data_directory)
             self.original_variable_to_scaled_variable[original] = "%(" + scaled + ")s"
 
-    def run(self, destination_width, destination_height, force):
+    def run(self, destination_width, destination_height, force,
+            batch_size=100, upload=True):
         q = self._db.query(Resource).filter(
             Resource.rel==Resource.IMAGE).filter(
                 Resource.mirrored==True).filter(
@@ -3196,23 +3843,33 @@ class ImageScaler(object):
 
         if not force:
             q = q.filter(Resource.scaled==False)
-        total = 0
+        if upload:
+            uploader = S3Uploader()
         print "Scaling %d images." % q.count()
-        resultset = q.limit(100).all()
+        resultset = q.limit(batch_size).all()
         while resultset:
+            total = 0
             a = time.time()
+            to_upload = []
             for r in resultset:
-                r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
+                already_scaled = r.scale(destination_width, destination_height, self.original_expansions, self.scaled_expansions, self.original_variable_to_scaled_variable, force)
                 if not r.scaled_path:
                     print "Could not scale %s" % r.href
+                elif already_scaled:
+                    pass
                 else:
-                    print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                                        r.local_scaled_path(self.scaled_expansions) 
-                    )
-                total += 1
-            self._db.commit()
-            print total, time.time()-a
+                    local_path = r.local_scaled_path(self.scaled_expansions)
+                    #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                    #                    local_path)
+                    to_upload.append((local_path, r.scaled_url))
+                    total += 1
+            print "%.2f sec to scale %d" % ((time.time()-a), total)
             a = time.time()
-            resultset = q.limit(100).all()
+            if upload:
+                uploader.upload_resources(to_upload)
+            self._db.commit()
+            print "%.2f sec to upload %d" % ((time.time()-a), total)
+            a = time.time()
+            resultset = q.limit(batch_size).all()
         self._db.commit()
 
