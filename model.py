@@ -784,7 +784,8 @@ class Identifier(Base):
 
         images = images.filter(mirrored_or_embeddable).all()
 
-        champion = None
+        champions = []
+        champion_score = None
         # Judge the image resource by its deviation from the ideal
         # aspect ratio, and by its deviation (in the "too small"
         # direction only) from the ideal resolution.
@@ -831,9 +832,18 @@ class Identifier(Base):
             # the Edition to the Work in question. This is much
             # too big a project to work on right now.
 
-            if (r.quality >= cls.MINIMUM_IMAGE_QUALITY and
-                (not champion or r.quality > champion.quality)):
-                champion = r
+            if not r.quality >= cls.MINIMUM_IMAGE_QUALITY:
+                continue
+            if r.quality > champion_score:
+                champions = [r]
+                champion_score = r.quality
+            elif r.quality == champion_score:
+                champions.append(r)
+        if champions:
+            champion = random.choice(champions)
+        else:
+            champion = None
+            
         return champion, images
 
     @classmethod
@@ -1914,7 +1924,8 @@ class Work(Base):
 
         if old_primary and old_primary != champion:
             old_primary.is_primary_for_work = False
-        champion.is_primary_for_work = True
+        if champion:
+            champion.is_primary_for_work = True
         self.primary_edition = champion
 
 
@@ -1969,7 +1980,7 @@ class Work(Base):
                 _db, DataSource.OCLC_LINKED_DATA)
             self.primary_edition.primary_identifier.add_measurement(
                 oclc_linked_data, Measurement.POPULARITY, 
-                len(flattened_data))
+                len(flattened_data)/3.0)
             # Only consider the quality signals associated with the
             # primary edition. Otherwise texts that have multiple
             # Gutenberg editions will drag down the quality of popular
@@ -3604,7 +3615,14 @@ class Representation(Base):
         """
         do_get = do_get or cls.simple_http_get
 
-        representation = get_one(_db, Representation, url=url)
+        representation = None
+        try:
+            representation = get_one(_db, Representation, url=url, data_source=data_source)
+        except Exception, e:
+            print "ERROR: more than one representation for %s" % url
+            representations = _db.query(Representation).filter(Representation.url==url).filter(Representation.data_source==data_source).all()
+            if representations:
+                representation = representations[0]
 
         # Do we already have a usable representation?
         usable_representation = (
