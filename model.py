@@ -13,7 +13,6 @@ import random
 import re
 import requests
 import time
-from integration.s3 import S3Uploader
 
 from PIL import (
     Image,
@@ -3844,6 +3843,7 @@ class ImageScaler(object):
         if not force:
             q = q.filter(Resource.scaled==False)
         if upload:
+            from integration.s3 import S3Uploader
             uploader = S3Uploader()
         print "Scaling %d images." % q.count()
         resultset = q.limit(batch_size).all()
