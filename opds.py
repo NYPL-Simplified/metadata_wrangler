@@ -138,7 +138,7 @@ class OPDSFeed(AtomFeed):
 class AcquisitionFeed(OPDSFeed):
 
     def __init__(self, _db, title, url, works, facet_url_generator=None,
-                 active_facet=None):
+                 active_facet=None, sublanes=[]):
         super(AcquisitionFeed, self).__init__(title, url=url)
         lane_link = dict(rel="collection", href=url)
         import time
@@ -165,6 +165,14 @@ class AcquisitionFeed(OPDSFeed):
                     link['{%s}activeFacet' % opds_ns] = "true"
                 self.add_link(**link)
 
+        for sublane in sublanes:
+            url = self.lane_url(sublane)
+            self.add_link(
+                href=url, title=sublane.name, 
+                type=self.ACQUISITION_FEED_TYPE,
+                rel="http://library-simplified.com/rel/sublane",
+            )
+
     @classmethod
     def featured(cls, _db, languages, lane):
         url = cls.lane_url(lane)
@@ -172,7 +180,7 @@ class AcquisitionFeed(OPDSFeed):
         feed_size = 20
         works = lane.quality_sample(languages, 0.8, 0.3, feed_size)
         return AcquisitionFeed(
-            _db, "%s: featured" % lane.name, url, works)
+            _db, "%s: featured" % lane.name, url, works, sublanes=lane.sublanes)
 
     @classmethod
     def active_loans_for(cls, patron):
@@ -340,4 +348,5 @@ class NavigationFeed(OPDSFeed):
                     *links
                 )
             )
+
         return feed

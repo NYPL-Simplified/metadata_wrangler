@@ -2756,23 +2756,38 @@ class LaneList(object):
     """A list of lanes such as you might see in an OPDS feed."""
 
     @classmethod
-    def from_description(self, _db, description):
+    def from_description(self, _db, parent_lane, description):
         lanes = LaneList()
+        if parent_lane:
+            default_fiction = parent_lane.fiction
+            default_audience = parent_lane.audience
+        else:
+            default_fiction = Lane.FICTION_DEFAULT_FOR_GENRE
+            default_audience = Classifier.AUDIENCE_ADULT
+
         for lane_description in description:
             if isinstance(lane_description, GenreData):
                 # This very simple lane is the default view for a genre.
                 genre = lane_description
-                lane = Lane(_db, genre.name, [genre], True, genre.is_fiction,
-                            Classifier.AUDIENCE_ADULT)
+                lane = Lane(_db, genre.name, [genre], True, default_fiction,
+                            default_audience)
+            elif isinstance(lane_description, Lane):
+                # The Lane object has already been created.
+                lane = lane_description
             else:
                 # A more complicated lane. Its description is a bunch
                 # of arguments to the Lane constructor.
                 l = lane_description
                 lane = Lane(_db, l['name'], l.get('genres', []), 
                             l.get('include_subgenres', True),
-                            l.get('fiction', Lane.FICTION_DEFAULT_FOR_GENRE),
-                            l.get('audience', Classifier.AUDIENCE_ADULT))
+                            l.get('fiction', default_fiction),
+                            l.get('audience', default_audience),
+                            l.get('sublanes', [])
+                        )                            
             lanes.add(lane)
+            for sublane in lane.sublanes:
+                lanes.add(sublane)
+
         return lanes
 
     def __init__(self):
@@ -2803,7 +2818,9 @@ class Lane(object):
         return Lane(_db, "", [], True, Lane.BOTH_FICTION_AND_NONFICTION,
                     None)
 
-    def __init__(self, _db, name, genres, include_subgenres, fiction, audience):
+    def __init__(self, _db, name, genres, include_subgenres=True,
+                 fiction=True, audience=Classifier.AUDIENCE_ADULT,
+                 parent=None, sublanes=[]):
         self.name = name
         self._db = _db
 
@@ -2824,6 +2841,7 @@ class Lane(object):
             self.include_subgenres=include_subgenres
         self.fiction = fiction
         self.audience = audience
+        self.sublanes = LaneList.from_description(_db, parent, sublanes)
 
     def search(self, languages, query):
         """Find works in this lane that match a search query.
