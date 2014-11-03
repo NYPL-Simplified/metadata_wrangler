@@ -2911,7 +2911,7 @@ class Lane(object):
         audience = self.audience
         fiction = fiction or self.fiction
         q = self._db.query(Work).join(Work.primary_edition).options(
-            joinedload('license_pools', 'resources').joinedload('data_source'),
+            joinedload('license_pools').joinedload('data_source'),
             joinedload('work_genres')
         )
         if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
