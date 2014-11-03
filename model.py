@@ -784,6 +784,7 @@ class Identifier(Base):
 
         images = images.filter(mirrored_or_embeddable).all()
 
+        champion = None
         champions = []
         champion_score = None
         # Judge the image resource by its deviation from the ideal
@@ -839,10 +840,8 @@ class Identifier(Base):
                 champion_score = r.quality
             elif r.quality == champion_score:
                 champions.append(r)
-        if champions:
-            champion = random.choice(champions)
-        else:
-            champion = None
+        if champions and not champion:
+                champion = random.choice(champions)
             
         return champion, images
 
