@@ -221,16 +221,15 @@ class TestParser(DatabaseTest):
     def test_missing_work_id(self):
 
         # This document contains a work that has a number of editions,
-        # but there's no work ID, so everything in the document is 
-        # thrown away.
+        # but there's no work ID. We use the document anyway.
         xml = pkgutil.get_data(
             "tests.integrate",
             "files/oclc_missing_pswid.xml")
 
-        status, records = OCLCXMLParser.parse(
+        status, [record] = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
-        eq_([], records)
+        eq_("The Europeans. Washington Square.", record.title)
 
     def test_no_contributors(self):
         # This document has no contributors listed.
