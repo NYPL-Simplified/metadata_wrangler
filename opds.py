@@ -245,10 +245,10 @@ class AcquisitionFeed(OPDSFeed):
             #if mirrored_url:
             #    full_url = mirrored_url
                 
-            qualities.append(("Cover quality", work.cover.quality))
-            if work.cover.scaled_path:
-                thumbnail_url = URLRewriter.rewrite(work.cover.scaled_path)
-            elif work.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
+            qualities.append(("Cover quality", work.primary_edition.cover.quality))
+            if work.primary_edition.cover.scaled_path:
+                thumbnail_url = URLRewriter.rewrite(work.primary_edition.cover.scaled_path)
+            elif work.primary_edition.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
                 thumbnail_url = mirrored_url
         elif identifier.type == Identifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
