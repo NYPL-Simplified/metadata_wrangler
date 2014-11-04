@@ -207,7 +207,7 @@ class GenreData(object):
         self.subgenres = []
 
     def __repr__(self):
-        return "[GenreData: %s]" % self.name
+        return "<GenreData: %s>" % self.name
 
     @property
     def self_and_subgenres(self):

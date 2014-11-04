@@ -52,6 +52,7 @@ class TestOPDS(DatabaseTest):
 
         self.lanes = LaneList.from_description(
             self._db,
+            None,
             [dict(name="Fiction",
                   fiction=True,
                   audience=Classifier.AUDIENCE_ADULT,
@@ -62,37 +63,91 @@ class TestOPDS(DatabaseTest):
                  fiction=Lane.BOTH_FICTION_AND_NONFICTION,
                  audience=Classifier.AUDIENCE_YOUNG_ADULT,
                  genres=[]),
+             dict(name="Romance", fiction=True, genres=[],
+                  sublanes=[
+                      dict(name="Contemporary Romance")
+                  ]
+              ),
          ]
         )
 
+        class FakeConf(object):
+            name = None
+            sublanes = None
+            pass
+
+        self.conf = FakeConf()
+        self.conf.sublanes = self.lanes
     
     def test_navigation_feed(self):
-        original_feed = NavigationFeed.main_feed(self.lanes)
+        original_feed = NavigationFeed.main_feed(self.conf)
         parsed = feedparser.parse(unicode(original_feed))
         feed = parsed['feed']
-        link = [link for link in feed['links'] if link['rel'] == 'self'][0]
-        assert link['href'].endswith("/lanes/")
+
+        # There's a self link.
+        alternate, self_link, start_link = sorted(feed.links)
+        assert self_link['href'].endswith("/lanes/")
+
+        # There's a link to the top level, which is the same as the
+        # self link.
+        assert start_link['href'].endswith("/lanes/")
+        eq_("start", start_link['rel'])
+        eq_(NavigationFeed.NAVIGATION_FEED_TYPE, start_link['type'])
 
         # Every lane has an entry.
-        eq_(3, len(parsed['entries']))
+        eq_(4, len(parsed['entries']))
         tags = [x['title'] for x in parsed['entries']]
-        eq_(['Fantasy', 'Fiction', 'Young Adult'], sorted(tags))
+        eq_(['Fantasy', 'Fiction', 'Romance', 'Young Adult'], sorted(tags))
 
-        # Let's take one entry as an example.
+        # Let's look at one entry, Fiction, which has no sublanes.
         toplevel = [x for x in parsed['entries'] if x.title == 'Fiction'][0]
         eq_("tag:Fiction", toplevel.id)
 
         # There are two links to acquisition feeds.
         self_link, featured, by_author = sorted(toplevel['links'])
-        assert featured['href'].endswith("/lanes/Fiction")
+        assert featured['href'].endswith("/feed/Fiction")
         eq_("Featured", featured['title'])
         eq_(NavigationFeed.FEATURED_REL, featured['rel'])
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, featured['type'])
 
-        assert by_author['href'].endswith("/lanes/Fiction?order=author")
-        eq_("All books", by_author['title'])
-        eq_("subsection", by_author['rel'])
+        assert by_author['href'].endswith("/feed/Fiction?order=author")
+        eq_("Look inside Fiction", by_author['title'])
+        # eq_(None, by_author.get('rel'))
         eq_(NavigationFeed.ACQUISITION_FEED_TYPE, by_author['type'])
+
+        # Now let's look at one entry, Romance, which has a sublane.
+        toplevel = [x for x in parsed['entries'] if x.title == 'Romance'][0]
+        eq_("tag:Romance", toplevel.id)
+
+        # Instead of an acquisition feed (by author), we have a navigation feed
+        # (the sublanes of Romance).
+        self_link, featured, sublanes = sorted(toplevel['links'])
+        assert sublanes['href'].endswith("/lanes/Romance")
+        eq_("Look inside Romance", sublanes['title'])
+        eq_("subsection", sublanes['rel'])
+        eq_(NavigationFeed.NAVIGATION_FEED_TYPE, sublanes['type'])
+
+    def test_navigation_feed_for_sublane(self):
+        original_feed = NavigationFeed.main_feed(self.conf.sublanes.by_name['Romance'])
+        parsed = feedparser.parse(unicode(original_feed))
+        feed = parsed['feed']
+
+        start_link, up_link, alternate_link, self_link = sorted(feed.links)
+
+        # There's a self link.
+        assert self_link['href'].endswith("/lanes/Romance")
+        eq_("self", self_link['rel'])
+
+        # There's a link to the top level.
+        assert start_link['href'].endswith("/lanes/")
+        eq_("start", start_link['rel'])
+        eq_(NavigationFeed.NAVIGATION_FEED_TYPE, start_link['type'])
+
+        # There's a link to one level up.
+        assert up_link['href'].endswith("/lanes/")
+        eq_("up", up_link['rel'])
+        eq_(NavigationFeed.NAVIGATION_FEED_TYPE, up_link['type'])
+
 
     def test_acquisition_feed(self):
         work = self._work(with_open_access_download=True, authors="Alice")

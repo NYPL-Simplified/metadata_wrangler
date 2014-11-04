@@ -165,14 +165,6 @@ class AcquisitionFeed(OPDSFeed):
                     link['{%s}activeFacet' % opds_ns] = "true"
                 self.add_link(**link)
 
-        for sublane in sublanes:
-            url = self.lane_url(sublane)
-            self.add_link(
-                href=url, title=sublane.name, 
-                type=self.ACQUISITION_FEED_TYPE,
-                rel="http://library-simplified.com/rel/sublane",
-            )
-
     @classmethod
     def featured(cls, _db, languages, lane):
         url = cls.lane_url(lane)
@@ -319,16 +311,38 @@ class AcquisitionFeed(OPDSFeed):
 class NavigationFeed(OPDSFeed):
 
     @classmethod
-    def main_feed(self, lanes):
+    def main_feed(self, lane):
+        if lane.name:
+            name = "Navigation feed for %s" % lane.name
+        else:
+            name = "Navigation feed"
         feed = NavigationFeed(
-            "Navigation feed",
-            url=url_for('navigation_feed', _external=True))
+            name,
+            url=url_for('navigation_feed', lane=lane.name, _external=True))
 
-        for lane in lanes:
+        top_level_feed = feed.add_link(
+            rel="start",
+            type=self.NAVIGATION_FEED_TYPE,
+            href=url_for('navigation_feed', _external=True),
+        )
+
+        if lane.name:
+            if lane.parent:
+                parent_name = lane.parent.name
+            else:
+                parent_name = None
+            parent_url = url_for(
+                'navigation_feed', lane=parent_name, _external=True)
+            feed.add_link(
+                rel="up",
+                href=parent_url,
+                type=self.NAVIGATION_FEED_TYPE,
+            )
+
+        for lane in lane.sublanes:
             links = []
 
             for title, order, rel in [
-                    ('All books', 'author', 'subsection'),
                     ('Featured', None, self.FEATURED_REL)
             ]:
                 link = E.link(
@@ -338,6 +352,23 @@ class NavigationFeed(OPDSFeed):
                     title=title,
                 )
                 links.append(link)
+
+            if lane.sublanes.lanes:
+                navigation_link = E.link(
+                    type=self.NAVIGATION_FEED_TYPE,
+                    href=url_for("navigation_feed", lane=lane.name, _external=True),
+                    rel="subsection",
+                    title="Look inside %s" % lane.name,
+                )
+                links.append(navigation_link)
+            else:
+                link = E.link(
+                    type=self.ACQUISITION_FEED_TYPE,
+                    href=self.lane_url(lane, 'author'),
+                    title="Look inside %s" % lane.name,
+                )
+                links.append(link)
+
 
             feed.feed.append(
                 E.entry(

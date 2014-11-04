@@ -2757,7 +2757,7 @@ class LaneList(object):
 
     @classmethod
     def from_description(self, _db, parent_lane, description):
-        lanes = LaneList()
+        lanes = LaneList(parent_lane)
         if parent_lane:
             default_fiction = parent_lane.fiction
             default_audience = parent_lane.audience
@@ -2786,12 +2786,13 @@ class LaneList(object):
                             l.get('sublanes', [])
                         )                            
             lanes.add(lane)
-            for sublane in lane.sublanes:
+            for sublane in lane.sublanes.lanes:
                 lanes.add(sublane)
 
         return lanes
 
-    def __init__(self):
+    def __init__(self, parent=None):
+        self.parent = parent
         self.lanes = []
         self.by_name = dict()
 
@@ -2799,7 +2800,7 @@ class LaneList(object):
         return self.lanes.__iter__()
 
     def add(self, lane):
-        if not lane.parent:
+        if lane.parent == self.parent:
             self.lanes.append(lane)
         if lane.name in self.by_name:
             raise ValueError("Duplicate lane: %s" % lane.name)
