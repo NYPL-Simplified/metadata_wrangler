@@ -82,7 +82,7 @@ if os.environ.get('TESTING') != "True":
     mystery = Lane(_db, name="Crime, Thrillers & Mystery",
                    genres = [genres.Crime_Thrillers_Mystery],
                    include_subgenres=True,
-                   fiction=None,
+                   fiction=Lane.BOTH_FICTION_AND_NONFICTION,
                    audience=Classifier.AUDIENCE_ADULT,
                    sublanes=[
                        genres.Mystery,
@@ -118,6 +118,7 @@ if os.environ.get('TESTING') != "True":
                 genres=[
                     genres.Cooking,
                     genres.Health_Diet],
+                fiction=False,
                 include_subgenres=True,
                 sublanes=[
                     Lane(_db, name="Cooking", genres=[genres.Cooking]),
@@ -131,6 +132,7 @@ if os.environ.get('TESTING') != "True":
         _db, name="Study Aids & Reference",
         genres=[genres.Reference],
         include_subgenres=True,
+        fiction=False,
         sublanes=[
             genres.Study_Aids,
             genres.Foreign_Language_Study,
@@ -161,14 +163,14 @@ if os.environ.get('TESTING') != "True":
         _db, name="Humor & Entertainment",
         genres=[genres.Humor_Entertainment],
         include_subgenres=True,
-        fiction=None,
+        fiction=False,
         sublanes=[
-            genres.Humor,
-            genres.Music,
-            genres.Film_TV,
+            Lane(_db, name="Humor", genres=[genres.Humor],
+                 fiction=Lane.BOTH_FICTION_AND_NONFICTION),
+            Lane(_db, name="Music", genres=[genres.Music]),
+            Lane(_db, name="Film & TV", genres=[genres.Film_TV]),
             Lane(_db, name="Performing Arts",
-                 genres=[genres.Performing_Arts,
-                         genres.Dance]),
+                 genres=[genres.Performing_Arts, genres.Dance]),
         ],
     )
 

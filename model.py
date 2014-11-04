@@ -2948,7 +2948,11 @@ class Lane(object):
 
         """
         audience = self.audience
-        fiction = fiction or self.fiction or self.FICTION_DEFAULT_FOR_GENRE
+        if fiction is None:
+            if self.fiction is not None:
+                fiction = self.fiction
+            else:
+                fiction = self.FICTION_DEFAULT_FOR_GENRE
         q = self._db.query(Work).join(Work.primary_edition).options(
             joinedload('license_pools').joinedload('data_source'),
             joinedload('work_genres')
@@ -2957,7 +2961,7 @@ class Lane(object):
             # No genre plus a boolean value for `fiction` means
             # fiction or nonfiction not associated with any genre.
             q = Work.with_no_genres(q)
-        else:
+        elif self.genres is not None:
             # Find works that are assigned to the given genres. This
             # may also turn into a restriction on the fiction status.
             fiction_default_by_genre = (fiction == self.FICTION_DEFAULT_FOR_GENRE)
