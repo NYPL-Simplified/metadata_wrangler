@@ -2755,6 +2755,16 @@ class Classification(Base):
 class LaneList(object):
     """A list of lanes such as you might see in an OPDS feed."""
 
+    def __repr__(self):
+        parent = ""
+        if self.parent:
+            parent = "parent=%s, " % self.parent.name
+
+        return "<LaneList: %slanes=[%s]>" % (
+            parent,
+            ", ".join([repr(x) for x in self.lanes])
+        )
+
     @classmethod
     def from_description(self, _db, parent_lane, description):
         lanes = LaneList(parent_lane)
@@ -2774,6 +2784,7 @@ class LaneList(object):
             elif isinstance(lane_description, Lane):
                 # The Lane object has already been created.
                 lane = lane_description
+                lane.parent = parent_lane
             else:
                 # A more complicated lane. Its description is a bunch
                 # of arguments to the Lane constructor.
@@ -2814,6 +2825,13 @@ class Lane(object):
     UNCLASSIFIED = "unclassified"
     BOTH_FICTION_AND_NONFICTION = "both fiction and nonfiction"
     FICTION_DEFAULT_FOR_GENRE = "fiction default for genre"
+
+    def __repr__(self):
+        if self.sublanes.lanes:
+            sublanes = " (sublanes=%d)" % len(self.sublanes.lanes)
+        else:
+            sublanes = ""
+        return "<Lane %s%s>" % (self.name, sublanes)
 
     @classmethod
     def everything(cls, _db):
