@@ -549,7 +549,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 "text/html", "tag:short")
 
         # Add measurements: rating and popularity
-        if info['starRating'] is not None and info['starRating'] > 0:
+        if info.get('starRating') is not None and info['starRating'] > 0:
             cls._add_value_as_measurement(
                 input_source, identifier, Measurement.RATING,
                 info['starRating'])
