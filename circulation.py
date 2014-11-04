@@ -61,6 +61,24 @@ class Conf:
 if os.environ.get('TESTING') != "True":
     _db = production_session()
 
+    science = Lane(_db, name="Science & Tech",
+                   genres = [genres.Science_Technology_Nature],
+                   include_subgenres=True,
+                   fiction=False,
+                   audience=Classifier.AUDIENCE_ADULT,
+                   sublanes=[
+                       genres.Science,
+                       genres.Nature,
+                       genres.Technology_Engineering,
+                       genres.Computers,
+                       genres.Social_Science,
+                       genres.Psychology,
+                       genres.Mathematics,
+                       genres.Medical,
+                   ],
+               )
+
+
     mystery = Lane(_db, name="Crime, Thrillers & Mystery",
                    genres = [genres.Crime_Thrillers_Mystery],
                    include_subgenres=True,
@@ -70,15 +88,11 @@ if os.environ.get('TESTING') != "True":
                        genres.Mystery,
                        genres.Women_Detectives,
                        genres.Police_Procedurals,
-                       genres.Hard_Boiled,
                        genres.Thrillers,
-                       Lane(_db, name="Espionage",
-                            genres=[genres.Espionage], fiction=True),
                        Lane(_db, name="True Crime",
                             genres=[genres.True_Crime], fiction=False),
                        genres.Action_Adventure,
                    ],
-
                )
 
     romance = Lane(_db, name="Romance",
@@ -100,6 +114,64 @@ if os.environ.get('TESTING') != "True":
               ],
           )
 
+    food = Lane(_db, name="Food and Health",
+                genres=[
+                    genres.Cooking,
+                    genres.Health_Diet],
+                include_subgenres=True,
+                sublanes=[
+                    Lane(_db, name="Cooking", genres=[genres.Cooking]),
+                    genres.Health_Diet,
+                    genres.Vegetarian_Vegan,
+                    genres.Bartending_Cocktails,
+                ]
+            )
+
+    reference = Lane(
+        _db, name="Study Aids & Reference",
+        genres=[genres.Reference],
+        include_subgenres=True,
+        sublanes=[
+            genres.Study_Aids,
+            genres.Foreign_Language_Study,
+            Lane(_db, name="General Reference", genres=[genres.Reference],
+                 include_subgenres=False),
+            genres.Law,
+            genres.Dictionaries,
+            genres.Encyclopedias,
+        ],
+
+    )
+
+    business = Lane(
+        _db, name="Personal Finance & Business",
+        genres=[genres.Business_Economics],
+        include_subgenres=True,
+        sublanes=[
+            genres.Personal_Finance_Investing,
+            Lane(_db, name="Business", genres=[genres.Business_Economics],
+                 include_subgenres=False),
+            genres.Economics,
+            genres.Management_Leadership,
+            genres.Real_Estate,
+        ],
+    )
+
+    humor = Lane(
+        _db, name="Humor & Entertainment",
+        genres=[genres.Humor_Entertainment],
+        include_subgenres=True,
+        fiction=None,
+        sublanes=[
+            genres.Humor,
+            genres.Music,
+            genres.Film_TV,
+            Lane(_db, name="Performing Arts",
+                 genres=[genres.Performing_Arts,
+                         genres.Dance]),
+        ],
+    )
+
     lanes = LaneList.from_description(
         _db,
         None,
@@ -117,12 +189,12 @@ if os.environ.get('TESTING') != "True":
          genres.Science_Fiction,
          genres.Historical_Fiction,
          genres.Horror,
-         genres.Cooking,
+         food,
          romance,
-         genres.Science_Technology_Nature,
+         science,
          genres.Self_Help,
          genres.Graphic_Novels_Comics,
-         genres.Reference,
+         reference,
          dict(
              name="Young Adult",
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
@@ -141,12 +213,11 @@ if os.environ.get('TESTING') != "True":
          genres.Art_Architecture_Design,
          genres.Crafts_Hobbies_Games,
          # genres.Gardening,
-         genres.Health_Diet,
-         genres.Humor_Entertainment,
+         humor,
          genres.Parenting_Family,
          genres.Religion_Spirituality,
          genres.Criticism_Philosophy,
-         genres.Business_Economics,
+         business,
          genres.Politics_Current_Events,
          genres.Travel_Adventure_Sports,
          dict(

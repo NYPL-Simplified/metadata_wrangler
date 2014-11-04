@@ -2948,7 +2948,7 @@ class Lane(object):
 
         """
         audience = self.audience
-        fiction = fiction or self.fiction
+        fiction = fiction or self.fiction or self.FICTION_DEFAULT_FOR_GENRE
         q = self._db.query(Work).join(Work.primary_edition).options(
             joinedload('license_pools').joinedload('data_source'),
             joinedload('work_genres')
