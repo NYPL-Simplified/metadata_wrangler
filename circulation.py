@@ -147,13 +147,13 @@ if os.environ.get('TESTING') != "True":
         _db, name="Personal Finance & Business",
         genres=[genres.Business_Economics],
         include_subgenres=True,
+        fiction=False,
         sublanes=[
             genres.Personal_Finance_Investing,
             Lane(_db, name="Business", genres=[genres.Business_Economics],
                  include_subgenres=False),
             genres.Economics,
             genres.Management_Leadership,
-            genres.Real_Estate,
         ],
     )
 
