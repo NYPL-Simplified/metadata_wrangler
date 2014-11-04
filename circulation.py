@@ -60,6 +60,26 @@ class Conf:
 
 if os.environ.get('TESTING') != "True":
     _db = production_session()
+
+    romance = Lane(_db, name="Romance",
+              genres=[
+                  genres.Romance, genres.Contemporary_Romance,
+                  genres.Historical_Romance, genres.Paranormal_Romance,
+                  genres.Regency_Romance, genres.Suspense_Romance],
+              include_subgenres=False,
+              fiction=True,
+              audience=Classifier.AUDIENCE_ADULT,
+              sublanes=[
+                  Lane(_db, name="General Romance",
+                       genres=[genres.Romance, genres.Contemporary_Romance]),
+                  genres.Historical_Romance,
+                  genres.Paranormal_Romance,
+                  genres.Regency_Romance,
+                  genres.Suspense_Romance,
+                  genres.Erotica,
+              ],
+          )
+
     lanes = LaneList.from_description(
         _db,
         None,
@@ -77,24 +97,7 @@ if os.environ.get('TESTING') != "True":
          genres.Science_Fiction,
          genres.Historical_Fiction,
          genres.Cooking,
-         Lane(_db, name="Romance",
-              genres=[
-                  genres.Romance, genres.Contemporary_Romance,
-                  genres.Historical_Romance, genres.Paranormal_Romance,
-                  genres.Regency_Romance, genres.Suspense_Romance],
-              include_subgenres=False,
-              fiction=True,
-              audience=Classifier.AUDIENCE_ADULT,
-              sublanes=[
-                  Lane(_db, name="General Romance",
-                       genres=[genres.Romance, genres.Contemporary_Romance]),
-                  genres.Historical_Romance,
-                  genres.Paranormal_Romance,
-                  genres.Regency_Romance,
-                  genres.Suspense_Romance,
-                  genres.Erotica,
-              ],
-          ),
+         romance,
          genres.Science_Technology_Nature,
          genres.Self_Help,
          genres.Graphic_Novels_Comics,
