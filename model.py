@@ -2756,7 +2756,7 @@ class LaneList(object):
 
     @classmethod
     def from_description(self, _db, parent_lane, description):
-        lanes = LaneList()
+        lanes = LaneList(parent_lane)
         if parent_lane:
             default_fiction = parent_lane.fiction
             default_audience = parent_lane.audience
@@ -2769,7 +2769,7 @@ class LaneList(object):
                 # This very simple lane is the default view for a genre.
                 genre = lane_description
                 lane = Lane(_db, genre.name, [genre], True, default_fiction,
-                            default_audience)
+                            default_audience, parent_lane)
             elif isinstance(lane_description, Lane):
                 # The Lane object has already been created.
                 lane = lane_description
@@ -2781,15 +2781,17 @@ class LaneList(object):
                             l.get('include_subgenres', True),
                             l.get('fiction', default_fiction),
                             l.get('audience', default_audience),
+                            parent_lane,
                             l.get('sublanes', [])
                         )                            
             lanes.add(lane)
-            for sublane in lane.sublanes:
+            for sublane in lane.sublanes.lanes:
                 lanes.add(sublane)
 
         return lanes
 
-    def __init__(self):
+    def __init__(self, parent=None):
+        self.parent = parent
         self.lanes = []
         self.by_name = dict()
 
@@ -2797,7 +2799,8 @@ class LaneList(object):
         return self.lanes.__iter__()
 
     def add(self, lane):
-        self.lanes.append(lane)
+        if lane.parent == self.parent:
+            self.lanes.append(lane)
         if lane.name in self.by_name:
             raise ValueError("Duplicate lane: %s" % lane.name)
         self.by_name[lane.name] = lane
@@ -2821,6 +2824,7 @@ class Lane(object):
                  fiction=True, audience=Classifier.AUDIENCE_ADULT,
                  parent=None, sublanes=[]):
         self.name = name
+        self.parent = parent
         self._db = _db
 
         if genres in (None, self.UNCLASSIFIED):
@@ -2840,7 +2844,7 @@ class Lane(object):
             self.include_subgenres=include_subgenres
         self.fiction = fiction
         self.audience = audience
-        self.sublanes = LaneList.from_description(_db, parent, sublanes)
+        self.sublanes = LaneList.from_description(_db, self, sublanes)
 
     def search(self, languages, query):
         """Find works in this lane that match a search query.

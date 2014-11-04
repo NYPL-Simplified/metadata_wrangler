@@ -507,6 +507,7 @@ class TestLane(DatabaseTest):
         super(TestLane, self).setup()
         self.lanes = LaneList.from_description(
             self._db,
+            None,
             [dict(name="Fiction",
                   fiction=True,
                   audience=Classifier.AUDIENCE_ADULT,
@@ -1019,6 +1020,7 @@ class TestLaneList(DatabaseTest):
     def test_from_description(self):
         lanes = LaneList.from_description(
             self._db,
+            None,
             [dict(name="Fiction",
                   fiction=True,
                   audience=Classifier.AUDIENCE_ADULT,

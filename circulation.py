@@ -49,12 +49,14 @@ feed_cache = dict()
 
 class Conf:
     db = None
-    lanes = None
+    sublanes = None
+    name = None
+    parent = None
 
     @classmethod
     def initialize(cls, _db, lanes):
         cls.db = _db
-        cls.lanes = lanes
+        cls.sublanes = lanes
 
 if os.environ.get('TESTING') != "True":
     _db = production_session()
@@ -221,15 +223,23 @@ def requires_auth(f):
 def index():    
     return redirect(url_for('.navigation_feed'))
 
-@app.route('/lanes/')
-def navigation_feed():
+@app.route('/lanes', defaults=dict(lane=None))
+@app.route('/lanes/', defaults=dict(lane=None))
+@app.route('/lanes/<lane>')
+def navigation_feed(lane):
+    if lane is None:
+        lane = Conf
+    else:
+        lane = Conf.sublanes.by_name[lane]
+
     languages = languages_for_request()
-    key = (",".join(languages), 'navigation')
+    key = (",".join(languages), 'navigation', lane)
     # This feed will not change unless the application is upgraded,
     # so there's no need to expire the cache.
     if key in feed_cache:
         return feed_cache[key]
-    feed = NavigationFeed.main_feed(Conf.lanes)
+        
+    feed = NavigationFeed.main_feed(lane)
 
     feed.add_link(
         rel="search", 
@@ -252,14 +262,14 @@ def active_loans():
     feed = AcquisitionFeed.active_loans_for(flask.request.patron)
     return unicode(feed)
 
-@app.route('/lanes/<lane>')
+@app.route('/feed/<lane>')
 def feed(lane):
     languages = languages_for_request()
     arg = flask.request.args.get
     order = arg('order', 'recommended')
     last_seen_id = arg('last_seen', None)
 
-    lane = Conf.lanes.by_name[lane]
+    lane = Conf.sublanes.by_name[lane]
 
     key = (lane, ",".join(languages), order)
     if not last_seen_id and key in feed_cache:

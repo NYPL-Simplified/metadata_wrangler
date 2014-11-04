@@ -71,8 +71,12 @@ class CirculationTest(DatabaseTest):
 
         self.lanes = LaneList.from_description(
             self._db,
+            None,
             [dict(name="Fiction", fiction=True, genres=[]),
-             dict(name="Nonfiction", fiction=False, genres=[])])
+             dict(name="Nonfiction", fiction=False, genres=[]),
+
+             dict(name="Romance", fiction=True, genres=[],
+                  subgenres=[dict(name="Contemporary Romance")])])
 
         circulation.Conf.initialize(self._db, self.lanes)
         self.circulation = circulation
@@ -106,7 +110,7 @@ class TestNavigationFeed(CirculationTest):
 
     def test_presence_of_extra_links(self):
         with self.app.test_request_context("/"):
-            response = circulation.navigation_feed()
+            response = circulation.navigation_feed(None)
             feed = feedparser.parse(response)
             links = feed['feed']['links']
             for expect_rel, expect_href_end in (
