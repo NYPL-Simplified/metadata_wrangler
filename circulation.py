@@ -352,7 +352,7 @@ def lane_search(lane):
     languages = languages_for_request()
     query = flask.request.args.get('q')
     if lane:
-        lane = Conf.lanes.by_name[lane]    
+        lane = Conf.sublanes.by_name[lane]    
     else:
         # Create a synthetic Lane that includes absolutely everything.
         lane = Lane.everything(Conf.db)
