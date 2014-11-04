@@ -61,6 +61,26 @@ class Conf:
 if os.environ.get('TESTING') != "True":
     _db = production_session()
 
+    mystery = Lane(_db, name="Crime, Thrillers & Mystery",
+                   genres = [genres.Crime_Thrillers_Mystery],
+                   include_subgenres=True,
+                   fiction=None,
+                   audience=Classifier.AUDIENCE_ADULT,
+                   sublanes=[
+                       genres.Mystery,
+                       genres.Women_Detectives,
+                       genres.Police_Procedurals,
+                       genres.Hard_Boiled,
+                       genres.Thrillers,
+                       Lane(_db, name="Espionage",
+                            genres=[genres.Espionage], fiction=True),
+                       Lane(_db, name="True Crime",
+                            genres=[genres.True_Crime], fiction=False),
+                       genres.Action_Adventure,
+                   ],
+
+               )
+
     romance = Lane(_db, name="Romance",
               genres=[
                   genres.Romance, genres.Contemporary_Romance,
@@ -88,7 +108,7 @@ if os.environ.get('TESTING') != "True":
               audience=genres.Classifier.AUDIENCE_ADULT,
               genres=Lane.UNCLASSIFIED),
          genres.Biography_Memoir,
-         genres.Crime_Thrillers_Mystery,
+         mystery,
          dict(name="Nonfiction",
               fiction=False,
               audience=genres.Classifier.AUDIENCE_ADULT,
@@ -96,6 +116,7 @@ if os.environ.get('TESTING') != "True":
          genres.Fantasy,
          genres.Science_Fiction,
          genres.Historical_Fiction,
+         genres.Horror,
          genres.Cooking,
          romance,
          genres.Science_Technology_Nature,
