@@ -1641,6 +1641,7 @@ class Work(Base):
     LANGUAGE_APPEAL = "Language"
     SETTING_APPEAL = "Setting"
     STORY_APPEAL = "Story"
+    UNKNOWN_APPEAL = "Unknown"
 
     appeal = Column(
         Enum(CHARACTER_APPEAL, LANGUAGE_APPEAL, SETTING_APPEAL,

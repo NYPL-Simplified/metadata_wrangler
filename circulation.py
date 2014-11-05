@@ -61,6 +61,93 @@ class Conf:
 if os.environ.get('TESTING') != "True":
     _db = production_session()
 
+    # art = Lane(_db, name="Art & Design",
+    #            genres = [genres.Art_Architecture_Design],
+    #            include_subgenres=True,
+    #            fiction=False,
+    #            audience=Classifier.AUDIENCE_ADULT,
+    #                sublanes=[
+    #                    genres.Art,
+    #                    genres.Design,
+    #                    genres.Architecture,
+    #                    genres.Fashion,
+    #                    genres.Photography,
+    #            ),
+
+    fiction = Lane(_db, name="Fiction",
+             fiction=True,
+             audience=genres.Classifier.AUDIENCE_ADULT,
+             genres=Lane.UNCLASSIFIED,
+             sublanes=[
+                 Lane(_db, name="General Fiction",
+                      genres=Lane.UNCLASSIFIED),
+                 Lane(_db, name="Literary Fiction",
+                      genres=[genres.Literary_Fiction],
+                      include_subgenres=False
+                  ),
+                 Lane(_db, name="Literary Collections",
+                      genres=[genres.Literary_Collections]),
+                 genres.Classics,
+             ],
+         )
+
+    hobbies_and_games = Lane(
+        _db, name="Hobbies & Home",
+        genres = [
+            genres.Crafts_Cooking_Garden,
+            genres.Crafts_Hobbies_Games,
+            genres.Antiques_Collectibles,
+            genres.Gardening,
+            genres.House_Home,
+            genres.Pets,
+        ],
+        include_subgenres=False,
+        fiction=False,
+        audience=Classifier.AUDIENCE_ADULT,
+        sublanes=[
+            Lane(_db, name="Crafts, Hobbies & Games",
+                 genres = [
+                     genres.Crafts_Hobbies_Games,
+                     genres.Antiques_Collectibles,
+                 ],
+                 include_subgenres=False,
+                 fiction=False,
+             ),
+            genres.House_Home,
+            genres.Gardening,
+            genres.Pets,
+        ],
+    )
+
+    religion = Lane(
+        _db, name="Religion & Spirituality",
+        genres = [genres.Religion_Spirituality],
+        include_subgenres=True,
+        fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+        audience=Classifier.AUDIENCE_ADULT,
+        sublanes=[
+            Lane(_db, name="General Religion & Spirituality",
+                 genres=[genres.Religion_Spirituality, genres.Body_Mind_Spirit,
+                         genres.Hinduism],
+                 include_subgenres=False, fiction=False),
+            genres.Buddhism,
+            Lane(_db, name="Christianity",
+                 genres=[genres.Christianity],
+                 fiction=False),
+            genres.Islam,
+            genres.Judaism,
+            genres.New_Age,
+            Lane(_db, name="Religious Fiction",
+                 genres=[genres.Religion_Spirituality,
+                         genres.Body_Mind_Spirit,
+                         genres.Religious_Fiction,
+                         genres.Christianity],
+                 include_subgenres=False,
+                 fiction=True,
+             ),
+        ],
+    )
+
     science = Lane(_db, name="Science & Tech",
                    genres = [genres.Science_Technology_Nature],
                    include_subgenres=True,
@@ -69,15 +156,31 @@ if os.environ.get('TESTING') != "True":
                    sublanes=[
                        genres.Science,
                        genres.Nature,
-                       genres.Technology_Engineering,
+                       Lane(_db, name="Technology",
+                            genres=[genres.Technology_Engineering],
+                            include_subgenres=False,
+                            fiction=False),
                        genres.Computers,
-                       genres.Social_Science,
+                       Lane(_db, name="Social Science",
+                            genres=[genres.Social_Science],
+                            include_subgenres=False),
                        genres.Psychology,
                        genres.Mathematics,
                        genres.Medical,
                    ],
                )
 
+    philosophy = Lane(
+        _db, name="Criticism & Philosophy",
+        genres = [genres.Criticism_Philosophy],
+        include_subgenres=True,
+        fiction=False,
+        audience=Classifier.AUDIENCE_ADULT,
+        sublanes=[
+            genres.Literary_Criticism,
+            genres.Philosophy,
+            genres.Language_Arts_Disciplines,
+        ])            
 
     mystery = Lane(_db, name="Crime, Thrillers & Mystery",
                    genres = [genres.Crime_Thrillers_Mystery],
@@ -91,7 +194,6 @@ if os.environ.get('TESTING') != "True":
                        genres.Thrillers,
                        Lane(_db, name="True Crime",
                             genres=[genres.True_Crime], fiction=False),
-                       genres.Action_Adventure,
                    ],
                )
 
@@ -128,19 +230,31 @@ if os.environ.get('TESTING') != "True":
                 ]
             )
 
+    family = Lane(
+        _db, name="Parenting & Family",
+        genres=[genres.Parenting_Family],
+        include_subgenres=True,
+        fiction=False,
+        sublanes=[
+            genres.Parenting,
+            genres.Family_Relationships,
+            genres.Education,
+        ]
+    )
+
     reference = Lane(
-        _db, name="Study Aids & Reference",
+        _db, name="Reference & Study Aids",
         genres=[genres.Reference],
         include_subgenres=True,
         fiction=False,
         sublanes=[
             genres.Study_Aids,
             genres.Foreign_Language_Study,
-            Lane(_db, name="General Reference", genres=[genres.Reference],
+            Lane(_db, name="General Reference",
+                 genres=[genres.Reference, genres.Encyclopedias],
                  include_subgenres=False),
             genres.Law,
             genres.Dictionaries,
-            genres.Encyclopedias,
         ],
 
     )
@@ -174,19 +288,37 @@ if os.environ.get('TESTING') != "True":
         ],
     )
 
+    travel = Lane(
+        _db, name="Travel, Adventure & Sports",
+        genres=[genres.Travel_Adventure_Sports],
+        include_subgenres=True,
+        fiction=False,
+        sublanes=[
+            Lane(_db, name="Travel", genres=[genres.Travel],
+                 fiction=Lane.BOTH_FICTION_AND_NONFICTION),
+            Lane(_db, name="Adventure Fiction",
+                 genres=[genres.Action_Adventure], fiction=True),
+            genres.Sports,
+            genres.Transportation,
+        ],
+    )
+
+    poetry_drama = Lane(
+        _db, name="Poetry & Drama",
+        genres=[genres.Poetry, genres.Drama],
+        fiction=Lane.BOTH_FICTION_AND_NONFICTION,
+        sublanes=[
+            genres.Poetry,
+            genres.Drama,
+        ],
+    )
+
     lanes = LaneList.from_description(
         _db,
         None,
-        [dict(name="Fiction",
-              fiction=True,
-              audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=Lane.UNCLASSIFIED),
+        [fiction,
          genres.Biography_Memoir,
          mystery,
-         dict(name="Nonfiction",
-              fiction=False,
-              audience=genres.Classifier.AUDIENCE_ADULT,
-              genres=Lane.UNCLASSIFIED),
          genres.Fantasy,
          genres.Science_Fiction,
          genres.Historical_Fiction,
@@ -212,18 +344,25 @@ if os.environ.get('TESTING') != "True":
              name="African-American",
              genres=[genres.African_American, genres.Urban_Fiction],
          ),
-         genres.Art_Architecture_Design,
-         genres.Crafts_Hobbies_Games,
-         # genres.Gardening,
+         dict(
+             name="Art & Design",
+             genres=[genres.Art_Architecture_Design],
+         ),
+         hobbies_and_games,
          humor,
-         genres.Parenting_Family,
-         genres.Religion_Spirituality,
-         genres.Criticism_Philosophy,
+         family,
+         religion,
+         philosophy,
          business,
          genres.Politics_Current_Events,
-         genres.Travel_Adventure_Sports,
+         travel,
+         poetry_drama,
+         dict(name="Unclassified Nonfiction",
+              fiction=False,
+              audience=genres.Classifier.AUDIENCE_ADULT,
+              genres=Lane.UNCLASSIFIED),
          dict(
-             name="Unclassified",
+             name="Unclassified General",
              fiction=Lane.UNCLASSIFIED,
              genres=Lane.UNCLASSIFIED,
              audience=genres.Classifier.AUDIENCE_ADULT),

@@ -70,7 +70,7 @@ class AppealCalculator(object):
             self.training_dataset_path, self.classifier_path)
         print " Found %s distinct reviews" % len(seen_reviews)
         if not seen_reviews:
-            return None
+            return Work.UNKNOWN_APPEAL
         prediction = self.classifier.predict(counter.row())[0]
         if prediction in self.appeal_names:
             prediction = self.appeal_names[prediction]
@@ -79,5 +79,9 @@ class AppealCalculator(object):
 if __name__ == '__main__':
     data_directory = sys.argv[1]
     _db = production_session()
-    works = Work.with_genre(_db, "Romance")
-    AppealCalculator(_db, data_directory).calculate_for_works(works)
+    calculator = AppealCalculator(_db, data_directory)
+    for genre in ("Historical Romance", "Contemporary Romance", "Historical Romance",
+              "Paranormal Romance", "Suspense Romance", "Regency Romance", "Erotica", 
+              "Romance"):
+        works = Work.with_genre(_db, genre)
+        calculator.calculate_for_works(works)

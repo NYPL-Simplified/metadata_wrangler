@@ -232,8 +232,8 @@ class OverdriveAPI(object):
             print "New book: %r" % wr
 
         pool.update_availability(
-            book['copiesOwned'], book['copiesAvailable'], 0, 
-            book['numberOfHolds'])
+            book.get('copiesOwned',0), book.get('copiesAvailable',0), 0, 
+            book.get('numberOfHolds', 0))
         return pool, was_new
 
     def _get_book_list_page(self, link):
