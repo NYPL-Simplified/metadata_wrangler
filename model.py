@@ -3690,13 +3690,14 @@ class Representation(Base):
         do_get = do_get or cls.simple_http_get
 
         representation = None
+        q = _db.query(Representation).filter(
+            Representation.url==url).filter(
+                Representation.data_source==data_source).order_by(
+                    Representation.fetched_at.desc()).limit(1)
         try:
-            representation = get_one(_db, Representation, url=url, data_source=data_source)
-        except Exception, e:
-            print "ERROR: more than one representation for %s" % url
-            representations = _db.query(Representation).filter(Representation.url==url).filter(Representation.data_source==data_source).all()
-            if representations:
-                representation = representations[0]
+            representation = q.one()
+        except NoResultFound, e:
+            representation = None
 
         # Do we already have a usable representation?
         usable_representation = (

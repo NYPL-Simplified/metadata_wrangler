@@ -7,6 +7,7 @@ from nose.tools import set_trace
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
+from integration.amazon import AmazonAPI
 from integration.appeal import (
     ClassifierFactory,
     FeatureCounter,
@@ -14,7 +15,7 @@ from integration.appeal import (
 from model import (
     DataSource,
     LicensePool,
-    SessionManager,
+    Identifier,
     Genre,
     Work,
     WorkGenre,
@@ -23,6 +24,11 @@ from model import (
 from model import production_session
 
 class AppealCalculator(object):
+
+    appeal_names = dict(language=Work.LANGUAGE_APPEAL,
+                        character=Work.CHARACTER_APPEAL,
+                        setting=Work.SETTING_APPEAL,
+                        story=Work.STORY_APPEAL)
 
     def __init__(self, _db, data_directory):
         self._db = _db
@@ -38,24 +44,35 @@ class AppealCalculator(object):
     def calculate_for_works(self, q, force=False):
         if not force:
             q = q.filter(Work.appeal==None)
-        for work in q:
-            work.appeal = self.calculate_for_work(self, work)
+            c = 0
+            for work in q:
+                work.appeal = self.calculate_for_work(work)
+                print work.title, work.appeal
+                self._db.commit()            
+            last_count = this_count
 
     def calculate_for_work(self, work):
+        seen_reviews = set()
         counter = FeatureCounter(self.feature_names)
         ids = work.all_identifier_ids()
         identifiers = self._db.query(
             Identifier).filter(Identifier.type.in_(
-                [Identifier.ISBN, Identifier.ASIN]))
+                [Identifier.ISBN, Identifier.ASIN])).filter(
+                    Identifier.id.in_(ids))
         for identifier in identifiers:
             for review_title, review in self.amazon_api.fetch_reviews(identifier):
-                counter.add_counts(review_title)
-                counter.add_counts(review)
+                if review not in seen_reviews:
+                    counter.add_counts(review_title)
+                    counter.add_counts(review)
+                    seen_reviews.add(review)
         if not self.classifier:
             self.classifier = ClassifierFactory.from_file(
             self.training_dataset_path, self.classifier_path)
-        set_trace()
-        work.appeal = clf.predict()
+        print " Found %s distinct reviews" % len(seen_reviews)
+        if not seen_reviews:
+            return None
+        prediction = self.classifier.predict(counter.row())[0]
+        return self.appeal_names[prediction]
 
 if __name__ == '__main__':
     data_directory = sys.argv[1]
