@@ -208,7 +208,7 @@ class OverdriveAPI(object):
         status_code, headers, content = self.get(circulation_link, {})
         if status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
-                book['id'], response.status_code)
+                book['id'], status_code)
             return
 
         book.update(json.loads(content))

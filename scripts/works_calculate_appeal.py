@@ -72,7 +72,9 @@ class AppealCalculator(object):
         if not seen_reviews:
             return None
         prediction = self.classifier.predict(counter.row())[0]
-        return self.appeal_names[prediction]
+        if prediction in self.appeal_names:
+            prediction = self.appeal_names[prediction]
+        return prediction
 
 if __name__ == '__main__':
     data_directory = sys.argv[1]
