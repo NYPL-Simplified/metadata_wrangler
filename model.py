@@ -3048,8 +3048,8 @@ class WorkFeed(object):
         self.order_by = order_by
         # In addition to the given order, we order by author,
         # then title, then work ID.
-        for i in (Edition.sort_author, Edition.author,
-                  Edition.sort_title, Edition.title, 
+        for i in (Edition.sort_author, 
+                  Edition.sort_title, 
                   Edition.id):
             if i not in self.order_by:
                 self.order_by.append(i)
@@ -3940,3 +3940,18 @@ class ImageScaler(object):
             resultset = q.limit(batch_size).all()
         self._db.commit()
 
+from sqlalchemy.sql import compiler
+from psycopg2.extensions import adapt as sqlescape
+
+def dump_query(query):
+    dialect = query.session.bind.dialect
+    statement = query.statement
+    comp = compiler.SQLCompiler(dialect, statement)
+    comp.compile()
+    enc = dialect.encoding
+    params = {}
+    for k,v in comp.params.iteritems():
+        if isinstance(v, unicode):
+            v = v.encode(enc)
+        params[k] = sqlescape(v)
+    return (comp.string.encode(enc) % params).decode(enc)
