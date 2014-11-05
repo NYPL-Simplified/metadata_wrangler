@@ -1638,6 +1638,17 @@ class Work(Base):
     # The overall current popularity of this work.
     popularity = Column(Float, index=True)
 
+    CHARACTER_APPEAL = "Character"
+    LANGUAGE_APPEAL = "Language"
+    SETTING_APPEAL = "Setting"
+    STORY_APPEAL = "Story"
+
+    appeal = Column(
+        Enum(CHARACTER_APPEAL, LANGUAGE_APPEAL, SETTING_APPEAL,
+             STORY_APPEAL, name="appeal"),
+        default=None, index=True
+    )
+
     # A Work may be merged into one other Work.
     was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
     was_merged_into = relationship("Work", remote_side = [id])
@@ -1708,6 +1719,13 @@ class Work(Base):
             self.summary_text = resource.content
 
     @classmethod
+    def with_genre(cls, _db, genre):
+        """Find all Works classified under the given genre."""
+        if isinstance(genre, basestring):
+            genre, ignore = Genre.lookup(_db, genre)
+        return _db.query(Work).join(WorkGenre).filter(WorkGenre.genre==genre)
+
+    @classmethod
     def with_no_genres(self, q):
         """Modify a query so it finds only Works that are not classified under
         any genre."""
@@ -1723,13 +1741,18 @@ class Work(Base):
         Identifiers.
         """
         _db = Session.object_session(self)
+        identifier_ids = self.all_identifier_ids(recursion_level)
+        q = _db.query(Edition).filter(
+            Edition.primary_identifier_id.in_(identifier_ids))
+        return q
+
+    def all_identifier_ids(self, recursion_level=5):
+        _db = Session.object_session(self)
         primary_identifier_ids = [
             x.primary_identifier.id for x in self.editions]
         identifier_ids = Identifier.recursively_equivalent_identifier_ids_flat(
             _db, primary_identifier_ids, recursion_level)
-        q = _db.query(Edition).filter(
-            Edition.primary_identifier_id.in_(identifier_ids))
-        return q
+        return identifier_ids
 
     @property
     def language_code(self):

@@ -9,7 +9,7 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
 from integration.amazon import (
-    AmazonScraper,
+    AmazonAPI,
 )
 
 from integration.appeal import (
@@ -33,7 +33,7 @@ class App:
         self.training_out_path = training_out_path
         self.db = production_session()
         self.amazon = DataSource.lookup(self.db, DataSource.AMAZON)
-        self.api = AmazonScraper(self.db)
+        self.api = AmazonAPI(self.db)
 
         self.seen = set()
         if os.path.exists(training_out_path):
@@ -86,7 +86,7 @@ class App:
         identifier, is_new = Identifier.for_foreign_id(self.db, type, asin)
         review_words = []
         print identifier.identifier, title
-        for review_title, review in self.api.scrape_reviews(identifier):
+        for review_title, review in self.api.fetch_reviews(identifier):
             review_words.extend(self.filter.filter(review_title))
             review_words.extend(self.filter.filter(review))
 

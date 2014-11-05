@@ -1,4 +1,4 @@
-"""Scrape one  objects into Work objects."""
+"""Fetch data from Amazon about one identifier."""
 
 import os
 import site
@@ -9,7 +9,7 @@ d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
 from integration.amazon import (
-    AmazonScraper,
+    AmazonAPI,
 )
 
 from model import(
@@ -29,10 +29,10 @@ if __name__ == '__main__':
         type = Identifier.ASIN
     db = production_session()
     identifier, ignore = Identifier.for_foreign_id(db, type, asin)
-    scraper = AmazonScraper(db)
-    print scraper.scrape_bibliographic_info(identifier)
+    api = AmazonAPI(db)
+    print api.fetch_bibliographic_info(identifier)
     print
-    for review in scraper.scrape_reviews(identifier):
+    for review in api.fetch_reviews(identifier):
         print review
         print "-" * 80
     db.commit()
