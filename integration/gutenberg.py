@@ -743,38 +743,3 @@ class GutenbergBookshelfClient(object):
                 bookshelf_name = bookshelf_name.strip()
                 shelves.append((new_url, bookshelf_name))
         return lists, shelves
-
-
-# class PopularityScraper(object):
-
-#     start_url = "http://www.gutenberg.org/ebooks/search/?sort_order=downloads"
-
-#     def scrape(self):
-#         previous_page = None
-#         next_page = self.start_url
-#         while next_page:
-#             previous_page, next_page = self.scrape_page(
-#                 previous_page, next_page)
-#             time.sleep(5 + random.random())
-
-#     def scrape_page(self, referer, url):
-#         headers = dict()
-#         if referer:
-#             headers['Referer']=referer
-#         response = requests.get(url, headers=headers)
-#         if response.status_code != 200:
-#             raise Exception("Request to %s got status code %s: %s" % (
-#                 url, response.status_code, response.content))
-#         soup = BeautifulSoup(response.content, 'lxml')
-#         set_trace()
-#         for book in soup.find_all('li', 'booklink'):
-#             id = book.find('a')['href']
-#             downloads = book.find('span', 'extra')
-#             print id, downloads
-
-#         next_page = soup.find(accesskey='+')
-#         if next_page:
-#             return url, urljoin(url, next_page['href'])
-#         else:
-#             return None, None
-            

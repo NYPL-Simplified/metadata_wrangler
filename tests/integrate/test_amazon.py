@@ -15,16 +15,16 @@ from model import (
     Subject,
 )
 
-class DummyAmazonScraper(object):
+class DummyAmazonAPI(object):
 
     def __init__(self):
         self.bibliographic_info = []
         self.reviews = []
 
-    def scrape_bibliographic_info(self, asin):
+    def fetch_bibliographic_info(self, asin):
         return self.bibliographic_info.pop()
 
-    def scrape_reviews(self, asin):
+    def fetch_reviews(self, asin):
         if self.reviews:
             return self.reviews.pop()
         else:
@@ -37,7 +37,7 @@ class TestCoverageProvider(DatabaseTest):
         provider = AmazonCoverageProvider(self._db, "")
 
         # Queue up some fake bibliographic info
-        provider.amazon = DummyAmazonScraper()
+        provider.amazon = DummyAmazonAPI()
         d = dict(identifiers=[(Identifier.ASIN, "foo")],
                  measurements={"foo measurement" : 101},
                  keywords=["foo"],

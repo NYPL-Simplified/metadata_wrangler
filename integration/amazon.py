@@ -23,7 +23,7 @@ from sqlalchemy import alias
 
 from pdb import set_trace
 
-class AmazonScraper(object):
+class AmazonAPI(object):
     
     SORT_REVIEWS_BY_DATE = "bySubmissionDateDescending"
     SORT_REVIEWS_BY_HELPFULNESS = "byRankDescending"
@@ -38,10 +38,10 @@ class AmazonScraper(object):
         self._db = _db
         self.data_source = DataSource.lookup(_db, DataSource.AMAZON)
 
-    def scrape(self, identifier):
-        identifiers, subjects, rating = self.scrape_bibliographic_info(
+    def fetch(self, identifier):
+        identifiers, subjects, rating = self.fetch_bibliographic_info(
             identifier)
-        reviews = self.scrape_reviews(identifier)
+        reviews = self.fetch_reviews(identifier)
         return identifiers, subjects, rating, reviews
     
     def get_bibliographic_info(self, identifier, get_method=None):
@@ -100,14 +100,14 @@ class AmazonScraper(object):
             time.sleep(60)
         return representation
 
-    def scrape_bibliographic_info(self, identifier):
+    def fetch_bibliographic_info(self, identifier):
         parser = AmazonBibliographicParser()
         representation = self.get_bibliographic_info(identifier)
         if representation.has_content:
             return parser.process_all(representation.content)
         return None
 
-    def scrape_reviews(self, identifier):
+    def fetch_reviews(self, identifier):
         parser = AmazonReviewParser()
         all_reviews = []
         for page in range(1,11):
@@ -327,7 +327,7 @@ class AmazonCoverageProvider(CoverageProvider):
     SERVICE_NAME = "Amazon Coverage Provider"
 
     def __init__(self, db, identifier_types=None):
-        self.amazon = AmazonScraper(db)
+        self.amazon = AmazonAPI(db)
         self.db = db
         if not identifier_types:
             identifier_types = [Identifier.ISBN, Identifier.ASIN]
@@ -359,13 +359,13 @@ class AmazonCoverageProvider(CoverageProvider):
 
     def process_edition(self, identifier):
         """Process an identifier (not an edition)."""
-        bibliographic = self.amazon.scrape_bibliographic_info(identifier)
+        bibliographic = self.amazon.fetch_bibliographic_info(identifier)
 
         if not bibliographic:
             return True
 
         print identifier
-        reviews = self.amazon.scrape_reviews(identifier)
+        reviews = self.amazon.fetch_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(
                 self._db, type, other_identifier_id)[0]
