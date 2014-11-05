@@ -92,7 +92,9 @@ class DatabaseTest(object):
         audience = audience or Classifier.AUDIENCE_ADULT
         if fiction is None:
             fiction = True
+        new_edition = False
         if not primary_edition:
+            new_edition = True
             primary_edition = self._edition(
                 title=title, language=language,
                 authors=authors,
@@ -100,6 +102,8 @@ class DatabaseTest(object):
                 with_open_access_download=with_open_access_download)
         if with_license_pool:
             primary_edition, pool = primary_edition
+        if new_edition:
+            primary_edition.calculate_presentation()
         work, ignore = get_one_or_create(
             self._db, Work, create_method_kwargs=dict(
                 audience=audience,

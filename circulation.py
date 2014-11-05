@@ -531,10 +531,10 @@ def feed(lane):
         opds_feed.add_link(**search_link)
         work_feed = None
     elif order == 'title':
-        work_feed = WorkFeed(lane, languages, Edition.title)
+        work_feed = WorkFeed(lane, languages, Edition.sort_title)
         title = "%s: By title" % lane.name
     elif order == 'author':
-        work_feed = WorkFeed(lane, languages, Edition.author)
+        work_feed = WorkFeed(lane, languages, Edition.sort_author)
         title = "%s: By author" % lane.name
     else:
         return "I don't know how to order a feed by '%s'" % order

@@ -3084,7 +3084,9 @@ class WorkFeed(object):
                                        (next_order_field == new_value))
             query = query.filter(clause)
 
-        return query.order_by(*self.order_by).limit(page_size)
+        query = query.order_by(*self.order_by).limit(page_size)
+        print dump_query(query)
+        return query
 
 class LicensePool(Base):
 
