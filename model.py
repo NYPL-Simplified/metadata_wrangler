@@ -3051,7 +3051,7 @@ class WorkFeed(object):
         # then title, then work ID.
         for i in (Edition.sort_author, 
                   Edition.sort_title, 
-                  Edition.id):
+                  Work.id):
             if i not in self.order_by:
                 self.order_by.append(i)
         self.active_facet = self.active_facet_for_field.get(order_by[0], None)
@@ -3085,7 +3085,6 @@ class WorkFeed(object):
             query = query.filter(clause)
 
         query = query.order_by(*self.order_by).limit(page_size)
-        print dump_query(query)
         return query
 
 class LicensePool(Base):
