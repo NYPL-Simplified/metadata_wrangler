@@ -44,12 +44,10 @@ class AppealCalculator(object):
     def calculate_for_works(self, q, force=False):
         if not force:
             q = q.filter(Work.appeal==None)
-            c = 0
             for work in q:
                 work.appeal = self.calculate_for_work(work)
                 print work.title, work.appeal
                 self._db.commit()            
-            last_count = this_count
 
     def calculate_for_work(self, work):
         seen_reviews = set()
@@ -80,8 +78,6 @@ if __name__ == '__main__':
     data_directory = sys.argv[1]
     _db = production_session()
     calculator = AppealCalculator(_db, data_directory)
-    for genre in ("Historical Romance", "Contemporary Romance", "Historical Romance",
-              "Paranormal Romance", "Suspense Romance", "Regency Romance", "Erotica", 
-              "Romance"):
+    for genre in ("Science Fiction", "Fantasy", "Mystery"):
         works = Work.with_genre(_db, genre)
         calculator.calculate_for_works(works)
