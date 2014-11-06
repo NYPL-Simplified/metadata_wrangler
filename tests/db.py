@@ -73,7 +73,8 @@ class DatabaseTest(object):
         if language:
             wr.language = language
         if authors:
-            wr.author = authors
+            wr.add_contributor(authors, Contributor.PRIMARY_AUTHOR_ROLE)
+            
         if with_license_pool or with_open_access_download:
             pool = self._licensepool(wr, data_source_name=data_source_name,
                                      with_open_access_download=with_open_access_download)                

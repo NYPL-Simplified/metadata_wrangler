@@ -197,17 +197,32 @@ if os.environ.get('TESTING') != "True":
                    ],
                )
 
+    non_erotica_romance = [
+        genres.Romance, genres.Contemporary_Romance,
+        genres.Historical_Romance, genres.Paranormal_Romance,
+        genres.Regency_Romance, genres.Suspense_Romance
+    ]
     romance = Lane(_db, name="Romance",
-              genres=[
-                  genres.Romance, genres.Contemporary_Romance,
-                  genres.Historical_Romance, genres.Paranormal_Romance,
-                  genres.Regency_Romance, genres.Suspense_Romance],
+              genres=non_erotica_romance,
               include_subgenres=False,
               fiction=True,
               audience=Classifier.AUDIENCE_ADULT,
               sublanes=[
                   Lane(_db, name="General Romance",
                        genres=[genres.Romance, genres.Contemporary_Romance]),
+                  Lane(_db, name="Story-Driven Romance",
+                       genres=non_erotica_romance, include_subgenres=False,
+                       appeal=Work.STORY_APPEAL),
+                  Lane(_db, name="Character-Driven Romance",
+                       genres=non_erotica_romance, include_subgenres=False,
+                       appeal=Work.CHARACTER_APPEAL),
+                  Lane(_db, name="Setting-Driven Romance",
+                       genres=non_erotica_romance, include_subgenres=False,
+                       appeal=Work.SETTING_APPEAL),
+                  Lane(_db, name="Language-Driven Romance",
+                       genres=non_erotica_romance, include_subgenres=False,
+                       appeal=Work.LANGUAGE_APPEAL),
+
                   genres.Historical_Romance,
                   genres.Paranormal_Romance,
                   genres.Regency_Romance,

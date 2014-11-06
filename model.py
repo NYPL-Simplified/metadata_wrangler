@@ -2864,10 +2864,11 @@ class Lane(object):
 
     def __init__(self, _db, name, genres, include_subgenres=True,
                  fiction=True, audience=Classifier.AUDIENCE_ADULT,
-                 parent=None, sublanes=[]):
+                 parent=None, sublanes=[], appeal=None):
         self.name = name
         self.parent = parent
         self._db = _db
+        self.appeal = appeal
 
         if genres in (None, self.UNCLASSIFIED):
             # We will only be considering works that are not
@@ -2960,6 +2961,8 @@ class Lane(object):
           `self.include_subgenres` is True, any of those genres'
           subgenres).
 
+        * Have the same appeal as `self.appeal`, if `self.appeal` is present.
+
         * Are intended for the audience in `self.audience`.
 
         * Are fiction (if `self.fiction` is True), or nonfiction (if fiction
@@ -3014,6 +3017,9 @@ class Lane(object):
         if self.audience != None:
             q = q.filter(Work.audience==self.audience)
 
+        if self.appeal != None:
+            q = q.filter(Work.appeal==self.appeal)
+
         if fiction == self.UNCLASSIFIED:
             q = q.filter(Work.fiction==None)
         elif fiction != self.BOTH_FICTION_AND_NONFICTION:
@@ -3051,7 +3057,7 @@ class WorkFeed(object):
         # then title, then work ID.
         for i in (Edition.sort_author, 
                   Edition.sort_title, 
-                  Edition.id):
+                  Work.id):
             if i not in self.order_by:
                 self.order_by.append(i)
         self.active_facet = self.active_facet_for_field.get(order_by[0], None)
@@ -3085,7 +3091,6 @@ class WorkFeed(object):
             query = query.filter(clause)
 
         query = query.order_by(*self.order_by).limit(page_size)
-        print dump_query(query)
         return query
 
 class LicensePool(Base):
