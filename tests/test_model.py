@@ -1050,7 +1050,7 @@ class TestLaneList(DatabaseTest):
         eq_("Fantasy", fantasy.name)
         eq_(Classifier.AUDIENCE_ADULT, fantasy.audience)
         eq_([fantasy_genre], fantasy.genres)
-        eq_(True, fantasy.fiction)
+        eq_(Lane.FICTION_DEFAULT_FOR_GENRE, fantasy.fiction)
 
         eq_("Young Adult", young_adult.name)
         eq_(Classifier.AUDIENCE_YOUNG_ADULT, young_adult.audience)
@@ -1173,8 +1173,6 @@ class TestWorkFeed(DatabaseTest):
         # If we provide a last seen work, we only get the works
         # after that one.
         query = feed.page_query(self._db, w2, 10)
-        from model import dump_query
-        set_trace()
         eq_([w3, w4], query.all())
 
         eq_([], feed.page_query(self._db, w4, 10).all())
