@@ -290,6 +290,19 @@ class FeatureCounter(Counter):
         'short',
         'teenage',
         'young',
+        'with',
+        'book',
+        'out',
+        'read',
+        'who',
+        'about',
+        'one',
+        'just',
+        'all',
+        'like',
+        'get',
+        'what',
+        'very',
     ])
 
     def add_counts(self, text):

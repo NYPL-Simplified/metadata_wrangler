@@ -2158,7 +2158,7 @@ class Work(Base):
         if primary[1] > cutoff:
             self.primary_appeal = primary[0]
         else:
-            self.primary_appeal = self.NO_APPEAL
+            self.primary_appeal = self.UNKNOWN_APPEAL
 
         if secondary[1] > cutoff:
             self.secondary_appeal = secondary[0]
