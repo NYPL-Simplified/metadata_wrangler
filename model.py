@@ -65,6 +65,10 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
+from integration.appeal import (
+    FeatureCounter,
+)
+
 import classifier
 from classifier import (
     Classifier,
@@ -1649,8 +1653,8 @@ class Work(Base):
                        STORY_APPEAL, NOT_APPLICABLE_APPEAL, NO_APPEAL,
                        name="appeal")
 
-    appeal_primary = Column(appeal_type, default=None, index=True)
-    appeal_secondary = Column(appeal_type, default=None, index=True)
+    primary_appeal = Column(appeal_type, default=None, index=True)
+    secondary_appeal = Column(appeal_type, default=None, index=True)
 
     appeal_character = Column(Float, default=None, index=True)
     appeal_language = Column(Float, default=None, index=True)
@@ -2115,10 +2119,11 @@ class Work(Base):
         return workgenres, fiction, audience
 
     def calculate_appeals(self, review_source, classifier, feature_names):
+        _db = Session.object_session(self)
         seen_reviews = set()
         counter = FeatureCounter(feature_names)
         ids = self.all_identifier_ids()
-        identifiers = self._db.query(Identifier).filter(
+        identifiers = _db.query(Identifier).filter(
             Identifier.type.in_([Identifier.ISBN, Identifier.ASIN])).filter(
                 Identifier.id.in_(ids))
         for identifier in identifiers:
@@ -2128,11 +2133,10 @@ class Work(Base):
                     counter.add_counts(review)
                     seen_reviews.add(review)
         print " Found %s distinct reviews" % len(seen_reviews)
-        if not seen_reviews:
-            self.primary_appeal = self.UNKNOWN_APPEAL
-            self.secondary_appeal = self.UNKNOWN_APPEAL
-            return Work.UNKNOWN_APPEAL
-        appeals = classifier.predict_proba(counter.row())[0]
+        if seen_reviews:
+            appeals = classifier.predict_proba(counter.row())[0]
+        else:
+            appeals = [0,0,0,0]
         self.assign_appeals(*appeals)
 
     def assign_appeals(self, character, language, story, setting,

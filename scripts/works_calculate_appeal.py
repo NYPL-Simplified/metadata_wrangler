@@ -10,7 +10,6 @@ site.addsitedir(os.path.join(d, ".."))
 from integration.amazon import AmazonAPI
 from integration.appeal import (
     ClassifierFactory,
-    FeatureCounter,
 )
 from model import (
     DataSource,
@@ -47,9 +46,8 @@ class AppealCalculator(object):
             q = q.filter(Work.primary_appeal==None)
             c = 0
             for work in q:
-                appeals = work.calculate_appeals(
+                work.calculate_appeals(
                     self.amazon_api, self.classifier, self.feature_names)
-                work.assign_appeals(*appeals)
                 print (
                     work.title, work.appeal_character, work.appeal_language,
                     work.appeal_setting, work.appeal_story)
