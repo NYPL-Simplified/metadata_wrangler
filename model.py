@@ -1673,7 +1673,7 @@ class Work(Base):
 
     @property
     def sort_title(self):
-        return self.primary_edition.sort_title
+        return self.primary_edition.sort_title or self.primary_edition.title
 
     @property
     def subtitle(self):
@@ -1691,7 +1691,7 @@ class Work(Base):
 
     @property
     def sort_author(self):
-        return self.primary_edition.sort_author
+        return self.primary_edition.sort_author or self.primary_edition.author
 
     @property
     def language(self):

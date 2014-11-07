@@ -518,7 +518,7 @@ def feed(lane):
     languages = languages_for_request()
     arg = flask.request.args.get
     order = arg('order', 'recommended')
-    last_seen_id = arg('last_seen', None)
+    last_seen_id = arg('after', None)
 
     lane = Conf.sublanes.by_name[lane]
 

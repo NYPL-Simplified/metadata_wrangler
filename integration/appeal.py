@@ -167,6 +167,8 @@ class AppealTextFilter(object):
     def filter(self, text):
         filtered = []
         previous_word = None
+        if not text:
+            return filtered
         tags = TextBlob(text).tags
         for i, (word, tag) in enumerate(tags):
             word = word.lower()
@@ -265,6 +267,8 @@ class FeatureCounter(Counter):
         self.feature_set = set(self.features)
 
     def add_counts(self, text):
+        if not text:
+            return
         last_word = None
         for word in TextBlob(text).words:
             word = word.lower()

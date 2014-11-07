@@ -44,7 +44,6 @@ class AppealCalculator(object):
     def calculate_for_works(self, q, force=False):
         if not force:
             q = q.filter(Work.primary_appeal==None)
-            c = 0
             for work in q:
                 work.calculate_appeals(
                     self.amazon_api, self.classifier, self.feature_names)
@@ -52,14 +51,11 @@ class AppealCalculator(object):
                     work.title, work.appeal_character, work.appeal_language,
                     work.appeal_setting, work.appeal_story)
                 self._db.commit()            
-            last_count = this_count
 
 if __name__ == '__main__':
     data_directory = sys.argv[1]
     _db = production_session()
     calculator = AppealCalculator(_db, data_directory)
-    for genre in ("Historical Romance", "Contemporary Romance", "Historical Romance",
-              "Paranormal Romance", "Suspense Romance", "Regency Romance", "Erotica", 
-              "Romance"):
+    for genre in ("Science Fiction", "Fantasy", "Mystery"):
         works = Work.with_genre(_db, genre)
         calculator.calculate_for_works(works)
