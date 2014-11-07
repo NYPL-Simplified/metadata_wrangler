@@ -39,42 +39,22 @@ class AppealCalculator(object):
             data_directory, "appeal", "classifier.pickle")
         self.feature_names = ClassifierFactory.feature_names(
             self.training_dataset_path)
-        self.classifier = None
+        self.classifier = ClassifierFactory.from_file(
+            self.training_dataset_path, self.classifier_path)
 
     def calculate_for_works(self, q, force=False):
         if not force:
-            q = q.filter(Work.appeal==None)
+            q = q.filter(Work.primary_appeal==None)
             c = 0
             for work in q:
-                work.appeal = self.calculate_for_work(work)
-                print work.title, work.appeal
+                appeals = work.calculate_appeals(
+                    self.amazon_api, self.classifier, self.feature_names)
+                work.assign_appeals(*appeals)
+                print (
+                    work.title, work.appeal_character, work.appeal_language,
+                    work.appeal_setting, work.appeal_story)
                 self._db.commit()            
             last_count = this_count
-
-    def calculate_for_work(self, work):
-        seen_reviews = set()
-        counter = FeatureCounter(self.feature_names)
-        ids = work.all_identifier_ids()
-        identifiers = self._db.query(
-            Identifier).filter(Identifier.type.in_(
-                [Identifier.ISBN, Identifier.ASIN])).filter(
-                    Identifier.id.in_(ids))
-        for identifier in identifiers:
-            for review_title, review in self.amazon_api.fetch_reviews(identifier):
-                if review not in seen_reviews:
-                    counter.add_counts(review_title)
-                    counter.add_counts(review)
-                    seen_reviews.add(review)
-        if not self.classifier:
-            self.classifier = ClassifierFactory.from_file(
-            self.training_dataset_path, self.classifier_path)
-        print " Found %s distinct reviews" % len(seen_reviews)
-        if not seen_reviews:
-            return Work.UNKNOWN_APPEAL
-        prediction = self.classifier.predict(counter.row())[0]
-        if prediction in self.appeal_names:
-            prediction = self.appeal_names[prediction]
-        return prediction
 
 if __name__ == '__main__':
     data_directory = sys.argv[1]

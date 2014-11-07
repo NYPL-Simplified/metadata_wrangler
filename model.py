@@ -1594,6 +1594,14 @@ class WorkGenre(Base):
 
 class Work(Base):
 
+    CHARACTER_APPEAL = "Character"
+    LANGUAGE_APPEAL = "Language"
+    SETTING_APPEAL = "Setting"
+    STORY_APPEAL = "Story"
+    UNKNOWN_APPEAL = "Unknown"
+    NOT_APPLICABLE_APPEAL = "Not Applicable"
+    NO_APPEAL = "None"
+
     __tablename__ = 'works'
     id = Column(Integer, primary_key=True)
 
@@ -1637,17 +1645,17 @@ class Work(Base):
     # The overall current popularity of this work.
     popularity = Column(Float, index=True)
 
-    CHARACTER_APPEAL = "Character"
-    LANGUAGE_APPEAL = "Language"
-    SETTING_APPEAL = "Setting"
-    STORY_APPEAL = "Story"
-    UNKNOWN_APPEAL = "Unknown"
+    appeal_type = Enum(CHARACTER_APPEAL, LANGUAGE_APPEAL, SETTING_APPEAL,
+                       STORY_APPEAL, NOT_APPLICABLE_APPEAL, NO_APPEAL,
+                       name="appeal")
 
-    appeal = Column(
-        Enum(CHARACTER_APPEAL, LANGUAGE_APPEAL, SETTING_APPEAL,
-             STORY_APPEAL, name="appeal"),
-        default=None, index=True
-    )
+    appeal_primary = Column(appeal_type, default=None, index=True)
+    appeal_secondary = Column(appeal_type, default=None, index=True)
+
+    appeal_character = Column(Float, default=None, index=True)
+    appeal_language = Column(Float, default=None, index=True)
+    appeal_setting = Column(Float, default=None, index=True)
+    appeal_story = Column(Float, default=None, index=True)
 
     # A Work may be merged into one other Work.
     was_merged_into_id = Column(Integer, ForeignKey('works.id'), index=True)
@@ -2106,6 +2114,52 @@ class Work(Base):
 
         return workgenres, fiction, audience
 
+    def calculate_appeals(self, review_source, classifier, feature_names):
+        seen_reviews = set()
+        counter = FeatureCounter(feature_names)
+        ids = self.all_identifier_ids()
+        identifiers = self._db.query(Identifier).filter(
+            Identifier.type.in_([Identifier.ISBN, Identifier.ASIN])).filter(
+                Identifier.id.in_(ids))
+        for identifier in identifiers:
+            for review_title, review in review_source.fetch_reviews(identifier):
+                if review not in seen_reviews:
+                    counter.add_counts(review_title)
+                    counter.add_counts(review)
+                    seen_reviews.add(review)
+        print " Found %s distinct reviews" % len(seen_reviews)
+        if not seen_reviews:
+            self.primary_appeal = self.UNKNOWN_APPEAL
+            self.secondary_appeal = self.UNKNOWN_APPEAL
+            return Work.UNKNOWN_APPEAL
+        appeals = classifier.predict_proba(counter.row())[0]
+        self.assign_appeals(*appeals)
+
+    def assign_appeals(self, character, language, story, setting,
+                       cutoff=0.20):
+        """Assign the given appeals to the corresponding database fields,
+        as well as calculating the primary and secondary appeal.
+        """
+        self.appeal_character = character
+        self.appeal_language = language
+        self.appeal_story = story
+        self.appeal_setting = setting
+
+        c = Counter()
+        c[self.CHARACTER_APPEAL] = character
+        c[self.LANGUAGE_APPEAL] = language
+        c[self.SETTING_APPEAL] = setting
+        c[self.STORY_APPEAL] = story
+        primary, secondary = c.most_common(2)
+        if primary[1] > cutoff:
+            self.primary_appeal = primary[0]
+        else:
+            self.primary_appeal = self.NO_APPEAL
+
+        if secondary[1] > cutoff:
+            self.secondary_appeal = secondary[0]
+        else:
+            self.secondary_appeal = self.NO_APPEAL
 
 class Measurement(Base):
     """A  measurement of some numeric quantity associated with a
