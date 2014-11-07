@@ -144,7 +144,10 @@ class AppealTextFilter(object):
                      "only", "other", "never", "many",
                      "even", "yet", "too", "really",
                      "such", "first", "often",
-                     "back", "whole", "else"
+                     "back", "whole", "else",
+
+                     "--",
+
                  ])
 
 
@@ -266,12 +269,37 @@ class FeatureCounter(Counter):
             self.features.append(key)
         self.feature_set = set(self.features)
 
+    blacklist = set([
+        'bad',
+        'big',
+        'but',
+        'excellent',
+        'extremely',
+        'favorite',
+        'finally', 
+        'full',
+        'good',
+        'great',
+        'hard',
+        'human',
+        'interesting',
+        'long',
+        'main',
+        'past',
+        'present',
+        'short',
+        'teenage',
+        'young',
+    ])
+
     def add_counts(self, text):
         if not text:
             return
         last_word = None
         for word in TextBlob(text).words:
             word = word.lower()
+            if word in self.blacklist:
+                continue
             if word in self.feature_set:
                 self[word] += 1
             if last_word and (last_word, word) in self.feature_set:

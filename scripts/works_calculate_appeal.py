@@ -44,18 +44,32 @@ class AppealCalculator(object):
     def calculate_for_works(self, q, force=False):
         if not force:
             q = q.filter(Work.primary_appeal==None)
-            for work in q:
-                work.calculate_appeals(
-                    self.amazon_api, self.classifier, self.feature_names)
-                print (
-                    work.title, work.appeal_character, work.appeal_language,
-                    work.appeal_setting, work.appeal_story)
-                self._db.commit()            
+        for work in q:
+            print "BEFORE pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
+                work.primary_appeal, work.secondary_appeal,
+                work.appeal_character or 0, work.appeal_language or 0,
+                work.appeal_setting or 0, work.appeal_story or 0, work.title, work.author)
+            old_language = work.appeal_language
+            old_setting = work.appeal_setting
+
+            work.calculate_appeals(
+                self.amazon_api, self.classifier, self.feature_names)
+            print "AFTER pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
+                work.primary_appeal, work.secondary_appeal,
+                work.appeal_character, work.appeal_language,
+                work.appeal_setting, work.appeal_story, work.title, work.author)
+            if old_language:
+                print "LANGUAGE DELTA: %.7f" % (old_language - work.appeal_language)
+            if old_setting:
+                print "SETTING DELTA: %.7f" % (old_setting - work.appeal_setting)
+
+            print ""
+            self._db.commit()
 
 if __name__ == '__main__':
     data_directory = sys.argv[1]
     _db = production_session()
     calculator = AppealCalculator(_db, data_directory)
-    for genre in ("Science Fiction", "Fantasy", "Mystery"):
-        works = Work.with_genre(_db, genre)
-        calculator.calculate_for_works(works)
+    works = _db.query(Work).filter(Work.primary_appeal.in_([Work.LANGUAGE_APPEAL, Work.SETTING_APPEAL, Work.STORY_APPEAL, Work.SETTING_APPEAL]))
+    print works.count()
+    calculator.calculate_for_works(works, force=True)

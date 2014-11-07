@@ -2139,15 +2139,15 @@ class Work(Base):
             appeals = [0,0,0,0]
         self.assign_appeals(*appeals)
 
-    def assign_appeals(self, character, language, story, setting,
+    def assign_appeals(self, character, language, setting, story,
                        cutoff=0.20):
         """Assign the given appeals to the corresponding database fields,
         as well as calculating the primary and secondary appeal.
         """
         self.appeal_character = character
         self.appeal_language = language
-        self.appeal_story = story
         self.appeal_setting = setting
+        self.appeal_story = story
 
         c = Counter()
         c[self.CHARACTER_APPEAL] = character
@@ -3735,7 +3735,7 @@ class Representation(Base):
     @classmethod
     def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
             identifier=None, license_pool=None, max_age=None, pause_before=0,
-            allow_redirects=True, debug=True):
+            allow_redirects=True, debug=False):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
