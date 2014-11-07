@@ -52,6 +52,8 @@ class OverdriveAPI(object):
     PAGE_SIZE_LIMIT = 300
     EVENT_SOURCE = "Overdrive"
 
+    EVENT_DELAY = datetime.timedelta(minutes=60)
+
     # The ebook formats we care about.
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
@@ -157,7 +159,9 @@ class OverdriveAPI(object):
         # `cutoff` is not supported by Overdrive, so we ignore it. All
         # we can do is get events between the start time and now.
 
-        params = dict(lastupdatetime=start,
+        last_update_time = start-self.EVENT_DELAY
+        print start, last_update_time
+        params = dict(lastupdatetime=last_update_time,
                       formats=self.FORMATS,
                       sort="popularity:desc",
                       limit=self.PAGE_SIZE_LIMIT,
@@ -170,7 +174,10 @@ class OverdriveAPI(object):
             # be putting them on the list of inventory items to
             # refresh. At that point we will send out events.
             for i in page_inventory:
-                print i
+                if 'penguin' in i.get('title', '').lower():
+                    print "PENGUIN" * 80
+                    print i
+                print i.get('title', '[no title]')
                 yield i
 
     def metadata_lookup(self, identifier):
@@ -209,7 +216,7 @@ class OverdriveAPI(object):
         if status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
                 book['id'], status_code)
-            return
+            return None, None
 
         book.update(json.loads(content))
         return self.update_licensepool_with_book_info(book)
@@ -374,7 +381,7 @@ class OverdriveCirculationMonitor(Monitor):
                     )
                 )
             _db.commit()
-        print "Processed %d books total." % i
+        print "Processed %d books total." % (int(i)+1)
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
