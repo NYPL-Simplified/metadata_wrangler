@@ -5,8 +5,6 @@ import csv
 from csv import Dialect
 from cStringIO import StringIO
 from collections import Counter
-from sklearn import linear_model
-from sklearn import cross_validation
 import numpy as np
 
 from textblob import TextBlob
@@ -236,6 +234,7 @@ class ClassifierFactory(object):
         
     @classmethod
     def from_data_and_labels(cls, training_data, training_labels):
+        from sklearn import linear_model
         clf = linear_model.LogisticRegression()
         clf.fit(training_data, training_labels)
         return clf
