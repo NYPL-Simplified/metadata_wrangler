@@ -2965,7 +2965,7 @@ class Lane(object):
 
     def quality_sample(
             self, languages, quality_min_start,
-            quality_min_rock_bottom, target_size):
+            quality_min_rock_bottom, target_size, availability):
         """Randomly select Works from this Lane that meet minimum quality
         criteria.
 
@@ -2981,7 +2981,7 @@ class Lane(object):
         while (quality_min >= quality_min_rock_bottom
                and len(results) < target_size):
             remaining = target_size - len(results)
-            query = self.works(languages=languages)
+            query = self.works(languages=languages, availability=availability)
             query = query.filter(
                 Work.quality >= quality_min,
             )
@@ -3008,7 +3008,10 @@ class Lane(object):
                 quality_min = quality_min_rock_bottom
         return results
 
-    def works(self, languages, fiction=None):
+    CURRENTLY_AVAILABLE = "currently_available"
+    ALL = "all"
+
+    def works(self, languages, fiction=None, availability=ALL):
         """Find Works that will go together in this Lane.
 
         Works will:
@@ -3042,6 +3045,13 @@ class Lane(object):
             joinedload('license_pools').joinedload('data_source'),
             joinedload('work_genres')
         )
+        if availability == self.CURRENTLY_AVAILABLE:
+            q = q.join(Work.license_pools)
+            or_clause = or_(
+                LicensePool.open_access==True,
+                LicensePool.licenses_available > 0)
+            q = q.filter(or_clause)
+
         if self.genres is None and fiction in (True, False, self.UNCLASSIFIED):
             # No genre plus a boolean value for `fiction` means
             # fiction or nonfiction not associated with any genre.
@@ -3076,7 +3086,7 @@ class Lane(object):
             q = q.filter(Work.audience==self.audience)
 
         if self.appeal != None:
-            q = q.filter(Work.appeal==self.appeal)
+            q = q.filter(Work.primary_appeal==self.appeal)
 
         if fiction == self.UNCLASSIFIED:
             q = q.filter(Work.fiction==None)
@@ -3101,7 +3111,11 @@ class WorkFeed(object):
         Edition.author : "author"
     }
 
-    def __init__(self, lane, languages, order_by=None):
+    CURRENTLY_AVAILABLE = "available"
+    ALL = "all"
+
+    def __init__(self, lane, languages, order_by=None,
+                 availability=CURRENTLY_AVAILABLE):
         if isinstance(languages, basestring):
             languages = [languages]
         self.languages = languages
@@ -3119,11 +3133,12 @@ class WorkFeed(object):
             if i not in self.order_by:
                 self.order_by.append(i)
         self.active_facet = self.active_facet_for_field.get(order_by[0], None)
+        self.availability = availability
 
     def page_query(self, _db, last_edition_seen, page_size):
         """A page of works."""
 
-        query = self.lane.works(self.languages)
+        query = self.lane.works(self.languages, availability=self.availability)
 
         if last_edition_seen:
             # Only find records that show up after the last one seen.
