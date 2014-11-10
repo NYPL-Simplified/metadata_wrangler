@@ -5,7 +5,6 @@ import csv
 from csv import Dialect
 from cStringIO import StringIO
 from collections import Counter
-import numpy as np
 
 from textblob import TextBlob
 
