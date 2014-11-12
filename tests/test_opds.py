@@ -1,4 +1,5 @@
 import feedparser
+import datetime
 from nose.tools import (
     eq_,
     set_trace,
@@ -205,6 +206,37 @@ class TestOPDS(DatabaseTest):
         assert not 'opds:activefacet' in by_title
         eq_(facet_url_generator("title"), by_title['href'])
 
+    def test_acquisition_feed_includes_available_and_issued_tag(self):
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+
+        # This work has both issued and published. issued will be used
+        # for the dc:issued tag.
+        work1 = self._work(with_open_access_download=True)
+        work1.primary_edition.issued = today
+        work1.primary_edition.published = yesterday
+        work1.primary_edition.work.availability_time = yesterday
+
+        # This work only has published. published will be used for the
+        # dc:issued tag.
+        work2 = self._work(with_open_access_download=True)
+        work2.primary_edition.published = today
+
+        # This work has neither published nor issued. There will be no
+        # dc:issued tag.
+        work3 = self._work(with_open_access_download=True)
+
+        self._db.commit()
+        works = self._db.query(Work)
+        with_times = AcquisitionFeed(self._db, "test", "url", works)
+        u = unicode(with_times)
+        assert 'dcterms:issued' in u
+        with_times = feedparser.parse(u)
+        e1, e2, e3 = sorted(
+            with_times['entries'], key = lambda x: x['title'])
+        # TODO: Feed parser treats dcterms:issued and published as the
+        # same, and only parses one of them. This makes it difficult
+        # to test this bit.
 
     def test_acquisition_feed_includes_language_tag(self):
         work = self._work(with_open_access_download=True)
