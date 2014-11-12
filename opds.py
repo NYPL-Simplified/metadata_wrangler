@@ -310,6 +310,11 @@ class AcquisitionFeed(OPDSFeed):
             language_tag.text = language
             entry.append(language_tag)
 
+        if active_edition.publisher:
+            publisher_tag = E._makeelement("{%s}publisher" % dcterms_ns)
+            publisher_tag.text = active_edition.publisher
+            entry.extend([publisher_tag])
+
         # We use Atom 'published' for the date the book first became
         # available to people using this application.
         now = datetime.datetime.utcnow()

@@ -13,6 +13,7 @@ from circulation import app
 
 from model import (
     get_one_or_create,
+    DataSource,
     LaneList,
     Lane,
     Patron,
@@ -252,6 +253,20 @@ class TestOPDS(DatabaseTest):
         assert 'language' not in entries[0]
         eq_('en', entries[1]['dcterms_language'])
 
+    def test_acquisition_feed_includes_language_tag(self):
+        work = self._work(with_open_access_download=True)
+        work.primary_edition.publisher = "The Publisher"
+        work2 = self._work(with_open_access_download=True)
+        work2.primary_edition.publisher = None
+
+        self._db.commit()
+
+        works = self._db.query(Work)
+        with_publisher = AcquisitionFeed(self._db, "test", "url", works)
+        with_publisher = feedparser.parse(unicode(with_publisher))
+        entries = sorted(with_publisher['entries'], key = lambda x: x['title'])
+        eq_('The Publisher', entries[0]['dcterms_publisher'])
+        assert 'publisher' not in entries[1]
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
         work = self._work(title="open access", with_open_access_download=True)
