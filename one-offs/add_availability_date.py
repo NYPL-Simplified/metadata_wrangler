@@ -23,6 +23,7 @@ db = production_session()
 
 m = datetime.time(0,0,0)
 
+num = 0
 for e in db.query(Edition).filter(Edition.work_id != None).order_by(Edition.id.desc()):
     availability = min_availability_date
     if e.issued:
@@ -32,12 +33,21 @@ for e in db.query(Edition).filter(Edition.work_id != None).order_by(Edition.id.d
     else:
         a = availability
 
-    if a >= availability and a <= max_availability_date:
-        availability = a
+    availability = a
+    if availability >= max_availability_date:
+        availability = max_availability_date
+    elif availability <= min_availability_date:
+        availability = min_availability_date
 
     pool = e.license_pool
     if pool:
-        print e.title, availability
+        if availability not in (max_availability_date, min_availability_date):
+            print e.title, availability
         pool.availability_date = availability
+        num += 1
+        if not num % 1000:
+            print num
+            db.commit()
     else:
         print "No license pool for %s" % e.title
+db.commit()
