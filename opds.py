@@ -134,6 +134,7 @@ class OPDSFeed(AtomFeed):
     FEATURED_REL = "http://opds-spec.org/featured"
     RECOMMENDED_REL = "http://opds-spec.org/recommended"
     OPEN_ACCESS_REL = "http://opds-spec.org/acquisition/open-access"
+    BORROW_REL = "http://opds-spec.org/acquisition/borrow"
     FULL_IMAGE_REL = "http://opds-spec.org/image" 
     EPUB_MEDIA_TYPE = "application/epub+zip"
 
@@ -236,8 +237,11 @@ class AcquisitionFeed(OPDSFeed):
             "checkout", data_source=active_license_pool.data_source.name,
             identifier=identifier.identifier, _external=True)
 
-        links=[E.link(rel=self.OPEN_ACCESS_REL, 
-                      href=checkout_url)]
+        if active_license_pool.open_access:
+            rel = self.OPEN_ACCESS_REL
+        else:
+            rel = self.BORROW_REL
+        links=[E.link(rel=rel, href=checkout_url)]
 
         cover_quality = 0
         qualities = [("Work quality", work.quality)]

@@ -22,6 +22,7 @@ from model import (
 )
 
 from opds import (
+    OPDSFeed,
     AcquisitionFeed,
     NavigationFeed,
     URLRewriter
@@ -163,6 +164,26 @@ class TestOPDS(DatabaseTest):
         eq_("Alice", with_author['authors'][0]['name'])
 
 
+    def test_acquisition_feed_includes_open_access_or_borrow_link(self):
+        w1 = self._work(with_open_access_download=True)
+        w2 = self._work(with_open_access_download=True)
+        w2.license_pools[0].open_access = False
+        self._db.commit()
+
+        works = self._db.query(Work)
+        feed = AcquisitionFeed(self._db, "test", "url", works)
+        feed = feedparser.parse(unicode(feed))
+        entries = sorted(feed['entries'], key = lambda x: int(x['title']))
+
+        open_access_links, borrow_links = [x['links'] for x in entries]
+        open_access_rels = [x['rel'] for x in open_access_links]
+        assert OPDSFeed.OPEN_ACCESS_REL in open_access_rels
+        assert not OPDSFeed.BORROW_REL in open_access_rels
+
+        borrow_rels = [x['rel'] for x in borrow_links]
+        assert not OPDSFeed.OPEN_ACCESS_REL in borrow_rels
+        assert OPDSFeed.BORROW_REL in borrow_rels
+
     def test_acquisition_feed_includes_author_tag_even_when_no_author(self):
         work = self._work(with_open_access_download=True)
         feed = AcquisitionFeed(self._db, "test", "http://the-url.com/",
@@ -303,7 +324,6 @@ class TestOPDS(DatabaseTest):
         feed = AcquisitionFeed(self._db, "test", "url", works)
         feed = feedparser.parse(unicode(feed))
         entries = sorted(feed['entries'], key = lambda x: int(x['title']))
-        a = [x['title'] for x in entries]
 
         eq_(['Romance', 'Science Fiction'], 
             sorted([x['term'] for x in entries[0]['tags']]))
