@@ -241,7 +241,7 @@ class TestOPDS(DatabaseTest):
         e1, e2, e3 = sorted(
             with_times['entries'], key = lambda x: int(x['title']))
 
-        eq_(today_s, e1['dcterms_datecopyrighted'])
+        eq_(the_past_s, e1['dcterms_datecopyrighted'])
         eq_(the_past_s, e1['published'])
 
         eq_(today_s, e2['dcterms_datecopyrighted'])

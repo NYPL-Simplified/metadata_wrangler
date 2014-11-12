@@ -348,7 +348,7 @@ class AcquisitionFeed(OPDSFeed):
         # to our database' we use Entry.issued if we have it and
         # Entry.published if not. In general this means we use issued
         # date for Gutenberg and published date for other sources.
-        issued = active_edition.issued or active_edition.published
+        issued = active_edition.published
         if (issued and issued <= today):
             issued_tag = E._makeelement("{%s}dateCopyrighted" % dcterms_ns)
             # TODO: convert to local timezone.
