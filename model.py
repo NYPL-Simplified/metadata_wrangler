@@ -3197,7 +3197,7 @@ class LicensePool(Base):
     resources = relationship("Resource", backref="license_pool")
 
     # The date this LicensePool first became available.
-    availability_date = Column(Date, index=True)
+    availability_time = Column(DateTime, index=True)
 
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
