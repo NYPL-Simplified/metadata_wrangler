@@ -342,14 +342,15 @@ class AcquisitionFeed(OPDSFeed):
         # from Entry.published (which may refer to the print edition
         # or some original edition way back when).
         #
-        # For Dublin Core 'issued' (which is the date of 'formal
-        # issuance resp. publication') we use Entry.issued if we have
-        # it and Entry.published if not. In general this means we use
-        # issued date for Gutenberg and published date for other
-        # sources.
+        # For Dublin Core 'dateCopyrighted' (which is the closest we
+        # can come to 'date the underlying book actually came out' in
+        # a way that won't be confused with 'date the book was added
+        # to our database' we use Entry.issued if we have it and
+        # Entry.published if not. In general this means we use issued
+        # date for Gutenberg and published date for other sources.
         issued = active_edition.issued or active_edition.published
         if (issued and issued <= today):
-            issued_tag = E._makeelement("{%s}issued" % dcterms_ns)
+            issued_tag = E._makeelement("{%s}dateCopyrighted" % dcterms_ns)
             # TODO: convert to local timezone.
             issued_tag.text = issued.strftime("%Y-%m-%d")
             entry.extend([issued_tag])

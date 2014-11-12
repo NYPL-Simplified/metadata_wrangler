@@ -210,49 +210,45 @@ class TestOPDS(DatabaseTest):
 
     def test_acquisition_feed_includes_available_and_issued_tag(self):
         today = datetime.date.today()
-        yesterday = today - datetime.timedelta(days=1)
+        today_s = today.strftime("%Y-%m-%d")
+        the_past = today - datetime.timedelta(days=2)
+        the_past_s = the_past.strftime("%Y-%m-%d")
 
         # This work has both issued and published. issued will be used
-        # for the dc:issued tag.
+        # for the dc:dateCopyrighted tag.
         work1 = self._work(with_open_access_download=True)
         work1.primary_edition.issued = today
-        work1.primary_edition.published = yesterday
-        work1.primary_edition.work.availability_time = yesterday
+        work1.primary_edition.published = the_past
+        work1.license_pools[0].availability_time = the_past
 
         # This work only has published. published will be used for the
-        # dc:issued tag.
+        # dc:dateCopyrighted tag.
         work2 = self._work(with_open_access_download=True)
         work2.primary_edition.published = today
+        work2.license_pools[0].availability_time = None
 
         # This work has neither published nor issued. There will be no
-        # dc:issued tag.
+        # dc:dateCopyrighted tag.
         work3 = self._work(with_open_access_download=True)
+        work3.license_pools[0].availability_time = None
 
         self._db.commit()
         works = self._db.query(Work)
         with_times = AcquisitionFeed(self._db, "test", "url", works)
         u = unicode(with_times)
-        assert 'dcterms:issued' in u
+        assert 'dcterms:dateCopyrighted' in u
         with_times = feedparser.parse(u)
         e1, e2, e3 = sorted(
-            with_times['entries'], key = lambda x: x['title'])
-        # TODO: Feed parser treats dcterms:issued and published as the
-        # same, and only parses one of them. This makes it difficult
-        # to test this bit.
+            with_times['entries'], key = lambda x: int(x['title']))
 
-    def test_acquisition_feed_includes_language_tag(self):
-        work = self._work(with_open_access_download=True)
-        work.languages = "eng,fre"
-        work2 = self._work(with_open_access_download=True)
-        work.languages = None
-        self._db.commit()
+        eq_(today_s, e1['dcterms_datecopyrighted'])
+        eq_(the_past_s, e1['published'])
 
-        works = self._db.query(Work)
-        with_language = AcquisitionFeed(self._db, "test", "url", works)
-        with_language = feedparser.parse(unicode(with_language))
-        entries = sorted(with_language['entries'], key = lambda x: x['title'])
-        assert 'language' not in entries[0]
-        eq_('en', entries[1]['dcterms_language'])
+        eq_(today_s, e2['dcterms_datecopyrighted'])
+        assert not 'published' in e2
+
+        assert not 'dcterms_datecopyrighted' in e3
+        assert not 'published' in e3
 
     def test_acquisition_feed_includes_language_tag(self):
         work = self._work(with_open_access_download=True)
