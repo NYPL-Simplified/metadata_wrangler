@@ -236,8 +236,11 @@ class AcquisitionFeed(OPDSFeed):
         cover_quality = 0
         qualities = [("Work quality", work.quality)]
         full_url = None
-        if not work.cover_full_url and work.primary_edition.cover:
-            work.primary_edition.set_cover(work.primary_edition.cover)
+
+        active_edition = work.primary_edition
+
+        if not work.cover_full_url and active_edition.cover:
+            active_edition.set_cover(active_edition.cover)
 
         thumbnail_url = work.cover_thumbnail_url
         if work.cover_full_url:
@@ -246,10 +249,10 @@ class AcquisitionFeed(OPDSFeed):
             #if mirrored_url:
             #    full_url = mirrored_url
                 
-            qualities.append(("Cover quality", work.primary_edition.cover.quality))
-            if work.primary_edition.cover.scaled_path:
-                thumbnail_url = URLRewriter.rewrite(work.primary_edition.cover.scaled_path)
-            elif work.primary_edition.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
+            qualities.append(("Cover quality", active_edition.cover.quality))
+            if active_edition.cover.scaled_path:
+                thumbnail_url = URLRewriter.rewrite(active_edition.cover.scaled_path)
+            elif active_edition.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
                 thumbnail_url = full_url
         elif identifier.type == Identifier.GUTENBERG_ID:
             host = URLRewriter.GENERATED_COVER_HOST
@@ -265,9 +268,6 @@ class AcquisitionFeed(OPDSFeed):
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
                       identifier=identifier.identifier, _external=True)
-        genre = ", ".join(repr(wg) for wg in work.work_genres)
-        if genre:
-            qualities.append(("Genre", genre))
 
         if work.summary_text:
             summary = work.summary_text
@@ -300,12 +300,68 @@ class AcquisitionFeed(OPDSFeed):
             E.updated(_strftime(datetime.datetime.utcnow())),
         ])
         entry.extend(links)
+
+        genre_tags = []
+        for wg in work.work_genres:
+            genre_tags.append(E.category(term=wg.genre.name))
+        if len(work.work_genres) == 0:
+            sole_genre = None
+            if work.fiction == True:
+                sole_genre = 'Fiction'
+            elif work.fiction == False:
+                sole_genre = 'Nonfiction'
+            if sole_genre:
+                genre_tags.append(E.category(term=sole_genre))
+        entry.extend(genre_tags)
+
         # print " ID %s TITLE %s AUTHORS %s" % (tag, work.title, work.authors)
         language = work.language_code
         if language:
             language_tag = E._makeelement("{%s}language" % dcterms_ns)
             language_tag.text = language
             entry.append(language_tag)
+
+        if active_edition.publisher:
+            publisher_tag = E._makeelement("{%s}publisher" % dcterms_ns)
+            publisher_tag.text = active_edition.publisher
+            entry.extend([publisher_tag])
+
+        # We use Atom 'published' for the date the book first became
+        # available to people using this application.
+        now = datetime.datetime.utcnow()
+        today = datetime.date.today()
+        if (active_license_pool.availability_time and
+            active_license_pool.availability_time <= now):
+            availability_tag = E._makeelement("published")
+            # TODO: convert to local timezone.
+            availability_tag.text = active_license_pool.availability_time.strftime(
+                "%Y-%m-%d")
+            entry.extend([availability_tag])
+
+        # Entry.issued is the date the ebook came out, as distinct
+        # from Entry.published (which may refer to the print edition
+        # or some original edition way back when).
+        #
+        # For Dublin Core 'dateCopyrighted' (which is the closest we
+        # can come to 'date the underlying book actually came out' in
+        # a way that won't be confused with 'date the book was added
+        # to our database' we use Entry.issued if we have it and
+        # Entry.published if not. In general this means we use issued
+        # date for Gutenberg and published date for other sources.
+        issued = active_edition.issued or active_edition.published
+        if (issued and issued <= today):
+            issued_tag = E._makeelement("{%s}dateCopyrighted" % dcterms_ns)
+            # TODO: convert to local timezone.
+            issued_tag.text = issued.strftime("%Y-%m-%d")
+            entry.extend([issued_tag])
+
+        if work.audience:
+            audience_tag = E._makeelement("{%s}audience" % schema_ns)
+            audience_name_tag = E._makeelement("{%s}name" % schema_ns)
+            audience_name_tag.text = work.audience
+            audience_tag.extend([audience_name_tag])
+            entry.extend([audience_tag])
+
         return entry
 
 

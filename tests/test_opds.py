@@ -1,4 +1,5 @@
 import feedparser
+import datetime
 from nose.tools import (
     eq_,
     set_trace,
@@ -12,6 +13,8 @@ from circulation import app
 
 from model import (
     get_one_or_create,
+    DataSource,
+    Genre,
     LaneList,
     Lane,
     Patron,
@@ -205,20 +208,107 @@ class TestOPDS(DatabaseTest):
         assert not 'opds:activefacet' in by_title
         eq_(facet_url_generator("title"), by_title['href'])
 
+    def test_acquisition_feed_includes_available_and_issued_tag(self):
+        today = datetime.date.today()
+        today_s = today.strftime("%Y-%m-%d")
+        the_past = today - datetime.timedelta(days=2)
+        the_past_s = the_past.strftime("%Y-%m-%d")
+
+        # This work has both issued and published. issued will be used
+        # for the dc:dateCopyrighted tag.
+        work1 = self._work(with_open_access_download=True)
+        work1.primary_edition.issued = today
+        work1.primary_edition.published = the_past
+        work1.license_pools[0].availability_time = the_past
+
+        # This work only has published. published will be used for the
+        # dc:dateCopyrighted tag.
+        work2 = self._work(with_open_access_download=True)
+        work2.primary_edition.published = today
+        work2.license_pools[0].availability_time = None
+
+        # This work has neither published nor issued. There will be no
+        # dc:dateCopyrighted tag.
+        work3 = self._work(with_open_access_download=True)
+        work3.license_pools[0].availability_time = None
+
+        self._db.commit()
+        works = self._db.query(Work)
+        with_times = AcquisitionFeed(self._db, "test", "url", works)
+        u = unicode(with_times)
+        assert 'dcterms:dateCopyrighted' in u
+        with_times = feedparser.parse(u)
+        e1, e2, e3 = sorted(
+            with_times['entries'], key = lambda x: int(x['title']))
+
+        eq_(today_s, e1['dcterms_datecopyrighted'])
+        eq_(the_past_s, e1['published'])
+
+        eq_(today_s, e2['dcterms_datecopyrighted'])
+        assert not 'published' in e2
+
+        assert not 'dcterms_datecopyrighted' in e3
+        assert not 'published' in e3
 
     def test_acquisition_feed_includes_language_tag(self):
         work = self._work(with_open_access_download=True)
-        work.languages = "eng,fre"
+        work.primary_edition.publisher = "The Publisher"
         work2 = self._work(with_open_access_download=True)
-        work.languages = None
+        work2.primary_edition.publisher = None
+
         self._db.commit()
 
         works = self._db.query(Work)
-        with_language = AcquisitionFeed(self._db, "test", "url", works)
-        with_language = feedparser.parse(unicode(with_language))
-        entries = sorted(with_language['entries'], key = lambda x: x['title'])
-        assert 'language' not in entries[0]
-        eq_('en', entries[1]['dcterms_language'])
+        with_publisher = AcquisitionFeed(self._db, "test", "url", works)
+        with_publisher = feedparser.parse(unicode(with_publisher))
+        entries = sorted(with_publisher['entries'], key = lambda x: x['title'])
+        eq_('The Publisher', entries[0]['dcterms_publisher'])
+        assert 'publisher' not in entries[1]
+
+    def test_acquisition_feed_includes_audience_tag(self):
+        work = self._work(with_open_access_download=True)
+        work.audience = "Young Adult"
+        work2 = self._work(with_open_access_download=True)
+        work2.audience = "Children"
+        work3 = self._work(with_open_access_download=True)
+        work3.audience = None
+
+        self._db.commit()
+
+        works = self._db.query(Work)
+        with_publisher = AcquisitionFeed(self._db, "test", "url", works)
+        u = unicode(with_publisher)
+        with_publisher = feedparser.parse(u)
+        entries = sorted(with_publisher['entries'], key = lambda x: int(x['title']))
+        eq_("Young Adult", entries[0]['schema_name'])
+        eq_("Children", entries[1]['schema_name'])
+        assert not 'schema_name' in entries[2]
+
+    def test_acquisition_feed_includes_category_tags_for_genres(self):
+        work = self._work(with_open_access_download=True)
+        g1, ignore = Genre.lookup(self._db, "Science Fiction")
+        g2, ignore = Genre.lookup(self._db, "Romance")
+        work.genres = [g1, g2]
+
+        work2 = self._work(with_open_access_download=True)
+        work2.genres = []
+        work2.fiction = False
+
+        work3 = self._work(with_open_access_download=True)
+        work3.genres = []
+        work3.fiction = True
+
+        self._db.commit()
+        works = self._db.query(Work)
+        feed = AcquisitionFeed(self._db, "test", "url", works)
+        feed = feedparser.parse(unicode(feed))
+        entries = sorted(feed['entries'], key = lambda x: int(x['title']))
+        a = [x['title'] for x in entries]
+
+        eq_(['Romance', 'Science Fiction'], 
+            sorted([x['term'] for x in entries[0]['tags']]))
+        eq_(['Nonfiction'], [x['term'] for x in entries[1]['tags']])
+        eq_(['Fiction'], [x['term'] for x in entries[2]['tags']])
 
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):

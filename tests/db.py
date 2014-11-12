@@ -138,7 +138,9 @@ class DatabaseTest(object):
             self._db, LicensePool,
             create_method_kwargs=dict(
                 open_access=open_access),
-            identifier=edition.primary_identifier, data_source=source)
+            identifier=edition.primary_identifier, data_source=source,
+            availability_time=datetime.utcnow()
+        )
 
         if with_open_access_download:
             pool.open_access = True
