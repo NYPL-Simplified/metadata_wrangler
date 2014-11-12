@@ -265,6 +265,25 @@ class TestOPDS(DatabaseTest):
         eq_('The Publisher', entries[0]['dcterms_publisher'])
         assert 'publisher' not in entries[1]
 
+    def test_acquisition_feed_includes_audience_tag(self):
+        work = self._work(with_open_access_download=True)
+        work.audience = "Young Adult"
+        work2 = self._work(with_open_access_download=True)
+        work2.audience = "Children"
+        work3 = self._work(with_open_access_download=True)
+        work3.audience = None
+
+        self._db.commit()
+
+        works = self._db.query(Work)
+        with_publisher = AcquisitionFeed(self._db, "test", "url", works)
+        u = unicode(with_publisher)
+        with_publisher = feedparser.parse(u)
+        entries = sorted(with_publisher['entries'], key = lambda x: int(x['title']))
+        eq_("Young Adult", entries[0]['schema_name'])
+        eq_("Children", entries[1]['schema_name'])
+        assert not 'schema_name' in entries[2]
+
     def test_acquisition_feed_includes_category_tags_for_genres(self):
         work = self._work(with_open_access_download=True)
         g1, ignore = Genre.lookup(self._db, "Science Fiction")

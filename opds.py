@@ -355,6 +355,13 @@ class AcquisitionFeed(OPDSFeed):
             issued_tag.text = issued.strftime("%Y-%m-%d")
             entry.extend([issued_tag])
 
+        if work.audience:
+            audience_tag = E._makeelement("{%s}audience" % schema_ns)
+            audience_name_tag = E._makeelement("{%s}name" % schema_ns)
+            audience_name_tag.text = work.audience
+            audience_tag.extend([audience_name_tag])
+            entry.extend([audience_tag])
+
         return entry
 
 
