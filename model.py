@@ -3196,6 +3196,9 @@ class LicensePool(Base):
     # One LicensePool can control access to many Resources.
     resources = relationship("Resource", backref="license_pool")
 
+    # The date this LicensePool first became available.
+    availability_date = Column(Date, index=True)
+
     open_access = Column(Boolean)
     last_checked = Column(DateTime)
     licenses_owned = Column(Integer,default=0)
@@ -3239,6 +3242,8 @@ class LicensePool(Base):
         # the Identifier.
         license_pool, was_new = get_one_or_create(
             _db, LicensePool, data_source=data_source, identifier=identifier)
+        if was_new and not license_pool.availability_date:
+            license_pool.availability_date = datetime.datetime.utcnow()
         return license_pool, was_new
 
     def edition(self):

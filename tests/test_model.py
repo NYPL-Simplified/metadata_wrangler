@@ -408,8 +408,10 @@ class TestLicensePool(DatabaseTest):
     def test_for_foreign_id(self):
         """Verify we can get a LicensePool for a data source and an 
         appropriate work identifier."""
+        now = datetime.datetime.utcnow()
         pool, was_new = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, Identifier.GUTENBERG_ID, "541")
+        assert (pool.availability_date - now).total_seconds() < 2
         eq_(True, was_new)
         eq_(DataSource.GUTENBERG, pool.data_source.name)
         eq_(Identifier.GUTENBERG_ID, pool.identifier.type)
