@@ -310,6 +310,26 @@ class TestOPDS(DatabaseTest):
         eq_(['Nonfiction'], [x['term'] for x in entries[1]['tags']])
         eq_(['Fiction'], [x['term'] for x in entries[2]['tags']])
 
+    def test_acquisition_feed_includes_license_information(self):
+        work = self._work(with_open_access_download=True)
+        pool = work.license_pools[0]
+
+        # These numbers are impossible, but it doesn't matter for
+        # purposes of this test.
+        pool.open_access = False
+        pool.licenses_owned = 100
+        pool.licenses_available = 50
+        pool.patrons_in_hold_queue = 25
+        self._db.commit()
+
+        works = self._db.query(Work)
+        feed = AcquisitionFeed(self._db, "test", "url", works)
+        u = unicode(feed)
+        feed = feedparser.parse(u)
+        [entry] = feed['entries']
+        eq_('100', entry['opds41_concurrent_lends'])
+        eq_('50', entry['simplified_available_lends'])
+        eq_('25', entry['simplified_active_holds'])
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
         work = self._work(title="open access", with_open_access_download=True)

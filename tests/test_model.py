@@ -411,7 +411,7 @@ class TestLicensePool(DatabaseTest):
         now = datetime.datetime.utcnow()
         pool, was_new = LicensePool.for_foreign_id(
             self._db, DataSource.GUTENBERG, Identifier.GUTENBERG_ID, "541")
-        assert (pool.availability_date - now).total_seconds() < 2
+        assert (pool.availability_time - now).total_seconds() < 2
         eq_(True, was_new)
         eq_(DataSource.GUTENBERG, pool.data_source.name)
         eq_(Identifier.GUTENBERG_ID, pool.identifier.type)
@@ -935,7 +935,8 @@ class TestWorkConsolidation(DatabaseTest):
         edition_2a, pool_2a = self._edition(
             DataSource.GUTENBERG, Identifier.GUTENBERG_ID, True)
         edition_2a.title = "The only title in this whole test."
-        pool_2b = self._licensepool(edition_2a, DataSource.OCLC)
+        pool_2b = self._licensepool(edition_2a, 
+                                    data_source_name=DataSource.OCLC)
 
         work2 = Work()
         work2.license_pools = [pool_2a, pool_2b]

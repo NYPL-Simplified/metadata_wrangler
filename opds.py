@@ -30,14 +30,20 @@ app_ns = 'http://www.w3.org/2007/app'
 xhtml_ns = 'http://www.w3.org/1999/xhtml'
 dcterms_ns = 'http://purl.org/dc/terms/'
 opds_ns = 'http://opds-spec.org/2010/catalog'
+# TODO: This is a placeholder.
+opds_41_ns = 'http://opds-spec.org/2014/catalog'
 schema_ns = 'http://schema.org/'
+simplified_ns = 'http://library-simplified.com/'
+
 
 nsmap = {
     None: atom_ns,
     'app': app_ns,
     'dcterms' : dcterms_ns,
     'opds' : opds_ns,
+    'opds41' : opds_41_ns,
     'schema' : schema_ns,
+    'simplified' : simplified_ns,
 }
 
 def _strftime(d):
@@ -362,8 +368,32 @@ class AcquisitionFeed(OPDSFeed):
             audience_tag.extend([audience_name_tag])
             entry.extend([audience_tag])
 
+        license_tag = self.license_tag(active_license_pool)
+        if license_tag:
+            entry.extend([license_tag])
+
         return entry
 
+    def license_tag(self, license_pool):
+        if license_pool.open_access:
+            return None
+        
+        licenses = E._makeelement("{%s}licenses" % opds_41_ns)
+        license = E._makeelement("{%s}license" % opds_41_ns)
+        concurrent_lends = E._makeelement("{%s}concurrent_lends" % opds_41_ns)
+        license.extend([concurrent_lends])
+        concurrent_lends.text = str(license_pool.licenses_owned)
+
+        available_lends = E._makeelement("{%s}available_lends" % simplified_ns)
+        license.extend([available_lends])
+        available_lends.text = str(license_pool.licenses_available)
+
+        active_holds = E._makeelement("{%s}active_holds" % simplified_ns)
+        license.extend([active_holds])
+        active_holds.text = str(license_pool.patrons_in_hold_queue)
+
+        licenses.extend([license])
+        return licenses
 
 class NavigationFeed(OPDSFeed):
 
