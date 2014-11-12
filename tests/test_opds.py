@@ -14,6 +14,7 @@ from circulation import app
 from model import (
     get_one_or_create,
     DataSource,
+    Genre,
     LaneList,
     Lane,
     Patron,
@@ -267,6 +268,33 @@ class TestOPDS(DatabaseTest):
         entries = sorted(with_publisher['entries'], key = lambda x: x['title'])
         eq_('The Publisher', entries[0]['dcterms_publisher'])
         assert 'publisher' not in entries[1]
+
+    def test_acquisition_feed_includes_category_tags_for_genres(self):
+        work = self._work(with_open_access_download=True)
+        g1, ignore = Genre.lookup(self._db, "Science Fiction")
+        g2, ignore = Genre.lookup(self._db, "Romance")
+        work.genres = [g1, g2]
+
+        work2 = self._work(with_open_access_download=True)
+        work2.genres = []
+        work2.fiction = False
+
+        work3 = self._work(with_open_access_download=True)
+        work3.genres = []
+        work3.fiction = True
+
+        self._db.commit()
+        works = self._db.query(Work)
+        feed = AcquisitionFeed(self._db, "test", "url", works)
+        feed = feedparser.parse(unicode(feed))
+        entries = sorted(feed['entries'], key = lambda x: int(x['title']))
+        a = [x['title'] for x in entries]
+
+        eq_(['Romance', 'Science Fiction'], 
+            sorted([x['term'] for x in entries[0]['tags']]))
+        eq_(['Nonfiction'], [x['term'] for x in entries[1]['tags']])
+        eq_(['Fiction'], [x['term'] for x in entries[2]['tags']])
+
 
     def test_acquisition_feed_omits_works_with_no_active_license_pool(self):
         work = self._work(title="open access", with_open_access_download=True)

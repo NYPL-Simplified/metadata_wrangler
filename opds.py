@@ -268,9 +268,6 @@ class AcquisitionFeed(OPDSFeed):
         identifier = active_license_pool.identifier
         tag = url_for("work", identifier_type=identifier.type,
                       identifier=identifier.identifier, _external=True)
-        genre = ", ".join(repr(wg) for wg in work.work_genres)
-        if genre:
-            qualities.append(("Genre", genre))
 
         if work.summary_text:
             summary = work.summary_text
@@ -303,6 +300,20 @@ class AcquisitionFeed(OPDSFeed):
             E.updated(_strftime(datetime.datetime.utcnow())),
         ])
         entry.extend(links)
+
+        genre_tags = []
+        for wg in work.work_genres:
+            genre_tags.append(E.category(term=wg.genre.name))
+        if len(work.work_genres) == 0:
+            sole_genre = None
+            if work.fiction == True:
+                sole_genre = 'Fiction'
+            elif work.fiction == False:
+                sole_genre = 'Nonfiction'
+            if sole_genre:
+                genre_tags.append(E.category(term=sole_genre))
+        entry.extend(genre_tags)
+
         # print " ID %s TITLE %s AUTHORS %s" % (tag, work.title, work.authors)
         language = work.language_code
         if language:
