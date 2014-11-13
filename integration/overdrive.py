@@ -116,7 +116,7 @@ class OverdriveAPI(object):
         headers['Authorization'] = "Basic %s" % auth
         return requests.post(url, payload, headers=headers)
 
-    def get_patron_access_token(self, barcode, pin):
+    def get_patron_access_token(self, library_card, pin):
         """Create an OAuth token for the given patron."""
         payload = dict(
             grant_type="password",
@@ -125,22 +125,48 @@ class OverdriveAPI(object):
             scope="websiteid:%s authorizationname:%s" % (
                 self.website_id, "default")
         )
-        response = self.token_post(patron_token_endpoint, payload)
-        if response.status == 200:
-            access_token = response.json['access_token']
+        response = self.token_post(self.PATRON_TOKEN_ENDPOINT, payload)
+        if response.status_code == 200:
+            access_token = response.json()['access_token']
         else:
             access_token = None
         return access_token, response
 
-    def checkout(self, patron_access_token, overdrive_id, format_type):
-        headers = dict(Authorization="Bearer %s" % patron_access_token)
+    def checkout(self, patron_access_token, overdrive_id, 
+                 format_type='ebook-epub-adobe'):
+        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
+        headers = dict(auth_header)
         headers["Content-Type"] = "application/json"
-        payload = dict(fields=[dict(name="reserveId", value=book_id),
+        payload = dict(fields=[dict(name="reserveId", value=overdrive_id),
                                dict(name="formatType", value=format_type)])
         payload = json.dumps(payload)
         response = requests.post(
             self.CHECKOUTS_ENDPOINT, headers=headers, data=payload)
-        return response
+
+        set_trace()
+        # TODO: We need a better error URL here, not that it matters.
+        expires, content_link_gateway = self.extract_data_from_checkout_response(
+            response.json(), format_type, "http://library-simplified.com/")
+
+        # Now GET the content_link_gateway, which will point us to the
+        # ACSM file or equivalent.
+        final_response = requests.get(content_link_gateway, headers=auth_header)
+        content_link, content_type = self.extract_content_link(final_response)
+        return content_link, content_type, expires
+
+    @classmethod
+    def extract_data_from_checkout_response(cls, checkout_response_json,
+                                            format_type, error_url):
+
+        expires = datetime.datetime.strptime(
+            checkout_response_json['expires'], "%Y-%m-%dT%H:%M:%SZ")
+        return expires, cls.get_download_link(
+            checkout_response_json, format_type, error_url)
+
+
+    def extract_content_link(self, content_link_gateway_json):
+        link = content_link_gateway_json['links']['contentlink']
+        return link['href'], link['type']
 
     def get_library(self):
         url = self.LIBRARY_ENDPOINT % dict(library_id=self.library_id)
@@ -296,14 +322,24 @@ class OverdriveAPI(object):
         return availability_queue, next_link
 
     @classmethod
-    def get_download_link(self, checkout_response, format, error_url):
+    def get_download_link(self, checkout_response, format_type, error_url):
         link = None
+        format = None
         for f in checkout_response['formats']:
-            if f.get('formatType') == format:
-                link = f['linkTemplates']['downloadLink']['href']
+            if f['formatType'] == format_type:
+                format = f
                 break
-        if link:
-            return link.replace("{errorpageurl}", error_url)
+        if not format:
+            raise IOError("Could not find specified format %s" % format_type)
+
+        if not 'linkTemplates' in format:
+            raise IOError("No linkTemplates for format %s" % format_type)
+        templates = format['linkTemplates']
+        if not 'downloadLink' in templates:
+            raise IOError("No downloadLink for format %s" % format_type)
+        download_link = templates['downloadLink']['href']
+        if download_link:
+            return download_link.replace("{errorpageurl}", error_url)
         else:
             return None
 

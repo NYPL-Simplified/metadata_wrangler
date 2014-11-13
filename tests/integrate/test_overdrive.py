@@ -1,5 +1,8 @@
 # encoding: utf-8
-from nose.tools import set_trace, eq_
+from nose.tools import (
+    set_trace, eq_,
+    assert_raises,
+)
 import pkgutil
 import json
 from tests.db import DatabaseTest
@@ -43,7 +46,7 @@ class TestOverdriveAPI(DatabaseTest):
         # newly created Identifier.
         raw['id'] = identifier.identifier
 
-        api = OverdriveAPI(self._db, None)
+        api = OverdriveAPI(self._db)
         pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(True, was_new)
 
@@ -78,7 +81,7 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(0, pool.licenses_reserved)
         eq_(0, pool.patrons_in_hold_queue)
 
-        api = OverdriveAPI(self._db, None)
+        api = OverdriveAPI(self._db)
         p2, was_new = api.update_licensepool_with_book_info(raw)
         eq_(False, was_new)
         eq_(p2, pool)
@@ -100,7 +103,7 @@ class TestOverdriveAPI(DatabaseTest):
         )
         raw['id'] = identifier.identifier
 
-        api = OverdriveAPI(self._db, None)
+        api = OverdriveAPI(self._db)
         pool, was_new = api.update_licensepool_with_book_info(raw)
         eq_(10, pool.patrons_in_hold_queue)
 
@@ -219,5 +222,17 @@ class TestOverdriveAPI(DatabaseTest):
         url = OverdriveAPI.get_download_link(
             data, "ebook-epub-adobe", "http://foo.com/")
         eq_("http://patron.api.overdrive.com/v1/patrons/me/checkouts/76C1B7D0-17F4-4C05-8397-C66C17411584/formats/ebook-epub-adobe/downloadlink?errorpageurl=http://foo.com/", url)
-        eq_(None, OverdriveAPI.get_download_link(
-            data, "no-such-format", "http://foo.com/"))
+        
+        assert_raises(IOError, OverdriveAPI.get_download_link,
+            data, "no-such-format", "http://foo.com/")
+
+    def test_extract_data_from_checkout_resource(self):
+        data = json.loads(pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/checkout_response_locked_in_format.json"))
+        expires, url = OverdriveAPI.extract_data_from_checkout_response(
+            data, "ebook-epub-adobe", "http://foo.com/")
+        eq_(2013, expires.year)
+        eq_(10, expires.month)
+        eq_(4, expires.day)
+        eq_("http://patron.api.overdrive.com/v1/patrons/me/checkouts/76C1B7D0-17F4-4C05-8397-C66C17411584/formats/ebook-epub-adobe/downloadlink?errorpageurl=http://foo.com/", url)

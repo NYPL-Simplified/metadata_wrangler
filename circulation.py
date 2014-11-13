@@ -649,7 +649,7 @@ def checkout(data_source, identifier):
             NO_AVAILABLE_LICENSE_PROBLEM, 
             "I don't have any licenses for that book.", 404)
 
-    if pool.is_open_access:
+    if pool.open_access:
         best_pool, best_link = pool.best_license_link
         if not best_link:
             return problem(
@@ -659,13 +659,20 @@ def checkout(data_source, identifier):
         return redirect(URLRewriter.rewrite(best_link.href))
 
     # This is not an open-access pool.
-    if best_pool.licenses_available < 1:
+    if pool.licenses_available < 1:
         return problem(
             NO_AVAILABLE_LICENSE_PROBLEM,
             "Sorry, couldn't find an available license.", 404)
 
-    if best_pool.data_source.name==DataSource.OVERDRIVE:
-        api = OverdriveAPI
+    if pool.data_source.name==DataSource.OVERDRIVE:
+        api = OverdriveAPI(_db)
+        header = flask.request.authorization
+        barcode, pin = header.username, header.password
+        access_token, response = api.get_patron_access_token(barcode, pin)
+        response = api.checkout(access_token, pool.identifier.identifier)
+        data = response.json()
+        expires = datetime.datetime.strptime(
+            data['expires'], "%Y-%m-%dT%H:%M:%SZ")
 
     best_pool.loan_to(flask.request.patron)
 
