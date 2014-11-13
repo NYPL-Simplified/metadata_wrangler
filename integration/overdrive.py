@@ -264,6 +264,10 @@ class OverdriveAPI(object):
         # Overdrive doesn't do 'reserved'.
         licenses_reserved = 0
 
+        print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
+        print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
+        print " Holds: %s => %s" % (pool.patrons_in_hold_queue, new_number_of_holds)
+
         pool.update_availability(new_licenses_owned, new_licenses_available,
                                  licenses_reserved, new_number_of_holds)
         return pool, was_new

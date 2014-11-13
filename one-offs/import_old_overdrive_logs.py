@@ -5,6 +5,7 @@ import sys
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 
+import zlib
 import csv
 import datetime
 from collections import defaultdict
@@ -58,9 +59,12 @@ def process_item(_db, item):
     CirculationEvent.log(_db, pool, event_name, old_value, new_value, start)
 
 def process_file(_db, filename):
-    for i in gzip.open(filename):
-        data = json.loads(i.strip())
-        process_item(_db, data)
+    try:
+        for i in gzip.open(filename):
+            data = json.loads(i.strip())
+            process_item(_db, data)
+    except zlib.error, e:
+        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
 
 done = set()
 done_path = os.path.join(data_dir, "done")
@@ -78,6 +82,5 @@ for filename in os.listdir(data_dir):
         continue
     process_file(database, path)
     print "DONE with %s! DONE!" % path
-    set_trace()
     database.commit()
     done_out.write(path + "\n")
