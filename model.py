@@ -3242,8 +3242,8 @@ class LicensePool(Base):
         # the Identifier.
         license_pool, was_new = get_one_or_create(
             _db, LicensePool, data_source=data_source, identifier=identifier)
-        if was_new and not license_pool.availability_date:
-            license_pool.availability_date = datetime.datetime.utcnow()
+        if was_new and not license_pool.availability_time:
+            license_pool.availability_time = datetime.datetime.utcnow()
         return license_pool, was_new
 
     def edition(self):
