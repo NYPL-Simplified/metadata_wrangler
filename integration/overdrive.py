@@ -238,9 +238,38 @@ class OverdriveAPI(object):
                 wr.title = book['title']
             print "New book: %r" % wr
 
-        pool.update_availability(
-            book.get('copiesOwned',0), book.get('copiesAvailable',0), 0, 
-            book.get('numberOfHolds', 0))
+        new_licenses_owned = []
+        new_licenses_available = []
+        new_number_of_holds = []
+        if 'collections' in book:
+            for collection in book['collections']:
+                if 'licensesOwned' in collection:
+                    new_licenses_owned.append(collection['licensesOwned'])
+                if 'licensesAvailable' in collection:
+                    new_licenses_available.append(collection['licensesAvailable'])
+                if 'numberOfHolds' in collection:
+                    new_number_of_holds.append(collection['numberOfHolds'])
+
+        if new_licenses_owned:
+            new_licenses_owned = sum(new_licenses_owned)
+        else:
+            new_licenses_owned = pool.licenses_owned
+
+        if new_licenses_available:
+            new_licenses_available = sum(new_licenses_available)
+        else:
+            new_licenses_available = pool.licenses_available
+
+        if new_number_of_holds:
+            new_number_of_holds = sum(new_number_of_holds)
+        else:
+            new_number_of_holds = pool.patrons_in_hold_queue
+
+        # Overdrive doesn't do 'reserved'.
+        licenses_reserved = 0
+
+        pool.update_availability(new_licenses_owned, new_licenses_available,
+                                 licenses_reserved, new_number_of_holds)
         return pool, was_new
 
     def _get_book_list_page(self, link):
@@ -363,7 +392,7 @@ class OverdriveCirculationMonitor(Monitor):
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
-        i = 0
+        i = None
         for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
             if i > 0 and not i % 50:
                 print " %s processed" % i
@@ -372,16 +401,12 @@ class OverdriveCirculationMonitor(Monitor):
             license_pool, is_new = self.api.update_licensepool(book)
             # Log a circulation event for this work.
             if is_new:
-                event = get_one_or_create(
-                    _db, CirculationEvent,
-                    type=CirculationEvent.TITLE_ADD,
-                    license_pool=license_pool,
-                    create_method_kwargs=dict(
-                        start=license_pool.last_checked
-                    )
-                )
+                CirculationEvent.log(
+                    _db, license_pool, CirculationEvent.TITLE_ADD,
+                    None, None, start=license_pool.last_checked)
             _db.commit()
-        print "Processed %d books total." % (int(i)+1)
+        if i != None:
+            print "Processed %d books total." % (i+1)
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""

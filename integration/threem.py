@@ -1,3 +1,25 @@
+    # def update_from_event(self, event):
+    #     """Update the license pool based on an event."""
+    #     name = event.type
+    #     delta = event.delta
+    #     if name in (
+    #             CirculationEvent.LICENSE_ADD,
+    #             CirculationEvent.LICENSE_REMOVE):
+    #         self.licenses_owned = event.new_value
+    #         self.licenses_available += delta
+    #     elif name in (CirculationEvent.CHECKIN, CirculationEvent.CHECKOUT):
+    #         self.licenses_available = event.new_value
+    #     elif name == CirculationEvent.AVAILABILITY_NOTIFY:
+    #         # People move from the hold queue to the reserves.
+    #         self.licenses_available -= delta
+    #         self.licenses_reserved += delta
+    #         self.patrons_in_hold_queue -= delta
+    #     elif name in (CirculationEvent.HOLD_RELEASE,
+    #                   CirculationEvent.HOLD_PLACE):
+    #         self.patrons_in_hold_queue = event.new_value
+    #     if self.last_checked < event.start:
+    #         self.last_checked = event.start
+
 import base64
 import urlparse
 import datetime

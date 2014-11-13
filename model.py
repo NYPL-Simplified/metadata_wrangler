@@ -3290,74 +3290,46 @@ class LicensePool(Base):
         return age > maximum_stale_time
 
     def update_availability(
-            self, licenses_owned, licenses_available, licenses_reserved,
-            patrons_in_hold_queue):
-        # TODO: Emit notification events.
-        self.licenses_owned = licenses_owned
-        self.licenses_available = licenses_available
-        self.licenses_reserved = licenses_reserved
-        self.patrons_in_hold_queue = patrons_in_hold_queue
-        self.last_checked = datetime.datetime.utcnow()
-
-    @classmethod
-    def compare_circulation_estimate_to_reality(self, estimate):
-        """Bring a circulation estimate up to date with reality.
-
-        Yields one event for every kind of change that happened.
+            self, new_licenses_owned, new_licenses_available, 
+            new_licenses_reserved, new_patrons_in_hold_queue):
+        """Update the LicensePool with new availability information.
+        Log the implied changes as CirculationEvents.
         """
-        for field, actual_value, more, fewer in (
-            [self.patrons_in_hold_queue, Event.HOLD_PLACE, Event.HOLD_RELEASE], 
-            [self.licenses_available, Event.CHECKIN, Event.CHECKOUT], 
-                [self.licenses_reserved, Event.AVAILABILITY_NOTIFY, None], 
-            [self.licenses_owned, Event.LICENSE_ADD, Event.LICENSE_REMOVE]):
-            estimated_value = estimate.get(key,0)
-            if estimated_value == actual_value:
-                # Our estimate was accurate. No need to generate 
-                # any events.
+
+        _db = Session.object_session(self)
+        now = datetime.datetime.utcnow()
+
+        for old_value, new_value, more_event, fewer_event in (
+                [self.patrons_in_hold_queue,  new_patrons_in_hold_queue,
+                 CirculationEvent.HOLD_PLACE, CirculationEvent.HOLD_RELEASE], 
+                [self.licenses_available, new_licenses_available,
+                 CirculationEvent.CHECKIN, CirculationEvent.CHECKOUT], 
+                [self.licenses_reserved, new_licenses_reserved,
+                 CirculationEvent.AVAILABILITY_NOTIFY, None], 
+                [self.licenses_owned, new_licenses_owned,
+                 CirculationEvent.LICENSE_ADD,
+                 CirculationEvent.LICENSE_REMOVE]):
+            if old_value == new_value:
                 continue
 
-            if actual_value < estimated_value:
-                # There are fewer of (whatever) than we estimated.
-                name = fewer
+            if old_value < new_value:
+                event_name = more_event
             else:
-                # There are more of (whatever) than we estimated.
-                name = more
-            if name is None:
-                # We have no event for this.
+                event_name = fewer_event
+
+            if not event_name:
                 continue
 
-                        
-            d = dict()
-            d[Event.OLD_VALUE] = estimated_value
-            d[Event.NEW_VALUE] = actual_value
-            d[Event.DELTA] = actual_value-estimated_value
-            d[Event.SOURCE] = self.edition().source
-            d[Event.SOURCE_BOOK_ID] = self.edition.source_id
-            d[Event.START_TIME] = datetime.datetime.strptime(
-                reality[LicensedWork.LAST_CHECKED], Event.TIME_FORMAT)
-            d[Event.EVENT_TYPE] = name
-            yield d
+            CirculationEvent.log(
+                _db, self, event_name, old_value, new_value, now)
 
-    def update_from_event(self, event):
-        """Update the license pool based on an event."""
-        name = event.type
-        delta = event.delta
-        if name in (
-                CirculationEvent.LICENSE_ADD,
-                CirculationEvent.LICENSE_REMOVE):
-            self.licenses_owned = event.new_value
-            self.licenses_available += delta
-        elif name in (CirculationEvent.CHECKIN, CirculationEvent.CHECKOUT):
-            self.licenses_available = event.new_value
-        elif name == CirculationEvent.AVAILABILITY_NOTIFY:
-            # People move from the hold queue to the reserves.
-            self.licenses_available -= delta
-            self.licenses_reserved += delta
-            self.patrons_in_hold_queue -= delta
-        elif name in (CirculationEvent.HOLD_RELEASE,
-                      CirculationEvent.HOLD_PLACE):
-            self.patrons_in_hold_queue = event.new_value
-
+        # Update the license pool with the latest information.
+        self.licenses_owned = new_licenses_owned
+        self.licenses_available = new_licenses_available
+        self.licenses_reserved = new_licenses_reserved
+        self.patrons_in_hold_queue = new_patrons_in_hold_queue
+        self.last_checked = now
+            
     def loan_to(self, patron):
         _db = Session.object_session(patron)
         kwargs = dict(start=datetime.datetime.utcnow())
@@ -3652,23 +3624,25 @@ class CirculationEvent(Base):
         delta = cls._get_int(data, 'delta')
         foreign_patron_id = data.get("foreign_patron_id")
 
-        # Finally, get or create the event.
+
+    @classmethod
+    def log(cls, _db, license_pool, event_name, old_value, new_value,
+            start=None, end=None, foreign_patron_id=None):
+        delta = new_value - old_value
+        if not start:
+            start = datetime.datetime.utcnow()
+        if not end:
+            end = start
+        print "EVENT %s %s=>%s" % (event_name, old_value, new_value)
         event, was_new = get_one_or_create(
             _db, CirculationEvent, license_pool=license_pool,
-            type=type, start=start, foreign_patron_id=foreign_patron_id,
+            type=event_name, start=start, foreign_patron_id=foreign_patron_id,
             create_method_kwargs=dict(
                 old_value=old_value,
                 new_value=new_value,
                 delta=delta,
                 end=end)
             )
-
-        if was_new:
-            # Update the LicensePool to reflect the information in this event.
-            print event.type
-            if event.type == 'availablity_notify':
-                set_trace()
-            license_pool.update_from_event(event)
         return event, was_new
 
 
