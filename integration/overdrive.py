@@ -239,10 +239,10 @@ class OverdriveAPI(object):
         new_number_of_holds = []
         if 'collections' in book:
             for collection in book['collections']:
-                if 'licensesOwned' in collection:
-                    new_licenses_owned.append(collection['licensesOwned'])
-                if 'licensesAvailable' in collection:
-                    new_licenses_available.append(collection['licensesAvailable'])
+                if 'copiesOwned' in collection:
+                    new_licenses_owned.append(collection['copiesOwned'])
+                if 'copiesAvailable' in collection:
+                    new_licenses_available.append(collection['copiesAvailable'])
                 if 'numberOfHolds' in collection:
                     new_number_of_holds.append(collection['numberOfHolds'])
 
