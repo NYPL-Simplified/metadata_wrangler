@@ -16,6 +16,7 @@ from model import (
     get_one_or_create,
     CirculationEvent,
     CoverageProvider,
+    Credential,
     DataSource,
     LicensePool,
     Measurement,
@@ -70,30 +71,25 @@ class OverdriveAPI(object):
         self.collection_name = os.environ['OVERDRIVE_COLLECTION_NAME']
 
         # Get set up with up-to-date credentials from the API.
-        if data_directory:
-            self.credential_path = os.path.join(data_directory, self.CRED_FILE)
-            self.check_creds()
-            self.collection_token = self.get_library()['collectionToken']
+        self.check_creds()
+        self.collection_token = self.get_library()['collectionToken']
 
     def check_creds(self):
-        """If the Bearer Token is about to expire, update it."""
-        refresh = True
-        if os.path.exists(self.credential_path):
-            cred_mod_time = os.stat(self.credential_path).st_mtime
-            cred_age = time.time() - cred_mod_time
-            if cred_age <= self.MAX_CREDENTIAL_AGE:
-                refresh = False
-        if refresh:
-            self.refresh_creds()
-            print "Refreshed OAuth credential."
-        self.token = json.load(open(self.credential_path))['access_token']
+        """If the Bearer Token has expired, update it."""
+        credential = Credential.lookup(
+            self._db, DataSource.OVERDRIVE, self.refresh_creds)
+        self.token = credential.credential
 
-    def refresh_creds(self):
-        """Fetch a new Bearer Token and write it to disk."""
+    def refresh_creds(self, credential):
+        """Fetch a new Bearer Token and update the given Credential object."""
         response = self.token_post(
             self.TOKEN_ENDPOINT,
             dict(grant_type="client_credentials"))
-        open(self.credential_path, "w").write(response.text)
+        data = response.json()
+        credential.credential = data['access_token']
+        expires_in = (data['expires_in'] * 0.9)
+        credential.expires = datetime.datetime.utcnow() + datetime.timedelta(
+            seconds=expires_in)
 
     def get(self, url, extra_headers, exception_on_401=False):
         """Make an HTTP GET request using the active Bearer Token."""

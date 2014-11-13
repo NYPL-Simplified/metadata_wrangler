@@ -3649,6 +3649,21 @@ class CirculationEvent(Base):
         return event, was_new
 
 
+class Credential(Base):
+    """A place to store credentials for external services."""
+    __tablename__ = 'credentials'
+    key = Column(String, primary_key=True, index=True)
+    credential = Column(String)
+    expires = Column(DateTime)
+
+    @classmethod
+    def lookup(self, _db, key, refresher_method):
+        credential, is_new = get_one_or_create(_db, Credential, key=key)
+        if is_new or credential.expires >= datetime.datetime.utcnow():
+            refresher_method(credential)
+        return credential
+
+
 class Timestamp(Base):
     """A general-purpose timestamp for external services."""
 
