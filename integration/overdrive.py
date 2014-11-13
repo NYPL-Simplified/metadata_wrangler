@@ -59,7 +59,7 @@ class OverdriveAPI(object):
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
     
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(_db, DataSource.OVERDRIVE)
 
@@ -375,14 +375,11 @@ class OverdriveCirculationMonitor(Monitor):
     bibliographic data isn't inserted into those LicensePools until
     the OverdriveCoverageProvider runs.
     """
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         super(OverdriveCirculationMonitor, self).__init__(
             "Overdrive Circulation Monitor")
         self._db = _db
-        self.path = os.path.join(data_directory, DataSource.OVERDRIVE)
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-        self.api = OverdriveAPI(self._db, self.path)
+        self.api = OverdriveAPI(self._db)
 
     def recently_changed_ids(self, start, cutoff):
         return self.api.recently_changed_ids(start, cutoff)
@@ -411,9 +408,9 @@ class OverdriveCirculationMonitor(Monitor):
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
 
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         self._db = _db
-        self.overdrive = OverdriveAPI(self._db, data_directory)
+        self.overdrive = OverdriveAPI(self._db)
         self.input_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         self.output_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         super(OverdriveBibliographicMonitor, self).__init__(

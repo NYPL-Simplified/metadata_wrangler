@@ -11,12 +11,8 @@ from model import (
 from integration.overdrive import OverdriveAPI
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print "Usage: %s [data storage directory]" % sys.argv[0]
-        sys.exit()
-    path = sys.argv[1]      
     _db = production_session()
-    overdrive = OverdriveAPI(path)
+    overdrive = OverdriveAPI(_db)
     overdrive_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
     for identifier in _db.query(Identifier).filter(
             Identifier.type==overdrive_source.primary_identifier_type):
