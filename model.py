@@ -3628,7 +3628,10 @@ class CirculationEvent(Base):
     @classmethod
     def log(cls, _db, license_pool, event_name, old_value, new_value,
             start=None, end=None, foreign_patron_id=None):
-        delta = new_value - old_value
+        if new_value is None or old_value is None:
+            delta = None
+        else:
+            delta = new_value - old_value
         if not start:
             start = datetime.datetime.utcnow()
         if not end:
