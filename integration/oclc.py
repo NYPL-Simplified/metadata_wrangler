@@ -137,7 +137,13 @@ class OCLCLinkedData(object):
         representation, cached = Representation.get(
             self._db, url, data_source=self.source,
             identifier=identifier)
-        data = jsonld.load_document(url)
+        try:
+            data = jsonld.load_document(url)
+        except Exception, e:
+            print url
+            set_trace()
+            return None, False
+
         if cached and not representation.content:
             representation, cached = Representation.get(
                 self._db, url, data_source=self.source,
@@ -175,6 +181,8 @@ class OCLCLinkedData(object):
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
         oclc_number_data, was_new = self.lookup_by_identifier(oclc_number)
+        if not oclc_number_data:
+            return
 
         # Look up every work referenced in that document and yield its data.
         graph = OCLCLinkedData.graph(oclc_number_data)
@@ -192,7 +200,12 @@ class OCLCLinkedData(object):
     def graph(cls, raw_data):
         if not raw_data or not raw_data['document']:
             return None
-        document = json.loads(raw_data['document'])
+        try:
+            document = json.loads(raw_data['document'])
+        except ValueError, e:
+            # We couldn't parse this JSON. It's _extremely_ rare from OCLC
+            # but it does seem to happen.
+            set_trace()
         if not '@graph' in document:
             # Empty graph
             return dict()

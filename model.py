@@ -31,7 +31,8 @@ from sqlalchemy.orm import (
     joinedload,
 )
 from sqlalchemy.orm.exc import (
-    NoResultFound
+    NoResultFound,
+    MultipleResultsFound,
 )
 from sqlalchemy.ext.mutable import (
     MutableDict,
@@ -674,15 +675,30 @@ class Identifier(Base):
                      media_type=None, content=None):
         """Associated a resource with this Identifier."""
         _db = Session.object_session(self)
-        resource, new = get_one_or_create(
-            _db, Resource, identifier=self,
-            rel=rel,
-            href=href,
-            media_type=media_type,
-            content=content,
-            create_method_kwargs=dict(
-                data_source=data_source,
-                license_pool=license_pool))
+        try:
+            resource, new = get_one_or_create(
+                _db, Resource, identifier=self,
+                rel=rel,
+                href=href,
+                media_type=media_type,
+                content=content,
+                create_method_kwargs=dict(
+                    data_source=data_source,
+                    license_pool=license_pool))
+        except MultipleResultsFound, e:
+            # TODO: This is a hack.
+            all_resources = _db.query(Resource).filter(
+                Resource.identifier==self,
+                Resource.rel==rel,
+                Resource.href==href,
+                Resource.media_type==media_type,
+                Resource.content==content)
+            all_resources = all_resources.all()
+            resource = all_resources[0]
+            new = False
+            for i in all_resources[1:]:
+                _db.delete(i)
+
         if content:
             resource.set_content(content, media_type)
         return resource, new
@@ -740,11 +756,23 @@ class Identifier(Base):
 
         # Use a Classification to connect the Identifier to the
         # Subject.
-        classification, is_new = get_one_or_create(
-            _db, Classification,
-            identifier=self,
-            subject=subject,
-            data_source_id=data_source.id)
+        try:
+            classification, is_new = get_one_or_create(
+                _db, Classification,
+                identifier=self,
+                subject=subject,
+                data_source=data_source)
+        except MultipleResultsFound, e:
+            # TODO: This is a hack.
+            all_classifications = _db.query(Classification).filter(
+                Classification.identifier==self,
+                Classification.subject==subject,
+                Classification.data_source==data_source)
+            all_classifications = all_classifications.all()
+            classification = all_classifications[0]
+            for i in all_classifications[1:]:
+                _db.delete(i)
+
         classification.weight = weight
         return classification
 

@@ -164,7 +164,7 @@ class OverdriveAPI(object):
         # we can do is get events between the start time and now.
 
         last_update_time = start-self.EVENT_DELAY
-        print start, last_update_time
+        print "Now: %s Asking for: %s" % (start, last_update_time)
         params = dict(lastupdatetime=last_update_time,
                       formats=self.FORMATS,
                       sort="popularity:desc",
@@ -178,9 +178,6 @@ class OverdriveAPI(object):
             # be putting them on the list of inventory items to
             # refresh. At that point we will send out events.
             for i in page_inventory:
-                if 'penguin' in i.get('title', '').lower():
-                    print "PENGUIN" * 80
-                    print i
                 print i.get('title', '[no title]')
                 yield i
 
@@ -206,7 +203,7 @@ class OverdriveAPI(object):
         circulation information.
         """
         # Retrieve current circulation information about this book
-        print "Update for %s" % book
+        # print "Update for %s" % book
         orig_book = book
         if isinstance(book, basestring):
             book_id = book
@@ -273,9 +270,9 @@ class OverdriveAPI(object):
         # Overdrive doesn't do 'reserved'.
         licenses_reserved = 0
 
-        print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
-        print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
-        print " Holds: %s => %s" % (pool.patrons_in_hold_queue, new_number_of_holds)
+        #print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
+        #print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
+        #print " Holds: %s => %s" % (pool.patrons_in_hold_queue, new_number_of_holds)
 
         pool.update_availability(new_licenses_owned, new_licenses_available,
                                  licenses_reserved, new_number_of_holds)
@@ -554,9 +551,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     continue
                 media_type = cls.media_type_for_overdrive_type.get(
                     format['id'])
-                if not media_type:
-                    print format['id']
-                    set_trace()
                 for sample_info in format['samples']:
                     href = sample_info['url']
                     resource, new = identifier.add_resource(
