@@ -197,6 +197,9 @@ class Patron(Base):
 
     loans = relationship('Loan', backref='patron')
 
+    # One Patron can have many associated Credentials.
+    credentials = relationship("Credential", backref="patron")
+
     def works_on_loan(self):
         db = Session.object_session(self)
         loans = db.query(Loan).filter(Loan.patron==self)
@@ -275,6 +278,8 @@ class DataSource(Base):
     # One DataSource can provide many Classifications.
     classifications = relationship("Classification", backref="data_source")
 
+    # One DataSource can have many associated Credentials.
+    credentials = relationship("Credential", backref="data_source")
 
     @classmethod
     def lookup(cls, _db, name):
@@ -3681,14 +3686,24 @@ class CirculationEvent(Base):
 class Credential(Base):
     """A place to store credentials for external services."""
     __tablename__ = 'credentials'
-    key = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
+    data_source_id = Column(Integer, ForeignKey('datasources.id'), index=True)
+    patron_id = Column(Integer, ForeignKey('patrons.id'), index=True)
     credential = Column(String)
     expires = Column(DateTime)
 
+    __table_args__ = (
+        UniqueConstraint('data_source_id', 'patron_id'),
+    )
+
     @classmethod
-    def lookup(self, _db, key, refresher_method):
-        credential, is_new = get_one_or_create(_db, Credential, key=key)
-        if is_new or credential.expires >= datetime.datetime.utcnow():
+    def lookup(self, _db, data_source, patron, refresher_method):
+        if isinstance(data_source, basestring):
+            data_source = DataSource.lookup(_db, data_source)
+        credential, is_new = get_one_or_create(
+            _db, Credential, data_source=data_source, patron=patron)
+        if (is_new or not credential.expires 
+            or credential.expires >= datetime.datetime.utcnow()):
             refresher_method(credential)
         return credential
 

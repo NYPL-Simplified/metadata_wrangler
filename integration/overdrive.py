@@ -83,7 +83,7 @@ class OverdriveAPI(object):
             refresh_on_lookup = self.refresh_creds
 
         credential = Credential.lookup(
-            self._db, DataSource.OVERDRIVE, refresh_on_lookup)
+            self._db, DataSource.OVERDRIVE, None, refresh_on_lookup)
         if force_refresh:
             self.refresh_creds(credential)
         self.token = credential.credential
@@ -94,10 +94,7 @@ class OverdriveAPI(object):
             self.TOKEN_ENDPOINT,
             dict(grant_type="client_credentials"))
         data = response.json()
-        credential.credential = data['access_token']
-        expires_in = (data['expires_in'] * 0.9)
-        credential.expires = datetime.datetime.utcnow() + datetime.timedelta(
-            seconds=expires_in)
+        self._update_credential(credential, data)
         self.token = credential.credential
 
     def get(self, url, extra_headers, exception_on_401=False):
@@ -125,21 +122,37 @@ class OverdriveAPI(object):
         headers['Authorization'] = "Basic %s" % auth
         return requests.post(url, payload, headers=headers)
 
-    def get_patron_access_token(self, library_card, pin):
+    def get_patron_credential(self, patron, pin):
         """Create an OAuth token for the given patron."""
+        def refresh(credential):
+            return self.refresh_patron_access_token(
+                credential, patron, pin)
+        return Credential.lookup(
+            self._db, DataSource.OVERDRIVE, patron, refresh)
+
+    def refresh_patron_access_token(self, credential, patron, pin):
         payload = dict(
             grant_type="password",
-            username=library_card,
+            username=patron.authorization_identifier,
             password=pin,
             scope="websiteid:%s authorizationname:%s" % (
                 self.website_id, "default")
         )
         response = self.token_post(self.PATRON_TOKEN_ENDPOINT, payload)
         if response.status_code == 200:
-            access_token = response.json()['access_token']
-        else:
-            access_token = None
-        return access_token, response
+            self._update_credential(credential, response.json())
+        elif response.status_code == 400:
+            response = response.json()
+            raise IOError(response['error'] + "/" + response['error_description'])
+        return credential
+
+    def _update_credential(self, credential, overdrive_data):
+        """Copy Overdrive OAuth data into a Credential object."""
+        credential.credential = overdrive_data['access_token']
+        expires_in = (overdrive_data['expires_in'] * 0.9)
+        credential.expires = datetime.datetime.utcnow() + datetime.timedelta(
+            seconds=expires_in)
+        self._db.commit()
 
     def checkout(self, patron_access_token, overdrive_id, 
                  format_type='ebook-epub-adobe'):
@@ -152,6 +165,14 @@ class OverdriveAPI(object):
 
         response = requests.post(
             self.CHECKOUTS_ENDPOINT, headers=headers, data=payload)
+
+        if response.status_code == 400:
+            error = response.json()
+            code = error['errorCode']
+            if code == 'NoCopiesAvailable':
+                # TODO
+                return None, None, None
+
         # TODO: We need a better error URL here, not that it matters.
         expires, content_link_gateway = self.extract_data_from_checkout_response(
             response.json(), format_type, "http://library-simplified.com/")
@@ -467,7 +488,7 @@ class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
 
     def recently_changed_ids(self, start, cutoff):
         """Ignore the dates and return all IDs."""
-        return self.api.all_ids()
+        return self.api.all_ids("http://api.overdrive.com/v1/collections/v1L1BCgAAAA2C/products?limit=25&offset=15075")
 
 
 class OverdriveBibliographicMonitor(CoverageProvider):

@@ -667,12 +667,10 @@ def checkout(data_source, identifier):
     if pool.data_source.name==DataSource.OVERDRIVE:
         api = OverdriveAPI(_db)
         header = flask.request.authorization
-        barcode, pin = header.username, header.password
-        access_token, response = api.get_patron_access_token(barcode, pin)
-        response = api.checkout(access_token, pool.identifier.identifier)
-        data = response.json()
-        expires = datetime.datetime.strptime(
-            data['expires'], "%Y-%m-%dT%H:%M:%SZ")
+        credential = api.get_patron_credential(
+            flask.request.patron, header.password)
+        content_link, content_type, content_expires = api.checkout(
+            credential.credential, pool.identifier.identifier)
 
     best_pool.loan_to(flask.request.patron)
 
