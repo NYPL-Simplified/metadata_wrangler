@@ -184,7 +184,7 @@ class OverdriveAPI(object):
 
     def all_ids(self, starting_link=None):
         """Get IDs for every book in the system."""
-        params = dict(collection_name=self.collection_name)
+        params = dict(collection_token=self.collection_token)
         next_link = starting_link or self.make_link_safe(
             self.ALL_PRODUCTS_ENDPOINT % params)
         while next_link:
@@ -427,9 +427,10 @@ class OverdriveCirculationMonitor(Monitor):
     bibliographic data isn't inserted into those LicensePools until
     the OverdriveCoverageProvider runs.
     """
-    def __init__(self, _db):
+    def __init__(self, _db, name="Overdrive Circulation Monitor",
+                 interval_seconds=60):
         super(OverdriveCirculationMonitor, self).__init__(
-            "Overdrive Circulation Monitor")
+            name, interval_seconds=interval_seconds)
         self._db = _db
         self.api = OverdriveAPI(self._db)
 
@@ -457,11 +458,15 @@ class OverdriveCirculationMonitor(Monitor):
         if i != None:
             print "Processed %d books total." % (i+1)
 
-class OverdriveCollectionMonitor(Monitor):
+class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
     """Monitor every single book in the Overdrive collection."""
 
+    def __init__(self, _db, interval_seconds=3600*24):
+        super(OverdriveCollectionMonitor, self).__init__(
+            _db, "Overdrive Collection Overview", interval_seconds)
+
     def recently_changed_ids(self, start, cutoff):
-        """Ignore the dates and return all IDs."
+        """Ignore the dates and return all IDs."""
         return self.api.all_ids()
 
 
