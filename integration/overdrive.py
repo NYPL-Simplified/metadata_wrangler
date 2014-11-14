@@ -40,6 +40,7 @@ class OverdriveAPI(object):
     PATRON_TOKEN_ENDPOINT = "https://oauth-patron.overdrive.com/patrontoken"
 
     LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
+    ALL_PRODUCTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
     EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
     CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
@@ -173,6 +174,17 @@ class OverdriveAPI(object):
             self._db, url, self.get, data_source=self.source)
         return json.loads(representation.content)
 
+    def all_ids(self, starting_link=None):
+        """Get IDs for every book in the system."""
+        params = dict(collection_name=self.collection_name)
+        next_link = starting_link or self.make_link_safe(
+            self.ALL_PRODUCTS_ENDPOINT % params)
+        while next_link:
+            print next_link
+            page_inventory, next_link = self._get_book_list_page(next_link)
+            for i in page_inventory:
+                yield i
+
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
         and now.
@@ -195,9 +207,6 @@ class OverdriveAPI(object):
             # be putting them on the list of inventory items to
             # refresh. At that point we will send out events.
             for i in page_inventory:
-                if 'penguin' in i.get('title', '').lower():
-                    print "PENGUIN" * 80
-                    print i
                 print i.get('title', '[no title]')
                 yield i
 
@@ -402,7 +411,6 @@ class OverdriveRepresentationExtractor(object):
         return link
 
 
-
 class OverdriveCirculationMonitor(Monitor):
     """Maintain license pool for Overdrive titles.
 
@@ -439,6 +447,14 @@ class OverdriveCirculationMonitor(Monitor):
             _db.commit()
         if i != None:
             print "Processed %d books total." % (i+1)
+
+class OverdriveCollectionMonitor(Monitor):
+    """Monitor every single book in the Overdrive collection."""
+
+    def recently_changed_ids(self, start, cutoff):
+        """Ignore the dates and return all IDs."
+        return self.api.all_ids()
+
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
