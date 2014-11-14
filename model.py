@@ -1260,11 +1260,12 @@ class Edition(Base):
     BOOK_MEDIUM = "Book"
     PERIODICAL_MEDIUM = "Periodical"
     AUDIO_MEDIUM = "Audio"
+    MUSIC_MEDIUM = "Music"
     VIDEO_MEDIUM = "Video"
 
     medium = Column(
         Enum(BOOK_MEDIUM, PERIODICAL_MEDIUM, AUDIO_MEDIUM,
-             VIDEO_MEDIUM, name="medium"),
+             MUSIC_MEDIUM, VIDEO_MEDIUM, name="medium"),
         default=BOOK_MEDIUM, index=True
     )
 
@@ -3664,7 +3665,7 @@ class CirculationEvent(Base):
             start = datetime.datetime.utcnow()
         if not end:
             end = start
-        print "EVENT %s %s=>%s" % (event_name, old_value, new_value)
+        print " EVENT %s %s=>%s" % (event_name, old_value, new_value)
         event, was_new = get_one_or_create(
             _db, CirculationEvent, license_pool=license_pool,
             type=event_name, start=start, foreign_patron_id=foreign_patron_id,

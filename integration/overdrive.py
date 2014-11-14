@@ -42,7 +42,7 @@ class OverdriveAPI(object):
     LIBRARY_ENDPOINT = "http://api.overdrive.com/v1/libraries/%(library_id)s"
     ALL_PRODUCTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
-    EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&formats=%(formats)s&limit=%(limit)s"
+    EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&limit=%(limit)s"
     CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
     AVAILABILITY_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products/%(product_id)s/availability"
 
@@ -203,7 +203,6 @@ class OverdriveAPI(object):
         last_update_time = start-self.EVENT_DELAY
         print "Now: %s Asking for: %s" % (start, last_update_time)
         params = dict(lastupdatetime=last_update_time,
-                      formats=self.FORMATS,
                       sort="popularity:desc",
                       limit=self.PAGE_SIZE_LIMIT,
                       collection_name=self.collection_name)
@@ -215,7 +214,6 @@ class OverdriveAPI(object):
             # be putting them on the list of inventory items to
             # refresh. At that point we will send out events.
             for i in page_inventory:
-                print i.get('title', '[no title]')
                 yield i
 
     def metadata_lookup(self, identifier):
@@ -307,6 +305,8 @@ class OverdriveAPI(object):
         # Overdrive doesn't do 'reserved'.
         licenses_reserved = 0
 
+        edition = pool.edition()
+        print '%s "%s" %s' % (edition.medium, edition.title, edition.author)
         #print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
         #print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
         #print " Holds: %s => %s" % (pool.patrons_in_hold_queue, new_number_of_holds)
@@ -580,7 +580,19 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         # Associate the Overdrive Edition with other identifiers
         # such as ISBN.
+        medium = Edition.BOOK_MEDIUM
         for format in info.get('formats', []):
+            if format['id'].startswith('audiobook-'):
+                medium = Edition.AUDIO_MEDIUM
+            elif format['id'].startswith('video-'):
+                medium = Edition.VIDEO_MEDIUM
+            elif format['id'].startswith('ebook-'):
+                medium = Edition.BOOK_MEDIUM
+            elif format['id'].startswith('music-'):
+                medium = Edition.MUSIC_MEDIUM
+            else:
+                print format['id']
+                set_trace()
             for new_id in format.get('identifiers', []):
                 t = new_id['type']
                 v = new_id['value']
@@ -619,6 +631,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         # Add resources: cover and descriptions
 
+        wr.medium = medium
+        if medium == Edition.BOOK_MEDIUM:
+            print medium, wr.title, wr.author
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])
