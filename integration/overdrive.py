@@ -59,7 +59,7 @@ class OverdriveAPI(object):
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
     
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(_db, DataSource.OVERDRIVE)
 
@@ -74,10 +74,17 @@ class OverdriveAPI(object):
         self.check_creds()
         self.collection_token = self.get_library()['collectionToken']
 
-    def check_creds(self):
+    def check_creds(self, force_refresh=False):
         """If the Bearer Token has expired, update it."""
+        if force_refresh:
+            refresh_on_lookup = lambda x: x
+        else:
+            refresh_on_lookup = self.refresh_creds
+
         credential = Credential.lookup(
-            self._db, DataSource.OVERDRIVE, self.refresh_creds)
+            self._db, DataSource.OVERDRIVE, refresh_on_lookup)
+        if force_refresh:
+            self.refresh_creds(credential)
         self.token = credential.credential
 
     def refresh_creds(self, credential):
@@ -90,6 +97,7 @@ class OverdriveAPI(object):
         expires_in = (data['expires_in'] * 0.9)
         credential.expires = datetime.datetime.utcnow() + datetime.timedelta(
             seconds=expires_in)
+        self.token = credential.credential
 
     def get(self, url, extra_headers, exception_on_401=False):
         """Make an HTTP GET request using the active Bearer Token."""
@@ -103,7 +111,7 @@ class OverdriveAPI(object):
                 raise Exception("Something's wrong with the OAuth Bearer Token!")
             else:
                 # Refresh the token and try again.
-                self.check_creds()
+                self.check_creds(force_refresh=True)
                 return self.get(url, extra_headers, True)
         else:
             return status_code, headers, content
@@ -198,6 +206,7 @@ class OverdriveAPI(object):
         circulation information.
         """
         # Retrieve current circulation information about this book
+        print "Update for %s" % book
         orig_book = book
         if isinstance(book, basestring):
             book_id = book
@@ -375,14 +384,11 @@ class OverdriveCirculationMonitor(Monitor):
     bibliographic data isn't inserted into those LicensePools until
     the OverdriveCoverageProvider runs.
     """
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         super(OverdriveCirculationMonitor, self).__init__(
             "Overdrive Circulation Monitor")
         self._db = _db
-        self.path = os.path.join(data_directory, DataSource.OVERDRIVE)
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-        self.api = OverdriveAPI(self._db, self.path)
+        self.api = OverdriveAPI(self._db)
 
     def recently_changed_ids(self, start, cutoff):
         return self.api.recently_changed_ids(start, cutoff)
@@ -411,9 +417,9 @@ class OverdriveCirculationMonitor(Monitor):
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
 
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         self._db = _db
-        self.overdrive = OverdriveAPI(self._db, data_directory)
+        self.overdrive = OverdriveAPI(self._db)
         self.input_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         self.output_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
         super(OverdriveBibliographicMonitor, self).__init__(

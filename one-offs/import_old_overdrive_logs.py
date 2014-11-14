@@ -65,6 +65,9 @@ def process_file(_db, filename):
             process_item(_db, data)
     except zlib.error, e:
         print "DATA CORRUPTION, GIVING UP ON THIS FILE"
+    except IOError, e:
+        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
+
 
 done = set()
 done_path = os.path.join(data_dir, "done")

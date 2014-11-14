@@ -13,6 +13,10 @@ import flask
 from flask import Flask, url_for, redirect, Response
 from jinja2 import Environment, PackageLoader
 
+from integration.overdrive import (
+    OverdriveAPI
+)
+
 from model import (
     get_one_or_create,
     DataSource,
@@ -645,14 +649,25 @@ def checkout(data_source, identifier):
             NO_AVAILABLE_LICENSE_PROBLEM, 
             "I don't have any licenses for that book.", 404)
 
-    best_pool, best_link = pool.best_license_link
-    if not best_link:
+    if pool.is_open_access:
+        best_pool, best_link = pool.best_license_link
+        if not best_link:
+            return problem(
+                NO_AVAILABLE_LICENSE_PROBLEM,
+                "Sorry, couldn't find an available license.", 404)
+        best_pool.loan_to(flask.request.patron)
+        return redirect(URLRewriter.rewrite(best_link.href))
+
+    # This is not an open-access pool.
+    if best_pool.licenses_available < 1:
         return problem(
             NO_AVAILABLE_LICENSE_PROBLEM,
             "Sorry, couldn't find an available license.", 404)
 
+    if best_pool.data_source.name==DataSource.OVERDRIVE:
+        api = OverdriveAPI
+
     best_pool.loan_to(flask.request.patron)
-    return redirect(URLRewriter.rewrite(best_link.href))
 
 @app.route('/work/<identifier_type>/<identifier>')
 def work(identifier_type, identifier):
