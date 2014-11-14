@@ -140,8 +140,7 @@ class OCLCLinkedData(object):
         try:
             data = jsonld.load_document(url)
         except Exception, e:
-            print url
-            set_trace()
+            print "EXCEPTION", url, e
             return None, False
 
         if cached and not representation.content:
