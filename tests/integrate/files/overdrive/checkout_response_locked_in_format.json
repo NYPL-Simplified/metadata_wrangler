@@ -1,4 +1,7 @@
 {
+    "reserveId": "76C1B7D0-17F4-4C05-8397-C66C17411584",
+    "expires": "2013-10-04T10:56:00Z",
+    "isFormatLockedIn": true,
     "formats": [
         {
             "formatType": "ebook-epub-adobe",
