@@ -140,10 +140,9 @@ class OverdriveAPI(object):
         payload = dict(fields=[dict(name="reserveId", value=overdrive_id),
                                dict(name="formatType", value=format_type)])
         payload = json.dumps(payload)
+
         response = requests.post(
             self.CHECKOUTS_ENDPOINT, headers=headers, data=payload)
-
-        set_trace()
         # TODO: We need a better error URL here, not that it matters.
         expires, content_link_gateway = self.extract_data_from_checkout_response(
             response.json(), format_type, "http://library-simplified.com/")
@@ -151,7 +150,7 @@ class OverdriveAPI(object):
         # Now GET the content_link_gateway, which will point us to the
         # ACSM file or equivalent.
         final_response = requests.get(content_link_gateway, headers=auth_header)
-        content_link, content_type = self.extract_content_link(final_response)
+        content_link, content_type = self.extract_content_link(final_response.json())
         return content_link, content_type, expires
 
     @classmethod
