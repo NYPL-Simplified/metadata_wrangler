@@ -9,4 +9,5 @@ from integration.overdrive import (
 from model import production_session
 
 if __name__ == '__main__':
-    OverdriveCoverImageMirror(production_session()).run()
+    data_dir = sys.argv[1]
+    OverdriveCoverImageMirror(production_session(), data_dir).run()

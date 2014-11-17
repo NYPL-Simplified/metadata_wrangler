@@ -204,7 +204,7 @@ class OCLCLinkedData(object):
         except ValueError, e:
             # We couldn't parse this JSON. It's _extremely_ rare from OCLC
             # but it does seem to happen.
-            set_trace()
+            return dict()
         if not '@graph' in document:
             # Empty graph
             return dict()

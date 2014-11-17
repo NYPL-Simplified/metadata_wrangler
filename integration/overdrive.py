@@ -54,7 +54,8 @@ class OverdriveAPI(object):
     PAGE_SIZE_LIMIT = 300
     EVENT_SOURCE = "Overdrive"
 
-    EVENT_DELAY = datetime.timedelta(minutes=60)
+    EVENT_DELAY = datetime.timedelta(minutes=62)
+    #EVENT_DELAY = datetime.timedelta(minutes=0)
 
     # The ebook formats we care about.
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
@@ -305,7 +306,10 @@ class OverdriveAPI(object):
         # Overdrive doesn't do 'reserved'.
         licenses_reserved = 0
 
-        edition = pool.edition()
+        edition, ignore = Edition.for_foreign_id(
+            self._db, self.source, pool.identifier.type,
+            pool.identifier.identifier)
+            
         print '%s "%s" %s' % (edition.medium, edition.title, edition.author)
         #print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
         #print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
