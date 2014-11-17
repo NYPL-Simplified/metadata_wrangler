@@ -471,8 +471,8 @@ class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
 
     def recently_changed_ids(self, start, cutoff):
         """Ignore the dates and return all IDs."""
+        # "http://api.overdrive.com/v1/collections/%(collection)s/products?limit=25&offset=%(offset)d"
         return self.api.all_ids()
-
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
