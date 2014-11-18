@@ -54,7 +54,7 @@ class OverdriveAPI(object):
     PAGE_SIZE_LIMIT = 300
     EVENT_SOURCE = "Overdrive"
 
-    EVENT_DELAY = datetime.timedelta(minutes=62)
+    EVENT_DELAY = datetime.timedelta(minutes=120)
     #EVENT_DELAY = datetime.timedelta(minutes=0)
 
     # The ebook formats we care about.
