@@ -209,10 +209,15 @@ class OverdriveAPI(object):
         next_link = starting_link or self.make_link_safe(
             self.ALL_PRODUCTS_ENDPOINT % params)
         while next_link:
-            print next_link
-            page_inventory, next_link = self._get_book_list_page(next_link)
-            for i in page_inventory:
-                yield i
+            while True:
+                try:
+                    page_inventory, next_link = self._get_book_list_page(next_link)
+                    for i in page_inventory:
+                        yield i
+                except Exception, e:
+                    print e
+                    print "Sleeping for 1 minute, then resuming."
+                    time.sleep(60)
 
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
@@ -455,18 +460,17 @@ class OverdriveCirculationMonitor(Monitor):
         self._db = _db
         self.api = OverdriveAPI(self._db)
 
-    def recently_changed_ids(self, start, cutoff):
+    def recently_changed_ids(self, start, cutoff, offset):
         return self.api.recently_changed_ids(start, cutoff)
 
-    def run_once(self, _db, start, cutoff):
+    def run_once(self, _db, timestamp, now):
         added_books = 0
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
         i = None
-        for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
-            if i > 0 and not i % 50:
-                print " %s processed" % i
+        total_books = 0
+        for i, book in enumerate(self.recently_changed_ids(start, cutoff, timestamp)):
             if not book:
                 continue
             license_pool, is_new = self.api.update_licensepool(book)
@@ -476,8 +480,15 @@ class OverdriveCirculationMonitor(Monitor):
                     _db, license_pool, CirculationEvent.TITLE_ADD,
                     None, None, start=license_pool.last_checked)
             _db.commit()
-        if i != None:
-            print "Processed %d books total." % (i+1)
+            total_books += 1
+            if not total_books % 50:
+                print " %s processed" % i
+        if total_books:
+            print "Processed %d books total." % (total_books)
+            # This avoids some (but nowhere close to all) situations
+            # where we miss events because they haven't made it into
+            # the feed yet.
+            self.timestamp.timestamp = now
 
 class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
     """Monitor every single book in the Overdrive collection."""

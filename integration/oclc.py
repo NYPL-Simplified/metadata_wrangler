@@ -17,7 +17,6 @@ from nose.tools import set_trace
 from integration import (
     XMLParser,
 )
-from monitor import Monitor
 from integration import FilesystemCache
 from model import (
     Contributor,
