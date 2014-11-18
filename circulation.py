@@ -332,6 +332,8 @@ if os.environ.get('TESTING') != "True":
         ],
     )
 
+    YA = genres.Classifier.AUDIENCE_YOUNG_ADULT
+    CHILDREN = genres.Classifier.AUDIENCE_CHILDREN
     lanes = LaneList.from_description(
         _db,
         None,
@@ -351,13 +353,52 @@ if os.environ.get('TESTING') != "True":
          dict(
              name="Young Adult",
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
-             audience=genres.Classifier.AUDIENCE_YOUNG_ADULT,
-             genres=[]),
+             audience=YA,
+             genres=[],
+             sublanes=[
+                 Lane(_db, name="Young Adult Fiction", genres=Lane.UNCLASSIFIED,
+                      fiction=True, audience=YA),
+                 Lane(_db, name="Young Adult Fantasy", genres=[genres.Fantasy],
+                      audience=YA),
+                 Lane(_db, name="Young Adult Romance", genres=[genres.Romance],
+                      audience=YA),
+                 Lane(_db, name="Young Adult Nonfiction",
+                      fiction=False, genres=[], audience=YA),
+                 Lane(_db, name="Young Adult Science Fiction",
+                      genres=[genres.Science_Fiction], audience=YA),
+                 Lane(_db, name="Young Adult Mystery",
+                      genres=[genres.Crime_Thrillers_Mystery],
+                      audience=YA),
+                 Lane(_db, name="Young Adult Historical Fiction",
+                      genres=[genres.Historical_Fiction],
+                      audience=YA),
+                 Lane(_db, name="Young Adult Horror",
+                      genres=[genres.Horror], audience=YA),
+                 Lane(_db, name="Young Adult Graphic Novels & Comics",
+                      genres=[genres.Graphic_Novels_Comics], audience=YA),
+
+             ]),
          dict(
              name="Children",
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
              audience=genres.Classifier.AUDIENCE_CHILDREN,
-             genres=[]),
+             genres=[],
+             sublanes=[
+                 Lane(_db, name="Juvenile Fiction", genres=Lane.UNCLASSIFIED,
+                      fiction=True, audience=CHILDREN),
+                 Lane(_db, name="Juvenile Nonfiction",
+                      fiction=False, genres=[], audience=CHILDREN),
+                 Lane(_db, name="Fantasy (Children)", genres=[genres.Fantasy],
+                      audience=CHILDREN),
+                 Lane(_db, name="Humor (Children)", genres=[genres.Humor],
+                      audience=CHILDREN),
+                 Lane(_db, name="Mystery (Children)", genres=[genres.Mystery],
+                      audience=CHILDREN),
+                 Lane(_db, name="Historical Fiction (Children)", genres=[genres.Historical_Fiction],
+                      audience=CHILDREN),
+                 Lane(_db, name="Science (Children)",
+                      fiction=False, genres=[genres.Science], audience=CHILDREN),
+             ]),
          dict(
              fiction=Lane.BOTH_FICTION_AND_NONFICTION,
              name="African-American",

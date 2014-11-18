@@ -3245,6 +3245,7 @@ class LicensePool(Base):
 
     @classmethod
     def for_foreign_id(self, _db, data_source, foreign_id_type, foreign_id):
+        """Create a LicensePool for the given foreign ID."""
 
         # Get the DataSource.
         if isinstance(data_source, basestring):

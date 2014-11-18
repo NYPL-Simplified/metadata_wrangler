@@ -54,7 +54,8 @@ class OverdriveAPI(object):
     PAGE_SIZE_LIMIT = 300
     EVENT_SOURCE = "Overdrive"
 
-    EVENT_DELAY = datetime.timedelta(minutes=60)
+    EVENT_DELAY = datetime.timedelta(minutes=120)
+    #EVENT_DELAY = datetime.timedelta(minutes=0)
 
     # The ebook formats we care about.
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
@@ -203,21 +204,33 @@ class OverdriveAPI(object):
             self._db, url, self.get, data_source=self.source)
         return json.loads(representation.content)
 
-    def all_ids(self, starting_link=None):
-        """Get IDs for every book in the system."""
+    def all_ids(self):
+        """Get IDs for every book in the system, with (more or less) the most
+        recent ones at the front.
+        """
         params = dict(collection_token=self.collection_token)
-        next_link = starting_link or self.make_link_safe(
+        starting_link = self.make_link_safe(
             self.ALL_PRODUCTS_ENDPOINT % params)
-        while next_link:
-            while True:
-                try:
-                    page_inventory, next_link = self._get_book_list_page(next_link)
-                    for i in page_inventory:
-                        yield i
-                except Exception, e:
-                    print e
-                    print "Sleeping for 1 minute, then resuming."
-                    time.sleep(60)
+
+        # Get the first page so we can find the 'last' link.
+        status_code, headers, content = self.get(starting_link, {})
+        try:
+            data = json.loads(content)
+        except Exception, e:
+            print "ERROR: %r %r %r" % (status_code, headers, content)
+            return
+        previous_link = OverdriveRepresentationExtractor.link(data, 'last')
+
+        while previous_link:
+            try:
+                page_inventory, previous_link = self._get_book_list_page(
+                    previous_link, 'prev')
+                for i in page_inventory:
+                    yield i
+            except Exception, e:
+                print e
+                print "Sleeping for 1 minute, then resuming."
+                time.sleep(60)
 
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
@@ -279,7 +292,7 @@ class OverdriveAPI(object):
         if status_code != 200:
             print "ERROR: Could not get availability for %s: %s" % (
                 book['id'], status_code)
-            return None, None
+            return None, None, False
 
         book.update(json.loads(content))
         return self.update_licensepool_with_book_info(book)
@@ -331,17 +344,26 @@ class OverdriveAPI(object):
         # Overdrive doesn't do 'reserved'.
         licenses_reserved = 0
 
-        edition = pool.edition()
-        print '%s "%s" %s' % (edition.medium, edition.title, edition.author)
+        edition, ignore = Edition.for_foreign_id(
+            self._db, self.source, pool.identifier.type,
+            pool.identifier.identifier)
+
+        changed = (pool.licenses_owned != new_licenses_owned
+                   or pool.licenses_available != new_licenses_available
+                   or pool.licenses_reserved != licenses_reserved
+                   or pool.patrons_in_hold_queue != new_number_of_holds)
+            
+        if changed:
+            print '%s "%s" %s' % (edition.medium, edition.title, edition.author)
         #print " Owned: %s => %s" % (pool.licenses_owned, new_licenses_owned)
         #print " Available: %s => %s" % (pool.licenses_available, new_licenses_available)
         #print " Holds: %s => %s" % (pool.patrons_in_hold_queue, new_number_of_holds)
 
         pool.update_availability(new_licenses_owned, new_licenses_available,
                                  licenses_reserved, new_number_of_holds)
-        return pool, was_new
+        return pool, was_new, changed
 
-    def _get_book_list_page(self, link):
+    def _get_book_list_page(self, link, rel_to_follow='next'):
         """Process a page of inventory whose circulation we need to check.
 
         Returns a list of (title, id, availability_link) 3-tuples,
@@ -356,7 +378,7 @@ class OverdriveAPI(object):
             return [], None
 
         # Find the link to the next page of results, if any.
-        next_link = OverdriveRepresentationExtractor.link(data, 'next')
+        next_link = OverdriveRepresentationExtractor.link(data, rel_to_follow)
 
         # Prepare to get availability information for all the books on
         # this page.
@@ -454,52 +476,70 @@ class OverdriveCirculationMonitor(Monitor):
     the OverdriveCoverageProvider runs.
     """
     def __init__(self, _db, name="Overdrive Circulation Monitor",
-                 interval_seconds=60):
+                 interval_seconds=500):
         super(OverdriveCirculationMonitor, self).__init__(
             name, interval_seconds=interval_seconds)
         self._db = _db
         self.api = OverdriveAPI(self._db)
+        self.maximum_consecutive_unchanged_books = None
 
     def recently_changed_ids(self, start, cutoff, offset):
         return self.api.recently_changed_ids(start, cutoff)
 
-    def run_once(self, _db, timestamp, now):
+    def run_once(self, _db, start, cutoff):
         added_books = 0
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
         i = None
-        total_books = 0
-        for i, book in enumerate(self.recently_changed_ids(start, cutoff, timestamp)):
+        consecutive_unchanged_books = 0
+        for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
+            total_books += 1
+            if not total_books % 100:
+                print " %s processed" % i
             if not book:
                 continue
-            license_pool, is_new = self.api.update_licensepool(book)
+            license_pool, is_new, is_changed = self.api.update_licensepool(book)
             # Log a circulation event for this work.
             if is_new:
                 CirculationEvent.log(
                     _db, license_pool, CirculationEvent.TITLE_ADD,
                     None, None, start=license_pool.last_checked)
             _db.commit()
-            total_books += 1
-            if not total_books % 50:
-                print " %s processed" % i
-        if total_books:
-            print "Processed %d books total." % (total_books)
-            # This avoids some (but nowhere close to all) situations
-            # where we miss events because they haven't made it into
-            # the feed yet.
-            self.timestamp.timestamp = now
 
-class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
+            if is_changed:
+                consecutive_unchanged_books = 0
+            else:
+                consecutive_unchanged_books += 1
+                if self.maximum_consecutive_unchanged_books and consecutive_unchanged_books >= self.maximum_consecutive_unchanged_books:
+                    # We're supposed to stop this run after finding a
+                    # number of consecutive books that have not
+                    # changed, and we have in fact seen this number of 
+                    # consecutive unchanged books.
+                    print "Found %d unchanged books." % consecutive_unchanged_books
+                    break
+
+
+class FullOverdriveCollectionMonitor(OverdriveCirculationMonitor):
     """Monitor every single book in the Overdrive collection."""
 
-    def __init__(self, _db, interval_seconds=3600*24):
-        super(OverdriveCollectionMonitor, self).__init__(
+    def __init__(self, _db, interval_seconds=3600*4):
+        super(FullOverdriveCollectionMonitor, self).__init__(
             _db, "Overdrive Collection Overview", interval_seconds)
 
     def recently_changed_ids(self, start, cutoff):
         """Ignore the dates and return all IDs."""
         return self.api.all_ids()
+
+
+class RecentOverdriveCollectionMonitor(FullOverdriveCollectionMonitor):
+    """Monitor recently changed books in the Overdrive collection."""
+
+    def __init__(self, _db, interval_seconds=60):
+        super(FullOverdriveCollectionMonitor, self).__init__(
+            _db, "Reverse Chronological Overdrive Collection Monitor",
+            interval_seconds)
+        self.maximum_consecutive_unchanged_books = 100
 
 
 class OverdriveBibliographicMonitor(CoverageProvider):
