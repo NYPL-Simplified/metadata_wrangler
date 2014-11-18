@@ -499,7 +499,7 @@ class OverdriveCollectionMonitor(OverdriveCirculationMonitor):
 
     def recently_changed_ids(self, start, cutoff):
         """Ignore the dates and return all IDs."""
-        return self.api.all_ids("http://api.overdrive.com/v1/collections/v1L1BCgAAAA2C/products?limit=25&offset=15075")
+        return self.api.all_ids()
 
 
 class OverdriveBibliographicMonitor(CoverageProvider):
