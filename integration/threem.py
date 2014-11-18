@@ -355,16 +355,22 @@ class ThreeMEventMonitor(Monitor):
         one_day = datetime.timedelta(days=1)
         for start, cutoff, full_slice in self.slice_timespan(
                 start, cutoff, one_day):
+            most_recent_timestamp = start
+            print "Asking for events between %r and %r" % (start, cutoff)
             events = self.api.get_events_between(start, cutoff, full_slice)
             for event in events:
-                self.handle_event(*event)
+                event_timestamp = self.handle_event(*event)
+                if (not most_recent_timestamp or
+                    (event_timestamp > most_recent_timestamp)):
+                    most_recent_timestamp = event_timestamp
                 i += 1
                 if not i % 1000:
                     print i
                     _db.commit()
             _db.commit()
-            self.timestamp.timestamp = cutoff
+            self.timestamp.timestamp = most_recent_timestamp
         print "Handled %d events total" % i
+        return most_recent_timestamp
 
     def handle_event(self, threem_id, isbn, foreign_patron_id,
                      start_time, end_time, internal_event_type):
@@ -407,7 +413,8 @@ class ThreeMEventMonitor(Monitor):
                     end=license_pool.last_checked,
                 )
             )
-
+        print "%r %s: %s" % (start_time, edition.title, internal_event_type)
+        return start_time
 
 class ThreeMBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for 3M records."""
@@ -492,13 +499,15 @@ class ThreeMCirculationMonitor(Monitor):
         q = _db.query(LicensePool).filter(clause).filter(
             LicensePool.data_source==self.api.source)
         current_batch = []
+        most_recent_timestamp = None
         for pool in q:
             current_batch.append(pool)
             if len(current_batch) == 25:
-                self.process_batch(_db, current_batch)
+                most_recent_timestamp = self.process_batch(_db, current_batch)
                 current_batch = []
         if current_batch:
-            self.process_batch(_db, current_batch)
+            most_recent_timestamp = self.process_batch(_db, current_batch)
+        return most_recent_timestamp
 
     def process_batch(self, _db, pools):
         identifiers = []
@@ -511,6 +520,7 @@ class ThreeMCirculationMonitor(Monitor):
             pool = pool_for_identifier[identifier]
             self.process_pool(_db, pool, item)
         _db.commit()
+        return most_recent_timestamp
         
     def process_pool(self, _db, pool, item):
         pool.update_availability(

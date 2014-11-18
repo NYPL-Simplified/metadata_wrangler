@@ -30,15 +30,15 @@ class Monitor(object):
 
         while not self.stop_running:
             cutoff = datetime.datetime.utcnow()
-            self.run_once(_db, start, cutoff)
+            new_timestamp = self.run_once(_db, start, cutoff) or cutoff
             duration = datetime.datetime.utcnow() - cutoff
             to_sleep = self.interval_seconds-duration.seconds-1
             self.cleanup()
-            self.timestamp.timestamp = cutoff
+            self.timestamp.timestamp = new_timestamp
             _db.commit()
             if to_sleep > 0:
                 time.sleep(to_sleep)
-            start = cutoff
+            start = new_timestamp
 
     def run_once(self, _db, start, cutoff):
         raise NotImplementedError()

@@ -450,7 +450,7 @@ class OverdriveCirculationMonitor(Monitor):
     the OverdriveCoverageProvider runs.
     """
     def __init__(self, _db, name="Overdrive Circulation Monitor",
-                 interval_seconds=60):
+                 interval_seconds=500):
         super(OverdriveCirculationMonitor, self).__init__(
             name, interval_seconds=interval_seconds)
         self._db = _db
@@ -483,7 +483,7 @@ class OverdriveCirculationMonitor(Monitor):
                 consecutive_unchanged_books = 0
             else:
                 consecutive_unchanged_books += 1
-                if self.maximum_consecutive_unchanged_books and consecutive_unchanged_books > self.maximum_consecutive_unchanged_books:
+                if self.maximum_consecutive_unchanged_books and consecutive_unchanged_books >= self.maximum_consecutive_unchanged_books:
                     # We're supposed to stop this run after finding a
                     # number of consecutive books that have not
                     # changed, and we have in fact seen this number of 
@@ -497,7 +497,7 @@ class OverdriveCirculationMonitor(Monitor):
 class FullOverdriveCollectionMonitor(OverdriveCirculationMonitor):
     """Monitor every single book in the Overdrive collection."""
 
-    def __init__(self, _db, interval_seconds=3600*24):
+    def __init__(self, _db, interval_seconds=3600*4):
         super(FullOverdriveCollectionMonitor, self).__init__(
             _db, "Overdrive Collection Overview", interval_seconds)
 
@@ -513,7 +513,7 @@ class RecentOverdriveCollectionMonitor(FullOverdriveCollectionMonitor):
         super(FullOverdriveCollectionMonitor, self).__init__(
             _db, "Reverse Chronological Overdrive Collection Monitor",
             interval_seconds)
-        self.maximum_consecutive_unchanged_books = 75
+        self.maximum_consecutive_unchanged_books = 100
 
 
 class OverdriveBibliographicMonitor(CoverageProvider):
