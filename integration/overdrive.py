@@ -483,7 +483,7 @@ class OverdriveCirculationMonitor(Monitor):
         self.api = OverdriveAPI(self._db)
         self.maximum_consecutive_unchanged_books = None
 
-    def recently_changed_ids(self, start, cutoff, offset):
+    def recently_changed_ids(self, start, cutoff):
         return self.api.recently_changed_ids(start, cutoff)
 
     def run_once(self, _db, start, cutoff):
@@ -496,7 +496,7 @@ class OverdriveCirculationMonitor(Monitor):
         for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
             total_books += 1
             if not total_books % 100:
-                print " %s processed" % i
+                print " %s processed" % total_books
             if not book:
                 continue
             license_pool, is_new, is_changed = self.api.update_licensepool(book)
@@ -519,6 +519,8 @@ class OverdriveCirculationMonitor(Monitor):
                     print "Found %d unchanged books." % consecutive_unchanged_books
                     break
 
+        if total_books:
+            print "Processed %d books total." % total_books
 
 class FullOverdriveCollectionMonitor(OverdriveCirculationMonitor):
     """Monitor every single book in the Overdrive collection."""
