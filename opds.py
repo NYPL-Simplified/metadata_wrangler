@@ -145,7 +145,7 @@ class OPDSFeed(AtomFeed):
 class AcquisitionFeed(OPDSFeed):
 
     def __init__(self, _db, title, url, works, facet_url_generator=None,
-                 active_facet=None, sublanes=[]):
+                 active_facet=None, sublanes=[], active_loans_by_work={}):
         super(AcquisitionFeed, self).__init__(title, url=url)
         lane_link = dict(rel="collection", href=url)
         import time
@@ -153,7 +153,7 @@ class AcquisitionFeed(OPDSFeed):
         totals = []
         for work in works:
             a = time.time()
-            self.add_entry(work, lane_link)
+            self.add_entry(work, lane_link, active_loans_by_work.get(work))
             totals.append(time.time()-a)
 
         # import numpy
@@ -186,7 +186,11 @@ class AcquisitionFeed(OPDSFeed):
     def active_loans_for(cls, patron):
         db = Session.object_session(patron)
         url = url_for('active_loans', _external=True)
-        return AcquisitionFeed(db, "Active loans", url, patron.works_on_loan())
+        active_loans_by_work = {}
+        for loan in patron.loans:
+            active_loans_by_work[loan.license_pool.work] = loan
+        return AcquisitionFeed(db, "Active loans", url, patron.works_on_loan(),
+                               active_loans_by_work=active_loans_by_work)
 
     def add_entry(self, work, lane_link, loan=None):
         entry = self.create_entry(work, lane_link, loan)
@@ -372,23 +376,48 @@ class AcquisitionFeed(OPDSFeed):
             audience_tag.extend([audience_name_tag])
             entry.extend([audience_tag])
 
+        loan_tag = self.loan_tag(loan)
+        if loan_tag is not None:
+            entry.extend([loan_tag])
+
         license_tag = self.license_tag(active_license_pool)
         if license_tag is not None:
             entry.extend([license_tag])
 
         return entry
 
+    def loan_tag(self, loan=None):
+        # TODO: loan.start should be a datetime object that knows it's UTC.
+        if not loan:
+            return None
+        loan_tag = E._makeelement("{%s}Event" % schema_ns)
+        name = E._makeelement("{%s}name" % schema_ns)
+        loan_tag.extend([name])
+        name.text = 'loan'
+
+        if loan.start:
+            created = E._makeelement("{%s}startDate" % schema_ns)
+            loan_tag.extend([created])
+            created.text = loan.start.isoformat() + "Z"
+        if loan.end:
+            expires = E._makeelement("{%s}endDate" % schema_ns)
+            loan_tag.extend([expires])
+            expires.text = loan.end.isoformat() + "Z"
+        return loan_tag
+
     def license_tag(self, license_pool):
         if license_pool.open_access:
             return None
-        
+
         licenses = E._makeelement("{%s}licenses" % opds_41_ns)
         license = E._makeelement("{%s}license" % opds_41_ns)
-        concurrent_lends = E._makeelement("{%s}concurrent_lends" % opds_41_ns)
+        concurrent_lends = E._makeelement(
+            "{%s}concurrent_lends" % opds_41_ns)
         license.extend([concurrent_lends])
         concurrent_lends.text = str(license_pool.licenses_owned)
 
-        available_lends = E._makeelement("{%s}available_lends" % simplified_ns)
+        available_lends = E._makeelement(
+            "{%s}available_lends" % simplified_ns)
         license.extend([available_lends])
         available_lends.text = str(license_pool.licenses_available)
 
