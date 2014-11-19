@@ -30,6 +30,7 @@ from model import (
 from integration import (
     FilesystemCache,
     CoverImageMirror,
+    NoAvailableCopies,
 )
 from monitor import Monitor
 from util import LanguageCodes
@@ -43,8 +44,10 @@ class OverdriveAPI(object):
     ALL_PRODUCTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products"
     METADATA_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_token)s/products/%(item_id)s/metadata"
     EVENTS_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products?lastupdatetime=%(lastupdatetime)s&sort=%(sort)s&limit=%(limit)s"
-    CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
     AVAILABILITY_ENDPOINT = "http://api.overdrive.com/v1/collections/%(collection_name)s/products/%(product_id)s/availability"
+
+    CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
+    ME_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me"
 
     CRED_FILE = "oauth_cred.json"
     BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
@@ -60,6 +63,7 @@ class OverdriveAPI(object):
     # The ebook formats we care about.
     FORMATS = "ebook-epub-open,ebook-epub-adobe,ebook-pdf-adobe,ebook-pdf-open"
 
+    TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
     
     def __init__(self, _db):
         self._db = _db
@@ -98,6 +102,33 @@ class OverdriveAPI(object):
         self._update_credential(credential, data)
         self.token = credential.credential
 
+    def patron_request(self, patron, pin, url, extra_headers={}, data=None,
+                       exception_on_401=False):
+        """Make an HTTP request on behalf of a patron.
+
+        The results are never cached.
+        """
+        patron_credential = self.get_patron_credential(patron, pin)
+        headers = dict(Authorization="Bearer %s" % patron_credential.credential)
+        headers.update(extra_headers)
+        if data:
+            method = requests.post
+        else:
+            method = requests.get
+        response = method(url, headers=headers, data=data)
+        if response.status_code == 401:
+            if exception_on_401:
+                # This is our second try. Give up.
+                raise Exception("Something's wrong with the patron OAuth Bearer Token!")
+            else:
+                # Refresh the token and try again.
+                self.refresh_patron_access_token(
+                    patron_credential, patron, pin)
+                return self.patron_request(
+                    patron, pin, url, extra_headers, data, True)
+        else:
+            return response
+
     def get(self, url, extra_headers, exception_on_401=False):
         """Make an HTTP GET request using the active Bearer Token."""
         headers = dict(Authorization="Bearer %s" % self.token)
@@ -110,7 +141,6 @@ class OverdriveAPI(object):
                 raise Exception("Something's wrong with the OAuth Bearer Token!")
             else:
                 # Refresh the token and try again.
-                self.check_creds(force_refresh=True)
                 return self.get(url, extra_headers, True)
         else:
             return status_code, headers, content
@@ -155,24 +185,27 @@ class OverdriveAPI(object):
             seconds=expires_in)
         self._db.commit()
 
-    def checkout(self, patron_access_token, overdrive_id, 
+    def checkout(self, patron, pin, overdrive_id, 
                  format_type='ebook-epub-adobe'):
-        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
-        headers = dict(auth_header)
-        headers["Content-Type"] = "application/json"
-        payload = dict(fields=[dict(name="reserveId", value=overdrive_id),
-                               dict(name="formatType", value=format_type)])
+        
+        headers = {"Content-Type": "application/json"}
+        payload = dict(fields=[dict(name="reserveId", value=overdrive_id)])
+        if format_type:
+            # The only reason to specify format_type==None is to test
+            # checkouts on the live site without actually claiming the book.
+            field = dict(name="formatType", value=format_type)
+            payload['fields'].append(field)
         payload = json.dumps(payload)
 
-        response = requests.post(
-            self.CHECKOUTS_ENDPOINT, headers=headers, data=payload)
+        response = self.patron_request(
+            patron, pin, self.CHECKOUTS_ENDPOINT, extra_headers=headers,
+            data=payload)
 
         if response.status_code == 400:
             error = response.json()
             code = error['errorCode']
             if code == 'NoCopiesAvailable':
-                # TODO
-                return None, None, None
+                raise NoAvailableCopies()
 
         # TODO: We need a better error URL here, not that it matters.
         expires, content_link_gateway = self.extract_data_from_checkout_response(
@@ -180,7 +213,7 @@ class OverdriveAPI(object):
 
         # Now GET the content_link_gateway, which will point us to the
         # ACSM file or equivalent.
-        final_response = requests.get(content_link_gateway, headers=auth_header)
+        final_response = self.patron_request(patron, pin, content_link_gateway)
         content_link, content_type = self.extract_content_link(final_response.json())
         return content_link, content_type, expires
 
@@ -188,8 +221,12 @@ class OverdriveAPI(object):
     def extract_data_from_checkout_response(cls, checkout_response_json,
                                             format_type, error_url):
 
-        expires = datetime.datetime.strptime(
-            checkout_response_json['expires'], "%Y-%m-%dT%H:%M:%SZ")
+        if not 'expires' in checkout_response_json:
+            set_trace()
+            expires = None
+        else:
+            expires = datetime.datetime.strptime(
+                checkout_response_json['expires'], cls.TIME_FORMAT)
         return expires, cls.get_download_link(
             checkout_response_json, format_type, error_url)
 
@@ -203,6 +240,18 @@ class OverdriveAPI(object):
         representation, cached = Representation.get(
             self._db, url, self.get, data_source=self.source)
         return json.loads(representation.content)
+
+    def get_patron_information(self, patron_access_token):
+        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
+        headers = dict(auth_header)
+        response = requests.get(self.ME_ENDPOINT, headers=headers)
+        return representation
+
+    def get_patron_checkouts(self, patron_access_token):
+        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
+        headers = dict(auth_header)
+        response = requests.get(self.CHECKOUTS_ENDPOINT, headers=headers)
+        return response.json()
 
     def all_ids(self):
         """Get IDs for every book in the system, with (more or less) the most

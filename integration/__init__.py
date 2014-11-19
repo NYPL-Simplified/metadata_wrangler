@@ -7,6 +7,12 @@ import requests
 from lxml import etree
 from nose.tools import set_trace
 
+class CheckoutException(Exception):
+    pass
+
+class NoAvailableCopies(CheckoutException):
+    pass
+
 class XMLParser(object):
 
     """Helper functions to process XML data."""

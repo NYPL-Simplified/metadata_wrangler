@@ -3365,9 +3365,10 @@ class LicensePool(Base):
         self.patrons_in_hold_queue = new_patrons_in_hold_queue
         self.last_checked = now
             
-    def loan_to(self, patron):
+    def loan_to(self, patron, start=None, end=None):
         _db = Session.object_session(patron)
-        kwargs = dict(start=datetime.datetime.utcnow())
+        kwargs = dict(start=start or datetime.datetime.utcnow(),
+                      end=end)
         return get_one_or_create(
             _db, Loan, patron=patron, license_pool=self, 
             create_method_kwargs=kwargs)

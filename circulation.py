@@ -13,6 +13,9 @@ import flask
 from flask import Flask, url_for, redirect, Response
 from jinja2 import Environment, PackageLoader
 
+from integration import (
+    NoAvailableCopies,
+)
 from integration.overdrive import (
     OverdriveAPI
 )
@@ -703,17 +706,26 @@ def checkout(data_source, identifier):
     if pool.licenses_available < 1:
         return problem(
             NO_AVAILABLE_LICENSE_PROBLEM,
-            "Sorry, couldn't find an available license.", 404)
+            "Sorry, couldn't find an available license.", 400)
 
+    content_link = None
+    content_type = None
+    content_expires = None
     if pool.data_source.name==DataSource.OVERDRIVE:
         api = OverdriveAPI(_db)
         header = flask.request.authorization
-        credential = api.get_patron_credential(
-            flask.request.patron, header.password)
-        content_link, content_type, content_expires = api.checkout(
-            credential.credential, pool.identifier.identifier)
+        try:
+            content_link, content_type, content_expires = api.checkout(
+                flask.request.patron, header.password,
+                pool.identifier.identifier)
+        except NoAvailableCopies:
+            return problem(
+                NO_AVAILABLE_LICENSE_PROBLEM,
+                "Sorry, couldn't find an available license.", 400)
 
-    best_pool.loan_to(flask.request.patron)
+    pool.loan_to(flask.request.patron, end=content_expires)
+    headers = { "Location" : content_link }
+    return Response(data, 201, headers)
 
 @app.route('/work/<identifier_type>/<identifier>')
 def work(identifier_type, identifier):
