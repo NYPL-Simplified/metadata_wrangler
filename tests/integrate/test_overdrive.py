@@ -47,8 +47,9 @@ class TestOverdriveAPI(DatabaseTest):
         raw['id'] = identifier.identifier
 
         api = OverdriveAPI(self._db)
-        pool, was_new = api.update_licensepool_with_book_info(raw)
+        pool, was_new, changed = api.update_licensepool_with_book_info(raw)
         eq_(True, was_new)
+        eq_(True, changed)
 
         # The title of the corresponding Edition has been filled
         # in, just to provide some basic human-readable metadata.
@@ -82,8 +83,9 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(0, pool.patrons_in_hold_queue)
 
         api = OverdriveAPI(self._db)
-        p2, was_new = api.update_licensepool_with_book_info(raw)
+        p2, was_new, changed = api.update_licensepool_with_book_info(raw)
         eq_(False, was_new)
+        eq_(True, changed)
         eq_(p2, pool)
         # The title didn't change to that title given in the availability
         # information, because we already set a title for that work.
@@ -104,8 +106,9 @@ class TestOverdriveAPI(DatabaseTest):
         raw['id'] = identifier.identifier
 
         api = OverdriveAPI(self._db)
-        pool, was_new = api.update_licensepool_with_book_info(raw)
+        pool, was_new, changed = api.update_licensepool_with_book_info(raw)
         eq_(10, pool.patrons_in_hold_queue)
+        eq_(True, changed)
 
     def test_link(self):
         data = pkgutil.get_data(
@@ -236,3 +239,51 @@ class TestOverdriveAPI(DatabaseTest):
         eq_(10, expires.month)
         eq_(4, expires.day)
         eq_("http://patron.api.overdrive.com/v1/patrons/me/checkouts/76C1B7D0-17F4-4C05-8397-C66C17411584/formats/ebook-epub-adobe/downloadlink?errorpageurl=http://foo.com/", url)
+
+    def test_sync_bookshelf_creates_local_loans(self):
+        data = json.loads(pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/shelf_with_some_checked_out_books.json"))
+        
+        # All four loans in the sample data were created.
+        patron = self.default_patron
+        loans = OverdriveAPI.sync_bookshelf(patron, data)
+        eq_(4, len(loans))
+        eq_(loans, patron.loans)
+
+        # Running the sync again leaves all four loans in place.
+        loans = OverdriveAPI.sync_bookshelf(patron, data)
+        eq_(4, len(loans))
+        eq_(loans, patron.loans)        
+
+    def test_sync_bookshelf_removes_loans_not_present_on_remote(self):
+        data = json.loads(pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/shelf_with_some_checked_out_books.json"))
+        
+        patron = self.default_patron
+        overdrive, new = self._edition(data_source_name=DataSource.OVERDRIVE,
+                                       with_license_pool=True)
+        overdrive_loan, new = overdrive.license_pool.loan_to(patron)
+
+        # The loan not present in the sample data has been removed
+        loans = OverdriveAPI.sync_bookshelf(patron, data)
+        eq_(4, len(loans))
+        eq_(loans, patron.loans)
+        assert overdrive_loan not in patron.loans
+
+    def test_sync_bookshelf_ignores_loans_from_other_sources(self):
+        patron = self.default_patron
+        gutenberg, new = self._edition(data_source_name=DataSource.GUTENBERG,
+                                       with_license_pool=True)
+        gutenberg_loan, new = gutenberg.license_pool.loan_to(patron)
+        data = json.loads(pkgutil.get_data(
+            "tests.integrate",
+            "files/overdrive/shelf_with_some_checked_out_books.json"))
+        
+        # Overdrive doesn't know about the Gutenberg loan, but it was
+        # not destroyed, because it came from another source.
+        loans = OverdriveAPI.sync_bookshelf(patron, data)
+        eq_(5, len(patron.loans))
+        assert gutenberg_loan in patron.loans
+

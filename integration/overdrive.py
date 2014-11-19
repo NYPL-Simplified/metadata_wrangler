@@ -12,6 +12,8 @@ from PIL import Image
 from nose.tools import set_trace
 from StringIO import StringIO
 
+from sqlalchemy.orm.session import Session
+
 from model import (
     get_one_or_create,
     CirculationEvent,
@@ -19,6 +21,7 @@ from model import (
     Credential,
     DataSource,
     LicensePool,
+    Loan,
     Measurement,
     Representation,
     Resource,
@@ -241,17 +244,62 @@ class OverdriveAPI(object):
             self._db, url, self.get, data_source=self.source)
         return json.loads(representation.content)
 
-    def get_patron_information(self, patron_access_token):
-        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
-        headers = dict(auth_header)
-        response = requests.get(self.ME_ENDPOINT, headers=headers)
-        return representation
+    def get_patron_information(self, patron, pin):
+        return self.patron_request(patron, pin, self.ME_ENDPOINT).json()
 
-    def get_patron_checkouts(self, patron_access_token):
-        auth_header = dict(Authorization="Bearer %s" % patron_access_token)
-        headers = dict(auth_header)
-        response = requests.get(self.CHECKOUTS_ENDPOINT, headers=headers)
-        return response.json()
+    def get_patron_checkouts(self, patron, pin):
+        return self.patron_request(patron, pin, self.CHECKOUTS_ENDPOINT).json()
+
+    @classmethod
+    def sync_bookshelf(cls, patron, remote_view):
+        """Synchronize Overdrive's view of the patron's bookshelf with our view.
+        """
+
+        _db = Session.object_session(patron)
+        overdrive_source = DataSource.lookup(_db, DataSource.OVERDRIVE)
+        active_loans = []
+
+        loans = _db.query(Loan).join(Loan.license_pool).filter(
+            LicensePool.data_source==overdrive_source)
+        loans_by_identifier = dict()
+        for loan in loans:
+            loans_by_identifier[loan.license_pool.identifier.identifier] = loan
+
+        to_add = []
+        for checkout in remote_view['checkouts']:
+            start = datetime.datetime.strptime(
+                checkout['checkoutDate'], cls.TIME_FORMAT)
+            end = datetime.datetime.strptime(
+                checkout['expires'], cls.TIME_FORMAT)
+            overdrive_identifier = checkout['reserveId'].lower()
+            identifier, new = Identifier.for_foreign_id(
+                _db, Identifier.OVERDRIVE_ID, overdrive_identifier)
+            if identifier.identifier in loans_by_identifier:
+                # We have a corresponding local loan. Just make sure the
+                # data matches up.
+                loan = loans_by_identifier[identifier.identifier]
+                loan.start = start
+                loan.end = end
+                active_loans.append(loan)
+
+                # Remove the loan from the list so that we don't
+                # delete it later.
+                del loans_by_identifier[identifier.identifier]
+            else:
+                # We never heard of this loan. Create it locally.
+                pool, new = LicensePool.for_foreign_id(
+                    _db, overdrive_source, identifier.type,
+                    identifier.identifier)
+                loan, new = pool.loan_to(patron, start, end)
+                active_loans.append(loan)
+
+        # Every loan remaining in loans_by_identifier is a loan that
+        # Overdrive doesn't know about, which means it's expired and
+        # we should get rid of it.
+        for loan in loans_by_identifier.values():
+            _db.delete(loan)
+        return active_loans
+       
 
     def all_ids(self):
         """Get IDs for every book in the system, with (more or less) the most
