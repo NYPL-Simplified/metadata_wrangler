@@ -558,6 +558,17 @@ def lane_url(cls, lane, order=None):
 @app.route('/loans/')
 @requires_auth
 def active_loans():
+
+    # First synchronize our local list of loans with all third-party
+    # loan providers.
+    header = flask.request.authorization
+    overdrive = OverdriveAPI(_db)
+    overdrive_loans = overdrive.get_patron_checkouts(
+        flask.request.patron, header.password)
+    OverdriveAPI.sync_bookshelf(flask.request.patron, overdrive_loans)
+    _db.commit()
+
+    # Then make the feed.
     feed = AcquisitionFeed.active_loans_for(flask.request.patron)
     return unicode(feed)
 

@@ -3705,7 +3705,7 @@ class Credential(Base):
         credential, is_new = get_one_or_create(
             _db, Credential, data_source=data_source, patron=patron)
         if (is_new or not credential.expires 
-            or credential.expires >= datetime.datetime.utcnow()):
+            or credential.expires <= datetime.datetime.utcnow()):
             refresher_method(credential)
         return credential
 

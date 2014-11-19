@@ -373,7 +373,7 @@ class AcquisitionFeed(OPDSFeed):
             entry.extend([audience_tag])
 
         license_tag = self.license_tag(active_license_pool)
-        if license_tag:
+        if license_tag is not None:
             entry.extend([license_tag])
 
         return entry
