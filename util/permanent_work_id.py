@@ -154,10 +154,114 @@ class Calculator(object):
         # groupingAuthor = RecordGroupingProcessor.mapAuthorAuthority(groupingAuthor);
         return groupingAuthor
 
+    commonSubtitlesPattern = re.compile("^(.*?)((a|una)\\s(.*)novel(a|la)?|a(.*)memoir|a(.*)mystery|a(.*)thriller|by\\s(.+)|a novel of .*|stories|an autobiography|a biography|a memoir in books|\\d+.*ed(ition)?|\\d+.*update|1st\\s+ed.*|an? .* story|a .*\\s?book|poems|the movie|[\\w\\s]+series book \\d+|[\\w\\s]+trilogy book \\d+|large print|graphic novel|magazine|audio cd)$");
 
-import csv
+    numerics = []
+    for find, replace in (
+            ("1st", "first"), ("2nd", "second"), ("3rd", "third"),
+            ("4th", "fourth"), ("5th", "fifth"), ("6th", "sixth"),
+            ("7th", "seventh"), ("8th", "eighth"), ("9th", "ninth"),
+            ("10th", "tenth")):
+        numerics.append(re.compile(find), replace)
 
-for row_number, solution, title, author, media, timestamp in csv.reader(open("grouped_work_sample_large.csv")):
-    if solution != Calculator.permanent_id(title, author, media):
-        print title, repr(author), media
+    @classmethod
+    def normalize_subtitle(cls, original_title):
+        if original_title == '':
+x            return original_title
 
+        subtitle = original_title.replace("&#8211;", "-")
+        subtitle = subtitle.replace("&", "and")
+
+        # Remove any bracketed parts of the title
+        subtitle = cls.bracketedCharacterStrip.sub("", subtitle).replaceAll("")
+        subtitle = cls.apostropheStrip.sub("s", subtitle)
+        subtitle = cls.specialCharacterStrip.sub(" ", subtitle)
+        subtitle = subtitle.lower().strip()
+
+        subtitle = cls.consecutiveCharacterStrip.sub(" ", subtitle)
+
+        # Remove some common subtitles that are meaningless
+        match = cls.commonSubtitlesPattern.search(subtitle)
+        if match:
+            subtitle = match.groups()[0]
+
+        # Normalize numeric titles
+        for find, replace in cls.numerics:
+            subtitle = find.sub(replace, subtitle)
+
+        subtitle = subtitle[:175].strip()
+        return subtitle
+
+
+    subtitleIndicator = re.compile("[:;/=]") ;
+    @classmethod
+    def normalize_title(full_title, num_non_filing_characters):
+        if (num_non_filing_characters > 0
+            and num_non_filing_characters < len(full_title)):
+            title = full_title[:num_non_filing_characters]
+        else:
+            title = full_title
+
+        title = makeValueSortable(title);
+
+        # Remove any bracketed parts of the title
+        tmp_title = cls.bracketedCharacterStrip.sub("", title)
+
+        # Make sure we don't strip the entire title
+        if len(tmp_title) > 0:
+            # And make sure we don't get just special characters
+            tmp_title = cls.specialCharacterStrip.sub(" ", tmp_title)
+            tmp_title = tmp_title.lower().strip()
+        if len(tmp_title) > 0:
+            title = tmpTitle;
+        else:
+            print "Just saved us from trimming %s to nothing" % title
+
+        # If the title includes a : in it, take the first part as the title and the second as the subtitle
+        match = cls.subtitleIndicator.search(title)
+        if match:
+            start = match.start()
+            subtitle = cls.normalizeSubtitle(title[start+1])
+            title = title.substring[:start]
+
+            # Add the subtitle back
+            if subtitle is not None and len(subtitle) > 0:
+                title = title + " " + subtitle
+
+        # Fix abbreviations
+        title = cls.initialsFix.sub(" ", title)
+
+        # Replace '&' with 'and' for better matching
+        title = title.replace("&#8211;", "-");
+        title = title.replace("&", "and");
+
+        # Remove some common subtitles that are meaningless (do again here in case they were part of the title).
+        match = cls.commonSubtitlesPattern.search(title)
+        if match && len(match.groups()[0]) != 0):
+            title = match.groups()[0]
+        title = cls.apostropheStrip.sub("s", title)
+        title = cls.specialCharacterStrip.sub(" ", title)
+        title = title.lower()
+        # Replace consecutive spaces
+        title = cls.consecutiveCharacterStrip.sub(" ", title)
+        title_end = 100
+        if len(title) > title_end:
+            title = title[:title_end]
+        title = title.strip()
+        if not title:
+            print "Title %s was normalized to nothing" % full_title
+            title = full_title
+        return title
+
+
+    sortTrimmingPattern = re.compile("(?i)^(?:(?:a|an|the|el|la|\"|')\\s)(.*)$")
+    @classmethod
+    def make_value_sortable(curtitle):
+        if not curtitle:
+            return ""
+        sort_title = curtitle.lower()
+        match = cls.sortTrimmingPattern.search(sortTitle)
+        if match:
+            sort_title = match.groups()[0]
+        sort_title = sortTitle.strip()
+        return sort_title
