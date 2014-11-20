@@ -1186,10 +1186,10 @@ class Contributor(Base):
             # Since there's no comma, this is probably a corporate name.
             family_name = None
             display_name = name
-        print " Default names for %s" % original_name
-        print "  Family name: %s" % family_name
-        print "  Display name: %s" % display_name
-        print
+        #print " Default names for %s" % original_name
+        #print "  Family name: %s" % family_name
+        #print "  Display name: %s" % display_name
+        #print
         return family_name, display_name
 
 

@@ -123,7 +123,7 @@ class TestNameParser(DatabaseTest):
         contributor, new = self._contributor(name)
         viaf, display_name, family_name, wikipedia_name = self.parser.info(
             contributor, xml, True)
-        eq_("36815818", viaf)
+        eq_("29620265", viaf)
         eq_("Roger Lancelyn Green", display_name)
         eq_("Green", family_name)
         eq_("Roger_Lancelyn_Green", wikipedia_name)

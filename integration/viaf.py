@@ -139,7 +139,7 @@ class VIAFParser(XMLParser):
             # better bet to try to munge the original name.
             for v in (possible_given, possible_family, possible_extra):
                 if (not working_name) or (v and v in working_name):
-                    print "FOUND %s in %s" % (v, working_name)
+                    # print "FOUND %s in %s" % (v, working_name)
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
                     break
@@ -175,8 +175,8 @@ class VIAFParser(XMLParser):
         given_name_for_family_name = defaultdict(Counter)
         extra_for_given_name_and_family_name = defaultdict(Counter)
         for given_name, family_name, name_extra in possibilities:
-            print "  POSSIBILITY: %s/%s/%s" % (
-                given_name, family_name, name_extra)
+            #print "  POSSIBILITY: %s/%s/%s" % (
+            #    given_name, family_name, name_extra)
             if family_name:
                 family_names[family_name] += 1
                 if given_name:
@@ -328,6 +328,8 @@ class VIAFClient(object):
             duplicates = self._db.query(Contributor).filter(
                 Contributor.viaf==contributor.viaf).all()
             if duplicates:
+                if duplicates[0].display_name != contributor.display_name:
+                    set_trace()
                 contributor.merge_into(duplicates[0])
                 
         
