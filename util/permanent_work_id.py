@@ -162,12 +162,12 @@ class Calculator(object):
             ("4th", "fourth"), ("5th", "fifth"), ("6th", "sixth"),
             ("7th", "seventh"), ("8th", "eighth"), ("9th", "ninth"),
             ("10th", "tenth")):
-        numerics.append(re.compile(find), replace)
+        numerics.append((re.compile(find), replace))
 
     @classmethod
     def normalize_subtitle(cls, original_title):
         if original_title == '':
-x            return original_title
+            return original_title
 
         subtitle = original_title.replace("&#8211;", "-")
         subtitle = subtitle.replace("&", "and")
@@ -195,14 +195,14 @@ x            return original_title
 
     subtitleIndicator = re.compile("[:;/=]") ;
     @classmethod
-    def normalize_title(full_title, num_non_filing_characters):
+    def normalize_title(cls, full_title, num_non_filing_characters):
         if (num_non_filing_characters > 0
             and num_non_filing_characters < len(full_title)):
             title = full_title[:num_non_filing_characters]
         else:
             title = full_title
 
-        title = makeValueSortable(title);
+        title = cls.make_value_sortable(title)
 
         # Remove any bracketed parts of the title
         tmp_title = cls.bracketedCharacterStrip.sub("", title)
@@ -213,7 +213,7 @@ x            return original_title
             tmp_title = cls.specialCharacterStrip.sub(" ", tmp_title)
             tmp_title = tmp_title.lower().strip()
         if len(tmp_title) > 0:
-            title = tmpTitle;
+            title = tmp_title;
         else:
             print "Just saved us from trimming %s to nothing" % title
 
@@ -237,7 +237,7 @@ x            return original_title
 
         # Remove some common subtitles that are meaningless (do again here in case they were part of the title).
         match = cls.commonSubtitlesPattern.search(title)
-        if match && len(match.groups()[0]) != 0):
+        if match and len(match.groups()[0]) != 0:
             title = match.groups()[0]
         title = cls.apostropheStrip.sub("s", title)
         title = cls.specialCharacterStrip.sub(" ", title)
@@ -256,12 +256,12 @@ x            return original_title
 
     sortTrimmingPattern = re.compile("(?i)^(?:(?:a|an|the|el|la|\"|')\\s)(.*)$")
     @classmethod
-    def make_value_sortable(curtitle):
+    def make_value_sortable(cls, curtitle):
         if not curtitle:
             return ""
         sort_title = curtitle.lower()
-        match = cls.sortTrimmingPattern.search(sortTitle)
+        match = cls.sortTrimmingPattern.search(sort_title)
         if match:
             sort_title = match.groups()[0]
-        sort_title = sortTitle.strip()
+        sort_title = sort_title.strip()
         return sort_title
