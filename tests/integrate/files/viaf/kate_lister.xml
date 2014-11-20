@@ -1,0 +1,404 @@
+<searchRetrieveResponse xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/zing/srw/" xsi:schemaLocation="http://www.loc.gov/zing/srw/ http://www.loc.gov/standards/sru/sru1-1archive/xml-files/srw-types.xsd">
+  <version xsi:type="xsd:string">1.1</version>
+  <numberOfRecords xsi:type="xsd:nonNegativeInteger">1</numberOfRecords>
+  <resultSetIdleTime xsi:type="xsd:positiveInteger">1</resultSetIdleTime>
+  <records xmlns:ns1="http://www.loc.gov/zing/srw/" xsi:type="ns1:recordsType">
+    <record xsi:type="ns1:recordType">
+      <recordSchema xsi:type="xsd:string">http://viaf.org/VIAFCluster</recordSchema>
+      <recordPacking xsi:type="xsd:string">xml</recordPacking>
+      <recordData xsi:type="ns1:stringOrXmlFragment">
+        <ns2:VIAFCluster xmlns="http://viaf.org/viaf/terms#" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:owl="http://www.w3.org/2002/07/owl#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:void="http://rdfs.org/ns/void#" xmlns:ns2="http://viaf.org/viaf/terms#">
+          <ns2:viafID>68169992</ns2:viafID>
+          <ns2:Document about="http://viaf.org/viaf/68169992/">
+            <ns2:inDataset resource="http://viaf.org/viaf/data"/>
+            <ns2:primaryTopic resource="http://viaf.org/viaf/68169992"/>
+          </ns2:Document>
+          <ns2:nameType>Personal</ns2:nameType>
+          <ns2:sources>
+            <ns2:source nsid="0000000109834704">ISNI|0000000109834704</ns2:source>
+            <ns2:source nsid="203802799">NTA|203802799</ns2:source>
+            <ns2:source nsid="vtls005131169">NUKAT|n 2008084152</ns2:source>
+            <ns2:source differentiated="false" nsid="http://d-nb.info/gnd/17957051X" sparse="true">DNB|17957051X</ns2:source>
+            <ns2:source nsid="n95005636">LC|n  95005636</ns2:source>
+            <ns2:source nsid="jn19990005122">NKC|jn19990005122</ns2:source>
+          </ns2:sources>
+          <ns2:length>88</ns2:length>
+          <ns2:mainHeadings>
+            <ns2:data>
+              <ns2:text>Lister, Kate, 1959-</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data>
+              <ns2:text>Lister, Kate</ns2:text>
+              <ns2:sources>
+                <ns2:s>DNB</ns2:s>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data>
+              <ns2:text>Lister, Catherine E. (1959- ).</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                <ns2:subfield code="a">Lister, Kate</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>DNB</ns2:s>
+              </ns2:sources>
+              <ns2:id>DNB|17957051X</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="exact name"/>ISNI|0000000109834704</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2="0" tag="100">
+                <ns2:subfield code="a">Lister, Kate,</ns2:subfield>
+                <ns2:subfield code="d">1959-</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+              <ns2:id>LC|n  95005636</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="forced single date"/>NTA|203802799</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>NUKAT|n 2008084152</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>NKC|jn19990005122</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>ISNI|0000000109834704</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                <ns2:subfield code="a">Lister, Catherine E.</ns2:subfield>
+                <ns2:subfield code="d">(1959- ).</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+              </ns2:sources>
+              <ns2:id>NUKAT|n 2008084152</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="forced single date"/>NTA|203802799</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>LC|n  95005636</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>ISNI|0000000109834704</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>NKC|jn19990005122</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                <ns2:subfield code="a">Lister, Kate,</ns2:subfield>
+                <ns2:subfield code="d">1959-</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+              </ns2:sources>
+              <ns2:id>NTA|203802799</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="forced single date"/>NUKAT|n 2008084152</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>LC|n  95005636</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>ISNI|0000000109834704</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>NKC|jn19990005122</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                <ns2:subfield code="a">Lister, Kate</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+              <ns2:id>ISNI|0000000109834704</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="partial date and publisher"/>NTA|203802799</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>NUKAT|n 2008084152</ns2:link>
+                <ns2:link><ns2:match type="exact name"/>DNB|17957051X</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>LC|n  95005636</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>NKC|jn19990005122</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+            <ns2:mainHeadingEl>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                <ns2:subfield code="a">Lister, Kate,</ns2:subfield>
+                <ns2:subfield code="d">1959-</ns2:subfield>
+                <ns2:subfield code="7">jn19990005122</ns2:subfield>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>NKC</ns2:s>
+              </ns2:sources>
+              <ns2:id>NKC|jn19990005122</ns2:id>
+              <ns2:links>
+                <ns2:link><ns2:match type="partial date and publisher"/>NTA|203802799</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>NUKAT|n 2008084152</ns2:link>
+                <ns2:link><ns2:match type="forced single date"/>LC|n  95005636</ns2:link>
+                <ns2:link><ns2:match type="partial date and publisher"/>ISNI|0000000109834704</ns2:link>
+              </ns2:links>
+            </ns2:mainHeadingEl>
+          </ns2:mainHeadings>
+          <ns2:fixed>
+            <ns2:gender>u</ns2:gender>
+          </ns2:fixed>
+          <ns2:x400s>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                <ns2:subfield code="a">Lister, Catherine</ns2:subfield>
+                <ns2:normalized>lister catherine</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2="0" tag="400">
+                <ns2:subfield code="a">Lister, Catherine E.,</ns2:subfield>
+                <ns2:subfield code="d">1959-</ns2:subfield>
+                <ns2:normalized>lister catherine e 1959</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                <ns2:subfield code="a">Lister, Catherine E.</ns2:subfield>
+                <ns2:subfield code="d">1959-</ns2:subfield>
+                <ns2:normalized>lister catherine e 1959</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                <ns2:subfield code="a">Lister, Catherine.</ns2:subfield>
+                <ns2:normalized>lister catherine</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                <ns2:subfield code="a">Lister, Kate</ns2:subfield>
+                <ns2:normalized>lister kate</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+            <ns2:x400>
+              <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                <ns2:subfield code="a">Lister, Kate.</ns2:subfield>
+                <ns2:normalized>lister kate</ns2:normalized>
+              </ns2:datafield>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+              </ns2:sources>
+            </ns2:x400>
+          </ns2:x400s>
+          <ns2:coauthors>
+            <ns2:data count="11" tag="950">
+              <ns2:text>Harnish, Tom 1945- )</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="2" tag="950">
+              <ns2:text>Nilles, Jack</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:coauthors>
+          <ns2:publishers>
+            <ns2:data count="7">
+              <ns2:text>Wiley</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="5">
+              <ns2:text>John Wiley &amp;#x26; Sons</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>LC</ns2:s>
+                <ns2:s>ISNI</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:publishers>
+          <ns2:birthDate>1959</ns2:birthDate>
+          <ns2:deathDate>0</ns2:deathDate>
+          <ns2:dateType>lived</ns2:dateType>
+          <ns2:dates max="200" min="199">
+            <ns2:date count="10" scaled="3.32">199</ns2:date>
+            <ns2:date count="6" scaled="2.58">200</ns2:date>
+          </ns2:dates>
+          <ns2:RecFormats>
+            <ns2:data count="4">
+              <ns2:text>am</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="3">
+              <ns2:text>dm</ns2:text>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:RecFormats>
+          <ns2:ISBNs unique="6">
+            <ns2:data count="3">
+              <ns2:text>9780471109839</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="2">
+              <ns2:text>9780471109846</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="2">
+              <ns2:text>9780470383322</ns2:text>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="1">
+              <ns2:text>9780471361046</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="1">
+              <ns2:text>9780471122838</ns2:text>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="1">
+              <ns2:text>9780471122821</ns2:text>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:ISBNs>
+          <ns2:covers>
+            <ns2:data count="3">
+              <ns2:text>0471109835</ns2:text>
+              <ns2:xtext>+-+0834566295</ns2:xtext>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="2">
+              <ns2:text>0470383321</ns2:text>
+              <ns2:xtext>+-+6788385295</ns2:xtext>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="1">
+              <ns2:text>0471361046</ns2:text>
+              <ns2:xtext>+-+1956186295</ns2:xtext>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+            <ns2:data count="1">
+              <ns2:text>0471122823</ns2:text>
+              <ns2:xtext>+-+8737766295</ns2:xtext>
+              <ns2:sources>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:covers>
+          <ns2:countries>
+            <ns2:data count="7" scaled="3">
+              <ns2:text>US</ns2:text>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+            </ns2:data>
+          </ns2:countries>
+          <ns2:titles>
+            <ns2:work>
+              <ns2:sources>
+                <ns2:s>NTA</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+              <ns2:title>Directory of venture capital</ns2:title>
+            </ns2:work>
+            <ns2:work>
+              <ns2:sources>
+                <ns2:s>NUKAT</ns2:s>
+                <ns2:s>NKC</ns2:s>
+                <ns2:s>LC</ns2:s>
+              </ns2:sources>
+              <ns2:title>Finding money : the small business guide to financing</ns2:title>
+            </ns2:work>
+          </ns2:titles>
+          <ns2:history>
+            <ns2:ht recid="LC|n  95005636" time="2009-03-03T12:03:34+00:00" type="add"/>
+            <ns2:ht recid="NKC|jn19990005122" time="2009-05-07T09:11:12+00:00" type="add"/>
+            <ns2:ht recid="NUKAT|n 2008084152" time="2011-02-17T05:22:52+00:00" type="add"/>
+            <ns2:ht recid="NTA|203802799" time="2012-12-19T19:11:18+00:00" type="add"/>
+            <ns2:ht recid="ISNI|0000000109834704" time="2013-09-16T16:15:07+00:00" type="add"/>
+            <ns2:ht recid="DNB|17957051X" time="2014-05-14T22:19:01+00:00" type="add"/>
+            <ns2:ht recid="NUKAT|n 2008084152" time="2014-10-21T12:48:43+00:00" type="delete"/>
+            <ns2:ht recid="NUKAT|n 2008084152" time="2014-10-27T16:17:29+00:00" type="add"/>
+          </ns2:history>
+        </ns2:VIAFCluster>
+      </recordData>
+      <recordPosition xsi:type="xsd:positiveInteger">1</recordPosition>
+    </record>
+  </records>
+  <echoedSearchRetrieveRequest xmlns:ns3="http://www.loc.gov/zing/srw/" xsi:type="ns3:echoedSearchRetrieveRequestType">
+    <version xsi:type="xsd:string">1.1</version>
+    <query xsi:type="xsd:string">local.names = &amp;#34;Lister, Kate&amp;#34;</query>
+    <xQuery>
+      <ns4:searchClause xmlns:ns4="http://www.loc.gov/zing/cql/xcql/" xsi:type="ns4:searchClauseType">
+        <ns4:index xsi:type="xsd:string">local.names</ns4:index>
+        <ns4:relation xsi:type="ns4:relationType">
+          <ns4:value xsi:type="xsd:string">=</ns4:value>
+        </ns4:relation>
+        <ns4:term xsi:type="xsd:string">Lister, Kate</ns4:term>
+      </ns4:searchClause>
+    </xQuery>
+    <startRecord xsi:type="xsd:positiveInteger">1</startRecord>
+    <maximumRecords xsi:type="xsd:nonNegativeInteger">10</maximumRecords>
+    <recordSchema xsi:type="xsd:string">default</recordSchema>
+    <sortKeys xsi:type="xsd:string">holdingscount</sortKeys>
+  </echoedSearchRetrieveRequest>
+  <extraResponseData xmlns:ns5="http://www.loc.gov/zing/srw/" xsi:type="ns5:extraDataType">
+    <ns6:extraData xmlns="http://oclc.org/srw/extraData" xmlns:ns6="http://oclc.org/srw/extraData">
+      <ns6:databaseTitle>VIAF: The Virtual International Authority File</ns6:databaseTitle>
+    </ns6:extraData>
+  </extraResponseData>
+</searchRetrieveResponse>

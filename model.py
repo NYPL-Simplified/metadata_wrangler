@@ -953,7 +953,7 @@ class Contributor(Base):
     viaf = Column(Unicode, index=True)
 
     # This is the name by which this person is known in the original
-    # catalog.
+    # catalog. It is sortable, e.g. "Twain, Mark".
     name = Column(Unicode, index=True)
     aliases = Column(ARRAY(Unicode), default=[])
 
@@ -1085,6 +1085,13 @@ class Contributor(Base):
             destination.lc = self.lc
         if not destination.viaf:
             destination.viaf = self.viaf
+        if not destination.family_name:
+            destination.viaf = self.family_name
+        if not destination.display_name:
+            destination.viaf = self.display_name
+        if not destination.wikipedia_name:
+            destination.viaf = self.wikipedia_name
+
         _db = Session.object_session(self)
         for contribution in self.contributions:
             # Is the new contributor already associated with this
@@ -3793,7 +3800,7 @@ class Representation(Base):
     @classmethod
     def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
             identifier=None, license_pool=None, max_age=None, pause_before=0,
-            allow_redirects=True, debug=True):
+            allow_redirects=True, debug=False):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the
