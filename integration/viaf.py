@@ -65,9 +65,23 @@ class VIAFParser(XMLParser):
         return viaf, display_name, family_name, wikipedia_name
 
     def cluster_has_record_for_named_author(self, cluster, name):
-        for potential_match in self._xpath(
-                cluster, '//*[local-name()="subfield"][@code="a"]'):
-            if potential_match.text == name:
+
+        for data_field in self._xpath(
+                cluster, './/*[local-name()="datafield"][@dtype="MARC21"][@tag="100"]'):
+            for potential_match in self._xpath(
+                    data_field, '*[local-name()="subfield"][@code="a"]'):
+                if potential_match.text == name:
+                    return True
+
+        unimarcs = self._xpath(cluster, './/*[local-name()="datafield"][@dtype="UNIMARC"]')
+        candidates = []
+        for unimarc in unimarcs:
+            (possible_given, possible_family,
+             possible_extra) = self.extract_name_from_unimarc(unimarc)
+            if (possible_given and possible_given in name
+                and possible_family and possible_family in name and (
+                    not possible_extra or possible_extra in name)):
+                set_trace()
                 return True
         return False
 
@@ -112,7 +126,7 @@ class VIAFParser(XMLParser):
             return None, None, None, None
 
         # Get the VIAF ID for this cluster, just in case we don't have one yet.
-        viaf_tag = self._xpath1(cluster, '*[local-name()="viafID"]')
+        viaf_tag = self._xpath1(cluster, './/*[local-name()="viafID"]')
         if viaf_tag is None:
             viaf_id = None
         else:
@@ -120,7 +134,7 @@ class VIAFParser(XMLParser):
 
 
         # Does this cluster have a Wikipedia page?
-        for source in self._xpath(cluster, '//*[local-name()="sources"]/*[local-name()="source"]'):
+        for source in self._xpath(cluster, './/*[local-name()="sources"]/*[local-name()="source"]'):
             if source.text.startswith("WKP|"):
                 # Jackpot!
                 wikipedia_name = source.text[4:]
@@ -129,7 +143,7 @@ class VIAFParser(XMLParser):
                     display_name = display_name[:display_name.rindex(' (')]
                 working_name = wikipedia_name
 
-        unimarcs = self._xpath(cluster, '//*[local-name()="datafield"][@dtype="UNIMARC"]')
+        unimarcs = self._xpath(cluster, './/*[local-name()="datafield"][@dtype="UNIMARC"]')
         candidates = []
         for unimarc in unimarcs:
             (possible_given, possible_family,
