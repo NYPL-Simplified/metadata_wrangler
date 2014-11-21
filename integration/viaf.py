@@ -11,7 +11,9 @@ from sqlalchemy.sql.expression import (
 
 from model import (
     Contributor,
+    Contribution,
     DataSource,
+    Edition,
     Representation,
 )
 
@@ -81,7 +83,6 @@ class VIAFParser(XMLParser):
             if (possible_given and possible_given in name
                 and possible_family and possible_family in name and (
                     not possible_extra or possible_extra in name)):
-                set_trace()
                 return True
         return False
 
@@ -270,7 +271,7 @@ class VIAFParser(XMLParser):
 class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
-    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=10&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
+    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
     SUBDIR = "viaf"
 
     def __init__(self, _db):
@@ -280,7 +281,19 @@ class VIAFClient(object):
 
     def run(self, force=False):
         a = 0
+        # Ignore editions from OCLC
+        oclc_linked_data = DataSource.lookup(
+            self._db, DataSource.OCLC_LINKED_DATA)
+        oclc_search = DataSource.lookup(
+            self._db, DataSource.OCLC)
+        ignore_editions_from = [oclc_linked_data.id, oclc_search.id]
+        must_have_roles = [
+            Contributor.PRIMARY_AUTHOR_ROLE, Contributor.AUTHOR_ROLE]
         candidates = self._db.query(Contributor)
+        candidates = candidates.join(Contributor.contributions)
+        candidates = candidates.join(Contribution.edition)
+        candidates = candidates.filter(~Edition.data_source_id.in_(ignore_editions_from))
+        candidates = candidates.filter(Contribution.role.in_(must_have_roles))
         if not force:
             something_is_missing = or_(
                 Contributor.display_name==None,

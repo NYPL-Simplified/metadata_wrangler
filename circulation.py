@@ -65,7 +65,10 @@ class Conf:
         cls.db = _db
         cls.sublanes = lanes
 
-if os.environ.get('TESTING') != "True":
+if os.environ.get('TESTING') == "True":
+    Conf.testing = True
+else:
+    Conf.testing = False
     _db = production_session()
 
     # art = Lane(_db, name="Art & Design",
@@ -562,11 +565,12 @@ def active_loans():
     # First synchronize our local list of loans with all third-party
     # loan providers.
     header = flask.request.authorization
-    overdrive = OverdriveAPI(_db)
-    overdrive_loans = overdrive.get_patron_checkouts(
-        flask.request.patron, header.password)
-    OverdriveAPI.sync_bookshelf(flask.request.patron, overdrive_loans)
-    _db.commit()
+    if not Conf.testing:
+        overdrive = OverdriveAPI(Conf.db)
+        overdrive_loans = overdrive.get_patron_checkouts(
+            flask.request.patron, header.password)
+        OverdriveAPI.sync_bookshelf(flask.request.patron, overdrive_loans)
+        Conf.db.commit()
 
     # Then make the feed.
     feed = AcquisitionFeed.active_loans_for(flask.request.patron)

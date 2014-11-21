@@ -1067,9 +1067,10 @@ class Contributor(Base):
         if self == destination:
             # They're already the same.
             return
-        msg = u"MERGING %s into %s" % (
-            repr(self).decode("utf8"), 
-            repr(destination).decode("utf8"))
+        msg = u"MERGING %s (%s) into %s (%s)" % (
+            repr(self).decode("utf8"), self.viaf,
+            repr(destination).decode("utf8"),
+            destination.viaf)
         print msg.encode("utf8")
         existing_aliases = set(destination.aliases)
         new_aliases = list(destination.aliases)
@@ -1086,13 +1087,14 @@ class Contributor(Base):
         if not destination.viaf:
             destination.viaf = self.viaf
         if not destination.family_name:
-            destination.viaf = self.family_name
+            destination.family_name = self.family_name
         if not destination.display_name:
-            destination.viaf = self.display_name
+            destination.display_name = self.display_name
         if not destination.wikipedia_name:
-            destination.viaf = self.wikipedia_name
+            destination.wikipedia_name = self.wikipedia_name
 
         _db = Session.object_session(self)
+        print " Merging edition contributions."
         for contribution in self.contributions:
             # Is the new contributor already associated with this
             # Edition in the given role (in which case we delete
@@ -1106,6 +1108,7 @@ class Contributor(Base):
                 _db.delete(contribution)
             else:
                 contribution.contributor_id = destination.id
+        print " Merging work contributions."
         for contribution in self.work_contributions:
             existing_record = _db.query(WorkContribution).filter(
                 WorkContribution.contributor_id==destination.id,
@@ -1116,8 +1119,15 @@ class Contributor(Base):
             else:
                 contribution.contributor_id = destination.id
             contribution.contributor_id = destination.id
-        _db.query(Contributor).filter(Contributor.id==self.id).delete()
+        print "Commit before deletion."
         _db.commit()
+        print "Final deletion."
+        _db.delete(self)
+        print "Committing after deletion."
+        _db.commit()
+        # _db.query(Contributor).filter(Contributor.id==self.id).delete()
+        #_db.commit()
+        print "All done."
 
     # Regular expressions used by default_names().
     PARENTHETICAL = re.compile("\([^)]*\)")
@@ -3634,64 +3644,6 @@ class CirculationEvent(Base):
 
     # The time format used when exporting to JSON.
     TIME_FORMAT = "%Y-%m-%dT%H:%M:%S+00:00"
-
-    @classmethod
-    def _get_datetime(cls, data, key):
-        date = data.get(key, None)
-        if not date:
-            return None
-        elif isinstance(date, datetime.date):
-            return date
-        else:
-            return datetime.datetime.strptime(date, cls.TIME_FORMAT)
-
-    @classmethod
-    def _get_int(cls, data, key):
-        value = data.get(key, None)
-        if not value:
-            return value
-        else:
-            return int(value)
-
-    @classmethod
-    def from_string(cls, _db, s):
-        """Find or create a CirculationEvent based on an entry in a JSON
-        stream.
-
-        e.g.
-
-        {"foreign_patron_id": "23333085908570", "start": "2013-05-04T00:17:39+00:00", "id": "d5o289", "source": "3M", "event": "hold_place"}
-        """
-
-        data = json.loads(s.strip())
-        for k in 'start', 'end':
-            if k in data:
-                data[k] = self._parse_date(k)
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_dict(cls, _db, data):
-
-        # Identify the source of the event.
-        source_name = data['source']
-        source = DataSource.lookup(_db, source_name)
-
-        # Identify which LicensePool the event is talking about.
-        foreign_id = data['id']
-        identifier_type = source.primary_identifier_type
-
-        license_pool, was_new = LicensePool.for_foreign_id(
-            _db, source, identifier_type, foreign_id)
-
-        # Finally, gather some information about the event itself.
-        type = data.get("type")
-        start = cls._get_datetime(data, 'start')
-        end = cls._get_datetime(data, 'end')
-        old_value = cls._get_int(data, 'old_value')
-        new_value = cls._get_int(data, 'new_value')
-        delta = cls._get_int(data, 'delta')
-        foreign_patron_id = data.get("foreign_patron_id")
-
 
     @classmethod
     def log(cls, _db, license_pool, event_name, old_value, new_value,
