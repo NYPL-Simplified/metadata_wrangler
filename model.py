@@ -953,7 +953,7 @@ class Contributor(Base):
     viaf = Column(Unicode, index=True)
 
     # This is the name by which this person is known in the original
-    # catalog.
+    # catalog. It is sortable, e.g. "Twain, Mark".
     name = Column(Unicode, index=True)
     aliases = Column(ARRAY(Unicode), default=[])
 
@@ -1067,9 +1067,10 @@ class Contributor(Base):
         if self == destination:
             # They're already the same.
             return
-        msg = u"MERGING %s into %s" % (
-            repr(self).decode("utf8"), 
-            repr(destination).decode("utf8"))
+        msg = u"MERGING %s (%s) into %s (%s)" % (
+            repr(self).decode("utf8"), self.viaf,
+            repr(destination).decode("utf8"),
+            destination.viaf)
         print msg.encode("utf8")
         existing_aliases = set(destination.aliases)
         new_aliases = list(destination.aliases)
@@ -1085,7 +1086,15 @@ class Contributor(Base):
             destination.lc = self.lc
         if not destination.viaf:
             destination.viaf = self.viaf
+        if not destination.family_name:
+            destination.family_name = self.family_name
+        if not destination.display_name:
+            destination.display_name = self.display_name
+        if not destination.wikipedia_name:
+            destination.wikipedia_name = self.wikipedia_name
+
         _db = Session.object_session(self)
+        print " Merging edition contributions."
         for contribution in self.contributions:
             # Is the new contributor already associated with this
             # Edition in the given role (in which case we delete
@@ -1099,6 +1108,7 @@ class Contributor(Base):
                 _db.delete(contribution)
             else:
                 contribution.contributor_id = destination.id
+        print " Merging work contributions."
         for contribution in self.work_contributions:
             existing_record = _db.query(WorkContribution).filter(
                 WorkContribution.contributor_id==destination.id,
@@ -1109,13 +1119,29 @@ class Contributor(Base):
             else:
                 contribution.contributor_id = destination.id
             contribution.contributor_id = destination.id
-        _db.query(Contributor).filter(Contributor.id==self.id).delete()
+        print "Commit before deletion."
         _db.commit()
+        print "Final deletion."
+        _db.delete(self)
+        print "Committing after deletion."
+        _db.commit()
+        # _db.query(Contributor).filter(Contributor.id==self.id).delete()
+        #_db.commit()
+        print "All done."
 
     # Regular expressions used by default_names().
     PARENTHETICAL = re.compile("\([^)]*\)")
     ALPHABETIC = re.compile("[a-zA-z]")
     NUMBERS = re.compile("[0-9]")
+
+    DATE_RES = [re.compile("\(?" + x + "\)?") for x in 
+                "[0-9?]+-",
+                "[0-9]+st cent",
+                "[0-9]+nd cent",
+                "[0-9]+th cent",
+                "\bcirca",
+                ]
+
 
     def default_names(self, default_display_name=None):
         """Attempt to derive a family name ("Twain") and a display name ("Mark
@@ -1145,13 +1171,25 @@ class Contributor(Base):
             # This is probably a personal name.
             parts = name.split(", ")
             if len(parts) > 2:
-                final = parts[-1]
                 # The most likely scenario is that the final part
                 # of the name is a date or a set of dates. If this
                 # seems true, just delete that part.
                 if (cls.NUMBERS.search(parts[-1])
                     or not cls.ALPHABETIC.search(parts[-1])):
                     parts = parts[:-1]
+            # The final part of the name may have a date or a set
+            # of dates at the end. If so, remove it from that string.
+            final = parts[-1]
+            for date_re in cls.DATE_RES:
+                m = date_re.search(final)
+                if m:
+                    new_part = final[:m.start()].strip() 
+                    if new_part:
+                        parts[-1] = new_part
+                    else:
+                        del parts[-1]
+                    break
+               
             family_name = parts[0]
             p = parts[-1].lower()
             if (p in ('llc', 'inc', 'inc.')
@@ -1164,7 +1202,11 @@ class Contributor(Base):
             if not display_name:
                 # The fateful moment. Swap the second string and the
                 # first string.
-                display_name = parts[1] + " " + parts[0]
+                if len(parts) == 1:
+                    display_name = parts[0]
+                    family_name = display_name
+                else:
+                    display_name = parts[1] + " " + parts[0]
                 if len(parts) > 2:
                     # There's a leftover bit.
                     if parts[2] in ('Mrs.', 'Mrs', 'Sir'):
@@ -1179,10 +1221,10 @@ class Contributor(Base):
             # Since there's no comma, this is probably a corporate name.
             family_name = None
             display_name = name
-        print " Default names for %s" % original_name
-        print "  Family name: %s" % family_name
-        print "  Display name: %s" % display_name
-        print
+        #print " Default names for %s" % original_name
+        #print "  Family name: %s" % family_name
+        #print "  Display name: %s" % display_name
+        #print
         return family_name, display_name
 
 
@@ -3604,64 +3646,6 @@ class CirculationEvent(Base):
     TIME_FORMAT = "%Y-%m-%dT%H:%M:%S+00:00"
 
     @classmethod
-    def _get_datetime(cls, data, key):
-        date = data.get(key, None)
-        if not date:
-            return None
-        elif isinstance(date, datetime.date):
-            return date
-        else:
-            return datetime.datetime.strptime(date, cls.TIME_FORMAT)
-
-    @classmethod
-    def _get_int(cls, data, key):
-        value = data.get(key, None)
-        if not value:
-            return value
-        else:
-            return int(value)
-
-    @classmethod
-    def from_string(cls, _db, s):
-        """Find or create a CirculationEvent based on an entry in a JSON
-        stream.
-
-        e.g.
-
-        {"foreign_patron_id": "23333085908570", "start": "2013-05-04T00:17:39+00:00", "id": "d5o289", "source": "3M", "event": "hold_place"}
-        """
-
-        data = json.loads(s.strip())
-        for k in 'start', 'end':
-            if k in data:
-                data[k] = self._parse_date(k)
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_dict(cls, _db, data):
-
-        # Identify the source of the event.
-        source_name = data['source']
-        source = DataSource.lookup(_db, source_name)
-
-        # Identify which LicensePool the event is talking about.
-        foreign_id = data['id']
-        identifier_type = source.primary_identifier_type
-
-        license_pool, was_new = LicensePool.for_foreign_id(
-            _db, source, identifier_type, foreign_id)
-
-        # Finally, gather some information about the event itself.
-        type = data.get("type")
-        start = cls._get_datetime(data, 'start')
-        end = cls._get_datetime(data, 'end')
-        old_value = cls._get_int(data, 'old_value')
-        new_value = cls._get_int(data, 'new_value')
-        delta = cls._get_int(data, 'delta')
-        foreign_patron_id = data.get("foreign_patron_id")
-
-
-    @classmethod
     def log(cls, _db, license_pool, event_name, old_value, new_value,
             start=None, end=None, foreign_patron_id=None):
         if new_value is None or old_value is None:
@@ -3793,7 +3777,7 @@ class Representation(Base):
     @classmethod
     def get(cls, _db, url, do_get=None, extra_request_headers=None, data_source=None,
             identifier=None, license_pool=None, max_age=None, pause_before=0,
-            allow_redirects=True, debug=True):
+            allow_redirects=True, debug=False):
         """Retrieve a representation from the cache if possible.
         
         If not possible, retrieve it from the web and store it in the

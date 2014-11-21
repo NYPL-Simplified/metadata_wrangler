@@ -157,6 +157,11 @@ class TestContributor(DatabaseTest):
         [bob], ignore = Contributor.lookup(self._db, name="Bob")
         bob.extra['foo'] = 'bar'
         bob.aliases = ['Bobby']
+        bob.viaf = 'viaf'
+        bob.lc = 'lc'
+        bob.display_name = "Bob's display name"
+        bob.family_name = "Bobb"
+        bob.wikipedia_name = "Bob_(Person)"
 
         # Each is a contributor to a Edition.
         data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
@@ -170,7 +175,7 @@ class TestContributor(DatabaseTest):
         bobs_book.add_contributor(bob, Contributor.AUTHOR_ROLE)
 
         # In a shocking turn of events, it transpires that "Bob" and
-        # "Robert" are the same person. We merge "Bob" into Roberg
+        # "Robert" are the same person. We merge "Bob" into Robert
         # thusly:
         bob.merge_into(robert)
 
@@ -181,6 +186,12 @@ class TestContributor(DatabaseTest):
         # The extra information associated with Bob is now associated
         # with Robert.
         eq_('bar', robert.extra['foo'])
+
+        eq_("viaf", robert.viaf)
+        eq_("lc", robert.lc)
+        eq_("Bobb", robert.family_name)
+        eq_("Bob's display name", robert.display_name)
+        eq_("Bob_(Person)", robert.wikipedia_name)
 
         # The standalone 'Bob' record has been removed from the database.
         eq_(
@@ -215,10 +226,20 @@ class TestContributor(DatabaseTest):
         self._names("Twain, Mark, ???-1910", "Twain", "Mark Twain")
         self._names("Twain, Mark, circ. 1900", "Twain", "Mark Twain")
         self._names("Twain, Mark, !@#!@", "Twain", "Mark Twain")
+        self._names(
+            "Coolbrith, Ina D. 1842?-1928", "Coolbrith", "Ina D. Coolbrith")
+        self._names("Caesar, Julius, 1st cent.", "Caesar", "Julius Caesar")
+        self._names("Arrian, 2nd cent.", "Arrian", "Arrian")
+        self._names("Hafiz, 14th cent.", "Hafiz", "Hafiz")
+        self._names("Hormel, Bob 1950?-", "Hormel", "Bob Hormel")
+        self._names("Holland, Henry 1583-1650? Monumenta sepulchraria Sancti Pauli",
+                    "Holland", "Henry Holland")
+        
 
         # Suffixes stay on the end, except for "Mrs.", which goes
         # to the front.
         self._names("Twain, Mark, Jr.", "Twain", "Mark Twain, Jr.")
+        self._names("House, Gregory, M.D.", "House", "Gregory House, M.D.")
         self._names("Twain, Mark, Mrs.", "Twain", "Mrs. Mark Twain")
         self._names("Twain, Mark, Mrs", "Twain", "Mrs Mark Twain")
 
@@ -597,11 +618,54 @@ class TestCirculationEvent(DatabaseTest):
             kwargs['delta'] = kwargs['new_value'] - kwargs['old_value']
         return kwargs
 
-    def test_create_event_from_string(self):
-        pass
+    def _get_datetime(self, data, key):
+        date = data.get(key, None)
+        if not date:
+            return None
+        elif isinstance(date, datetime.date):
+            return date
+        else:
+            return datetime.datetime.strptime(date, CirculationEvent.TIME_FORMAT)
 
-    def test_create_event_from_dict(self):
-        pass
+    def _get_int(self, data, key):
+        value = data.get(key, None)
+        if not value:
+            return value
+        else:
+            return int(value)
+
+    def from_dict(self, data):
+        _db = self._db
+
+        # Identify the source of the event.
+        source_name = data['source']
+        source = DataSource.lookup(_db, source_name)
+
+        # Identify which LicensePool the event is talking about.
+        foreign_id = data['id']
+        identifier_type = source.primary_identifier_type
+
+        license_pool, was_new = LicensePool.for_foreign_id(
+            _db, source, identifier_type, foreign_id)
+
+        # Finally, gather some information about the event itself.
+        type = data.get("type")
+        start = self._get_datetime(data, 'start')
+        end = self._get_datetime(data, 'end')
+        old_value = self._get_int(data, 'old_value')
+        new_value = self._get_int(data, 'new_value')
+        delta = self._get_int(data, 'delta')
+        foreign_patron_id = data.get("foreign_patron_id")
+        event, was_new = get_one_or_create(
+            _db, CirculationEvent, license_pool=license_pool,
+            type=type, start=start, foreign_patron_id=foreign_patron_id,
+            create_method_kwargs=dict(
+                old_value=old_value,
+                new_value=new_value,
+                delta=delta,
+                end=end)
+            )
+        return event, was_new
 
     def test_new_title(self):
 
@@ -611,11 +675,12 @@ class TestCirculationEvent(DatabaseTest):
             id="{1-2-3}",
             type=CirculationEvent.LICENSE_ADD,
             old_value=0,
+            delta=2,
             new_value=2,
         )
         
         # Turn it into an event and see what happens.
-        event, ignore = CirculationEvent.from_dict(self._db, data)
+        event, ignore = self.from_dict(data)
 
         # The event is associated with the correct data source.
         eq_(DataSource.OVERDRIVE, event.license_pool.data_source.name)
@@ -628,86 +693,6 @@ class TestCirculationEvent(DatabaseTest):
         # The number of licenses has been set to the new value.
         eq_(2, event.license_pool.licenses_owned)
 
-    def test_update_from_event(self):
-
-        generic_event = dict(
-            source=DataSource.THREEM,
-            id="a1d45",
-        )
-
-        # Here's a new title. Ten copies available.
-        data = self._event_data(
-            type=CirculationEvent.LICENSE_ADD,
-            old_value=0,
-            new_value=10,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        pool = event.license_pool
-        eq_(10, pool.licenses_available)
-
-        # All ten copies get checked out.
-        data = self._event_data(
-            type=CirculationEvent.CHECKOUT,
-            old_value=10,
-            new_value=0,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        eq_(0, pool.licenses_available)
-
-        # Three patrons place holds.
-        data = self._event_data(
-            type=CirculationEvent.HOLD_PLACE,
-            old_value=0,
-            new_value=3,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        eq_(0, pool.licenses_available)
-        eq_(3, pool.patrons_in_hold_queue)
-
-        # One patron leaves the hold queue.
-        data = self._event_data(
-            type=CirculationEvent.HOLD_RELEASE,
-            old_value=3,
-            new_value=2,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        eq_(0, pool.licenses_available)
-        eq_(2, pool.patrons_in_hold_queue)
-
-        # One patron checks in the book.
-        data = self._event_data(
-            type=CirculationEvent.CHECKIN,
-            old_value=0,
-            new_value=1,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        # This temporarily creates an inconsistent state.
-        eq_(1, pool.licenses_available)
-        eq_(2, pool.patrons_in_hold_queue)
-
-        # But a signal is then sent to the next person in the queue
-        # saying that the book is available.
-        data = self._event_data(
-            type=CirculationEvent.AVAILABILITY_NOTIFY,
-            delta=1,
-            **generic_event
-        )
-        event, ignore = CirculationEvent.from_dict(self._db, data)
-        eq_(0, pool.licenses_available)
-        eq_(1, pool.patrons_in_hold_queue)
-        eq_(1, pool.licenses_reserved)
-
-        # That person checks the book out.
-
-        # TODO: at this point we run into a problem--without tracking
-        # internal patron ID, we don't know whether a checkout is
-        # caused by someone who has a reserved copy or someone who is
-        # checking out from the general pool.
 
 class TestWorkQuality(DatabaseTest):
 

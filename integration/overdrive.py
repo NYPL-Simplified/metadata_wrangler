@@ -52,9 +52,6 @@ class OverdriveAPI(object):
     CHECKOUTS_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me/checkouts"
     ME_ENDPOINT = "http://patron.api.overdrive.com/v1/patrons/me"
 
-    CRED_FILE = "oauth_cred.json"
-    BIBLIOGRAPHIC_DIRECTORY = "bibliographic"
-
     MAX_CREDENTIAL_AGE = 50 * 60
 
     PAGE_SIZE_LIMIT = 300
