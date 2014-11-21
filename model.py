@@ -1124,6 +1124,15 @@ class Contributor(Base):
     ALPHABETIC = re.compile("[a-zA-z]")
     NUMBERS = re.compile("[0-9]")
 
+    DATE_RES = [re.compile("\(?" + x + "\)?") for x in 
+                "[0-9?]+-",
+                "[0-9]+st cent",
+                "[0-9]+nd cent",
+                "[0-9]+th cent",
+                "\bcirca",
+                ]
+
+
     def default_names(self, default_display_name=None):
         """Attempt to derive a family name ("Twain") and a display name ("Mark
         Twain") from a catalog name ("Twain, Mark").
@@ -1152,13 +1161,25 @@ class Contributor(Base):
             # This is probably a personal name.
             parts = name.split(", ")
             if len(parts) > 2:
-                final = parts[-1]
                 # The most likely scenario is that the final part
                 # of the name is a date or a set of dates. If this
                 # seems true, just delete that part.
                 if (cls.NUMBERS.search(parts[-1])
                     or not cls.ALPHABETIC.search(parts[-1])):
                     parts = parts[:-1]
+            # The final part of the name may have a date or a set
+            # of dates at the end. If so, remove it from that string.
+            final = parts[-1]
+            for date_re in cls.DATE_RES:
+                m = date_re.search(final)
+                if m:
+                    new_part = final[:m.start()].strip() 
+                    if new_part:
+                        parts[-1] = new_part
+                    else:
+                        del parts[-1]
+                    break
+               
             family_name = parts[0]
             p = parts[-1].lower()
             if (p in ('llc', 'inc', 'inc.')
@@ -1171,7 +1192,11 @@ class Contributor(Base):
             if not display_name:
                 # The fateful moment. Swap the second string and the
                 # first string.
-                display_name = parts[1] + " " + parts[0]
+                if len(parts) == 1:
+                    display_name = parts[0]
+                    family_name = display_name
+                else:
+                    display_name = parts[1] + " " + parts[0]
                 if len(parts) > 2:
                     # There's a leftover bit.
                     if parts[2] in ('Mrs.', 'Mrs', 'Sir'):

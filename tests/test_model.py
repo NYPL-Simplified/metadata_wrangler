@@ -215,10 +215,20 @@ class TestContributor(DatabaseTest):
         self._names("Twain, Mark, ???-1910", "Twain", "Mark Twain")
         self._names("Twain, Mark, circ. 1900", "Twain", "Mark Twain")
         self._names("Twain, Mark, !@#!@", "Twain", "Mark Twain")
+        self._names(
+            "Coolbrith, Ina D. 1842?-1928", "Coolbrith", "Ina D. Coolbrith")
+        self._names("Caesar, Julius, 1st cent.", "Caesar", "Julius Caesar")
+        self._names("Arrian, 2nd cent.", "Arrian", "Arrian")
+        self._names("Hafiz, 14th cent.", "Hafiz", "Hafiz")
+        self._names("Hormel, Bob 1950?-", "Hormel", "Bob Hormel")
+        self._names("Holland, Henry 1583-1650? Monumenta sepulchraria Sancti Pauli",
+                    "Holland", "Henry Holland")
+        
 
         # Suffixes stay on the end, except for "Mrs.", which goes
         # to the front.
         self._names("Twain, Mark, Jr.", "Twain", "Mark Twain, Jr.")
+        self._names("House, Gregory, M.D.", "House", "Gregory House, M.D.")
         self._names("Twain, Mark, Mrs.", "Twain", "Mrs. Mark Twain")
         self._names("Twain, Mark, Mrs", "Twain", "Mrs Mark Twain")
 
