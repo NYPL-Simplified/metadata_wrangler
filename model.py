@@ -244,6 +244,7 @@ class DataSource(Base):
     CONTENT_CAFE = "Content Cafe"
     VIAF = "Content Cafe"
     GUTENBERG_COVER_GENERATOR = "Project Gutenberg eBook Cover Generator"
+    BIBLIOCOMMONS = "BiblioCommons"
     MANUAL = "Manual intervention"
 
     __tablename__ = 'datasources'
@@ -306,6 +307,7 @@ class DataSource(Base):
                 (cls.WEB, True, Identifier.URI, None),
                 (cls.VIAF, False, None, None),
                 (cls.CONTENT_CAFE, False, None, None),
+                (cls.BIBLIOCOMMONS, False, Identifier.BIBLIOCOMMONS_ID, None),
                 (cls.MANUAL, False, None, None),
         ):
 
@@ -406,6 +408,7 @@ class Identifier(Base):
     OCLC_WORK = "OCLC Work ID"
     OCLC_NUMBER = "OCLC Number"
     OPEN_LIBRARY_ID = "OLID"
+    BIBLIOCOMMONS_ID = "Bibliocommons ID"
     URI = "URI"
     DOI = "DOI"
     UPC = "UPC"
