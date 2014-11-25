@@ -465,7 +465,6 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         edition.language = info[Edition.language]
         edition.published = info[Edition.published]
 
-        set_trace()
         for name in info[Contributor]:
             edition.add_contributor(name, Contributor.AUTHOR_ROLE)
 

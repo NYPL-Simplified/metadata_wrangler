@@ -323,8 +323,8 @@ class OverdriveAPI(object):
                     yield i
             except Exception, e:
                 print e
-                print "Sleeping for 1 minute, then resuming."
-                time.sleep(60)
+                sys.exit()
+
 
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
