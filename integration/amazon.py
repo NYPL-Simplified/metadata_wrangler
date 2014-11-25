@@ -318,8 +318,14 @@ class AmazonReviewParser(XMLParser):
         reviews = reviewset.xpath(self._cls("div", "review"))
         for review in reviews:
             title = self._xpath1(review, self._cls("a", "review-title")).text
-            review_text = self._xpath1(
-                review, self._cls("div", "review-text")).xpath("text()")
+            review_tag = None
+            review_text = []
+            for tag_name in ('div', 'span'):
+                review_tag = self._xpath1(
+                    review, self._cls(tag_name, "review-text"))
+                if review_tag is not None:
+                    review_text = review_tag.xpath("text()")
+                    break
             yield title, "\n\n".join(review_text)
 
 class AmazonCoverageProvider(CoverageProvider):
