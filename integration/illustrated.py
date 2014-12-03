@@ -1,8 +1,12 @@
-from nose.tools import set_trace
+from collections import defaultdict
+import os
 import re
+from nose.tools import set_trace
 
 from model import (
-    Identifier
+    Identifier,
+    Edition,
+    DataSource,
 )
 
 class GutenbergIllustratedDriver(object):
@@ -12,6 +16,14 @@ class GutenbergIllustratedDriver(object):
     invoke Gutenberg Illustrated to generate covers and then upload
     the covers to S3.
     """
+
+    gutenberg_id_res = [
+        re.compile(".*/([0-9]+)-h"),
+        re.compile(".*/([0-9]+)"),
+    ]
+
+    # These authors can be treated as if no author was specified
+    ignorable_authors = ['Various']
 
     # These regular expressions match text that can be removed from a
     # title when calculating the short display title.
@@ -51,10 +63,24 @@ class GutenbergIllustratedDriver(object):
             return None
         return title
 
-    ignorable_authors = ['Various']
 
     @classmethod
-    def data(cls, edition):
+    def author_string(cls, names):
+        if not names:
+            return ''
+
+        if len(names) == 1:
+            name = names[0]
+            if name in cls.ignorable_authors:
+                return ''
+            return name
+
+        before_ampersand = names[:-1]
+        after_ampersand = names[-1]
+        return ", ".join(before_ampersand) + " & " + after_ampersand
+
+    @classmethod
+    def data_for_edition(cls, edition):
         short_names = []
         long_names = []
         primary_author = None
@@ -81,18 +107,65 @@ class GutenbergIllustratedDriver(object):
         )
         return d
 
+
     @classmethod
-    def author_string(cls, names):
-        if not names:
-            return ''
+    def illustrations_from_file_list(cls, paths):
+        seen_ids = set()
+        images_for_work = defaultdict(list)
+        gid = container = working_directory = None
+        for i in paths:
+            i = i.strip()
+            if i.endswith("images:") and not i.endswith("page-images:"):
+                working_directory = i[:-1]
+                for r in cls.gutenberg_id_res:
+                    gid = r.search(i)
+                    if gid:
+                        gid = gid.groups()[0]
+                        container = images_for_work[gid]
+                        break
+                continue
 
-        if len(names) == 1:
-            name = names[0]
-            if name in cls.ignorable_authors:
-                return ''
-            return name
+            if i:
+                if container is not None:
+                    container.append(os.path.join(working_directory, i))
+                continue
 
-        before_ampersand = names[:-1]
-        after_ampersand = names[-1]
-        return ", ".join(before_ampersand) + " & " + after_ampersand
+            # At this point we know that we've encountered a blank line.
 
+            if gid is None or container is None:
+                # We're not equipped to handle this.
+                continue
+
+            # Look up Gutenberg info.
+            if gid in seen_ids:
+                # This happens very rarely, when an anthology book includes
+                # another book's directory wholesale. But the illustrations
+                # should be the same in either case,
+                continue
+
+            if container:
+                yield gid, container
+            gid = container = working_directory = None
+
+        if container:
+            yield gid, container
+
+    @classmethod
+    def data_from_file_list(cls, db, paths):
+        data_source = DataSource.lookup(db, DataSource.GUTENBERG)
+        for (gid, illustrations) in cls.illustrations_from_file_list(paths):
+            edition = Edition.for_foreign_id(
+                db, data_source, Identifier.GUTENBERG_ID, gid,
+                create_if_not_exists=False)
+
+            if not edition:
+                # We don't know about this book.
+                gid = container = working_directory = None
+                continue
+
+            data = cls.data_for_edition(edition)
+            data['gid'] = gid
+            data['illustrations'] = container
+            yield data
+            seen_ids.add(gid)
+            gid = container = working_directory = None

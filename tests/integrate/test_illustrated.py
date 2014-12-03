@@ -93,5 +93,59 @@ class TestAuthorString(object):
 
         self._author(
             ['Scharten', 'Vos', 'Moens', 'Kloos', 'Boutens'],
-            'Kloos, Moens, Scharten, Vos & Boutens'
+            'Scharten, Vos, Moens, Kloos & Boutens'
         )
+
+    def test_images_gathered(self):
+        data = """./2/8/8/6/28862/28862-h/images:
+icover.jpg
+ipublogo.jpg
+"""
+        data = data.split("\n")
+        illustrations = list(
+            GutenbergIllustratedDriver.illustrations_from_ls_filehandle(data))
+        eq_(
+            [('28862', ['./2/8/8/6/28862/28862-h/images/icover.jpg',
+                        './2/8/8/6/28862/28862-h/images/ipublogo.jpg'])],
+            illustrations)
+
+    def test_images_gathered_multiple(self):
+        data = """./1/7/0/2/17022/17022-h/0501051h-images:
+fda-01.jpg
+
+./1/7/0/6/17068/17068-h:
+17068-h.htm
+images
+
+./1/7/0/6/17068/17068-h/images:
+01.png
+02.png"""
+        data = data.split("\n")
+        illustrations = list(
+            GutenbergIllustratedDriver.illustrations_from_ls_filehandle(data))
+        eq_(
+            [
+                ('17022', ['./1/7/0/2/17022/17022-h/0501051h-images/fda-01.jpg']),
+                ('17068', ['./1/7/0/6/17068/17068-h/images/01.png', 
+                           './1/7/0/6/17068/17068-h/images/02.png'])],
+            illustrations
+        )
+
+    def test_page_images_ignored(self):
+        data = """./2/8/8/6/28863/28863-page-images:
+f0001.png
+f0002-blank.png
+p0716.png
+p0717.png
+p0718.png
+p0719.png
+p0720.png
+p0721.png
+p0722.png
+p0723.png
+p0724.png
+"""
+        data = data.split("\n")
+        illustrations = GutenbergIllustratedDriver.illustrations_from_ls_filehandle(
+            data)
+        eq_([], list(illustrations))
