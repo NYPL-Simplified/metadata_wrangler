@@ -153,6 +153,7 @@ class GutenbergIllustratedDriver(object):
     @classmethod
     def data_from_file_list(cls, db, paths):
         data_source = DataSource.lookup(db, DataSource.GUTENBERG)
+        seen_ids = set()
         for (gid, illustrations) in cls.illustrations_from_file_list(paths):
             edition = Edition.for_foreign_id(
                 db, data_source, Identifier.GUTENBERG_ID, gid,
@@ -165,7 +166,7 @@ class GutenbergIllustratedDriver(object):
 
             data = cls.data_for_edition(edition)
             data['gid'] = gid
-            data['illustrations'] = container
+            data['illustrations'] = illustrations
             yield data
             seen_ids.add(gid)
-            gid = container = working_directory = None
+
