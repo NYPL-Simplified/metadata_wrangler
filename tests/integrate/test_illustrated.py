@@ -65,3 +65,33 @@ class TestShortDisplayTitle(object):
         self._not_shortened("The Life and Voyages of Christopher Columbus (Volume II)")
         self._not_shortened("Antonio Canova (1757-1822)")
         self._not_shortened(u"Mémoires de madame de Rémusat (2/3)")
+
+class TestAuthorString(object):
+
+    def _author(self, original, expect):
+        eq_(
+            expect, GutenbergIllustratedDriver.author_string(original))
+
+    def test_author_string(self):
+
+        self._author(["Various"], "")
+
+        self._author(
+            ["Mark Twain"], "Mark Twain"
+        )
+
+        self._author(
+            ["George Blacker Morgan", "William Parker Monteagle"],
+            "George Blacker Morgan & William Parker Monteagle"
+        )
+
+        self._author(
+            ['C. Th. Scharten', 'Margot Vos', 'Wies Moens', 'Willem Kloos',
+             'P. C. Boutens'],
+            "C. Th. Scharten, Margot Vos, Wies Moens, Willem Kloos & P. C. Boutens"
+        )
+
+        self._author(
+            ['Scharten', 'Vos', 'Moens', 'Kloos', 'Boutens'],
+            'Kloos, Moens, Scharten, Vos & Boutens'
+        )

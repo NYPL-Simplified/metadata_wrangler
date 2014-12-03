@@ -1,4 +1,9 @@
+from nose.tools import set_trace
 import re
+
+from model import (
+    Identifier
+)
 
 class GutenbergIllustratedDriver(object):
     """Manage the command-line Gutenberg Illustrated program.
@@ -45,3 +50,52 @@ class GutenbergIllustratedDriver(object):
         if title == orig:
             return None
         return title
+
+    ignorable_authors = ['Various']
+
+    @classmethod
+    def data(cls, edition):
+        short_names = []
+        long_names = []
+        primary_author = None
+        other_authors = []
+        for a in edition.author_contributors:
+            if a.name in cls.ignorable_authors:
+                continue
+            if a.family_name:
+                short_names.append(a.family_name)
+            if a.display_name:
+                long_names.append(a.display_name)
+        short_name = cls.author_string(short_names)
+        long_name = cls.author_string(long_names)
+
+        d = dict(
+            authors_short=short_name or "",
+            authors_long=long_name or "",
+#            identifier=gid,
+            title=edition.title or "",
+            title_short=cls.short_display_title(edition.title) or "",
+            subtitle=edition.subtitle or "",
+            identifier_type = Identifier.GUTENBERG_ID,
+#            illustrations=container,
+        )
+        return d
+
+    @classmethod
+    def author_string(cls, names):
+        if not names:
+            return ''
+
+        if len(names) == 1:
+            name = names[0]
+            if name in cls.ignorable_authors:
+                return ''
+            return name
+
+        before_ampersand = names[:-1]
+        after_ampersand = names[-1]
+        # TODO: This sorts full names by given name. It's pretty rare
+        # that this matters, though--a book has to have two authors
+        # with short names.
+        return ", ".join(sorted(before_ampersand)) + " & " + after_ampersand
+

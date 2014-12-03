@@ -1353,8 +1353,19 @@ class Edition(Base):
 
     @property
     def author_contributors(self):
-        return [x.contributor for x in self.contributions
-                if x.role in Contributor.AUTHOR_ROLES]
+        """All 'author'-type contributors, with the primary author first."""
+        primary_author = None
+        other_authors = []
+        for x in self.contributions:
+            if not primary_author and x.role == Contributor.PRIMARY_AUTHOR_ROLE:
+                print "PRIMARY", primary_author
+                primary_author = x.contributor
+            elif x.role in Contributor.AUTHOR_ROLES:
+                other_authors.append(x.contributor)
+        if primary_author:
+            return [primary_author] + other_authors
+        else:
+            return other_authors
 
     @classmethod
     def for_foreign_id(cls, _db, data_source,
