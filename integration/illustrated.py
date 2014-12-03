@@ -94,8 +94,5 @@ class GutenbergIllustratedDriver(object):
 
         before_ampersand = names[:-1]
         after_ampersand = names[-1]
-        # TODO: This sorts full names by given name. It's pretty rare
-        # that this matters, though--a book has to have two authors
-        # with short names.
-        return ", ".join(sorted(before_ampersand)) + " & " + after_ampersand
+        return ", ".join(before_ampersand) + " & " + after_ampersand
 

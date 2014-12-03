@@ -1353,7 +1353,9 @@ class Edition(Base):
 
     @property
     def author_contributors(self):
-        """All 'author'-type contributors, with the primary author first."""
+        """All 'author'-type contributors, with the primary author first,
+        other authors sorted by sort name.
+        """
         primary_author = None
         other_authors = []
         for x in self.contributions:
@@ -1363,7 +1365,7 @@ class Edition(Base):
             elif x.role in Contributor.AUTHOR_ROLES:
                 other_authors.append(x.contributor)
         if primary_author:
-            return [primary_author] + other_authors
+            return [primary_author] + sorted(other_authors, key=lambda x: x.name)
         else:
             return other_authors
 
