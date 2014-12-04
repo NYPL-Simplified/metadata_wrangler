@@ -323,8 +323,8 @@ class OverdriveAPI(object):
                     yield i
             except Exception, e:
                 print e
-                print "Sleeping for 1 minute, then resuming."
-                time.sleep(60)
+                sys.exit()
+
 
     def recently_changed_ids(self, start, cutoff):
         """Get IDs of books whose status has changed between the start time
@@ -585,7 +585,7 @@ class OverdriveCirculationMonitor(Monitor):
         overdrive_data_source = DataSource.lookup(
             _db, DataSource.OVERDRIVE)
 
-        i = None
+        total_books = 0
         consecutive_unchanged_books = 0
         for i, book in enumerate(self.recently_changed_ids(start, cutoff)):
             total_books += 1
