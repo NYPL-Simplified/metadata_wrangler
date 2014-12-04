@@ -29,7 +29,7 @@ class S3Uploader(object):
             requests.append(self.pool.upload(remote_filename, fh, bucket=bucket))
         # Do the upload.
         for r in self.pool.as_completed(requests):
-            # print r.url
+            print r.url
             pass
         # Close the filehandles.
         for i in filehandles:
