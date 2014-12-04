@@ -3978,15 +3978,7 @@ class CoverageProvider(object):
                 if self.process_edition(record):
                     # Success! Now there's coverage! Add a CoverageRecord.
                     successes += 1
-                    if isinstance(record, Identifier):
-                        identifier = record
-                    else:
-                        identifier = record.primary_identifier
-                    get_one_or_create(
-                        self._db, CoverageRecord,
-                        identifier=identifier,
-                        data_source=self.output_source,
-                        create_method_kwargs = dict(date=datetime.datetime.utcnow()))
+                    self.add_coverage_record_for(record)
                 else:
                     failures.add(record)
             # Commit this workset before moving on to the next one.
@@ -3997,6 +3989,20 @@ class CoverageProvider(object):
         # Now that we're done, update the timestamp
         Timestamp.stamp(self._db, self.service_name)
         self._db.commit()
+
+    def add_coverage_record_for(self, identifier):
+        if isinstance(identifier, Identifier):
+            identifier = identifier
+        else:
+            identifier = identifier.primary_identifier
+        now = datetime.datetime.utcnow())
+        coverage_record, is_new = get_one_or_create(
+            self._db, CoverageRecord,
+            identifier=identifier,
+            data_source=self.output_source,
+        )
+        coverage_record.date = now
+        return coverage_record, is_new
 
     def process_edition(self, edition):
         raise NotImplementedError()

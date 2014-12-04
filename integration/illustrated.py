@@ -1,13 +1,17 @@
 from collections import defaultdict
 import os
 import re
+import shutil
 from nose.tools import set_trace
 
 from model import (
+    CoverageProvider,
     Identifier,
     Edition,
     DataSource,
 )
+import subprocess
+import tmpfile
 
 class GutenbergIllustratedDriver(object):
     """Manage the command-line Gutenberg Illustrated program.
@@ -24,6 +28,8 @@ class GutenbergIllustratedDriver(object):
 
     # These authors can be treated as if no author was specified
     ignorable_authors = ['Various']
+
+    font_filename = "AvenirNext-Bold-14.vlw"
 
     # These regular expressions match text that can be removed from a
     # title when calculating the short display title.
@@ -164,9 +170,65 @@ class GutenbergIllustratedDriver(object):
                 gid = container = working_directory = None
                 continue
 
-            data = cls.data_for_edition(edition)
-            data['gid'] = gid
-            data['illustrations'] = illustrations
             yield data
             seen_ids.add(gid)
 
+
+class GutenbergIllustratedCoverageProvider(CoverageProvider):
+
+    def __init__(self, _db, data_directory, binary_path):
+
+        self.gutenberg_mirror = os.path.join(
+            data_directory, "gutenberg-mirror")
+        self.file_list = os.path.join(self.gutenberg_mirror, "ls-R")
+        self.binary_path = binary_path
+        self.font_path = os.path.join(
+            sketch_directory, 'data', self.font_filename)
+
+        input_source = DataSource.lookup(_db, DataSource.GUTENBERG)
+        output_source = DataSource.lookup(
+            _db, DataSource.GUTENBERG_COVER_GENERATOR)
+        super(GutenbergIllustratedCoverageProvider, self).__init__(
+            "Gutenberg Illustrated", input_source, output_source)
+
+        # Load the illustration lists from the Gutenberg ls-R file.
+        self.illustration_lists = dict()
+        for (gid, illustrations) in cls.illustrations_from_file_list(paths):
+            if gid not in self.illustration_lists:
+                self.illustration_lists[gid] = illustrations
+            if len(self.illustration_lists) > 10:
+                # Good enough for testing.
+                break
+        set_trace()
+
+    def process_edition(self, edition):
+        data = GutenbergIllustratedDriver.data_for_edition(edition)
+
+        identifier = edition.identifier.identifier
+        if identifier not in self.illustration_lists:
+            # No illustrations for this edition. Nothing to do.
+            return True
+
+        data['gid'] = identifier
+        data['illustrations'] = illustrations
+        
+        # Create a temporary directory that will contain the input and
+        # the output.
+        temp_dir = tempfile.mkdtemp()
+        input_path = os.path.join(temp_dir, "input-%s.json" % identifier)
+        json.dump(data, open(input_path, "w"))
+        args = self.args_for(input_path)
+        os.cwd(temp_dir)
+        output_capture = StringIO()
+        set_trace()
+        subprocess.call(args, stdout=output_capture)
+
+        # Copy the generated images into the local data directory.
+
+        # Associate 'cover' resources with the identifier
+
+        # Upload the generated images to S3.
+
+    def args_for(self, input_path):
+        return [self.binary_path, self.gutenberg_root, input_path,
+                self.font_path, self.font_path]

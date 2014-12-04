@@ -102,3 +102,20 @@ alter user simplified password '[password]'
 
 Change the DATABASE_URL and DATABASE_URL_TEST URLs to reflect the role
 and password.
+
+= Gutenberg Illustrated 
+
+== Packaging
+
+1. Install Processing.
+
+2. Download the following files and unzip them into ~/sketchbook/libraries/
+
+* controlP5 (http://www.sojamo.de/libraries/controlP5/)
+* opencv_processing (https://github.com/atduskgreg/opencv-processing/releases)
+
+3. Start Processing.
+
+$ ./processing-java /path/to/imagecoverp5tint.pde
+
+4. File > Export Application
