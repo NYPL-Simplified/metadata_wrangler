@@ -3995,7 +3995,7 @@ class CoverageProvider(object):
             identifier = identifier
         else:
             identifier = identifier.primary_identifier
-        now = datetime.datetime.utcnow())
+        now = datetime.datetime.utcnow()
         coverage_record, is_new = get_one_or_create(
             self._db, CoverageRecord,
             identifier=identifier,

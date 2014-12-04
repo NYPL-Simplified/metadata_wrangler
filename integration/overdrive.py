@@ -8,6 +8,7 @@ import time
 import urlparse
 import urllib
 import logging
+import sys
 from PIL import Image
 from nose.tools import set_trace
 from StringIO import StringIO

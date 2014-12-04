@@ -1,7 +1,8 @@
+import json
+from StringIO import StringIO
 from collections import defaultdict
 import os
 import re
-import shutil
 from nose.tools import set_trace
 
 from model import (
@@ -11,15 +12,17 @@ from model import (
     DataSource,
 )
 import subprocess
-import tmpfile
+import tempfile
 
-class GutenbergIllustratedDriver(object):
+class GutenbergIllustratedDataProvider(object):
     """Manage the command-line Gutenberg Illustrated program.
 
     Given the path to a Project Gutenberg HTML mirror, this class can
     invoke Gutenberg Illustrated to generate covers and then upload
     the covers to S3.
     """
+
+    IMAGE_EXTENSIONS = ['jpg', 'png', 'jpeg', 'gif']
 
     gutenberg_id_res = [
         re.compile(".*/([0-9]+)-h"),
@@ -28,8 +31,6 @@ class GutenbergIllustratedDriver(object):
 
     # These authors can be treated as if no author was specified
     ignorable_authors = ['Various']
-
-    font_filename = "AvenirNext-Bold-14.vlw"
 
     # These regular expressions match text that can be removed from a
     # title when calculating the short display title.
@@ -115,6 +116,23 @@ class GutenbergIllustratedDriver(object):
 
 
     @classmethod
+    def is_usable_image_name(cls, filename):
+        if not '.' in filename:
+            return False
+        name, extension = filename.lower().rsplit('.', 1)
+        if not extension in cls.IMAGE_EXTENSIONS:
+            return False
+
+        if name.endswith('thumb') or name.endswith('th') or name.endswith('tn'):
+            # No thumbnails.
+            return False
+
+        if 'cover' in name:
+            # Don't coverize something that's already a cover.
+            return False
+        return True
+
+    @classmethod
     def illustrations_from_file_list(cls, paths):
         seen_ids = set()
         images_for_work = defaultdict(list)
@@ -132,7 +150,7 @@ class GutenbergIllustratedDriver(object):
                 continue
 
             if i:
-                if container is not None:
+                if container is not None and cls.is_usable_image_name(i):
                     container.append(os.path.join(working_directory, i))
                 continue
 
@@ -156,34 +174,23 @@ class GutenbergIllustratedDriver(object):
         if container:
             yield gid, container
 
-    @classmethod
-    def data_from_file_list(cls, db, paths):
-        data_source = DataSource.lookup(db, DataSource.GUTENBERG)
-        seen_ids = set()
-        for (gid, illustrations) in cls.illustrations_from_file_list(paths):
-            edition = Edition.for_foreign_id(
-                db, data_source, Identifier.GUTENBERG_ID, gid,
-                create_if_not_exists=False)
-
-            if not edition:
-                # We don't know about this book.
-                gid = container = working_directory = None
-                continue
-
-            yield data
-            seen_ids.add(gid)
-
 
 class GutenbergIllustratedCoverageProvider(CoverageProvider):
+
+    DESTINATION_DIRECTORY = "Gutenberg Illustrated"
+    FONT_FILENAME = "AvenirNext-Bold-14.vlw"
 
     def __init__(self, _db, data_directory, binary_path):
 
         self.gutenberg_mirror = os.path.join(
-            data_directory, "gutenberg-mirror")
+            data_directory, "gutenberg-mirror") + "/"
         self.file_list = os.path.join(self.gutenberg_mirror, "ls-R")
         self.binary_path = binary_path
+        binary_directory = os.path.split(self.binary_path)[0]
         self.font_path = os.path.join(
-            sketch_directory, 'data', self.font_filename)
+            binary_directory, 'data', self.FONT_FILENAME)
+        self.output_directory = os.path.join(
+            data_directory, self.DESTINATION_DIRECTORY) + "/"
 
         input_source = DataSource.lookup(_db, DataSource.GUTENBERG)
         output_source = DataSource.lookup(
@@ -193,42 +200,75 @@ class GutenbergIllustratedCoverageProvider(CoverageProvider):
 
         # Load the illustration lists from the Gutenberg ls-R file.
         self.illustration_lists = dict()
-        for (gid, illustrations) in cls.illustrations_from_file_list(paths):
+        for (gid, illustrations) in GutenbergIllustratedDataProvider.illustrations_from_file_list(
+                open(self.file_list)):
             if gid not in self.illustration_lists:
                 self.illustration_lists[gid] = illustrations
-            if len(self.illustration_lists) > 10:
-                # Good enough for testing.
-                break
-        set_trace()
+
+    IMAGE_CUTOFF_SIZE = 10 * 1024
+
+    def apply_size_filter(self, illustrations):
+        large_enough = []
+        for i in illustrations:
+            path = os.path.join(self.gutenberg_mirror, i)
+            if not os.path.exists(path):
+                print "ERROR: could not find illustration %s" % path
+                continue
+            file_size = os.stat(path).st_size
+            if file_size < self.IMAGE_CUTOFF_SIZE:
+                print "INFO: %s is only %d bytes, not using it." % (
+                    path, file_size)
+                continue
+            large_enough.append(i)
+        return large_enough
 
     def process_edition(self, edition):
-        data = GutenbergIllustratedDriver.data_for_edition(edition)
+        data = GutenbergIllustratedDataProvider.data_for_edition(edition)
 
-        identifier = edition.identifier.identifier
+        identifier = edition.primary_identifier.identifier
         if identifier not in self.illustration_lists:
             # No illustrations for this edition. Nothing to do.
             return True
 
-        data['gid'] = identifier
+        data['identifier'] = identifier
+        illustrations = self.illustration_lists[identifier]
+
+        # The size filter is time-consuming, so we apply it here, when
+        # we know we're going to generate covers for this particular
+        # book, rather than ahead of time.
+        illustrations = self.apply_size_filter(illustrations)
+
+        if not illustrations:
+            # All illustrations were filtered out. Nothing to do.
+            return True
+
         data['illustrations'] = illustrations
         
-        # Create a temporary directory that will contain the input and
-        # the output.
-        temp_dir = tempfile.mkdtemp()
-        input_path = os.path.join(temp_dir, "input-%s.json" % identifier)
+        # Write the input to a temporary file.
+        fh, input_path = tempfile.mkstemp()
         json.dump(data, open(input_path, "w"))
+
+        # Make sure the output directory exists.
+        if not os.path.exists(self.output_directory):
+                         os.makedirs(self.output_directory)
+
         args = self.args_for(input_path)
-        os.cwd(temp_dir)
-        output_capture = StringIO()
-        set_trace()
+        fh, output_capture_path = tempfile.mkstemp()
+        output_capture = open(output_capture_path, "w")
+        print output_capture_path
+        print "Running"
+        print " ".join(args)
         subprocess.call(args, stdout=output_capture)
 
-        # Copy the generated images into the local data directory.
+        # We're done with the input file. Remove it.
+        os.remove(input_path)
+        return False
 
         # Associate 'cover' resources with the identifier
 
         # Upload the generated images to S3.
+        # TODO: only upload images that changed.
 
     def args_for(self, input_path):
-        return [self.binary_path, self.gutenberg_root, input_path,
-                self.font_path, self.font_path]
+        return [self.binary_path, self.gutenberg_mirror, self.output_directory,
+                input_path, self.font_path, self.font_path]

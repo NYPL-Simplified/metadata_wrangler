@@ -12,15 +12,31 @@ from tests.db import (
     DatabaseTest,
 )
 
+class TestIsUsableImageName(object):
+
+    def test_image_names(self):
+        usable = GutenbergIllustratedDataProvider.is_usable_image_name
+        eq_(True, usable("foo.jpg"))
+        eq_(True, usable("foo.png"))
+        eq_(True, usable("foo.gif"))
+        eq_(True, usable("foo.jpeg"))
+
+        eq_(False, usable("Thumbs.db"))
+        eq_(False, usable("foo.txt"))
+        eq_(False, usable("01th.jpg"))
+        eq_(False, usable("01tn.jpg"))
+        eq_(False, usable("01thumb.jpg"))
+        eq_(False, usable("cover.jpg"))
+
 class TestShortDisplayTitle(object):
 
     def _shorten(self, original, shortened):
         eq_(
-            shortened, GutenbergIllustratedDriver.short_display_title(original))
+            shortened, GutenbergIllustratedDataProvider.short_display_title(original))
 
     def _not_shortened(self, original):
         eq_(
-            None, GutenbergIllustratedDriver.short_display_title(original))
+            None, GutenbergIllustratedDataProvider.short_display_title(original))
 
     def test_shortened(self):
         self._shorten("The Financier: A Novel", "The Financier")
@@ -70,7 +86,7 @@ class TestAuthorString(object):
 
     def _author(self, original, expect):
         eq_(
-            expect, GutenbergIllustratedDriver.author_string(original))
+            expect, GutenbergIllustratedDataProvider.author_string(original))
 
     def test_author_string(self):
 
@@ -103,7 +119,7 @@ ipublogo.jpg
 """
         data = data.split("\n")
         illustrations = list(
-            GutenbergIllustratedDriver.illustrations_from_ls_filehandle(data))
+            GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(data))
         eq_(
             [('28862', ['./2/8/8/6/28862/28862-h/images/icover.jpg',
                         './2/8/8/6/28862/28862-h/images/ipublogo.jpg'])],
@@ -122,7 +138,7 @@ images
 02.png"""
         data = data.split("\n")
         illustrations = list(
-            GutenbergIllustratedDriver.illustrations_from_ls_filehandle(data))
+            GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(data))
         eq_(
             [
                 ('17022', ['./1/7/0/2/17022/17022-h/0501051h-images/fda-01.jpg']),
@@ -146,6 +162,6 @@ p0723.png
 p0724.png
 """
         data = data.split("\n")
-        illustrations = GutenbergIllustratedDriver.illustrations_from_ls_filehandle(
+        illustrations = GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(
             data)
         eq_([], list(illustrations))
