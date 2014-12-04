@@ -302,7 +302,6 @@ class GutenbergIllustratedCoverageProvider(CoverageProvider):
             to_upload.append((path, resource.final_url))
 
         self.uploader.upload_resources(to_upload)
-        set_trace()
         return True
 
     def args_for(self, input_path):
