@@ -10,6 +10,7 @@ site.addsitedir(os.path.join(d, ".."))
 from integration.amazon import AmazonAPI
 from integration.appeal import (
     ClassifierFactory,
+    FeatureCounter,
 )
 from model import (
     DataSource,
@@ -44,6 +45,7 @@ class AppealCalculator(object):
     def calculate_for_works(self, q, force=False):
         if not force:
             q = q.filter(Work.primary_appeal==None)
+        feature_counter = FeatureCounter(self.feature_names)
         for work in q:
             print "BEFORE pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
                 work.primary_appeal, work.secondary_appeal,
@@ -52,8 +54,8 @@ class AppealCalculator(object):
             old_language = work.appeal_language
             old_setting = work.appeal_setting
 
-            work.calculate_appeals(
-                self.amazon_api, self.classifier, self.feature_names)
+            feature_counter.calculate_appeals_for_work(
+                work, self.amazon_api, self.classifier)
             print "AFTER pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
                 work.primary_appeal, work.secondary_appeal,
                 work.appeal_character, work.appeal_language,

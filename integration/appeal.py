@@ -8,6 +8,11 @@ from collections import Counter
 
 from textblob import TextBlob
 
+from core.model import (
+    Identifier,
+    Session,
+)
+
 class WakaDialect(Dialect):
     delimiter=","
     doublequote = False
@@ -328,3 +333,23 @@ class FeatureCounter(Counter):
             return x
         else:
             return [self[i] for i in self.features]
+
+    def calculate_appeals_for_work(self, work, review_source, classifier):
+        _db = Session.object_session(work)
+        seen_reviews = set()
+        ids = work.all_identifier_ids()
+        identifiers = _db.query(Identifier).filter(
+            Identifier.type.in_([Identifier.ISBN, Identifier.ASIN])).filter(
+                Identifier.id.in_(ids))
+        for identifier in identifiers:
+            for review_title, review in review_source.fetch_reviews(identifier):
+                if review not in seen_reviews:
+                    self.add_counts(review_title)
+                    self.add_counts(review)
+                    seen_reviews.add(review)
+        print " Found %s distinct reviews" % len(seen_reviews)
+        if seen_reviews:
+            appeals = self.predict_proba(self.row())[0]
+        else:
+            appeals = [0,0,0,0]
+        work.assign_appeals(*appeals)
