@@ -691,8 +691,10 @@ class TestCirculationEvent(DatabaseTest):
         eq_(Identifier.OVERDRIVE_ID, event.license_pool.identifier.type)
         eq_("{1-2-3}", event.license_pool.identifier.identifier)
 
-        # The number of licenses has been set to the new value.
-        eq_(2, event.license_pool.licenses_owned)
+        # The number of licenses has not been set to the new value.
+        # The creator of a circulation event is responsible for also
+        # updating the dataset.
+        eq_(0, event.license_pool.licenses_owned)
 
 
 class TestWorkQuality(DatabaseTest):

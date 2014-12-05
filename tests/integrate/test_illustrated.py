@@ -5,7 +5,7 @@ import pkgutil
 import StringIO
 from nose.tools import set_trace, eq_ 
 from integration.illustrated import (
-    GutenbergIllustratedDriver,
+    GutenbergIllustratedDataProvider,
 )
 
 from tests.db import (
@@ -119,10 +119,9 @@ ipublogo.jpg
 """
         data = data.split("\n")
         illustrations = list(
-            GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(data))
+            GutenbergIllustratedDataProvider.illustrations_from_file_list(data))
         eq_(
-            [('28862', ['./2/8/8/6/28862/28862-h/images/icover.jpg',
-                        './2/8/8/6/28862/28862-h/images/ipublogo.jpg'])],
+            [('28862', ['./2/8/8/6/28862/28862-h/images/ipublogo.jpg'])],
             illustrations)
 
     def test_images_gathered_multiple(self):
@@ -138,7 +137,7 @@ images
 02.png"""
         data = data.split("\n")
         illustrations = list(
-            GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(data))
+            GutenbergIllustratedDataProvider.illustrations_from_file_list(data))
         eq_(
             [
                 ('17022', ['./1/7/0/2/17022/17022-h/0501051h-images/fda-01.jpg']),
@@ -162,6 +161,6 @@ p0723.png
 p0724.png
 """
         data = data.split("\n")
-        illustrations = GutenbergIllustratedDataProvider.illustrations_from_ls_filehandle(
+        illustrations = GutenbergIllustratedDataProvider.illustrations_from_file_list(
             data)
         eq_([], list(illustrations))

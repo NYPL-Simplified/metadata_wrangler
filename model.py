@@ -1360,7 +1360,6 @@ class Edition(Base):
         other_authors = []
         for x in self.contributions:
             if not primary_author and x.role == Contributor.PRIMARY_AUTHOR_ROLE:
-                print "PRIMARY", primary_author
                 primary_author = x.contributor
             elif x.role in Contributor.AUTHOR_ROLES:
                 other_authors.append(x.contributor)

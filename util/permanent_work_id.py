@@ -1,8 +1,9 @@
 import md5
 import re
 import struct
+import unicodedata
 
-class Calculator(object):
+class WorkIDCalculator(object):
 
     @classmethod
     def permanent_id(self, normalized_title, normalized_author, 
@@ -11,7 +12,7 @@ class Calculator(object):
         for i in (normalized_title, normalized_author, grouping_category):
             if i == '' or i is None:
                 i = '--null--'
-            digest.update(i.encode("ascii"))
+            digest.update(i.encode("utf-8"))
         permanent_id = digest.hexdigest().zfill(32)
         permanent_id = "-".join([
             permanent_id[:8], permanent_id[8:12], permanent_id[12:16],
@@ -24,7 +25,7 @@ class Calculator(object):
     distributedByRemoval = re.compile("^distributed (?:in.*\\s)?by\\s(.+)$")
     initialsFix = re.compile("(?<=[A-Z])\\.(?=(\\s|[A-Z]|$))")
     apostropheStrip = re.compile("'s")
-    specialCharacterStrip = re.compile("[^\\w\\s]")
+    specialCharacterStrip = re.compile("[^\\w\\d\\s]", re.U)
     consecutiveCharacterStrip = re.compile("\\s{2,}")
     bracketedCharacterStrip = re.compile("\\[(.*?)\\]")
     commonAuthorSuffixPattern = re.compile("^(.+?)\\s(?:general editor|editor|editor in chief|etc|inc|inc\\setc|co|corporation|llc|partners|company|home entertainment)$")
@@ -125,6 +126,9 @@ class Calculator(object):
 
     @classmethod
     def normalize_author(cls, author):
+        if author is None:
+            author = u''
+        author = unicodedata.normalize("NFKD", author)
         groupingAuthor = cls.initialsFix.sub(" ", author)
         groupingAuthor = cls.bracketedCharacterStrip.sub("", groupingAuthor)
         groupingAuthor = cls.specialCharacterStrip.sub(
@@ -195,7 +199,10 @@ class Calculator(object):
 
     subtitleIndicator = re.compile("[:;/=]") ;
     @classmethod
-    def normalize_title(cls, full_title, num_non_filing_characters):
+    def normalize_title(cls, full_title, num_non_filing_characters=0):
+        if full_title is None:
+            full_title = u''
+        author = unicodedata.normalize("NFKD", full_title)
         if (num_non_filing_characters > 0
             and num_non_filing_characters < len(full_title)):
             title = full_title[:num_non_filing_characters]
