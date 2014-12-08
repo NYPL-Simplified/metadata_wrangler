@@ -286,6 +286,22 @@ class Classifier(object):
     audience, and a fiction status.
     """
 
+    DDC = "DDC"
+    LCC = "LCC"
+    LCSH = "LCSH"
+    FAST = "FAST"
+    OVERDRIVE = "Overdrive"
+    TAG = "tag"   # Folksonomic tags.
+    GUTENBERG_BOOKSHELF = "gutenberg:bookshelf"
+    TOPIC = "schema:Topic"
+    PLACE = "schema:Place"
+    PERSON = "schema:Person"
+    ORGANIZATION = "schema:Organization"
+
+    AUDIENCE_ADULT = "Adult"
+    AUDIENCE_YOUNG_ADULT = "Young Adult"
+    AUDIENCE_CHILDREN = "Children"
+
     # TODO: This is currently set in model.py in the Subject class.
     classifiers = dict()
 

@@ -9,6 +9,7 @@ from model import (
 from sqlalchemy.orm.session import Session
 
 class DBInfo(object):
+    set_trace()
     connection = None
     engine = None
     transaction = None
@@ -36,6 +37,7 @@ def setup():
 
 def teardown():
     # Roll back the top level transaction and disconnect from the database
+    set_trace()
     DBInfo.transaction.rollback()
     DBInfo.connection.close()
     DBInfo.engine.dispose()

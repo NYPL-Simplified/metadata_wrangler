@@ -17,13 +17,15 @@ from model import (
     get_one_or_create
 )
 from classifier import Classifier
-from tests import DBInfo
 
+from tests import DBInfo
 
 class DatabaseTest(object):
     def setup(self):
+        print DBInfo.connection
         self.__transaction = DBInfo.connection.begin_nested()
         self._db = Session(DBInfo.connection)
+        set_trace()
         self.counter = 0
 
     def teardown(self):
