@@ -1,7 +1,7 @@
 from nose.tools import set_trace, eq_
 import datetime
 import pkgutil
-from model import (
+from core.model import (
     CirculationEvent,
     Contributor,
     DataSource,

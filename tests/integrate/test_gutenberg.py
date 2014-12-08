@@ -4,7 +4,7 @@ import datetime
 import pkgutil
 import StringIO
 from nose.tools import set_trace, eq_ 
-from model import (
+from core.model import (
     Contributor,
     DataSource,
     Resource,
@@ -18,7 +18,7 @@ from integration.gutenberg import (
     GutenbergRDFExtractor,
 )
 
-from tests.db import (
+from core.testing import (
     DatabaseTest,
 )
 

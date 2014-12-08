@@ -1,7 +1,7 @@
 
 from nose.tools import set_trace, eq_
 
-from tests.db import (
+from core.testing import (
     DatabaseTest,
 )
 
@@ -10,7 +10,7 @@ from integration.openlibrary import (
     OpenLibraryMonitor,
 )
 
-from model import (
+from core.model import (
     DataSource,
     Resource,
     Identifier,

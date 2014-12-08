@@ -20,7 +20,7 @@ from integration.overdrive import (
     OverdriveAPI
 )
 
-from model import (
+from core.model import (
     get_one_or_create,
     DataSource,
     production_session,
@@ -44,8 +44,8 @@ import urllib
 from util import LanguageCodes
 from util import problem_detail
 from integration.millenium_patron import DummyMilleniumPatronAPI as authenticator
-import classifier as genres
-from classifier import (
+import core.classifier as genres
+from core.classifier import (
     Classifier,
     GenreData,
 )

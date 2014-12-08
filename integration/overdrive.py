@@ -15,7 +15,7 @@ from StringIO import StringIO
 
 from sqlalchemy.orm.session import Session
 
-from model import (
+from core.model import (
     get_one_or_create,
     CirculationEvent,
     CoverageProvider,

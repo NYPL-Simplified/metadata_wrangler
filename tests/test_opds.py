@@ -5,13 +5,13 @@ from nose.tools import (
     set_trace,
 )
 
-from tests.db import (
+from core.testing import (
     DatabaseTest,
 )
 
 from circulation import app
 
-from model import (
+from core.model import (
     get_one_or_create,
     DataSource,
     Genre,
@@ -28,7 +28,10 @@ from opds import (
     URLRewriter
 )
 
-from classifier import Classifier, Fantasy
+from core.classifier import (
+    Classifier,
+    Fantasy,
+)
 
 class TestURLRewriter(object):
 

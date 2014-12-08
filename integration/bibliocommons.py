@@ -8,7 +8,7 @@ import os
 import json
 import urlparse
 
-from model import (
+from core.model import (
     DataSource,
     Representation,
 )

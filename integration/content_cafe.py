@@ -6,7 +6,7 @@ import requests
 from nose.tools import set_trace
 
 from sqlalchemy import and_
-from model import (
+from core.model import (
     DataSource,
     Resource,
     Identifier,

@@ -2,7 +2,7 @@ from nose.tools import set_trace
 import datetime
 import time
 
-from model import (
+from core.model import (
     get_one_or_create,
     Timestamp,
 )

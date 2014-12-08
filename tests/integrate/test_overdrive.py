@@ -5,13 +5,13 @@ from nose.tools import (
 )
 import pkgutil
 import json
-from tests.db import DatabaseTest
+from core.testing import DatabaseTest
 from integration.overdrive import (
     OverdriveAPI,
     OverdriveRepresentationExtractor,
     OverdriveBibliographicMonitor,
 )
-from model import (
+from core.model import (
     DataSource,
     Measurement,
     Resource,

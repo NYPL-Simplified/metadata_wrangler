@@ -10,7 +10,7 @@ from lxml import etree
 from integration import (
     XMLParser,
 )
-from model import (
+from core.model import (
     CoverageProvider,
     DataSource,
     Equivalency,

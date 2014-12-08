@@ -8,7 +8,7 @@ from integration import XMLParser
 from integration.authenticator import Authenticator
 import os
 import re
-from model import (
+from core.model import (
     get_one,
     get_one_or_create,
     Patron,

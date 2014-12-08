@@ -13,7 +13,7 @@ from nose.tools import set_trace
 
 from sqlalchemy import or_
 
-from model import (
+from core.model import (
     CirculationEvent,
     Contributor,
     CoverageProvider,

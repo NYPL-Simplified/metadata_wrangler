@@ -14,7 +14,7 @@ from model import (
     Edition,
 )
 
-from tests.db import (
+from testing import (
     DatabaseTest,
 )
 

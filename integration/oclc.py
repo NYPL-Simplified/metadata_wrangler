@@ -18,7 +18,7 @@ from integration import (
     XMLParser,
 )
 from integration import FilesystemCache
-from model import (
+from core.model import (
     Contributor,
     CoverageProvider,
     get_one,

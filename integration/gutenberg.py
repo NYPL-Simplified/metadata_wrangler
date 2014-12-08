@@ -19,7 +19,7 @@ from nose.tools import set_trace
 import rdflib
 from rdflib import Namespace
 
-from model import (
+from core.model import (
     get_one_or_create,
     CirculationEvent,
     CoverageProvider,

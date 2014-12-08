@@ -10,6 +10,7 @@
 # select count(identifiers.id) as c, subjects.type, substr(subjects.identifier, 0, 20) as i, substr(subjects.name, 0, 20) as n from workidentifiers join classifications on workidentifiers.id=classifications.work_identifier_id join subjects on classifications.subject_id=subjects.id where subjects.genre_id is null and subjects.fiction is null group by subjects.type, i, n order by c desc;
 
 import json
+import os
 import pkgutil
 from collections import (
     Counter,
@@ -18,6 +19,9 @@ from collections import (
 from nose.tools import set_trace
 import re
 from sqlalchemy.sql.expression import and_
+
+base_dir = os.path.split(__file__)[0]
+resource_dir = os.path.join(base_dir, "resources")
 
 # This is the large-scale structure of our classification system,
 # taken mostly from Zola. 
@@ -542,8 +546,8 @@ class OverdriveClassifier(Classifier):
 
 class DeweyDecimalClassifier(Classifier):
 
-    NAMES = json.loads(
-        pkgutil.get_data("resources", "dewey_1000.json"))
+    NAMES = json.load(
+        open(os.path.join(resource_dir, "dewey_1000.json")))
 
     # Add some other values commonly found in MARC records.
     NAMES["B"] = "Biography"
@@ -766,8 +770,7 @@ class LCCClassifier(Classifier):
         BP=Religion_Spirituality,
     )
 
-    NAMES = json.loads(
-        pkgutil.get_data("resources", "lcc_one_level.json"))
+    NAMES = json.load(open(os.path.join(resource_dir, "lcc_one_level.json")))
 
     @classmethod
     def scrub_identifier(cls, identifier):

@@ -8,7 +8,7 @@ from integration.illustrated import (
     GutenbergIllustratedDataProvider,
 )
 
-from tests.db import (
+from core.testing import (
     DatabaseTest,
 )
 

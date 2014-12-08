@@ -7,14 +7,14 @@ from integration.oclc import (
 )
 from nose.tools import set_trace, eq_
 
-from model import (
+from core.model import (
     Contributor,
     Subject,
     Identifier,
     Edition,
     )
 
-from tests.db import (
+from core.testing import (
     DatabaseTest,
 )
 
