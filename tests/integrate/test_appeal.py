@@ -1,4 +1,4 @@
-from integration.appeal import FeatureCounter
+from ..integration.appeal import FeatureCounter
 from nose.tools import (
     assert_raises_regexp,
     eq_,

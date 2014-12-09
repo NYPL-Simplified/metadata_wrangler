@@ -2,14 +2,14 @@
 from nose.tools import set_trace, eq_
 import pkgutil
 
-from core.testing import DatabaseTest
-from integration.amazon import (
+from ..core.testing import DatabaseTest
+from ..integration.amazon import (
     AmazonBibliographicParser,
     AmazonReviewParser,
     AmazonCoverageProvider,
 )
 
-from core.model import (
+from ..core.model import (
     Identifier,
     Measurement,
     Subject,

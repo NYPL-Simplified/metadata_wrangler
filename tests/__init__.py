@@ -1,8 +1,6 @@
 import sys, os
 from nose.tools import set_trace
 
-set_trace()
-
 from ..core.testing import (
     DatabaseTest,
     _setup,

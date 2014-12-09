@@ -7,8 +7,8 @@ import datetime
 import json
 import pkgutil
 
-from core.testing import DatabaseTest
-from integration.bibliocommons import BibliocommonsAPI
+from ..core.testing import DatabaseTest
+from ..integration.bibliocommons import BibliocommonsAPI
 
 class DummyBibliocommonsAPI(BibliocommonsAPI):
 
