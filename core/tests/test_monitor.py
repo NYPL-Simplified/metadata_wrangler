@@ -1,11 +1,11 @@
 from nose.tools import eq_, set_trace
 import datetime
 
-from core.testing import (
+from testing import (
     DatabaseTest,
 )
 
-from core.model import Timestamp
+from model import Timestamp
 
 from monitor import Monitor
 
