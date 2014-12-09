@@ -5,11 +5,15 @@ from nose.tools import (
     set_trace,
 )
 
-from core.testing import (
+from testing import (
     DatabaseTest,
 )
 
-from core.model import (
+from flask import Flask
+app = Flask("Unit test test app")
+
+
+from model import (
     get_one_or_create,
     DataSource,
     Genre,
@@ -19,19 +23,17 @@ from core.model import (
     Work,
 )
 
-from core.opds import (
+from opds import (
     OPDSFeed,
     AcquisitionFeed,
     NavigationFeed,
     URLRewriter
 )
 
-from core.classifier import (
+from classifier import (
     Classifier,
     Fantasy,
 )
-
-from circulation import app
 
 class TestURLRewriter(object):
 

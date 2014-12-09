@@ -33,8 +33,8 @@ from core.model import (
     WorkFeed,
     Edition,
     )
-from opensearch import OpenSearchDocument
-from opds import (
+from core.opensearch import OpenSearchDocument
+from core.opds import (
     E,
     AcquisitionFeed,
     NavigationFeed,

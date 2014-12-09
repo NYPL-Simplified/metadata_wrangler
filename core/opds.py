@@ -16,7 +16,7 @@ from lxml import builder, etree
 
 #d = os.path.split(__file__)[0]
 #site.addsitedir(os.path.join(d, ".."))
-from core.model import (
+from model import (
     DataSource,
     Resource,
     Identifier,
