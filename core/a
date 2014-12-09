@@ -1,0 +1,89 @@
+EEEEEEE
+======================================================================
+ERROR: core.testing (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.testing
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.testing
+
+
+======================================================================
+ERROR: core.tests.test_classification (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_classification
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_classification
+
+
+======================================================================
+ERROR: core.tests.test_equivalency (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_equivalency
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_equivalency
+
+
+======================================================================
+ERROR: core.tests.test_summary_evaluator (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_summary_evaluator
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_summary_evaluator
+
+
+======================================================================
+ERROR: core.tests.test_measurement (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_measurement
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_measurement
+
+
+======================================================================
+ERROR: core.tests.test_util (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_util
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_util
+
+
+======================================================================
+ERROR: core.tests.test_model (nose2.loader.ModuleImportFailure)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: core.tests.test_model
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose2/plugins/loader/discovery.py", line 189, in _find_tests_in_file
+    module = util.module_from_name(name)
+  File "/usr/lib/python2.7/dist-packages/nose2/util.py", line 80, in module_from_name
+    __import__(name)
+ImportError: No module named core.tests.test_model
+
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.001s
+
+FAILED (errors=7)
