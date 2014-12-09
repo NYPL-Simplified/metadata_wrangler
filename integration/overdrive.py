@@ -1,4 +1,4 @@
-from ..core.integration.overdrive import (
+from ..core.overdrive import (
     OverdriveAPI
 )
 

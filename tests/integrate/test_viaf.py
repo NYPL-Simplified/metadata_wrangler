@@ -5,15 +5,15 @@ from integration.oclc import (
 )
 from nose.tools import set_trace, eq_
 
-from core.model import (
+from ...core.model import (
     Contributor,
     )
 
-from core.testing import (
+from ...core.testing import (
     DatabaseTest,
 )
 
-from integration.viaf import (
+from ...integration.viaf import (
     VIAFParser,
     VIAFClient,
 )
