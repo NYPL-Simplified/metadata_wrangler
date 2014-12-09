@@ -5,7 +5,6 @@ from cStringIO import StringIO
 
 import requests
 from nose.tools import set_trace
-from core.xmlparser import XMLParser
 
 class FilesystemCache(object):
 

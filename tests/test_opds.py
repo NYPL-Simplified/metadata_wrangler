@@ -5,11 +5,11 @@ from nose.tools import (
     set_trace,
 )
 
-from core.testing import (
+from . import (
     DatabaseTest,
 )
 
-from core.model import (
+from ..core.model import (
     get_one_or_create,
     DataSource,
     Genre,
@@ -19,14 +19,14 @@ from core.model import (
     Work,
 )
 
-from core.opds import (
+from ..core.opds import (
     OPDSFeed,
     AcquisitionFeed,
     NavigationFeed,
     URLRewriter
 )
 
-from core.classifier import (
+from ..core.classifier import (
     Classifier,
     Fantasy,
 )
