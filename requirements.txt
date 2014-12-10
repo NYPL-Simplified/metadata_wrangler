@@ -10,3 +10,6 @@ isbnlib
 pillow
 sqlalchemy
 lxml
+textblob
+pyld
+feedparser
