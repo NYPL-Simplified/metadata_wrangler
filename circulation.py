@@ -590,11 +590,9 @@ def feed(lane):
         chance = random.random()
         feed, created_at = feed_cache.get(key)
         elapsed = time.time()-created_at
-        # An old feed is almost certain to be regenerated.
-        if elapsed > 1800:
-            chance = chance / 5
-        elif elapsed > 3600:
-            chance = 0
+        # An old feed is more likely to be regenerated.
+        if elapsed > 3600:
+            chance = chance / 2
         if chance > 0.10:
             # Return the cached version.
             return feed

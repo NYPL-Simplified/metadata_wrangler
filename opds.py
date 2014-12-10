@@ -382,7 +382,7 @@ class AcquisitionFeed(OPDSFeed):
 
         license_tag = self.license_tag(active_license_pool)
         if license_tag is not None:
-            entry.extend([license_tag])
+            entry.extend(license_tag)
 
         return entry
 
@@ -409,8 +409,7 @@ class AcquisitionFeed(OPDSFeed):
         if license_pool.open_access:
             return None
 
-        licenses = E._makeelement("{%s}licenses" % opds_41_ns)
-        license = E._makeelement("{%s}license" % opds_41_ns)
+        license = []
         concurrent_lends = E._makeelement(
             "{%s}concurrent_lends" % opds_41_ns)
         license.extend([concurrent_lends])
@@ -425,8 +424,7 @@ class AcquisitionFeed(OPDSFeed):
         license.extend([active_holds])
         active_holds.text = str(license_pool.patrons_in_hold_queue)
 
-        licenses.extend([license])
-        return licenses
+        return license
 
 class NavigationFeed(OPDSFeed):
 
