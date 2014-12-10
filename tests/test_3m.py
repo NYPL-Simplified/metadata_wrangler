@@ -16,8 +16,9 @@ class TestItemListParser(object):
     base_path = os.path.split(__file__)[0]
     resource_path = os.path.join(base_path, "files", "3m")
 
-    def get_data(self, filename):
-        path = os.path.join(self.resource_path, filename)
+    @classmethod
+    def get_data(cls, filename):
+        path = os.path.join(cls.resource_path, filename)
         return open(path).read()
 
     def text_parse_author_string(cls):
@@ -26,7 +27,7 @@ class TestItemListParser(object):
         eq_(authors, ["Walsh, Jill Paton", "Sayers, Dorothy L."])
 
     def test_item_list(cls):
-        data = self.get_data("3m_item_metadata_list.xml")
+        data = cls.get_data("item_metadata_list.xml")
         
         data = [(id, raw, cooked)
                 for (id, raw,cooked)  in ItemListParser().parse(data)]

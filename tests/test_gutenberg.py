@@ -65,7 +65,7 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
         base_path = os.path.split(__file__)[0]
         resource_path = os.path.join(base_path, "files", "gutenberg")
         path = os.path.join(resource_path, filename)
-        data = open(path).read()
+        return open(path).read()
 
     def test_rdf_parser(self):
         """Parse RDF into a Edition."""
