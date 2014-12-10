@@ -7,10 +7,10 @@ import os
 import re
 from cStringIO import StringIO
 from lxml import etree 
-from integration import (
+from ..core.util.xmlparser import (
     XMLParser,
 )
-from core.model import (
+from ..core.model import (
     CoverageProvider,
     DataSource,
     Equivalency,
@@ -20,8 +20,6 @@ from core.model import (
     Subject,
 )
 from sqlalchemy import alias
-
-from pdb import set_trace
 
 class AmazonAPI(object):
     

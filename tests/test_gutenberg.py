@@ -4,7 +4,7 @@ import datetime
 import pkgutil
 import StringIO
 from nose.tools import set_trace, eq_ 
-from core.model import (
+from ..core.model import (
     Contributor,
     DataSource,
     Resource,
@@ -13,12 +13,12 @@ from core.model import (
     Edition,
     get_one_or_create,
 )
-from integration.gutenberg import (
+from ..integration.gutenberg import (
     GutenbergAPI,
     GutenbergRDFExtractor,
 )
 
-from core.testing import (
+from . import (
     DatabaseTest,
 )
 
@@ -62,11 +62,15 @@ class TestGutenbergAPI(DatabaseTest):
 
 class TestGutenbergMetadataExtractor(DatabaseTest):
 
+    def sample_data(self, filename):
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "gutenberg")
+        path = os.path.join(resource_path, filename)
+        data = open(path).read()
+
     def test_rdf_parser(self):
         """Parse RDF into a Edition."""
-        fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integrate",
-            "files/gutenberg-17.rdf"))
+        fh = StringIO.StringIO(self.sample_data("gutenberg-17.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "17", fh)
 
         # Verify that the Edition is hooked up to the correct
@@ -119,17 +123,13 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
 
 
     def test_unicode_characters_in_title(self):
-        fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integrate",
-            "files/gutenberg-10130.rdf"))
+        fh = StringIO.StringIO(self.sample_data("gutenberg-10130.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "10130", fh)
         eq_(u"The Works of Charles and Mary Lamb — Volume 3", book.title)
         eq_("Books for Children", book.subtitle)
 
     def test_includes_cover_image(self):
-        fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integrate",
-            "files/gutenberg-40993.rdf"))
+        fh = StringIO.StringIO(self.sample_data("gutenberg-40993.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "40993", fh)
 
         identifier = book.primary_identifier
@@ -141,18 +141,14 @@ class TestGutenbergMetadataExtractor(DatabaseTest):
     def test_rdf_file_describing_no_books(self):
         """GutenbergRDFExtractor can handle an RDF document that doesn't
         describe any books."""
-        fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integrate",
-            "files/gutenberg-0.rdf"))
+        fh = StringIO.StringIO(self.sample_data("gutenberg-0.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "0", fh)
         eq_(None, book)
         eq_(False, new)
 
     def test_audio_book(self):
         """An audio book is loaded with its medium set to AUDIO."""
-        fh = StringIO.StringIO(pkgutil.get_data(
-            "tests.integrate",
-            "files/gutenberg/pg28794.rdf"))
+        fh = StringIO.StringIO(self.sample_data("pg28794.rdf"))
         book, new = GutenbergRDFExtractor.book_in(self._db, "28794", fh)
         eq_(Edition.AUDIO_MEDIUM, book.medium)
 

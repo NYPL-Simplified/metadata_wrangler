@@ -1,39 +1,29 @@
-import os
-import sys
-import site
-import re
-
+from ..integration.appeal import FeatureCounter
 from nose.tools import (
     assert_raises_regexp,
     eq_,
     set_trace,
 )
 
-from ..core.testing import (
-    DatabaseTest,
-)
+class TestFeatureCounter(object):
 
-from ..core.model import (
-    Work,
-)
+    def test_basic(self):
+        counter = FeatureCounter(["a", "b", "c"])
+        counter.add_counts("a b c d b a a a ab ac addd")
+        eq_([4, 2, 1], counter.row())
 
-class TestAppealAssignment(DatabaseTest):
+    def test_multiword(self):
+        counter = FeatureCounter(["world", "superb world", "awful world"])
+        eq_(["world", ("superb", "world"), ("awful", "world")],
+            counter.features)
+        counter.add_counts("the world is a superb world, a superb world indeed.")
+        counter.add_counts("An Awful World, But What A World!")
+        eq_([5, 2, 1], counter.row())
 
-    def test_assign_appeals(self):
-        work = self._work()
-        work.assign_appeals(0.50, 0.25, 0.20, 0.05)
-        eq_(0.50, work.appeal_character)
-        eq_(0.25, work.appeal_language)
-        eq_(0.20, work.appeal_setting)
-        eq_(0.05, work.appeal_story)
-        eq_(Work.CHARACTER_APPEAL, work.primary_appeal)
-        eq_(Work.LANGUAGE_APPEAL, work.secondary_appeal)
 
-        # Increase the cutoff point so that there is no secondary appeal.
-        work.assign_appeals(0.50, 0.25, 0.20, 0.05, cutoff=0.30)
-        eq_(0.50, work.appeal_character)
-        eq_(0.25, work.appeal_language)
-        eq_(0.20, work.appeal_setting)
-        eq_(0.05, work.appeal_story)
-        eq_(Work.CHARACTER_APPEAL, work.primary_appeal)
-        eq_(Work.NO_APPEAL, work.secondary_appeal)
+    def test_multiword_limited_to_two_words(self):
+        assert_raises_regexp(
+            ValueError,
+            "'has', 'three', 'words'] has more than two words",
+            FeatureCounter, ["this one", "has three words"]
+        )

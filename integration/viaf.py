@@ -9,7 +9,7 @@ from sqlalchemy.sql.expression import (
     or_,
 )
 
-from core.model import (
+from ..core.model import (
     Contributor,
     Contribution,
     DataSource,
@@ -17,7 +17,7 @@ from core.model import (
     Representation,
 )
 
-from integration import (
+from ..core.util.xmlparser import (
     XMLParser,
 )
 

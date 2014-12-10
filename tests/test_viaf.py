@@ -1,19 +1,15 @@
-import pkgutil
-import StringIO
-from integration.oclc import (
-    OCLCXMLParser,
-)
+import os
 from nose.tools import set_trace, eq_
 
-from ...core.model import (
+from ..core.model import (
     Contributor,
     )
 
-from ...core.testing import (
+from . import (
     DatabaseTest,
 )
 
-from ...integration.viaf import (
+from ..integration.viaf import (
     VIAFParser,
     VIAFClient,
 )
@@ -24,11 +20,15 @@ class TestNameParser(DatabaseTest):
         super(TestNameParser, self).setup()
         self.parser = VIAFParser()
 
+    def sample_data(self, filename):
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "viaf")
+        path = os.path.join(resource_path, filename)
+        return open(path).read()
+
     def test_entry_with_wikipedia_name(self):
 
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/will_eisner.xml")
+        xml = self.sample_data("will_eisner.xml")
 
         contributor, new = self._contributor(None)
 
@@ -39,9 +39,7 @@ class TestNameParser(DatabaseTest):
         eq_("Will_Eisner", wikipedia)
 
     def test_entry_without_wikipedia_name(self):
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/palmer.xml")
+        xml = self.sample_data("palmer.xml")
 
         viaf, display, family, wikipedia = self.parser.parse(xml)
         eq_("2506349", viaf)
@@ -50,9 +48,7 @@ class TestNameParser(DatabaseTest):
         eq_(None, wikipedia)
 
     def test_simple_corporate_entry(self):
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/aquarius.xml")
+        xml = self.sample_data("aquarius.xml")
         viaf, display, family, wikipedia = self.parser.parse(xml)
         eq_("159591140", viaf)
         eq_("Aquarius Paris", display)
@@ -63,9 +59,7 @@ class TestNameParser(DatabaseTest):
         # Even if we pass in "Sam Clemens" as the working name,
         # the family name we get back is "Twain", because the Wikipedia
         # name takes precedence over the working name.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/mark_twain.xml")
+        xml = self.sample_data("mark_twain.xml")
 
         viaf, display, family, wikipedia = self.parser.parse(
             xml, "Sam Clemens")
@@ -75,9 +69,7 @@ class TestNameParser(DatabaseTest):
         eq_("Mark_Twain", wikipedia)
 
         # Let's try again without the Wikipedia name.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/mark_twain_no_wikipedia.xml")
+        xml = self.sample_data("mark_twain_no_wikipedia.xml")
 
         # The author is better known as Mark Twain, so this 
         # name wins by popularity if we don't specify a name going in.
@@ -101,9 +93,7 @@ class TestNameParser(DatabaseTest):
         # J. J.". There are lots of results but none of them is the
         # correct one. This test verifies that we ignore all the
         # incorrect results.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/howard_j_j.xml")
+        xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
         contributor, new = self._contributor(name)
         viaf, display_name, family_name, wikipedia_name = self.parser.info(
@@ -116,9 +106,7 @@ class TestNameParser(DatabaseTest):
         eq_(None, wikipedia_name)
 
     def test_multiple_results_with_success(self):
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/lancelyn_green.xml")
+        xml = self.sample_data("lancelyn_green.xml")
         name = "Green, Roger Lancelyn"
         contributor, new = self._contributor(name)
         viaf, display_name, family_name, wikipedia_name = self.parser.info(
@@ -132,9 +120,7 @@ class TestNameParser(DatabaseTest):
         # This author's VIAF entry doesn't have any name information
         # we don't already have, but it does have a VIAF entry, and we
         # pick that up.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/viaf/kate_lister.xml")
+        xml = self.sample_data("kate_lister.xml")
         name = "Lister, Kate"
         contributor, new = self._contributor(name)
         viaf, display_name, family_name, wikipedia_name = self.parser.info(

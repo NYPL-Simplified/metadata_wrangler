@@ -4,11 +4,11 @@ import datetime
 import pkgutil
 import StringIO
 from nose.tools import set_trace, eq_ 
-from integration.illustrated import (
+from ..integration.illustrated import (
     GutenbergIllustratedDataProvider,
 )
 
-from core.testing import (
+from . import (
     DatabaseTest,
 )
 

@@ -1,16 +1,16 @@
 
 from nose.tools import set_trace, eq_
 
-from core.testing import (
+from . import (
     DatabaseTest,
 )
 
-from integration.openlibrary import (
+from ..integration.openlibrary import (
     OpenLibraryIDMapping,
     OpenLibraryMonitor,
 )
 
-from core.model import (
+from ..core.model import (
     DataSource,
     Resource,
     Identifier,

@@ -2,17 +2,16 @@
 from nose.tools import set_trace, eq_
 import pkgutil
 
-from ..core.testing import DatabaseTest
-from ..integration.amazon import (
-    AmazonBibliographicParser,
-    AmazonReviewParser,
-    AmazonCoverageProvider,
-)
-
+from . import DatabaseTest
 from ..core.model import (
     Identifier,
     Measurement,
     Subject,
+)
+from ..integration.amazon import (
+    AmazonBibliographicParser,
+    AmazonReviewParser,
+    AmazonCoverageProvider,
 )
 
 class DummyAmazonAPI(object):
@@ -67,9 +66,10 @@ class TestCoverageProvider(DatabaseTest):
 class TestBibliographicParser(object):
 
     def bib(self, filename):
-        data = pkgutil.get_data(
-            "tests.integrate",
-            "files/amazon/%s" % filename)
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "amazon")
+        path = os.path.join(resource_path, filename)
+        data = open(path).read()
         return AmazonBibliographicParser().process_all(data)
 
     def test_basic_kindle(self):

@@ -19,7 +19,7 @@ from nose.tools import set_trace
 import rdflib
 from rdflib import Namespace
 
-from core.model import (
+from ..core.model import (
     get_one_or_create,
     CirculationEvent,
     CoverageProvider,
@@ -34,12 +34,12 @@ from core.model import (
     Subject,
 )
 
-from monitor import Monitor
-from integration.oclc import (
+from ..core.monitor import Monitor
+from .oclc import (
     OCLCClassifyAPI,
     OCLCXMLParser,
 )
-from util import LanguageCodes
+from ..core.util import LanguageCodes
 
 class GutenbergAPI(object):
 

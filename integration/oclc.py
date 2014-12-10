@@ -14,11 +14,11 @@ from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
 
-from integration import (
+from ..core.util.xmlparser import (
     XMLParser,
 )
-from integration import FilesystemCache
-from core.model import (
+from . import FilesystemCache
+from ..core.model import (
     Contributor,
     CoverageProvider,
     get_one,
@@ -30,7 +30,7 @@ from core.model import (
     Resource,
     Subject,
 )
-from util import MetadataSimilarity
+from ..core.util import MetadataSimilarity
 
 
 class OCLC(object):

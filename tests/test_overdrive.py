@@ -1,17 +1,31 @@
 # encoding: utf-8
+import json
+import os
+
 from nose.tools import (
-    set_trace, eq_,
+    set_trace,
+    eq_,
     assert_raises,
 )
 
+from . import DatabaseTest
 from ..core.model import (
     DataSource,
     Identifier,
+    Measurement,
+    Resource,
+)
+from ..integration.overdrive import (
+    OverdriveAPI,
+    OverdriveBibliographicMonitor,
 )
 
-from ..integration.overdrive import OverdriveAPI
-
 class TestOverdrive(DatabaseTest):
+
+    def setup(self):
+        super(TestOverdrive, self).setup()
+        base_path = os.path.split(__file__)[0]
+        self.resource_path = os.path.join(base_path, "files", "overdrive")
 
     def sample_json(self, filename):
         path = os.path.join(self.resource_path, filename)
@@ -22,7 +36,6 @@ class TestOverdrive(DatabaseTest):
 
         wr, new = self._edition(with_license_pool=True)
         raw, info = self.sample_json("overdrive_metadata.json")
-        info = json.loads(data)
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
         OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
@@ -89,10 +102,7 @@ class TestOverdrive(DatabaseTest):
 
     def test_annotate_edition_with_sample(self):
         wr, new = self._edition(with_license_pool=True)
-        data = pkgutil.get_data(
-            "tests.integrate",
-            "files/overdrive/overdrive_has_sample.json")
-        info = json.loads(data)
+        raw, info = self.sample_json("has_sample.json")
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
         OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(
@@ -106,10 +116,7 @@ class TestOverdrive(DatabaseTest):
 
     def test_annotate_edition_with_awards(self):
         wr, new = self._edition(with_license_pool=True)
-        data = pkgutil.get_data(
-            "tests.integrate",
-            "files/overdrive/overdrive_has_awards.json")
-        info = json.loads(data)
+        raw, info = self.sample_json("has_awards.json")
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
         OverdriveBibliographicMonitor.annotate_edition_with_bibliographic_information(

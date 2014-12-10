@@ -1,24 +1,28 @@
 # encoding: utf-8
+import os
 from nose.tools import (
     set_trace, eq_,
     assert_raises,
 )
 import datetime
 import json
-import pkgutil
 
-from ..core.testing import DatabaseTest
+from . import DatabaseTest
 from ..integration.bibliocommons import BibliocommonsAPI
 
 class DummyBibliocommonsAPI(BibliocommonsAPI):
 
+    def sample_json(self, filename):
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "bibliocommons")
+        path = os.path.join(resource_path, filename)
+        data = open(path).read()
+        return json.loads(data)
+
     def list_pages_for_user(self, user_id, max_age=None):
         for pagenum in range(1,4):
-            data = pkgutil.get_data(
-                "tests.integrate",
-                "files/bibliocommons/list_of_user_lists_page%d.json" % pagenum)
-            yield json.loads(data)
-
+            yield self.sample_json(
+                "list_of_user_lists_page%d.json" % pagenum)
 
 class TestBibliocommonsAPI(DatabaseTest):
     

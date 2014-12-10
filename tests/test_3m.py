@@ -1,13 +1,13 @@
 from nose.tools import set_trace, eq_
 import datetime
 import pkgutil
-from core.model import (
+from ..core.model import (
     Contributor,
     Resource,
     Identifier,
     Edition,
 )
-from integration.threem import (
+from ..integration.threem import (
     ItemListParser,
 )
 

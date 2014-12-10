@@ -1,30 +1,35 @@
 # encoding: utf-8
 
-import pkgutil
 import StringIO
-from integration.oclc import (
-    OCLCXMLParser,
-)
+import os
 from nose.tools import set_trace, eq_
 
-from core.model import (
+from ..core.model import (
     Contributor,
     Subject,
     Identifier,
     Edition,
     )
 
-from core.testing import (
+from ..integration.oclc import (
+    OCLCXMLParser,
+)
+
+from . import (
     DatabaseTest,
 )
 
 class TestParser(DatabaseTest):
 
+    def sample_data(self, filename):
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "oclc")
+        path = os.path.join(resource_path, filename)
+        return open(path).read()
+
     def test_extract_multiple_works(self):
         """We can turn a multi-work response into a list of SWIDs."""
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_multi_work_response.xml")
+        xml = self.sample_data("multi_work_response.xml")
 
         status, swids = OCLCXMLParser.parse(self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.MULTI_WORK_STATUS, status)
@@ -38,9 +43,7 @@ class TestParser(DatabaseTest):
 
     def test_extract_multiple_works_with_title_restriction(self):
         """We can choose to only accept works similar to a given title."""
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_multi_work_response.xml")
+        xml = self.sample_data("multi_work_response.xml")
 
         # This will only accept titles that contain exactly the same
         # words as "Dick Moby". Only four titles in the sample data
@@ -90,9 +93,7 @@ class TestParser(DatabaseTest):
 
     def test_extract_multiple_works_with_author_restriction(self):
         """We can choose to only accept works by a given author."""
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_multi_work_response.xml")
+        xml = self.sample_data("multi_work_response.xml")
 
         [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
         status, swids = OCLCXMLParser.parse(
@@ -129,9 +130,7 @@ class TestParser(DatabaseTest):
         """We can turn a single-work response into a single Edition.
         """
 
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_single_work_response.xml")
+        xml = self.sample_data("single_work_response.xml")
 
         status, records = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])
@@ -222,9 +221,7 @@ class TestParser(DatabaseTest):
 
         # This document contains a work that has a number of editions,
         # but there's no work ID. We use the document anyway.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_missing_pswid.xml")
+        xml = self.sample_data("missing_pswid.xml")
 
         status, [record] = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])
@@ -233,9 +230,7 @@ class TestParser(DatabaseTest):
 
     def test_no_contributors(self):
         # This document has no contributors listed.
-        xml = pkgutil.get_data(
-            "tests.integrate",
-            "files/oclc_single_work_no_authors.xml")
+        xml = self.sample_data("single_work_no_authors.xml")
 
         status, records = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"])

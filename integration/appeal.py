@@ -8,7 +8,7 @@ from collections import Counter
 
 from textblob import TextBlob
 
-from core.model import (
+from ..core.model import (
     Identifier,
     Session,
 )
