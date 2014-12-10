@@ -1,6 +1,6 @@
 # encoding: utf-8
 from nose.tools import set_trace, eq_
-import pkgutil
+import os
 
 from . import DatabaseTest
 from ..core.model import (

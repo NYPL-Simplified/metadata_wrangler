@@ -1,6 +1,6 @@
 from nose.tools import set_trace, eq_
 import datetime
-import pkgutil
+import os
 from ..core.model import (
     Contributor,
     Resource,

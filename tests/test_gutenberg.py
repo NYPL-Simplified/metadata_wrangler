@@ -1,9 +1,11 @@
 # encoding: utf-8
 
 import datetime
-import pkgutil
+import os
 import StringIO
+
 from nose.tools import set_trace, eq_ 
+
 from ..core.model import (
     Contributor,
     DataSource,
@@ -17,10 +19,7 @@ from ..integration.gutenberg import (
     GutenbergAPI,
     GutenbergRDFExtractor,
 )
-
-from . import (
-    DatabaseTest,
-)
+from . import DatabaseTest
 
 class TestGutenbergAPI(DatabaseTest):
 
