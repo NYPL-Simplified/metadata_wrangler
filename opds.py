@@ -269,10 +269,12 @@ class AcquisitionFeed(OPDSFeed):
             elif active_edition.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
                 thumbnail_url = full_url
         elif identifier.type == Identifier.GUTENBERG_ID:
-            host = URLRewriter.GENERATED_COVER_HOST
-            thumbnail_url = host + urllib.quote(
-                "/Gutenberg ID/%s.png" % identifier.identifier)
-            full_url = thumbnail_url
+            #host = URLRewriter.GENERATED_COVER_HOST
+            #thumbnail_url = host + urllib.quote(
+            #    "/Gutenberg ID/%s.png" % identifier.identifier)
+            #full_url = thumbnail_url
+            # Cover will be generated client-side.
+            full_url = None
         if full_url:
             links.append(E.link(rel=Resource.IMAGE, href=full_url))
 
@@ -382,7 +384,7 @@ class AcquisitionFeed(OPDSFeed):
 
         license_tag = self.license_tag(active_license_pool)
         if license_tag is not None:
-            entry.extend([license_tag])
+            entry.extend(license_tag)
 
         return entry
 
@@ -409,15 +411,14 @@ class AcquisitionFeed(OPDSFeed):
         if license_pool.open_access:
             return None
 
-        licenses = E._makeelement("{%s}licenses" % opds_41_ns)
-        license = E._makeelement("{%s}license" % opds_41_ns)
+        license = []
         concurrent_lends = E._makeelement(
-            "{%s}concurrent_lends" % opds_41_ns)
+            "{%s}total_licenses" % simplified_ns)
         license.extend([concurrent_lends])
         concurrent_lends.text = str(license_pool.licenses_owned)
 
         available_lends = E._makeelement(
-            "{%s}available_lends" % simplified_ns)
+            "{%s}available_licenses" % simplified_ns)
         license.extend([available_lends])
         available_lends.text = str(license_pool.licenses_available)
 
@@ -425,8 +426,7 @@ class AcquisitionFeed(OPDSFeed):
         license.extend([active_holds])
         active_holds.text = str(license_pool.patrons_in_hold_queue)
 
-        licenses.extend([license])
-        return licenses
+        return license
 
 class NavigationFeed(OPDSFeed):
 
