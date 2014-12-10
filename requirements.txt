@@ -1,0 +1,12 @@
+Flask
+nose
+psycopg2
+pyatom
+beautifulsoup4
+requests
+rdflib
+gunicorn
+isbnlib
+pillow
+sqlalchemy
+lxml
