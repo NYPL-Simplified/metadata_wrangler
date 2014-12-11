@@ -175,7 +175,7 @@ class AcquisitionFeed(OPDSFeed):
     def featured(cls, _db, languages, lane):
         url = cls.lane_url(lane)
         links = []
-        feed_size = 20
+        feed_size = 10
         works = lane.quality_sample(languages, 0.65, 0.3, feed_size,
                                     "currently_available")
         return AcquisitionFeed(
