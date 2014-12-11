@@ -567,10 +567,17 @@ def active_loans():
     header = flask.request.authorization
     if not Conf.testing:
         overdrive = OverdriveAPI(Conf.db)
-        overdrive_loans = overdrive.get_patron_checkouts(
-            flask.request.patron, header.password)
-        OverdriveAPI.sync_bookshelf(flask.request.patron, overdrive_loans)
-        Conf.db.commit()
+        # TODO: this is a hack necessary so long as we use dummy auth,
+        # because Overdrive always asks the real ILS for the real barcode.
+        # If you use a test barcode, we want /loans to act like you have no
+        # Overdrive loans; we don't want it to crash.
+        try:
+            overdrive_loans = overdrive.get_patron_checkouts(
+                flask.request.patron, header.password)
+            OverdriveAPI.sync_bookshelf(flask.request.patron, overdrive_loans)
+            Conf.db.commit()
+        except IOError, e:
+            print e
 
     # Then make the feed.
     feed = AcquisitionFeed.active_loans_for(flask.request.patron)
