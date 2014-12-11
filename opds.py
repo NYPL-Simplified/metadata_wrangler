@@ -64,7 +64,6 @@ class URLRewriter(object):
     epub_id = re.compile("/([0-9]+)")
 
     GUTENBERG_ILLUSTRATED_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Gutenberg-Illustrated"
-    GENERATED_COVER_HOST = "https://s3.amazonaws.com/gutenberg-corpus.nypl.org/Generated+covers"
     CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/CC"
     SCALED_CONTENT_CAFE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/scaled/300/CC"
     ORIGINAL_OVERDRIVE_IMAGE_MIRROR_HOST = "https://s3.amazonaws.com/book-covers.nypl.org/Overdrive"
@@ -269,10 +268,6 @@ class AcquisitionFeed(OPDSFeed):
             elif active_edition.cover.data_source.name == DataSource.GUTENBERG_COVER_GENERATOR:
                 thumbnail_url = full_url
         elif identifier.type == Identifier.GUTENBERG_ID:
-            #host = URLRewriter.GENERATED_COVER_HOST
-            #thumbnail_url = host + urllib.quote(
-            #    "/Gutenberg ID/%s.png" % identifier.identifier)
-            #full_url = thumbnail_url
             # Cover will be generated client-side.
             full_url = None
         if full_url:
