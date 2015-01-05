@@ -9,7 +9,7 @@ from sqlalchemy.sql.expression import (
     or_,
 )
 
-from ..core.model import (
+from core.model import (
     Contributor,
     Contribution,
     DataSource,
@@ -17,7 +17,7 @@ from ..core.model import (
     Representation,
 )
 
-from ..core.util.xmlparser import (
+from core.util.xmlparser import (
     XMLParser,
 )
 
@@ -279,6 +279,32 @@ class VIAFClient(object):
         self.data_source = DataSource.lookup(self._db, DataSource.VIAF)
         self.parser = VIAFParser()
 
+    def process_contributor(self, contributor):
+        """Fill in VIAF information for one specific Contributor."""
+        if contributor.display_name and contributor.viaf:
+            # Nothing to do.
+            return
+        if contributor.viaf:
+            # A VIAF ID is the most reliable way we have of identifying
+            # a contributor.
+            viafs = [x.strip() for x in contributor.viaf.split("|")]
+            # Sometimes there are multiple VIAF IDs.
+            for v in viafs:
+                self.fill_contributor_info_from_viaf(contributor, v)
+                if contributor.wikipedia_name or contributor.family_name:
+                    # Good enough.
+                    break
+        elif contributor.name:
+            self.fill_contributor_info_from_name(contributor)
+
+        if not contributor.display_name:
+            # We could not find a VIAF record for this contributor,
+            # or none of the records were good enough. Use the
+            # default name.
+            print "BITTER FAILURE for %s" % contributor.name
+            contributor.family_name, contributor.display_name = (
+                contributor.default_names())
+
     def run(self, force=False):
         a = 0
         # Ignore editions from OCLC
@@ -301,26 +327,7 @@ class VIAFClient(object):
             # Only process authors that haven't been processed yet.
             candidates = candidates.filter(something_is_missing)
         for contributor in candidates:
-            if contributor.viaf:
-                # A VIAF ID is the most reliable way we have of identifying
-                # a contributor.
-                viafs = [x.strip() for x in contributor.viaf.split("|")]
-                # Sometimes there are multiple VIAF IDs.
-                for v in viafs:
-                    self.fill_contributor_info_from_viaf(contributor, v)
-                    if contributor.wikipedia_name or contributor.family_name:
-                        # Good enough.
-                        break
-            elif contributor.name:
-                self.fill_contributor_info_from_name(contributor)
-
-            if not contributor.display_name:
-                # We could not find a VIAF record for this contributor,
-                # or none of the records were good enough. Use the
-                # default name.
-                print "BITTER FAILURE for %s" % contributor.name
-                contributor.family_name, contributor.display_name = (
-                    contributor.default_names())
+            self.process_contributor(contributor)
             a += 1
             if not a % 10:
                 print a

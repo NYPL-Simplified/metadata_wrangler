@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from nose.tools import set_trace
 
-from ..core.model import (
+from core.model import (
     get_one_or_create,
     CoverageProvider,
     Contributor,
@@ -28,12 +28,12 @@ from ..core.model import (
     Subject,
 )
 
-from ..core.monitor import Monitor
-from .oclc import (
+from core.monitor import Monitor
+from oclc import (
     OCLCClassifyAPI,
     OCLCXMLParser,
 )
-from ..core.util import LanguageCodes
+from core.util import LanguageCodes
 
 class OCLCMonitorForGutenberg(CoverageProvider):
 
@@ -49,7 +49,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     # especially colons.
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
     
-    def __init__(self, _db, data_directory):
+    def __init__(self, _db):
         self._db = _db
         self.oclc_classify = OCLCClassifyAPI(self._db)
         input_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
@@ -99,7 +99,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
             swids = records
             records = []
             for swid in swids:
-                swid_xml = self.oclc_classify.lookup_by(swid=swid)
+                swid_xml = self.oclc_classify.lookup_by(wi=swid)
                 representation_type, editions = OCLCXMLParser.parse(
                     self._db, swid_xml, **restrictions)
 
@@ -114,7 +114,7 @@ class OCLCMonitorForGutenberg(CoverageProvider):
                     # there's nothing we can do.
                     pass                    
                 else:
-                    print " Got unexpected representation type from lookup: %s" % representation_type
+                    raise IOError("Got unexpected representation type from lookup: %s" % representation_type)
         # Connect the Gutenberg book to the OCLC works looked up by
         # title/author. Hopefully we can also connect the Gutenberg book
         # to an author who has an LC and VIAF.
@@ -279,10 +279,7 @@ class GutenbergBookshelfClient(object):
             is_favorite = book.parent.find(
                 'img', src=re.compile("Favorite-icon")) is not None
             m = self.gutenberg_text_number.search(book['href'])
-            if m:
-                identifier = m.groups()[0]
-            else:
-                set_trace()
+            identifier = m.groups()[0]
 
             texts.add(identifier)
             if is_favorite:

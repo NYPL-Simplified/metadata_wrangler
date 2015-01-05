@@ -7,10 +7,10 @@ import os
 import re
 from cStringIO import StringIO
 from lxml import etree 
-from ..core.util.xmlparser import (
+from core.util.xmlparser import (
     XMLParser,
 )
-from ..core.model import (
+from core.model import (
     CoverageProvider,
     DataSource,
     Equivalency,

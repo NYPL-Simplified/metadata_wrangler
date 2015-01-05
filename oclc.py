@@ -14,11 +14,10 @@ from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
 
-from ..core.util.xmlparser import (
+from core.util.xmlparser import (
     XMLParser,
 )
-from . import FilesystemCache
-from ..core.model import (
+from core.model import (
     Contributor,
     CoverageProvider,
     get_one,
@@ -30,7 +29,7 @@ from ..core.model import (
     Resource,
     Subject,
 )
-from ..core.util import MetadataSimilarity
+from core.util import MetadataSimilarity
 
 
 class OCLC(object):
@@ -119,6 +118,7 @@ class OCLCLinkedData(object):
                     self._db, type, id)
         else:
             identifier = identifier_or_uri
+            type = identifier.type
         if not type or not identifier:
             return None, None
         return self.lookup_by_identifier(identifier)
@@ -288,8 +288,11 @@ class OCLCLinkedData(object):
 
         for k, repository in (
                 ('schema:description', descriptions),
+                ('description', descriptions),
                 ('schema:name', titles),
+                ('name', titles),
                 ('schema:datePublished', publication_dates),
+                ('datePublished', publication_dates),
                 ('workExample', example_uris),
                 ('publisher', publisher_uris),
                 ('creator', creator_uris),
@@ -442,6 +445,8 @@ class OCLCXMLParser(XMLParser):
             # plus summary classification information for the work.
             edition, ignore = cls.extract_edition(
                 _db, work_tag, existing_authors, **restrictions)
+            if edition:
+                print "EXTRACTED %r" % edition
             records = []
             if edition:
                 records.append(edition)
@@ -493,7 +498,13 @@ class OCLCXMLParser(XMLParser):
             response = cls._extract_basic_info(
                 _db, work_tag, **restrictions)
             if response:
-                swids.append(work_tag.get('swid'))
+                title, author_names, language = response
+                # TODO: 'swid' is what it's called in older representations.
+                # That code can be removed once we replace all representations.
+                work_identifier = work_tag.get('wi') or work_tag.get('swid')
+                #print "WORK ID %s (%s, %r, %s)" % (
+                #    work_identifier, title, author_names, language)
+                swids.append(work_identifier)
         return swids
 
     ROLES = re.compile("\[([^]]+)\]$")
@@ -684,7 +695,7 @@ class OCLCXMLParser(XMLParser):
             if similarity < threshold:
                 # The title of the book under consideration is not
                 # similar enough to the given title.
-                #print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
+                # print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
                 return None
 
             # The semicolon is frequently used to separate multiple
@@ -693,7 +704,7 @@ class OCLCXMLParser(XMLParser):
             # semicolons.
             if (not ' ; ' in must_resemble_title
                 and ' ; ' in title and threshold > 0):
-                #print "SEMICOLON DISQUALIFICATION: %s" % title
+                # print "SEMICOLON DISQUALIFICATION: %s" % title
                 return None
 
         # Apply restrictions. If they're not met, return None.
@@ -704,6 +715,7 @@ class OCLCXMLParser(XMLParser):
             restrict_to_language = set(restrictions['language'])
             if language != restrict_to_language:
                 # This record is for a book in a different language
+                # print "WRONG LANGUAGE: %s" % language
                 return None
 
         if 'authors' in restrictions:
@@ -728,7 +740,6 @@ class OCLCXMLParser(XMLParser):
 
         author_names = ", ".join([x.name for x, y in authors_and_roles])
 
-        print u" SUCCESS %s, %r, %s" % (title, author_names, language)
         return title, authors_and_roles, language
 
     UNUSED_MEDIA = set([
@@ -754,18 +765,17 @@ class OCLCXMLParser(XMLParser):
         """Create a new Edition object with information about a
         work (identified by OCLC Work ID).
         """
-        oclc_work_id = unicode(work_tag.get('pswid'))
+        # TODO: 'pswid' is what it's called in older representations.
+        # That code can be removed once we replace all representations.
+        oclc_work_id = unicode(work_tag.get('owi') or work_tag.get('pswid'))
         # if oclc_work_id:
         #     print " owi: %s" % oclc_work_id
         # else:
         #     print " No owi in %s" % etree.tostring(work_tag)
 
 
-        try:
-            int(oclc_work_id)
-        except ValueError, e:
-            # This record does not have a valid OCLC Work ID.
-            oclc_work_id = None
+        if not oclc_work_id:
+            raise ValueError("Work has no owi")
 
         item_type = work_tag.get("itemtype")
         if (item_type.startswith('itemtype-book') 
@@ -996,17 +1006,22 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.oclc_linked_data,
             workset_size=3)
 
-    def process_edition(self, wr):
+    def process_edition(self, edition):
+        if isinstance(edition, Identifier):
+            identifier = edition
+            title = "[unknown]"
+        else:
+            identifier = edition.primary_identifier
+            title = edition.title
         try:
-            original_identifier = wr.primary_identifier
             new_records = 0
             new_isbns = 0
             new_descriptions = 0
             new_subjects = 0
-            print u"%s (%s)" % (wr.title, repr(original_identifier).decode("utf8"))
+            print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
             editions = 0
-            for edition in self.info_for(original_identifier):
-                edition, isbns, descriptions, subjects = self.process_oclc_edition(original_identifier, edition)
+            for edition in self.info_for(identifier):
+                edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
                 if edition:
                     new_records += 1
                     print "", edition.publisher, len(isbns), len(descriptions)
@@ -1026,6 +1041,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return True
 
     def process_oclc_edition(self, original_identifier, edition):
+        #print "   Processing edition %s: %r" % (edition['oclc_id'], edition['titles'])
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
@@ -1199,13 +1215,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
         example_graphs = OCLCLinkedData.internal_lookup(
             subgraph, example_uris)
         for example in example_graphs:
-            for isbn in ldq.values(example.get('schema:isbn', [])):
-                if len(isbn) == 10:
-                    isbn = isbnlib.to_isbn13(isbn)
-                elif len(isbn) != 13:
-                    continue
-                if isbn:
-                    isbns.add(isbn)
+            for isbn_name in 'schema:isbn', 'isbn':
+                for isbn in ldq.values(example.get(isbn_name, [])):
+                    if len(isbn) == 10:
+                        isbn = isbnlib.to_isbn13(isbn)
+                    elif len(isbn) != 13:
+                        continue
+                    if isbn:
+                        isbns.add(isbn)
 
         # Consolidate subjects and apply a blacklist.
         tags = set()
@@ -1271,6 +1288,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, identifier):
+        #print "BEGIN GRAPHS FOR %r" % identifier
         if identifier.type in OCLCLinkedData.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
                 work_data = list(self.oclc.oclc_works_for_isbn(identifier))
@@ -1288,9 +1306,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     work_data = [work_data]
                 for data in work_data:
                     # Turn the work graph into a bunch of edition graphs.
+                    #print " Handling work graph %s" % data['documentUrl']
                     graph = self.oclc.graph(data)
                     examples = self.oclc.extract_workexamples(graph)
                     for uri in examples:
+                        #print "  Found example URI %s" % uri
                         data, cached = self.oclc.lookup(uri)
                         yield data
 
@@ -1301,3 +1321,4 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 if i.output.type in OCLCLinkedData.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph
+        #print "END GRAPHS FOR %r" % identifier
