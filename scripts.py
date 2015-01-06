@@ -1,6 +1,7 @@
 import os
 from core.scripts import Script
 from presentation_ready import MakePresentationReadyMonitor
+from gutenberg import OCLCMonitorForGutenberg
 
 from viaf import VIAFClient
 
@@ -25,3 +26,10 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
+
+
+class OCLCMonitorForGutenbergScript(Script):
+
+    def run(self):
+        OCLCMonitorForGutenberg(self._db).run()
+    
