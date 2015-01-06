@@ -6,6 +6,7 @@ from core.scripts import (
     WorkProcessingScript,
     Script,
 )
+from amazon import AmazonCoverageProvider
 from presentation_ready import MakePresentationReadyMonitor
 from gutenberg import OCLCMonitorForGutenberg
 from appeal import AppealCalculator
@@ -37,6 +38,11 @@ class OCLCMonitorForGutenbergScript(Script):
 
     def run(self):
         OCLCMonitorForGutenberg(self._db).run()
+
+class AmazonCoverageProviderScript(Script):
+
+    def run(self):
+        AmazonCoverageProvider(self._db).run()
     
 
 class WorkAppealCalculationScript(WorkProcessingScript):
