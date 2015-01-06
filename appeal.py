@@ -384,13 +384,6 @@ class AppealCalculator(object):
             self.training_dataset_path, self.classifier_path)
         self.feature_counter = FeatureCounter(self.feature_names)
 
-    def calculate_for_works(self, q, force=False):
-        if not force:
-            q = q.filter(Work.primary_appeal==None)
-        for work in q:
-            self.calculate_for_work(work)
-            self._db.commit()
-
     def calculate_for_work(self, work):
         print "BEFORE pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
             work.primary_appeal, work.secondary_appeal,
