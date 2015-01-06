@@ -1,0 +1,12 @@
+# Core requirements
+pillow
+psycopg2
+requests
+sqlalchemy
+nose
+lxml
+flask
+
+isbnlib
+
+feedparser
