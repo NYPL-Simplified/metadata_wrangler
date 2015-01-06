@@ -184,7 +184,7 @@ class GutenbergBookshelfClient(object):
         representation, cached = Representation.get(
             self._db, url, self.do_get_with_captcha_trapdoor,
             headers, data_source=self.data_source,
-            pause_before=random.random()*5)
+            pause_before=random.random()*60)
         if not cached:
             self._db.commit()
         handled.add(url)

@@ -8,7 +8,10 @@ from core.scripts import (
 )
 from amazon import AmazonCoverageProvider
 from presentation_ready import MakePresentationReadyMonitor
-from gutenberg import OCLCMonitorForGutenberg
+from gutenberg import (
+    GutenbergBookshelfClient,
+    OCLCMonitorForGutenberg,
+)
 from appeal import AppealCalculator
 from viaf import VIAFClient
 
@@ -43,7 +46,15 @@ class AmazonCoverageProviderScript(Script):
 
     def run(self):
         AmazonCoverageProvider(self._db).run()
-    
+
+class GutenbergBookshelfMonitorScript(Script):
+    """Gather subject classifications and popularity measurements from
+    Gutenberg's 'bookshelf' wiki.
+    """
+    def run(self):
+        db = self._db
+        GutenbergBookshelfClient(db).full_update()
+        db.commit()
 
 class WorkAppealCalculationScript(WorkProcessingScript):
 
