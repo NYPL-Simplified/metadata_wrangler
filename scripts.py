@@ -82,3 +82,8 @@ class WorkPresentationCalculationScript(WorkProcessingScript):
         if not self.force:
             q = q.filter(Work.fiction==None).filter(Work.audience==None)
         return q
+
+class IdentifierResolutionScript(Script):
+
+    IdentifierResolutionMonitor(os.environ['DATA_DIRECTORY']).run(
+        self._db)

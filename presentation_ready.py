@@ -3,6 +3,7 @@ from core.monitor import Monitor
 from core.model import (
     DataSource,
     Identifier,
+    UnresolvedIdentifier,
     Work,
 )
 from appeal import AppealCalculator
@@ -15,7 +16,47 @@ class IdentifierResolutionMonitor(Monitor):
     """Turn an UnresolvedIdentifier into an Edition with a LicensePool."""
 
     def __init__(self, content_server_url, overdrive_api, threem_api):
-        pass
+        self.content_server_url = content_server_url
+        self.overdrive = overdrive_api
+        self.threem = threem_api
+
+    def run_once(self, _db, start, cutoff):
+        # TODO: Gather a batch at a time because we're going to be
+        # deleting them?
+        for unresolved in _db.query(UnresolvedIdentifier):
+            now = datetime.datetime.utcnow()
+            try:
+                status, message = self.resolve(unresolved)
+            except Exception, e:
+                status = 500
+                message = str(e)
+
+
+            if status == 200:
+                # Success. Delete 
+                _db.delete(unresolved)
+            else:
+                unresolved.status = status
+                unresolved.exception = message
+                unresolved.most_recent_attempt = now
+                if not unresolved.first_attempt:
+                    unresolved.first_attempt = now
+            _db.commit()
+
+    def resolve(self, unresolved):
+        # Which text source is responsible for resolving this identifier?
+        _db = session_
+        source = DataSource.license_source_for(_db, unresolved.identifier)
+        if source.name == DataSource.GUTENBERG:
+            self.resolve_gutenberg(unresolved)
+        elif source.name == DataSource.THREEM:
+            self.resolve_threem(unresolved)
+        elif source.name == DataSource.OVERDRIVE:
+            self.resolve_overdrive(unresolved)
+
+        self.resolve_overdrive()
+        self.resolve_threem()
+        self.resolve_content_server()
 
 
 class MakePresentationReadyMonitor(Monitor):
