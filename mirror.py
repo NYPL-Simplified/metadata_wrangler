@@ -1,10 +1,15 @@
+from nose.tools import set_trace
 import gzip
 import os
+import random
 import urlparse
-from cStringIO import StringIO
-
 import requests
-from nose.tools import set_trace
+
+from core.model import (
+    DataSource,
+    Resource,
+)
+from core.s3 import S3Uploader
 
 class FilesystemCache(object):
 
@@ -61,49 +66,8 @@ class FilesystemCache(object):
         f.close()
         return filename
 
-class MultipageFilesystemCache(FilesystemCache):
-
-    """Can associate multiple pages with the same key."""
-
-    def _filename(self, key, page):
-        page = str(page)
-        if len(key) + 1 + len(page) > 140:
-            key = key[:135]
-        if self.subdir_chars:
-            if self.substring_from_beginning:
-                subdir = key[:self.subdir_chars]
-            else:
-                subdir = key[-self.subdir_chars:]
-
-            directory = os.path.join(self.cache_directory, subdir)
-        else:
-            directory = self.cache_directory
-        return os.path.join(directory, key + "-" + page)
-
-    def exists(self, key, page):
-        return os.path.exists(self._filename(key, page))
-
-    def open(self, key, page):
-        return open(self._filename(key, page))
-
-    def store(self, key, page, value):
-        filename = self._filename(key, page)
-        if self.subdir_chars:
-            # Make sure the subdirectory exists.
-            directory = os.path.split(filename)[0]
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        f = open(filename, "w")
-        if isinstance(value, unicode):
-            value = value.encode("utf8")
-        f.write(value)
-        f.close()
-        return filename
-
-
-
 class CoverImageMirror(object):
-    """Downloads images from Overdrive and writes them to disk."""
+    """Downloads images via HTTP and writes them to disk."""
 
     COVERS_DIR = "covers"
     ORIGINAL_SUBDIR = "original"
@@ -125,16 +89,13 @@ class CoverImageMirror(object):
 
     def __init__(self, db, data_directory):
         self._db = db
-        from model import DataSource
         self.data_source = DataSource.lookup(self._db, self.DATA_SOURCE)
         self.original_subdir = self.data_directory(data_directory)
         self.original_cache = FilesystemCache(self.original_subdir, 3)
-        from integration.s3 import S3Uploader
         self.uploader = S3Uploader()
 
     def run(self):
         """Mirror all image resources associated with this data source."""
-        from model import Resource
         q = self._db.query(Resource).filter(
             Resource.rel==Resource.IMAGE).filter(
                 Resource.data_source==self.data_source).filter(
@@ -186,3 +147,69 @@ class CoverImageMirror(object):
         resource.mirrored_to(path, content_type, data)
         return location, resource.final_url
     
+
+class Mirror(object):
+    """I'm not sure if this is used..."
+
+    FOR_HOSTNAME = dict()
+
+    DIRECTORY_NAME = "mirror"
+
+    def __init__(self, data_directory, sleep_time=None):
+        self.sleep_time = sleep_time or self.default_sleep_time
+        if not os.path.exists(data_directory):
+            raise ValueError("Base data directory %s does not exist." % 
+                             data_directory)
+
+        self.data_directory = os.path.join(data_directory, self.DIRECTORY_NAME)
+        if not os.path.exists(self.data_directory):
+            os.makedirs(self.data_directory)
+
+    def local_path(self, url):
+        parsed = urlparse.urlparse(url)
+        netloc = parsed.netloc
+        if not netloc:
+            return None
+        path = parsed.path
+        if path.startswith("/"):
+            path = path[1:]
+        if not path:
+            return None
+        if '/.' in path or path.startswith("./") or path.startswith("../"):
+            return None
+        return os.path.join(self.data_directory, netloc, path)
+
+    def ensure_mirrored(self, url, request_headers={}):
+        sleep_time = 0
+        path = self.local_path(url)
+        if not path:
+            raise ValueError("Cannot mirror URL due to its structure: %s" % url)
+        if not os.path.exists(path):
+            d, f = os.path.split(path)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            sleep_time = self.download(url, path, request_headers)
+        return path, sleep_time
+
+    def make_request(self, url, headers):
+        return requests.get(url, headers=headers)
+
+    def download(self, url, local_path, request_headers={}):
+        response = self.make_request(url, request_headers)
+        if response.status_code != 200:
+            raise Exception(
+                "Request to %s got response code %s: %s" % (
+                    url, response.status_code, response.content))
+
+        d, f = os.path.split(local_path)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        out = open(local_path, "w")
+        out.write(response.content)
+        out.close()
+
+        return self.sleep_time(url)
+
+    def default_sleep_time(self, url):
+        """How long to sleep after making a request to the given URL."""
+        random.random()

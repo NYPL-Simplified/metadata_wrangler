@@ -11,6 +11,13 @@ from amazon import AmazonCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
+class IdentifierResolutionMonitor(Monitor):
+    """Turn an UnresolvedIdentifier into an Edition with a LicensePool."""
+
+    def __init__(self, content_server_url, overdrive_api, threem_api):
+        pass
+
+
 class MakePresentationReadyMonitor(Monitor):
     """Make works presentation ready.
 

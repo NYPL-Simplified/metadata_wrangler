@@ -1,6 +1,6 @@
 import datetime
 
-from ..core.overdrive import (
+from core.overdrive import (
     OverdriveAPI
 )
 
@@ -8,7 +8,7 @@ from . import (
     CoverImageMirror
 )
 
-from ..core.model import (
+from core.model import (
     CoverageProvider,
     DataSource,
     Edition,
