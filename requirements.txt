@@ -6,7 +6,7 @@ sqlalchemy
 nose
 lxml
 flask
-
+textblob
 isbnlib
 
 feedparser
