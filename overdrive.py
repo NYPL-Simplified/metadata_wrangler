@@ -4,7 +4,7 @@ from core.overdrive import (
     OverdriveAPI
 )
 
-from . import (
+from mirror import (
     CoverImageMirror
 )
 
@@ -18,8 +18,8 @@ from core.model import (
     Resource,
     Subject,
 )
-from ..core.monitor import Monitor
-from ..core.util import LanguageCodes
+from core.monitor import Monitor
+from core.util import LanguageCodes
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""

@@ -8,7 +8,7 @@ import datetime
 import json
 
 from . import DatabaseTest
-from ..integration.bibliocommons import BibliocommonsAPI
+from ..bibliocommons import BibliocommonsAPI
 
 class DummyBibliocommonsAPI(BibliocommonsAPI):
 

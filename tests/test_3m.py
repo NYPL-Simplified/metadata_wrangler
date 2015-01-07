@@ -7,7 +7,7 @@ from ..core.model import (
     Identifier,
     Edition,
 )
-from ..integration.threem import (
+from ..threem import (
     ItemListParser,
 )
 

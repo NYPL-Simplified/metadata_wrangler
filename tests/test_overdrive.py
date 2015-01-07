@@ -15,7 +15,7 @@ from ..core.model import (
     Measurement,
     Resource,
 )
-from ..integration.overdrive import (
+from ..overdrive import (
     OverdriveAPI,
     OverdriveBibliographicMonitor,
 )

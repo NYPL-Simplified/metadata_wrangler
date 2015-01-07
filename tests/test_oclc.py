@@ -11,7 +11,7 @@ from ..core.model import (
     Edition,
     )
 
-from ..integration.oclc import (
+from ..oclc import (
     OCLCXMLParser,
 )
 

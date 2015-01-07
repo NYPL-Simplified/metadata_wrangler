@@ -3,9 +3,9 @@ from nose.tools import set_trace
 import datetime
 from lxml import etree
 
-from . import CoverImageMirror
+from mirror import CoverImageMirror
 
-from ..core.model import (
+from core.model import (
     Contributor,
     CoverageProvider,
     DataSource,
@@ -13,10 +13,10 @@ from ..core.model import (
     Identifier,
     Resource,
 )
-from ..core.monitor import Monitor
-from ..core.util.xmlparser import XMLParser
-from ..core.threem import ThreeMAPI as BaseThreeMAPI
-from ..core.util import LanguageCodes
+from core.monitor import Monitor
+from core.util.xmlparser import XMLParser
+from core.threem import ThreeMAPI as BaseThreeMAPI
+from core.util import LanguageCodes
 
 class ThreeMAPI(BaseThreeMAPI):
 
@@ -39,6 +39,8 @@ class ItemListParser(XMLParser):
 
     DATE_FORMAT = "%Y-%m-%d"
     YEAR_FORMAT = "%Y"
+
+    NAMESPACES = {}
 
     def parse(self, xml):
         for i in self.process_all(xml, "//Item"):

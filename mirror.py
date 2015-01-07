@@ -149,7 +149,7 @@ class CoverImageMirror(object):
     
 
 class Mirror(object):
-    """I'm not sure if this is used..."
+    """I'm not sure if this is used..."""
 
     FOR_HOSTNAME = dict()
 

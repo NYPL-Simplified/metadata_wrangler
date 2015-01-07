@@ -9,7 +9,7 @@ from . import (
     DatabaseTest,
 )
 
-from ..integration.viaf import (
+from ..viaf import (
     VIAFParser,
     VIAFClient,
 )

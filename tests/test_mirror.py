@@ -7,7 +7,7 @@ from nose.tools import (
     set_trace,
 )
 
-from ..integration.mirror import Mirror
+from ..mirror import Mirror
 
 class DummyResponse(object):
     def __init__(self, status_code, content):

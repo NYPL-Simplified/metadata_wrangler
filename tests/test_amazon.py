@@ -8,7 +8,7 @@ from ..core.model import (
     Measurement,
     Subject,
 )
-from ..integration.amazon import (
+from ..amazon import (
     AmazonBibliographicParser,
     AmazonReviewParser,
     AmazonCoverageProvider,

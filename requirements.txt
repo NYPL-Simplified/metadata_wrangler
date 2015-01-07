@@ -8,5 +8,7 @@ lxml
 flask
 textblob
 isbnlib
+tinys3
+pyld
 
 feedparser
