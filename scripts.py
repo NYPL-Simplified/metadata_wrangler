@@ -4,7 +4,7 @@ from core.model import (
 )
 from core.overdrive import OverdriveAPI
 from threem import ThreeMAPI
-from content_server import SimplifiedContentServerAPI
+from core.opds_import import SimplifiedOPDSLookup
 from core.scripts import (
     WorkProcessingScript,
     Script,
@@ -94,7 +94,7 @@ class IdentifierResolutionScript(Script):
 
     def run(self):
         content_server_url = os.environ['CONTENT_SERVER_URL']
-        content_server = SimplifiedContentServerAPI(content_server_url)
+        content_server = SimplifiedOPDSLookup(content_server_url)
         overdrive = OverdriveAPI(self._db)
         threem = ThreeMAPI(self._db)
         IdentifierResolutionMonitor(content_server, overdrive, threem).run(
