@@ -71,11 +71,11 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             identifier=identifier)
         return json.loads(representation.content)
 
-    def process_edition(self, wr):
-        identifier = wr.primary_identifier
+    def process_edition(self, edition):
+        identifier = edition.primary_identifier
         info = self.overdrive.metadata_lookup(identifier)
         return self.annotate_edition_with_bibliographic_information(
-            self._db, wr, info, self.input_source
+            self._db, edition, info, self.input_source
         )
 
     media_type_for_overdrive_type = {

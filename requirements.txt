@@ -10,5 +10,5 @@ textblob
 isbnlib
 tinys3
 pyld
-
+beautifulsoup4
 feedparser

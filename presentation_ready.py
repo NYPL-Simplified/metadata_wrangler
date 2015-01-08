@@ -8,11 +8,15 @@ from sqlalchemy.sql.functions import func
 from core.monitor import Monitor
 from core.model import (
     DataSource,
+    Edition,
     Identifier,
     UnresolvedIdentifier,
     Work,
 )
 from core.opds_import import DetailedOPDSImporter
+
+from overdrive import OverdriveBibliographicMonitor
+from threem import ThreeMBibliographicMonitor
 
 from appeal import AppealCalculator
 from gutenberg import OCLCMonitorForGutenberg
@@ -44,19 +48,26 @@ class IdentifierResolutionMonitor(Monitor):
             UnresolvedIdentifier.exception==None,
             UnresolvedIdentifier.most_recent_attempt < one_day_ago)
 
+        overdrive_coverage_provider = OverdriveBibliographicMonitor(_db)
+        threem_coverage_provider = ThreeMBibliographicMonitor(_db)
 
         batches = 0
-        for identifier, handler in (
-                [Identifier.GUTENBERG_ID, self.resolve_content_server],
+
+        for data_source_name, handler, arg in (
+                    (DataSource.GUTENBERG, self.resolve_content_server, None),
+                    (DataSource.THREEM, self.resolve_through_coverage_provider, overdrive_coverage_provider),
+                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, threem_coverage_provider),
         ):
+            data_source = DataSource.lookup(_db, data_source_name)
+            identifier_type = data_source.primary_identifier_type
             q = _db.query(UnresolvedIdentifier).join(
                 UnresolvedIdentifier.identifier).filter(
-                    Identifier.type==Identifier.GUTENBERG_ID).filter(
+                    Identifier.type==identifier_type).filter(
                         needs_processing)
             while q.count() and batches < 10:
                 batches += 1
                 unresolved_identifiers = q.order_by(func.random()).limit(10).all()
-                successes, failures = handler(_db, unresolved_identifiers)
+                successes, failures = handler(_db, unresolved_identifiers, data_source, arg)
                 if isinstance(successes, int):
                     # There was a problem getting any information at all from
                     # the server.
@@ -81,7 +92,7 @@ class IdentifierResolutionMonitor(Monitor):
                         f.first_attempt = now
                 _db.commit()
 
-    def resolve_content_server(self, _db, batch):
+    def resolve_content_server(self, _db, batch, data_source, ignore):
         successes = []
         failures = []
         tasks_by_identifier = dict()
@@ -123,7 +134,30 @@ class IdentifierResolutionMonitor(Monitor):
             task.exception = exception
             failures.append(task)
         return successes, failures
-        
+
+    def resolve_through_coverage_provider(
+            self, _db, batch, data_source, coverage_provider):
+        successes = []
+        failures = []
+        for task in batch:
+            if self.resolve_one_through_coverage_provider(
+                _db, task, data_source, coverage_provider):
+                successes.append(task)
+            else:
+                failures.append(task)
+
+    def resolve_one_through_coverage_provider(
+            self, _db, task, data_source, coverage_provider):
+        edition, is_new = Edition.for_foreign_id(
+            _db, data_source, task.identifier.type, task.identifier.identifier)
+        set_trace()
+        try:
+            coverage_provider.ensure_coverage(edition, force=True)
+            return True
+        except Exception, e:
+            task.status_code = 500
+            task.exception = str(e)
+            return False
 
 class MakePresentationReadyMonitor(Monitor):
     """Make works presentation ready.
