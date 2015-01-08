@@ -2,12 +2,18 @@ import os
 from core.model import (
     Work,
 )
+from core.overdrive import OverdriveAPI
+from threem import ThreeMAPI
+from content_server import SimplifiedContentServerAPI
 from core.scripts import (
     WorkProcessingScript,
     Script,
 )
 from amazon import AmazonCoverageProvider
-from presentation_ready import MakePresentationReadyMonitor
+from presentation_ready import (
+    MakePresentationReadyMonitor,
+    IdentifierResolutionMonitor,
+)
 from gutenberg import (
     GutenbergBookshelfClient,
     OCLCMonitorForGutenberg,
@@ -85,5 +91,11 @@ class WorkPresentationCalculationScript(WorkProcessingScript):
 
 class IdentifierResolutionScript(Script):
 
-    IdentifierResolutionMonitor(os.environ['DATA_DIRECTORY']).run(
-        self._db)
+
+    def run(self):
+        content_server_url = os.environ['CONTENT_SERVER_URL']
+        content_server = SimplifiedContentServerAPI(content_server_url)
+        overdrive = OverdriveAPI(self._db)
+        threem = ThreeMAPI(self._db)
+        IdentifierResolutionMonitor(content_server, overdrive, threem).run(
+            self._db)
