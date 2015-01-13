@@ -59,13 +59,12 @@ class IdentifierResolutionMonitor(Monitor):
         overdrive_coverage_provider = OverdriveBibliographicMonitor(_db)
         threem_coverage_provider = ThreeMBibliographicMonitor(_db)
 
-        batches = 0
-
         for data_source_name, handler, arg in (
                     (DataSource.GUTENBERG, self.resolve_content_server, None),
                     (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider),
                     (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider),
         ):
+            batches = 0
             data_source = DataSource.lookup(_db, data_source_name)
             identifier_type = data_source.primary_identifier_type
             q = _db.query(UnresolvedIdentifier).join(
@@ -95,6 +94,7 @@ class IdentifierResolutionMonitor(Monitor):
                 for f in failures:
                     if not f.exception:
                         f.exception = self.UNKNOWN_FAILURE
+                    print f.identifier, f.exception
                     f.most_recent_attempt = now
                     if not f.first_attempt:
                         f.first_attempt = now

@@ -1,4 +1,6 @@
 import datetime
+import json
+from nose.tools import set_trace
 
 from core.overdrive import (
     OverdriveAPI
@@ -62,18 +64,16 @@ class OverdriveBibliographicMonitor(CoverageProvider):
     def metadata_lookup(self, identifier):
         """Look up metadata for an Overdrive identifier.
         """
-        url = self.METADATA_ENDPOINT % dict(
-            collection_token=self.collection_token,
+        url = self.overdrive.METADATA_ENDPOINT % dict(
+            collection_token=self.overdrive.collection_token,
             item_id=identifier.identifier
         )
-        representation, cached = Representation.get(
-            self._db, url, self.get, data_source=self.source,
-            identifier=identifier)
-        return json.loads(representation.content)
+        status_code, headers, content = self.overdrive.get(url, {})
+        return json.loads(content)
 
     def process_edition(self, edition):
         identifier = edition.primary_identifier
-        info = self.overdrive.metadata_lookup(identifier)
+        info = self.metadata_lookup(identifier)
         return self.annotate_edition_with_bibliographic_information(
             self._db, edition, info, self.input_source
         )
