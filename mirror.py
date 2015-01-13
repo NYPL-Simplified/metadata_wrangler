@@ -101,18 +101,21 @@ class CoverImageMirror(object):
         print "Mirroring %d images." % q.count()
         self.mirror_all_resources(q)
 
-    def mirror_all_resources(self, q, force=False):
+    def mirror_all_resources(self, q, force=False, scale=True):
         """Mirror all resources that match a query."""
         # Only mirror images.
         q = q.filter(Resource.rel==Resource.IMAGE)
         if not force:
             # Restrict to resources that are not already mirrored.
             q = q.filter(Resource.mirror_date==None)
+        else:
+            scale = True
         resultset = q.limit(100).all()
         while resultset:
             to_upload = []
             for resource in resultset:
                 to_upload.append(self.mirror(resource))
+                    
 
             self.uploader.upload_resources(to_upload)
             self._db.commit()
@@ -227,3 +230,88 @@ class Mirror(object):
     def default_sleep_time(self, url):
         """How long to sleep after making a request to the given URL."""
         random.random()
+
+
+class ImageScaler(object):
+
+    DEFAULT_WIDTH = 200
+    DEFAULT_HEIGHT = 300
+
+    def __init__(self, db, data_directory, mirrors):
+        self._db = db
+        self.original_expansions = {}
+        self.scaled_expansions = {}
+        self.original_variable_to_scaled_variable = {}
+        self.data_source_ids = []
+        self.uploader = S3Uploader()
+
+        for mirror in mirrors:
+            original = mirror.ORIGINAL_PATH_VARIABLE
+            scaled = mirror.SCALED_PATH_VARIABLE
+            data_source_name = mirror.DATA_SOURCE
+            data_source = DataSource.lookup(self._db, data_source_name)
+            self.data_source_ids.append(data_source.id)
+            self.original_expansions[original] = mirror.data_directory(
+                data_directory)
+            self.scaled_expansions[scaled] = mirror.scaled_image_directory(data_directory)
+            self.original_variable_to_scaled_variable[original] = "%(" + scaled + ")s"
+
+
+    def run(self, destination_width=None, destination_height=None, force=False,
+            batch_size=100, upload=True):
+        q = self._db.query(Resource).filter(
+            Resource.data_source_id.in_(self.data_source_ids))
+        self.scale_all_resources(q, destination_width, destination_height,
+                                 batch_size, force, upload)
+
+    def scale_edition(self, edition, destination_width=None,
+                      destination_height=None, force=False, upload=True):
+        """Make sure that one specific edition has its cover(s) scaled."""
+        # Find all resources for this edition's primary identifier.
+        q = self._db.query(Resource).filter(
+            Resource.identifier==edition.primary_identifier)
+        self.scale_all_resources(
+            q, destination_width, destination_height,
+            force, upload)
+
+    def scale_all_resources(
+            self, q, destination_width=None, destination_height=None,
+            batch_size=100, force=False, upload=True):
+
+        destination_width = destination_width or self.DEFAULT_WIDTH
+        destination_height = destination_height or self.DEFAULT_HEIGHT
+
+        q = q.filter(Resource.rel==Resource.IMAGE).filter(
+            Resource.mirrored==True)
+        if not force:
+            q = q.filter(Resource.scaled==False)
+        resultset = q.limit(batch_size).all()
+        while resultset:
+            total = 0
+            a = time.time()
+            to_upload = []
+            for r in resultset:
+                set_trace()
+                already_scaled = r.scale(
+                    destination_width, destination_height, 
+                    self.original_expansions, self.scaled_expansions,
+                    self.original_variable_to_scaled_variable, force)
+                if not r.scaled_path:
+                    print "Could not scale %s" % r.href
+                elif already_scaled:
+                    pass
+                else:
+                    local_path = r.local_scaled_path(self.scaled_expansions)
+                    #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
+                    #                    local_path)
+                    to_upload.append((local_path, r.scaled_url))
+                    total += 1
+            print "%.2f sec to scale %d" % ((time.time()-a), total)
+            a = time.time()
+            if upload:
+                self.uploader.upload_resources(to_upload)
+            self._db.commit()
+            print "%.2f sec to upload %d" % ((time.time()-a), total)
+            a = time.time()
+            resultset = q.limit(batch_size).all()
+        self._db.commit()

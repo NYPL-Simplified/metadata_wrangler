@@ -1,9 +1,16 @@
+from nose.tools import set_trace
 import os
 from core.model import (
     Work,
 )
 from core.overdrive import OverdriveAPI
-from threem import ThreeMAPI
+from overdrive import OverdriveCoverImageMirror
+from mirror import ImageScaler
+from threem import (
+    ThreeMAPI,
+    ThreeMCoverImageMirror,
+)    
+
 from core.opds_import import SimplifiedOPDSLookup
 from core.scripts import (
     WorkProcessingScript,
@@ -99,3 +106,30 @@ class IdentifierResolutionScript(Script):
         threem = ThreeMAPI(self._db)
         IdentifierResolutionMonitor(content_server, overdrive, threem).run(
             self._db)
+
+
+class CoverImageMirrorScript(Script):
+    """This is not needed in normal usage, but it's useful to have it around
+    in case the covers get screwed up."""
+    
+    def __init__(self, force=False, data_directory=None):
+        self.force = force
+        super(CoverImageMirrorScript, self).__init__()
+
+    def run(self):
+        ThreeMCoverImageMirror(self._db, self.data_directory).run()
+        OverdriveCoverImageMirror(self._db, self.data_directory).run()
+
+
+class CoverImageScaleScript(Script):
+    """This is not needed in normal usage, but it's useful to have it around
+    in case the covers get screwed up."""
+
+    def __init__(self, force=False, data_directory=None):
+        self.force = force
+        super(CoverImageScaleScript, self).__init__()
+
+    def run(self):
+        mirrors = [OverdriveCoverImageMirror, ThreeMCoverImageMirror]
+        ImageScaler(self._db, self.data_directory, mirrors).run(
+            force=self.force)

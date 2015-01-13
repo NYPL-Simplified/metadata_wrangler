@@ -16,6 +16,7 @@ from core.model import (
 )
 from core.opds_import import DetailedOPDSImporter
 
+from mirror import ImageScaler
 from overdrive import (
     OverdriveBibliographicMonitor,
     OverdriveCoverImageMirror,
@@ -189,6 +190,9 @@ class MakePresentationReadyMonitor(Monitor):
         image_mirrors = { DataSource.THREEM : threem_image_mirror,
                           DataSource.OVERDRIVE : overdrive_image_mirror }
 
+        image_scaler = ImageScaler(
+            _db, self.data_directory, image_mirrors.values())
+
         appeal_calculator = AppealCalculator(_db, self.data_directory)
 
         coverage_providers = dict(
@@ -203,7 +207,8 @@ class MakePresentationReadyMonitor(Monitor):
         while unready_works.count():
             for work in unready_works.all():
                 self.make_work_ready(_db, work, appeal_calculator, 
-                                     coverage_providers, image_mirrors)
+                                     coverage_providers, image_mirrors,
+                                     image_scaler)
                 # try:
                 #     self.make_work_ready(_db, work, appeal_calculator,
                 #                          coverage_providers)
@@ -213,7 +218,8 @@ class MakePresentationReadyMonitor(Monitor):
                 _db.commit()
 
     def make_work_ready(self, _db, work, appeal_calculator, 
-                        coverage_providers, image_mirrors):
+                        coverage_providers, image_mirrors,
+                        image_scaler):
         """Either make a work presentation ready, or raise an exception
         explaining why that's not possible.
         """
@@ -254,6 +260,7 @@ class MakePresentationReadyMonitor(Monitor):
             n = edition.data_source.name
             if n in image_mirrors:
                 image_mirrors[n].mirror_edition(edition)
+            image_scaler.scale_edition(edition)
 
         # Calculate presentation.
         work.calculate_presentation()
