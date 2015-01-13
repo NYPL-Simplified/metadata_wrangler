@@ -10,6 +10,7 @@ from core.model import (
     DataSource,
     Edition,
     Identifier,
+    LicensePool,
     UnresolvedIdentifier,
     Work,
 )
@@ -55,8 +56,8 @@ class IdentifierResolutionMonitor(Monitor):
 
         for data_source_name, handler, arg in (
                     (DataSource.GUTENBERG, self.resolve_content_server, None),
-                    (DataSource.THREEM, self.resolve_through_coverage_provider, overdrive_coverage_provider),
-                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, threem_coverage_provider),
+                    (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider),
+                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider),
         ):
             data_source = DataSource.lookup(_db, data_source_name)
             identifier_type = data_source.primary_identifier_type
@@ -145,12 +146,14 @@ class IdentifierResolutionMonitor(Monitor):
                 successes.append(task)
             else:
                 failures.append(task)
+        return successes, failures
 
     def resolve_one_through_coverage_provider(
             self, _db, task, data_source, coverage_provider):
         edition, is_new = Edition.for_foreign_id(
             _db, data_source, task.identifier.type, task.identifier.identifier)
-        set_trace()
+        license_pool, pool_is_new = LicensePool.for_foreign_id(
+            _db, data_source, task.identifier.type, task.identifier.identifier)
         try:
             coverage_provider.ensure_coverage(edition, force=True)
             return True

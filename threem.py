@@ -20,6 +20,10 @@ from core.util import LanguageCodes
 
 class ThreeMAPI(BaseThreeMAPI):
 
+    def __init__(self, *args, **kwargs):
+        super(ThreeMAPI, self).__init__(*args, **kwargs)
+        self.item_list_parser = ItemListParser()
+
     def get_bibliographic_info_for(self, editions):
         results = dict()
         identifiers = []
@@ -103,7 +107,8 @@ class ThreeMBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for 3M records."""
 
     def __init__(self, _db,
-                 account_id=None, library_id=None, account_key=None):
+                 account_id=None, library_id=None, account_key=None,
+                 batch_size=1):
         self._db = _db
         self.api = ThreeMAPI(_db, account_id, library_id, account_key)
         self.input_source = DataSource.lookup(_db, DataSource.THREEM)
@@ -112,10 +117,11 @@ class ThreeMBibliographicMonitor(CoverageProvider):
             "3M Bibliographic Monitor",
             self.input_source, self.output_source)
         self.current_batch = []
+        self.batch_size=batch_size
 
     def process_edition(self, edition):
         self.current_batch.append(edition)
-        if len(self.current_batch) == 25:
+        if len(self.current_batch) >= self.batch_size:
             self.process_batch(self.current_batch)
             self.current_batch = []
         return True
