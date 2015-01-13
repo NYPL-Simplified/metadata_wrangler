@@ -97,13 +97,20 @@ class CoverImageMirror(object):
     def run(self):
         """Mirror all image resources associated with this data source."""
         q = self._db.query(Resource).filter(
-            Resource.rel==Resource.IMAGE).filter(
-                Resource.data_source==self.data_source).filter(
-                    Resource.mirror_date==None)
+                Resource.data_source==self.data_source)
         print "Mirroring %d images." % q.count()
+        self.mirror_all_resources(q)
+
+    def mirror_all_resources(self, q, force=False):
+        """Mirror all resources that match a query."""
+        # Only mirror images.
+        q = q.filter(Resource.rel==Resource.IMAGE)
+        if not force:
+            # Restrict to resources that are not already mirrored.
+            q = q.filter(Resource.mirror_date==None)
         resultset = q.limit(100).all()
-        to_upload = []
         while resultset:
+            to_upload = []
             for resource in resultset:
                 to_upload.append(self.mirror(resource))
 
@@ -115,6 +122,13 @@ class CoverImageMirror(object):
     types_for_image_extensions = { ".jpg" : "image/jpeg",
                                    ".gif" : "image/gif",
                                    ".png" : "image/png"}
+
+    def mirror_edition(self, edition):
+        """Make sure that one specific edition has its cover(s) mirrored."""
+        # Find all resources for this edition's primary identifier.
+        q = self._db.query(Resource).filter(
+            Resource.identifier==edition.primary_identifier)
+        self.mirror_all_resources(q)
 
     def filename_for(self, resource):
         href = resource.href

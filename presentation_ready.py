@@ -16,8 +16,14 @@ from core.model import (
 )
 from core.opds_import import DetailedOPDSImporter
 
-from overdrive import OverdriveBibliographicMonitor
-from threem import ThreeMBibliographicMonitor
+from overdrive import (
+    OverdriveBibliographicMonitor,
+    OverdriveCoverImageMirror,
+)
+from threem import (
+    ThreeMBibliographicMonitor,
+    ThreeMCoverImageMirror,
+)
 
 from appeal import AppealCalculator
 from gutenberg import OCLCMonitorForGutenberg
@@ -176,6 +182,13 @@ class MakePresentationReadyMonitor(Monitor):
 
     def run_once(self, _db, start, cutoff):
 
+        threem_image_mirror = ThreeMCoverImageMirror(
+            _db, self.data_directory)
+        overdrive_image_mirror = OverdriveCoverImageMirror(
+            _db, self.data_directory)
+        image_mirrors = { DataSource.THREEM : threem_image_mirror,
+                          DataSource.OVERDRIVE : overdrive_image_mirror }
+
         appeal_calculator = AppealCalculator(_db, self.data_directory)
 
         coverage_providers = dict(
@@ -190,7 +203,7 @@ class MakePresentationReadyMonitor(Monitor):
         while unready_works.count():
             for work in unready_works.all():
                 self.make_work_ready(_db, work, appeal_calculator, 
-                                     coverage_providers)
+                                     coverage_providers, image_mirrors)
                 # try:
                 #     self.make_work_ready(_db, work, appeal_calculator,
                 #                          coverage_providers)
@@ -199,7 +212,8 @@ class MakePresentationReadyMonitor(Monitor):
                 #     work.presentation_ready_exception = str(e)
                 _db.commit()
 
-    def make_work_ready(self, _db, work, appeal_calculator, coverage_providers):
+    def make_work_ready(self, _db, work, appeal_calculator, 
+                        coverage_providers, image_mirrors):
         """Either make a work presentation ready, or raise an exception
         explaining why that's not possible.
         """
@@ -234,6 +248,12 @@ class MakePresentationReadyMonitor(Monitor):
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
         appeal_calculator.calculate_for_work(work)
+
+        # Make sure we have the cover for all editions.
+        for edition in work.editions:
+            n = edition.data_source.name
+            if n in image_mirrors:
+                image_mirrors[n].mirror_edition(edition)
 
         # Calculate presentation.
         work.calculate_presentation()
