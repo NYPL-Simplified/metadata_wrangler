@@ -253,7 +253,7 @@ class MakePresentationReadyMonitor(Monitor):
                 viaf.process_contributor(contributor)
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
-        appeal_calculator.calculate_for_work(work)
+        #a ppeal_calculator.calculate_for_work(work)
 
         # Make sure we have the cover for all editions.
         for edition in work.editions:
