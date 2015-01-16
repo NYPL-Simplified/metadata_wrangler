@@ -207,15 +207,12 @@ class MakePresentationReadyMonitor(Monitor):
                     Work.last_update_time.desc()).limit(10)
         while unready_works.count():
             for work in unready_works.all():
-                self.make_work_ready(_db, work, appeal_calculator, 
-                                     coverage_providers, image_mirrors,
-                                     image_scaler)
-                # try:
-                #     self.make_work_ready(_db, work, appeal_calculator,
-                #                          coverage_providers)
-                #     work.presentation_ready = True
-                # except Exception, e:
-                #     work.presentation_ready_exception = str(e)
+                try:
+                    self.make_work_ready(_db, work, appeal_calculator, 
+                                         coverage_providers, image_mirrors,
+                                         image_scaler)
+                except Exception, e:
+                    work.presentation_ready_exception = str(e)
                 _db.commit()
 
     def make_work_ready(self, _db, work, appeal_calculator, 
