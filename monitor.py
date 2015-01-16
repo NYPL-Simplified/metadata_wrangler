@@ -44,7 +44,7 @@ class IdentifierResolutionMonitor(Monitor):
 
     def __init__(self, content_server, overdrive_api, threem_api):
         super(IdentifierResolutionMonitor, self).__init__(
-            "Identifier Resolution Manager")
+            "Identifier Resolution Manager", interval_seconds=15)
         self.content_server = content_server
         self.overdrive = overdrive_api
         self.threem = threem_api
@@ -59,10 +59,10 @@ class IdentifierResolutionMonitor(Monitor):
         overdrive_coverage_provider = OverdriveBibliographicMonitor(_db)
         threem_coverage_provider = ThreeMBibliographicMonitor(_db)
 
-        for data_source_name, handler, arg in (
-                    (DataSource.GUTENBERG, self.resolve_content_server, None),
-                    (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider),
-                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider),
+        for data_source_name, handler, arg, batch_size in (
+                    (DataSource.GUTENBERG, self.resolve_content_server, None, 100),
+                    (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
+                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
         ):
             batches = 0
             data_source = DataSource.lookup(_db, data_source_name)
@@ -73,7 +73,7 @@ class IdentifierResolutionMonitor(Monitor):
                         needs_processing)
             while q.count() and batches < 10:
                 batches += 1
-                unresolved_identifiers = q.order_by(func.random()).limit(10).all()
+                unresolved_identifiers = q.order_by(func.random()).limit(batch_size).all()
                 successes, failures = handler(_db, unresolved_identifiers, data_source, arg)
                 if isinstance(successes, int):
                     # There was a problem getting any information at all from
