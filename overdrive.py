@@ -1,4 +1,5 @@
 import datetime
+import isbnlib
 import json
 from nose.tools import set_trace
 

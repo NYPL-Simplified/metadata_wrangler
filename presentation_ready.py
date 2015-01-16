@@ -90,6 +90,7 @@ class IdentifierResolutionMonitor(Monitor):
                     successes = failures = []
                     
                 for s in successes:
+                    print s.identifier
                     _db.delete(s)
                 for f in failures:
                     if not f.exception:
