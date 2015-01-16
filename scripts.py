@@ -17,7 +17,7 @@ from core.scripts import (
     Script,
 )
 from amazon import AmazonCoverageProvider
-from presentation_ready import (
+from monitor import (
     MakePresentationReadyMonitor,
     IdentifierResolutionMonitor,
 )
