@@ -1,15 +1,14 @@
-Flask
-nose
-psycopg2
-pyatom
-beautifulsoup4
-requests
-rdflib
-gunicorn
-isbnlib
+# Core requirements
 pillow
+psycopg2
+requests
 sqlalchemy
+nose
 lxml
+flask
 textblob
+isbnlib
+tinys3
 pyld
+beautifulsoup4
 feedparser

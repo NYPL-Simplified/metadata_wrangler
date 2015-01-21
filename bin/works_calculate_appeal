@@ -1,0 +1,11 @@
+#!/usr/bin/python
+"""Calculate or recalculate the appeals of works."""
+import os
+import sys
+bin_dir = os.path.split(__file__)[0]
+package_dir = os.path.join(bin_dir, "..", "..")
+sys.path.append(os.path.abspath(package_dir))
+from metadata.scripts import WorkAppealCalculationScript
+
+force = 'force' in sys.argv
+WorkAppealCalculationScript(os.environ['DATA_DIRECTORY'], force=force).run()

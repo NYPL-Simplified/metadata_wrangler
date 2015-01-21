@@ -1,0 +1,17 @@
+#!/usr/bin/python
+"""Update the metadata wrangler with new books from the open access
+content server.
+
+A work will be created for each book, but the work will not be
+presentation-ready until metadata has been acquired from every known
+source.
+"""
+import os
+import sys
+bin_dir = os.path.split(__file__)[0]
+package_dir = os.path.join(bin_dir, "..")
+sys.path.append(os.path.abspath(package_dir))
+from core.scripts import OPDSImportScript
+from core.opds_import import DetailedOPDSImporter
+from core.model import DataSource
+OPDSImportScript(sys.argv[1], DetailedOPDSImporter).run()
