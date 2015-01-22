@@ -3,40 +3,23 @@ import os
 from core.model import (
     Work,
 )
-from core.overdrive import OverdriveAPI
 from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
 from threem import (
-    ThreeMAPI,
     ThreeMCoverImageMirror,
 )    
 
-from core.opds_import import SimplifiedOPDSLookup
 from core.scripts import (
     WorkProcessingScript,
     Script,
 )
 from amazon import AmazonCoverageProvider
-from monitor import (
-    MakePresentationReadyMonitor,
-    IdentifierResolutionMonitor,
-)
 from gutenberg import (
     GutenbergBookshelfClient,
     OCLCMonitorForGutenberg,
 )
 from appeal import AppealCalculator
 from viaf import VIAFClient
-
-class MakePresentationReady(Script):
-
-    def run(self):
-        """Find all Works that are not presentation ready, and make them
-        presentation ready.
-        """
-        MakePresentationReadyMonitor(os.environ['DATA_DIRECTORY']).run(
-            self._db)
-
 
 class FillInVIAFAuthorNames(Script):
 
@@ -95,18 +78,6 @@ class WorkPresentationCalculationScript(WorkProcessingScript):
         if not self.force:
             q = q.filter(Work.fiction==None).filter(Work.audience==None)
         return q
-
-class IdentifierResolutionScript(Script):
-
-
-    def run(self):
-        content_server_url = os.environ['CONTENT_SERVER_URL']
-        content_server = SimplifiedOPDSLookup(content_server_url)
-        overdrive = OverdriveAPI(self._db)
-        threem = ThreeMAPI(self._db)
-        IdentifierResolutionMonitor(content_server, overdrive, threem).run(
-            self._db)
-
 
 class CoverImageMirrorScript(Script):
     """This is not needed in normal usage, but it's useful to have it around

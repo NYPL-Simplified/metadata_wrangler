@@ -10,8 +10,8 @@ from lxml import etree
 from core.util.xmlparser import (
     XMLParser,
 )
+from core.coverage import CoverageProvider
 from core.model import (
-    CoverageProvider,
     DataSource,
     Equivalency,
     Identifier,

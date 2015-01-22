@@ -11,8 +11,8 @@ from mirror import (
     CoverImageMirror
 )
 
+from core.coverage import CoverageProvider
 from core.model import (
-    CoverageProvider,
     DataSource,
     Edition,
     Identifier,
