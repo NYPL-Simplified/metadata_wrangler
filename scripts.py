@@ -16,7 +16,6 @@ from core.scripts import (
 from amazon import AmazonCoverageProvider
 from gutenberg import (
     GutenbergBookshelfClient,
-    OCLCMonitorForGutenberg,
 )
 from appeal import AppealCalculator
 from viaf import VIAFClient
@@ -31,17 +30,6 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
-
-
-class OCLCMonitorForGutenbergScript(Script):
-
-    def run(self):
-        OCLCMonitorForGutenberg(self._db).run()
-
-class AmazonCoverageProviderScript(Script):
-
-    def run(self):
-        AmazonCoverageProvider(self._db).run()
 
 class GutenbergBookshelfMonitorScript(Script):
     """Gather subject classifications and popularity measurements from

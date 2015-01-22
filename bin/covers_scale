@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Scale the cover images associated with all works."""
 import os
 import sys

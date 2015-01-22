@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Update the metadata wrangler with new books from the open access
 content server.
 
