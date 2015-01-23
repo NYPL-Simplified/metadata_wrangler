@@ -1,4 +1,5 @@
 import csv
+import sys
 from nose.tools import set_trace
 import os
 from core.model import (
@@ -143,7 +144,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
     work ID generation algorithm.
     """
 
-    def __init__(self, destination_file, test_size=20000):
+    def __init__(self, destination_file):
         self.destination_file = destination_file
         self.out = open(self.destination_file, "w")
         self.writer = csv.writer(self.out)
@@ -164,12 +165,11 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         else:
             return ''
 
-    def write_row(self, original_author, normalized_author, original_title,
-                  normalized_title, format):
+    def write_row(self, title, author, normalized_title, normalized_author,
+                  format):
         permanent_id = WorkIDCalculator.permanent_id(
             normalized_title, normalized_author, format)
-        row = [original_author, normalized_author,
-               original_title, normalized_title,
+        row = [title, author, normalized_title, normalized_author,
                format, permanent_id]
         self.writer.writerow(map(self.ready, row))
 
@@ -188,3 +188,22 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         title = WorkIDCalculator.normalize_title(original_title)
         self.write_row(primary_author_name, author, original_title, title,
                        "ebook")
+
+class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript):
+    
+    def __init__(self, input_path):
+        self.input = open(input_path)
+        self.reader = csv.reader(self.input)
+        self.writer = csv.writer(sys.stdout)
+        self.writer.writerow(["Title", "Author", "Normalized title", "Normalized author", "Format", "Permanent work ID"])
+
+    def run(self):
+        skipped = False
+        wi = WorkIDCalculator
+        for title, author, format in self.reader:
+            if not skipped:
+                skipped = True
+                continue
+            normalized_title = wi.normalize_title(title.decode("utf8"))
+            normalized_author = wi.normalize_author(author.decode("utf8"))
+            self.write_row(title, author, normalized_title, normalized_author, format)
