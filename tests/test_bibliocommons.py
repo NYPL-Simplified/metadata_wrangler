@@ -106,3 +106,40 @@ class TestBibliocommonsAPI(DatabaseTest):
                  for x in edition.equivalent_identifiers()
                  if x.type == Identifier.ISBN]
         eq_("9780374370930", isbn)
+
+    def test_list_to_customlist(self):
+        bib_list = self.api.get_list("371050767")
+        custom_list = bib_list.to_customlist(self._db)
+
+        eq_(bib_list.name, custom_list.name)
+        eq_(bib_list.description, custom_list.description)
+        eq_(bib_list.created, custom_list.created)
+        eq_(bib_list.updated, custom_list.updated)
+
+        initial_entry_list = list(custom_list.entries)
+
+        bib_titles = sorted([x.item['title'] for x in bib_list])
+        custom_titles = sorted([x.edition.title for x in initial_entry_list])
+        eq_(bib_titles, custom_titles)
+
+        bib_annotations = sorted([x.annotation for x in bib_list])
+        custom_annotations = sorted([x.annotation for x in initial_entry_list])
+        eq_(bib_annotations, custom_annotations)
+        eq_(True, all([x.added == custom_list.updated for x in initial_entry_list]))
+        eq_(True, all([x.removed is None for x in initial_entry_list]))
+
+        # Now replace this list's entries with the entries from a
+        # different list. We wouldn't do this in real life, but it's
+        # a convenient way to change the contents of a list.
+        other_bibliocommons_list = self.api.get_list("379257178")
+        other_bibliocommons_list.update_items(custom_list)
+
+        # The CustomList now contains elements from both Bibliocommons lists.
+        new_entries = list(custom_list.entries)
+        assert (len(new_entries) = len(initial_entry_list)
+                + len(other_bibliocommons_list.items))
+
+        # But all the old entries have had their 'removed' dates set.
+        eq_(True, all([x.removed == other_bibliocommons_list.updated
+                       for x in initial_entry_list]))
+

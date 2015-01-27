@@ -8,9 +8,12 @@ import os
 import json
 import urlparse
 import isbnlib
+from sqlalchemy.orm.session import Session
 
 from core.model import (
+    get_one_or_create,
     Contributor,
+    CustomList,
     DataSource,
     Edition,
     Identifier,
@@ -58,7 +61,7 @@ class BibliocommonsAPI(BibliocommonsBase):
         url += joiner + "api_key=" + self.api_key
         
         # TODO: huge library-specific hack here
-        url += "&library=nypl"
+        # url += "&library=nypl"
 
         representation, cached = Representation.get(
             self._db, url, data_source=self.source, identifier=identifier,
@@ -113,13 +116,55 @@ class BibliocommonsList(BibliocommonsBase):
         ):
             setattr(self, i, list_data.get(i, None))
 
+        self.creator = list_data.get('user', {})
+
         self.items = []
         for li_data in list_data.get('list_items', []):
             item = BibliocommonsListItem(li_data)
             self.items.append(item)
+        print list_data
 
     def __iter__(self):
         return self.items.__iter__()
+
+    def to_customlist(self, _db):
+        """Turn this Bibliocommons list into a CustomList object."""
+        data_source = DataSource.lookup(_db, DataSource.BIBLIOCOMMONS)
+        l, was_new = get_one_or_create(
+            _db, 
+            CustomList,
+            data_source=data_source,
+            foreign_identifier=self.id,
+            create_method_kwargs = dict(
+                created=self.created
+            )
+        )
+        l.name = self.name
+        l.description = self.description
+        l.responsible_party = self.creator.get('name')
+        l.updated = self.updated
+        self.update_items(l)
+        return l
+
+    def update_items(self, custom_list):
+        """Make sure the given CustomList's CustomListEntries reflect
+        the current state of the Bibliocommons list.
+        """
+        db = Session.object_session(custom_list)
+
+        previous_contents = {}
+        for entry in custom_list.entries:
+            previous_contents[entry.edition.id] = entry
+    
+        # Add new items to the list.
+        for i in self.items:
+            list_item, was_new = i.to_custom_list_item(custom_list)
+            if list_item.edition.id in previous_contents:
+                del previous_contents[edition.id]
+
+        # Mark items no longer on the list as removed.
+        for entry in previous_contents.values():
+            entry.removed = custom_list.updated
 
 class BibliocommonsListItem(BibliocommonsBase):
 
@@ -132,6 +177,12 @@ class BibliocommonsListItem(BibliocommonsBase):
             self.item = BibliocommonsTitle(item_data['title'])
         else:
             self.item = item_data
+
+    def to_custom_list_item(self, custom_list):
+        _db = Session.object_session(custom_list)        
+        edition = self.item.to_edition(_db)
+        return custom_list.add_entry(edition, self.annotation, 
+                                     custom_list.updated)
 
 class BibliocommonsTitle(BibliocommonsBase):
 
