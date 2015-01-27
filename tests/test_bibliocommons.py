@@ -13,6 +13,11 @@ from ..bibliocommons import (
     BibliocommonsListItem,
     BibliocommonsTitle
 )
+from ..core.model import (
+    Contributor,
+    Edition,
+    Identifier,
+)
 
 class DummyBibliocommonsAPI(BibliocommonsAPI):
 
@@ -80,3 +85,24 @@ class TestBibliocommonsAPI(DatabaseTest):
         info = self.api.get_title("20172591052907")
         eq_("Snow", info['title'])
         eq_("20172591052907", info['id'])
+
+    def test_title_to_edition(self):
+        title = self.api.get_title("20172591052907")
+        edition = title.to_edition(self._db)
+
+        eq_("Snow", edition.title)
+        eq_(Edition.BOOK_MEDIUM, edition.medium)
+        eq_("eng", edition.language)
+
+        eq_(datetime.datetime(2012, 1, 1, 0, 0), edition.published)
+
+        [cont] = edition.contributions
+        eq_("Shulevitz, Uri", cont.contributor.name)
+        eq_(Contributor.PRIMARY_AUTHOR_ROLE, cont.role)
+
+        # We were given an ISBN-10 and an equivalent ISBN-13 for this
+        # book. Only the ISBN-13 was recorded.
+        [isbn] = [x.identifier
+                 for x in edition.equivalent_identifiers()
+                 if x.type == Identifier.ISBN]
+        eq_("9780374370930", isbn)

@@ -7,9 +7,13 @@ from datetime import (
 import os
 import json
 import urlparse
+import isbnlib
 
 from core.model import (
+    Contributor,
     DataSource,
+    Edition,
+    Identifier,
     Representation,
 )
 
@@ -52,6 +56,9 @@ class BibliocommonsAPI(BibliocommonsBase):
         if '?' in url:
             joiner = '&'
         url += joiner + "api_key=" + self.api_key
+        
+        # TODO: huge library-specific hack here
+        url += "&library=nypl"
 
         representation, cached = Representation.get(
             self._db, url, data_source=self.source, identifier=identifier,
@@ -79,12 +86,12 @@ class BibliocommonsAPI(BibliocommonsBase):
 
     def get_list(self, list_id):
         url = self.LIST_URL.format(list_id=list_id)
-        return self._make_list(self, self.request(url))
+        return self._make_list(self.request(url))
 
     def get_title(self, title_id):
         url = self.TITLE_URL.format(title_id=title_id)
         data = self.request(url, max_age=self.TITLE_MAX_AGE)
-        return self._make_title(self, data)
+        return self._make_title(data)
 
     def _make_title(self, data):
         if not 'title' in data:
@@ -128,13 +135,96 @@ class BibliocommonsListItem(BibliocommonsBase):
 
 class BibliocommonsTitle(BibliocommonsBase):
 
+    DATE_FORMAT = "%Y"
+
+    # TODO: This needs to be greatly expanded and moved into core/util
+    LANGUAGE_CODES = {
+        "English": "eng",
+        "Spanish": "spa",
+        "French": "fra",
+        "Japanese": "jpn",
+        "Russian": "rus",
+        "Undetermined": "eng" # This is almost always correct.
+    }
+
     def __init__(self, data):
         self.data = data
 
     def __getitem__(self, k):
-        return self.data.get(k, None)
+        return self.get(k)
+
+    def get(self, k, default=None):
+        return self.data.get(k, default)
 
     def to_edition(self, _db):
-        # Create or locate a Simplified edition for this Bibliocommons
-        # title.
-        pass
+        """Create or update a Simplified Edition object for this Bibliocommons
+        title.
+       """
+        if not self['id']:
+            return None
+        data_source = DataSource.lookup(_db, DataSource.BIBLIOCOMMONS)
+        edition, was_new = Edition.for_foreign_id(
+            _db, data_source, Identifier.BIBLIOCOMMONS_ID, self['id'])
+
+        edition.title = self['title']
+        edition.subtitle = self['sub_title']
+        if self['publishers']:
+            edition.publisher = self['publishers'][0]['name']
+
+        format = self['format']['id']
+        # TODO: We need a bigger collection here.
+        if format in ('BK', 'PAPERBACK', 'EBOOK'):
+            edition.medium = Edition.BOOK_MEDIUM
+        elif format in ('MUSIC_CD'):
+            edition.medium = Edition.MUSIC_MEDIUM
+        elif format in ('AB', 'BOOK_CD'):
+            edition.medium = Edition.AUDIO_MEDIUM
+        elif format in ('DVD'):
+            edition.medium = Edition.VIDEO_MEDIUM
+        else:
+            print self['format']
+            set_trace()
+
+        language = self['primary_language'].get('name', 'Undetermined')
+        if language == 'Undetermined':
+            language = 'eng'
+        if language in self.LANGUAGE_CODES:
+            language = self.LANGUAGE_CODES[language]
+        else:
+            language = None
+        edition.language = language
+
+        for i in self.get('isbns', []):
+            if len(i) == 10:
+                i = isbnlib.to_isbn13(i)
+            elif len(i) != 13:
+                continue
+            other_identifier, ignore = Identifier.for_foreign_id(
+                _db, Identifier.ISBN, i)
+            edition.primary_identifier.equivalent_to(
+                data_source, other_identifier, 1)
+
+        if self['publication_date']:
+            edition.published = datetime.strptime(
+                self['publication_date'][:4], self.DATE_FORMAT)
+
+        all_authors = self.get('authors', []) + self.get(
+            'additional_contributors', [])
+
+        primary_author = None
+        for author in all_authors:
+            if not author['name']:
+                continue
+            if len(author.keys()) > 1:
+                set_trace()
+            if primary_author is None:
+                role = Contributor.PRIMARY_AUTHOR_ROLE
+                primary_author = author                
+            else:
+                role = Contributor.AUTHOR_ROLE
+            edition.add_contributor(author['name'], role)
+
+        for performer in self.get('performers', []):
+            edition.add_contributor(
+                performer['name'], Contributor.PERFORMER_ROLE)
+        return edition
