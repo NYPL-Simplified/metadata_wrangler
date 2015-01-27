@@ -8,7 +8,11 @@ import datetime
 import json
 
 from . import DatabaseTest
-from ..bibliocommons import BibliocommonsAPI
+from ..bibliocommons import (
+    BibliocommonsAPI,
+    BibliocommonsListItem,
+    BibliocommonsTitle
+)
 
 class DummyBibliocommonsAPI(BibliocommonsAPI):
 
@@ -23,6 +27,14 @@ class DummyBibliocommonsAPI(BibliocommonsAPI):
         for pagenum in range(1,4):
             yield self.sample_json(
                 "list_of_user_lists_page%d.json" % pagenum)
+
+    def get_list(self, list_id):
+        data = self.sample_json("list_%s.json" % list_id)
+        return self._make_list(data)
+
+    def get_title(self, title_id):
+        data = self.sample_json("title_detail_%s.json" % title_id)
+        return self._make_title(data)
 
 class TestBibliocommonsAPI(DatabaseTest):
     
@@ -42,3 +54,29 @@ class TestBibliocommonsAPI(DatabaseTest):
         # Updated and created dates have been converted to datetimes.
         eq_(datetime.datetime(2014, 9, 30, 20, 55, 13), first_list['updated'])
         eq_(datetime.datetime(2014, 9, 30, 20, 30, 25), first_list['created'])
+
+    def test_list_with_non_titles(self):
+        # Two of the items in this list are URLs, not titles.
+        list_1 = self.api.get_list("358549907")
+        non_titles = [
+            x for x in list_1 if x.type != BibliocommonsListItem.TITLE_TYPE]
+        assert all(['url' in x.item for x in non_titles])
+        assert all(['title' not in x.item for x in non_titles])
+
+    def test_list_with_titles(self):
+        l = self.api.get_list("371050767")
+        
+        # Make sure all the list items were converted to
+        # BibliocommonsTitle objects.
+        assert all([isinstance(x.item, BibliocommonsTitle) for x in l])
+
+        # Make sure all the annotations got picked up.
+        annotations = sorted([x.annotation for x in l])
+        eq_([u'', u'Out in February', u'Out in Februrary', u'Out in January',
+             u'Out in January', u'Out in January', u'Out in January', 
+             u'Out in January', u'Out in January'], annotations)
+
+    def test_title_info(self):
+        info = self.api.get_title("20172591052907")
+        eq_("Snow", info['title'])
+        eq_("20172591052907", info['id'])
