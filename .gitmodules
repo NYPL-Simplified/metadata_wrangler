@@ -1,3 +1,6 @@
 [submodule "core"]
 	path = core
 	url = https://github.com/NYPL/Simplified-server-core.git
+[submodule "Simplified-server-core"]
+	path = core
+	url = https://github.com/NYPL/Simplified-server-core.git
