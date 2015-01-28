@@ -100,6 +100,9 @@ class TestBibliocommonsAPI(DatabaseTest):
         eq_("Shulevitz, Uri", cont.contributor.name)
         eq_(Contributor.PRIMARY_AUTHOR_ROLE, cont.role)
 
+        eq_("Shulevitz, Uri", edition.author)
+        eq_("Shulevitz, Uri", edition.sort_author)
+
         # We were given an ISBN-10 and an equivalent ISBN-13 for this
         # book. Only the ISBN-13 was recorded.
         [isbn] = [x.identifier
@@ -132,14 +135,15 @@ class TestBibliocommonsAPI(DatabaseTest):
         # different list. We wouldn't do this in real life, but it's
         # a convenient way to change the contents of a list.
         other_bibliocommons_list = self.api.get_list("379257178")
-        other_bibliocommons_list.update_items(custom_list)
+        other_bibliocommons_list.update_custom_list(custom_list)
 
         # The CustomList now contains elements from both Bibliocommons lists.
         new_entries = list(custom_list.entries)
-        assert (len(new_entries) = len(initial_entry_list)
+        assert (len(new_entries) == len(initial_entry_list)
                 + len(other_bibliocommons_list.items))
 
-        # But all the old entries have had their 'removed' dates set.
+        # But all the old entries have had their 'removed' dates set
+        # to the date the other list was updated.
         eq_(True, all([x.removed == other_bibliocommons_list.updated
                        for x in initial_entry_list]))
 

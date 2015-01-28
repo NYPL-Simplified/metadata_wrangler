@@ -143,10 +143,10 @@ class BibliocommonsList(BibliocommonsBase):
         l.description = self.description
         l.responsible_party = self.creator.get('name')
         l.updated = self.updated
-        self.update_items(l)
+        self.update_custom_list(l)
         return l
 
-    def update_items(self, custom_list):
+    def update_custom_list(self, custom_list):
         """Make sure the given CustomList's CustomListEntries reflect
         the current state of the Bibliocommons list.
         """
@@ -164,7 +164,7 @@ class BibliocommonsList(BibliocommonsBase):
 
         # Mark items no longer on the list as removed.
         for entry in previous_contents.values():
-            entry.removed = custom_list.updated
+            entry.removed = self.updated
 
 class BibliocommonsListItem(BibliocommonsBase):
 
@@ -278,4 +278,5 @@ class BibliocommonsTitle(BibliocommonsBase):
         for performer in self.get('performers', []):
             edition.add_contributor(
                 performer['name'], Contributor.PERFORMER_ROLE)
+        edition.calculate_presentation()
         return edition
