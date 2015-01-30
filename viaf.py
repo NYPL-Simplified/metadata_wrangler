@@ -20,12 +20,17 @@ from core.model import (
 from core.util.xmlparser import (
     XMLParser,
 )
+from core.util.personal_names import display_name_to_sort_name
 
 class VIAFParser(XMLParser):
 
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
-    def info(self, contributor, xml, from_multiple):
+    @classmethod
+    def name_matches(cls, n1, n2):
+        return n1.replace(".", "").lower() == n2.replace(".", "").lower()
+
+    def info(self, contributor, viaf, display_name, family_name, wikipedia_name):
         """For the given Contributor, find:
 
         * A VIAF ID
@@ -36,17 +41,7 @@ class VIAFParser(XMLParser):
 
         :return: a 3-tuple (display name, family name, Wikipedia name)
         """
-        if not xml:
-            display, family = contributor.default_names(None)
-            return display, family, None
         print "Starting point: %s" % contributor.name
-
-        if from_multiple:
-            viaf, display_name, family_name, wikipedia_name = self.parse_multiple(
-                xml, contributor.name)
-        else:
-            viaf, display_name, family_name, wikipedia_name = self.parse(
-                xml, contributor.name)
 
         if not contributor.viaf:
             contributor.viaf = viaf
@@ -66,37 +61,77 @@ class VIAFParser(XMLParser):
         print
         return viaf, display_name, family_name, wikipedia_name
 
-    def cluster_has_record_for_named_author(self, cluster, name):
+    def sort_names_for_cluster(self, cluster):
+        """Find all sort names for the given cluster."""
+        for tag in ('100', '110'):
+            for data_field in self._xpath(
+                    cluster, './/*[local-name()="datafield"][@dtype="MARC21"][@tag="%s"]' % tag):
+                for potential_match in self._xpath(
+                        data_field, '*[local-name()="subfield"][@code="a"]'):
+                    yield potential_match.text
 
-        for data_field in self._xpath(
-                cluster, './/*[local-name()="datafield"][@dtype="MARC21"][@tag="100"]'):
-            for potential_match in self._xpath(
-                    data_field, '*[local-name()="subfield"][@code="a"]'):
-                if potential_match.text == name:
+    def cluster_has_record_for_named_author(
+            self, cluster, working_sort_name, working_display_name):
+
+        # If we have a sort name to look for, and it's in this cluster's
+        # sort names, great.
+        if working_sort_name:
+            for potential_match in self.sort_names_for_cluster(cluster):
+                if self.name_matches(potential_match, working_sort_name):
                     return True
 
+        # If we have a display name to look for, and this cluster's
+        # Wikipedia name converts to the display name, great.
+        if working_display_name:
+            wikipedia_name = self.extract_wikipedia_name(cluster)
+            if wikipedia_name:
+                display_name = self.wikipedia_name_to_display_name(
+                    wikipedia_name)
+                if self.name_matches(display_name, working_display_name):
+                    return True
+
+        # If there are UNIMARC records, and every part of the UNIMARC
+        # record matches the sort name or the display name, great.
         unimarcs = self._xpath(cluster, './/*[local-name()="datafield"][@dtype="UNIMARC"]')
         candidates = []
         for unimarc in unimarcs:
             (possible_given, possible_family,
-             possible_extra) = self.extract_name_from_unimarc(unimarc)
-            if (possible_given and possible_given in name
-                and possible_family and possible_family in name and (
-                    not possible_extra or possible_extra in name)):
-                return True
+             possible_extra, possible_sort_name) = self.extract_name_from_unimarc(unimarc)
+            if working_sort_name:
+                if self.name_matches(possible_sort_name, working_sort_name):
+                    return True
+
+            for name in (working_sort_name, working_display_name):
+                if not name:
+                    continue
+                if (possible_given and possible_given in name
+                    and possible_family and possible_family in name and (
+                        not possible_extra or possible_extra in name)):
+                    return True
+
+        # Last-ditch effort. Guess at the sort name and see if *that's* one
+        # of the cluster sort names.
+        if working_display_name and not working_sort_name:
+            test_sort_name = display_name_to_sort_name(working_display_name)
+            for potential_match in self.sort_names_for_cluster(cluster):
+                if self.name_matches(potential_match, test_sort_name):
+                    return True
+
         return False
 
-    def parse_multiple(self, xml, working_name=None):
+    def parse_multiple(
+            self, xml, working_sort_name=None, working_display_name=None,
+            strict=True):
         """Parse a VIAF response containing multiple clusters into a
-        VIAF ID + name 4-tuple.
+        VIAF ID + name 5-tuple.
         """
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         viaf_id = None
         for cluster in self._xpath(tree, '//*[local-name()="VIAFCluster"]'):
-            viaf, display, family, wikipedia = self.extract_viaf_info(
-                cluster, working_name, strict=True)
+            viaf, display, family, sort, wikipedia = self.extract_viaf_info(
+                cluster, working_sort_name, working_display_name, strict)
             if display:
-                return viaf, display, family, wikipedia
+                return viaf, display, family, sort, wikipedia
             # We couldn't find a display name, but can we at least
             # determine that this is an acceptable VIAF ID for this
             # name?
@@ -105,26 +140,37 @@ class VIAFParser(XMLParser):
 
         # We could not find any names for this author, but hopefully
         # we at least found a VIAF ID.
-        return viaf_id, None, None, None
+        return viaf_id, None, None, None, None
 
-    def parse(self, xml, working_name=None):
+    def parse(self, xml, working_sort_name=None, working_display_name=None):
         """Parse a VIAF response containing a single cluster into a name
         3-tuple."""
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
-        return self.extract_viaf_info(tree, working_name)
-        
-    def extract_viaf_info(self, cluster, working_name=None, strict=False):
+        return self.extract_viaf_info(
+            tree, working_sort_name, working_display_name)
+
+    def extract_wikipedia_name(self, cluster):
+        """Extract Wiki name from a single VIAF cluster."""
+        for source in self._xpath(cluster, './/*[local-name()="sources"]/*[local-name()="source"]'):
+            if source.text.startswith("WKP|"):
+                return source.text[4:]
+
+
+    def extract_viaf_info(self, cluster, working_sort_name=None,
+                          working_display_name=False, strict=False):
         """Extract name info from a single VIAF cluster."""
         display_name = None
+        sort_name = working_sort_name
         family_name = None
         wikipedia_name = None
 
         # If we're not sure that this is even the right cluster for
-        # the given author, make sure that the working name shows up
-        # in a name record.
-        if strict and not self.cluster_has_record_for_named_author(
-                cluster, working_name):
-            return None, None, None, None
+        # the given author, make sure that one of the working names
+        # shows up in a name record.
+        if strict:
+            if not self.cluster_has_record_for_named_author(
+                cluster, working_sort_name, working_display_name):
+                return None, None, None, None, None
 
         # Get the VIAF ID for this cluster, just in case we don't have one yet.
         viaf_tag = self._xpath1(cluster, './/*[local-name()="viafID"]')
@@ -133,30 +179,40 @@ class VIAFParser(XMLParser):
         else:
             viaf_id = viaf_tag.text
 
+        # If we don't have a working sort name, find the most popular
+        # sort name in this cluster and use it as the sort name.
+        sort_name_popularity = Counter()
+        if not sort_name:
+            for possible_sort_name in self.sort_names_for_cluster(cluster):
+                if possible_sort_name.endswith(","):
+                    possible_sort_name = possible_sort_name[:-1]
+                sort_name_popularity[possible_sort_name] += 1
 
         # Does this cluster have a Wikipedia page?
-        for source in self._xpath(cluster, './/*[local-name()="sources"]/*[local-name()="source"]'):
-            if source.text.startswith("WKP|"):
-                # Jackpot!
-                wikipedia_name = source.text[4:]
-                display_name = wikipedia_name.replace("_", " ")
-                if ' (' in display_name:
-                    display_name = display_name[:display_name.rindex(' (')]
-                working_name = wikipedia_name
+        wikipedia_name = self.extract_wikipedia_name(cluster)
+        if wikipedia_name:
+            display_name = self.wikipedia_name_to_display_name(wikipedia_name)
+            working_display_name = wikipedia_name
+            # TODO: There's a problem here when someone's record has a
+            # Wikipedia page other than their personal page (e.g. for
+            # a band they're in.)
 
         unimarcs = self._xpath(cluster, './/*[local-name()="datafield"][@dtype="UNIMARC"]')
         candidates = []
         for unimarc in unimarcs:
             (possible_given, possible_family,
-             possible_extra) = self.extract_name_from_unimarc(unimarc)
+             possible_extra, possible_sort_name) = self.extract_name_from_unimarc(unimarc)
             # Some part of this name must also show up in the original
             # name for it to even be considered. Otherwise it's a
             # better bet to try to munge the original name.
             for v in (possible_given, possible_family, possible_extra):
-                if (not working_name) or (v and v in working_name):
+                if v and (not working_sort_name or v in working_sort_name):
                     # print "FOUND %s in %s" % (v, working_name)
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
+                    if possible_sort_name and possible_sort_name.endswith(","):
+                        possible_sort_name = sort_name[:-1]
+                        sort_name_popularity[possible_sort_name] += 1
                     break
             else:
                 #print "  EXCLUDED %s/%s/%s for lack of resemblance to %s" % (
@@ -164,14 +220,27 @@ class VIAFParser(XMLParser):
                 #    working_name)
                 pass
 
+        if sort_name_popularity and not sort_name:
+            sort_name, ignore = sort_name_popularity.most_common(1)[0]
+
         display_nameparts = self.best_choice(candidates)
         if display_nameparts[1]: # Family name
             family_name = display_nameparts[1]
-        return (
+
+        v = (
             viaf_id,
-            display_name or self.combine_nameparts(*display_nameparts),
+            display_name or self.combine_nameparts(*display_nameparts) or working_display_name,
             family_name,
+            sort_name or working_sort_name,
             wikipedia_name)
+        return v
+
+    def wikipedia_name_to_display_name(self, wikipedia_name):
+        "Convert 'Bob_Jones_(Author)' to 'Bob Jones'"
+        display_name = wikipedia_name.replace("_", " ")
+        if ' (' in display_name:
+            display_name = display_name[:display_name.rindex(' (')]
+        return display_name
 
     def best_choice(self, possibilities):
         """Return the best (~most popular) choice among the given names.
@@ -230,10 +299,16 @@ class VIAFParser(XMLParser):
         return namepart.strip()
 
     def extract_name_from_unimarc(self, unimarc):
-        """Turn a UNIMARC tag into a 3-tuple:
-         (given name, family name, extra)
+        """Turn a UNIMARC tag into a 4-tuple:
+         (given name, family name, extra, sort name)
         """
+        # Only process author names and corporate names.
+        #if unimarc.get('tag') not in ('100', '110'):
+        #    return None, None, None, None
+        #if unimarc.get('tag') == '110':
+        #    set_trace()
         data = dict()
+        sort_name_in_progress = []
         for (code, key) in (
                 ('a', 'family'),
                 ('b', 'given'),
@@ -243,9 +318,10 @@ class VIAFParser(XMLParser):
             if value is not None and value.text:
                 value = value.text
                 value = self.remove_commas_from(value)
+                sort_name_in_progress.append(value)
                 data[key] = value
         return (data.get('given', None), data.get('family', None),
-                data.get('extra', None))
+                data.get('extra', None), ", ".join(sort_name_in_progress))
 
     @classmethod
     def combine_nameparts(self, given, family, extra):
@@ -279,91 +355,24 @@ class VIAFClient(object):
         self.data_source = DataSource.lookup(self._db, DataSource.VIAF)
         self.parser = VIAFParser()
 
-    def process_contributor(self, contributor):
-        """Fill in VIAF information for one specific Contributor."""
-        if contributor.display_name and contributor.viaf:
-            # Nothing to do.
-            return
-        if contributor.viaf:
-            # A VIAF ID is the most reliable way we have of identifying
-            # a contributor.
-            viafs = [x.strip() for x in contributor.viaf.split("|")]
-            # Sometimes there are multiple VIAF IDs.
-            for v in viafs:
-                self.fill_contributor_info_from_viaf(contributor, v)
-                if contributor.wikipedia_name or contributor.family_name:
-                    # Good enough.
-                    break
-        elif contributor.name:
-            self.fill_contributor_info_from_name(contributor)
-
-        if not contributor.display_name:
-            # We could not find a VIAF record for this contributor,
-            # or none of the records were good enough. Use the
-            # default name.
-            print "BITTER FAILURE for %s" % contributor.name
-            contributor.family_name, contributor.display_name = (
-                contributor.default_names())
-
-    def run(self, force=False):
-        a = 0
-        # Ignore editions from OCLC
-        oclc_linked_data = DataSource.lookup(
-            self._db, DataSource.OCLC_LINKED_DATA)
-        oclc_search = DataSource.lookup(
-            self._db, DataSource.OCLC)
-        ignore_editions_from = [oclc_linked_data.id, oclc_search.id]
-        must_have_roles = [
-            Contributor.PRIMARY_AUTHOR_ROLE, Contributor.AUTHOR_ROLE]
-        candidates = self._db.query(Contributor)
-        candidates = candidates.join(Contributor.contributions)
-        candidates = candidates.join(Contribution.edition)
-        candidates = candidates.filter(~Edition.data_source_id.in_(ignore_editions_from))
-        candidates = candidates.filter(Contribution.role.in_(must_have_roles))
-        if not force:
-            something_is_missing = or_(
-                Contributor.display_name==None,
-                Contributor.viaf==None)
-            # Only process authors that haven't been processed yet.
-            candidates = candidates.filter(something_is_missing)
-        for contributor in candidates:
-            self.process_contributor(contributor)
-            a += 1
-            if not a % 10:
-                print a
-                self._db.commit()
-        self._db.commit()
-
-    def fill_contributor_info_from_viaf(self, contributor, viaf):
+    def lookup_by_viaf(self, viaf, working_sort_name=None,
+                       working_display_name=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
-        r, cached = Representation.get(self._db, url, data_source=self.data_source)
+        r, cached = Representation.get(
+            self._db, url, data_source=self.data_source)
 
         xml = r.content
-        viaf, display_name, family_name, wikipedia_name = self.parser.info(
-            contributor, xml, False)
-        contributor.display_name = display_name
-        contributor.family_name = family_name
-        contributor.wikipedia_name = wikipedia_name
+        return self.parser.parse(xml, working_sort_name, working_display_name)
 
-    def fill_contributor_info_from_name(self, contributor):
-        url = self.SEARCH_URL.format(sort_name=contributor.name.encode("utf8"))
+    def lookup_by_name(self, sort_name, display_name=None, strict=True):
+        name = sort_name or display_name
+        url = self.SEARCH_URL.format(sort_name=name.encode("utf8"))
         r, cached = Representation.get(
             self._db, url, data_source=self.data_source)
         xml = r.content
-        viaf, display_name, family_name, wikipedia_name = self.parser.info(
-            contributor, xml, True)
-        contributor.viaf = viaf
-        contributor.display_name = display_name
-        contributor.family_name = family_name
-        contributor.wikipedia_name = wikipedia_name
-
-        # Is there already a contributor with this VIAF?
-        if contributor.viaf is not None:
-            duplicates = self._db.query(Contributor).filter(
-                Contributor.viaf==contributor.viaf).all()
-            if duplicates:
-                if duplicates[0].display_name != contributor.display_name:
-                    set_trace()
-                contributor.merge_into(duplicates[0])
-                
-        
+        v = self.parser.parse_multiple(
+            xml, sort_name, display_name, strict)
+        if not any(v):
+            # Delete the representation so it's not cached.
+            self._db.query(Representation).filter(Representation.id==r.id).delete()
+        return v
