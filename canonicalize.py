@@ -85,9 +85,7 @@ class AuthorNameCanonicalizer(object):
         sort_name = display_name_to_sort_name(shortened_name)
         print "FAILURE on %s, going with %s" % (
             display_name, sort_name)
-        return None
         return sort_name
-
 
 
     def _canonicalize(self, identifier, display_name):
@@ -175,7 +173,7 @@ class AuthorNameCanonicalizer(object):
         return shortest_candidate, uris
 
     def sort_name_from_viaf(self, display_name):
-        #viaf, display_name, family_name, sort_name, wikipedia_name = (
-        #        viaf_client.lookup_by_name(None, display_name))
-        #return sort_name
-        return None
+        viaf, display_name, family_name, sort_name, wikipedia_name = (
+                self.viaf.lookup_by_name(None, display_name))
+        return sort_name
+
