@@ -193,6 +193,30 @@ class OCLCLinkedData(object):
                     self._db, Identifier.OCLC_WORK, work_id)
                 oclc_work_data, cached = self.lookup_by_identifier(identifier)
                 yield oclc_work_data
+
+    @classmethod
+    def creator_names(cls, graph, field_name='creator'):
+        """Extract names and VIAF IDs for the creator(s) of the work described
+        in `graph`.
+
+        :param field_name: Try 'creator' first, then 'contributor' if
+        that doesn't work.
+        """
+        names = []
+        uris = []
+        for book in cls.books(graph):
+            values = book.get(field_name, [])
+            for creator_uri in ldq.values(
+                ldq.restrict_to_language(values, 'en')):
+                internal_results = cls.internal_lookup(graph, creator_uri)
+                if internal_results:
+                    for obj in internal_results:
+                        for fieldname in ('name', 'schema:name'):
+                            for name in ldq.values(obj.get(fieldname, [])):
+                                names.append(name)
+                else:
+                    uris.append(creator_uri)
+        return names, uris
                
     @classmethod
     def graph(cls, raw_data):
