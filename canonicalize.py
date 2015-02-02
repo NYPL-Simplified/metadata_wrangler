@@ -82,11 +82,11 @@ class AuthorNameCanonicalizer(object):
 
         # All our techniques have failed. Let's just convert the
         # shortened display name to a sort name and hope for the best.
-        sort_name = display_name_to_sort_name(shortened_name)
-        print "FAILURE on %s, going with %s" % (
-            display_name, sort_name)
-        return sort_name
+        return None
 
+    def default_name(self, display_name):
+        shortened_name = self.primary_author_name(display_name)
+        return display_name_to_sort_name(shortened_name)
 
     def _canonicalize(self, identifier, display_name):
         # The best outcome would be that we already have a Contributor
