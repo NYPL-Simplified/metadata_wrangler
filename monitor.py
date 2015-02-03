@@ -201,11 +201,17 @@ class MakePresentationReadyMonitor(Monitor):
             oclc_linked_data = LinkedDataCoverageProvider(_db),
             amazon = AmazonCoverageProvider(_db),
         )
+
+        not_presentation_ready = or_(
+            Work.presentation_ready==None,
+            Work.presentation_ready==False)
+
         unready_works = _db.query(Work).filter(
-            Work.presentation_ready==False).filter(
+            not_presentation_ready).filter(
                 Work.presentation_ready_exception==None).order_by(
                     Work.last_update_time.desc()).limit(10)
         while unready_works.count():
+            print "%s works not presentation ready." % unready_works.count()
             for work in unready_works.all():
                 try:
                     self.make_work_ready(_db, work, appeal_calculator, 

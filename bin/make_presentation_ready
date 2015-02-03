@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Continually make new works presentation ready."""
 import os
 import sys
