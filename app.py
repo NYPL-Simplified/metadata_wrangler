@@ -32,4 +32,5 @@ if __name__ == '__main__':
 
     debug = True
     host = "0.0.0.0"
-    app.run(debug=debug, host=host, port=5500)
+    port = int(os.environ['METADATA_WEB_APP_PORT'])
+    app.run(debug=debug, host=host, port=port)

@@ -105,7 +105,7 @@ class IdentifierResolutionScript(Script):
 
 
     def run(self):
-        content_server_url = os.environ['CONTENT_SERVER_URL']
+        content_server_url = os.environ['CONTENT_WEB_APP_URL']
         content_server = SimplifiedOPDSLookup(content_server_url)
         overdrive = OverdriveAPI(self._db)
         threem = ThreeMAPI(self._db)
