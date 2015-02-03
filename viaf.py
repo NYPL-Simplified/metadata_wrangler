@@ -362,8 +362,12 @@ class VIAFClient(object):
             duplicates = self._db.query(Contributor).filter(
                 Contributor.viaf==contributor.viaf).all()
             if duplicates:
-                if duplicates[0].display_name != contributor.display_name:
-                    set_trace()
-                contributor.merge_into(duplicates[0])
+                if duplicates[0].display_name == contributor.display_name:
+                    contributor.merge_into(duplicates[0])
+                else:
+                    print "WARNING: POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (contributor.display_name, duplicates[0].display_name)
+                    # This is a problem. Do not merge the VIAFs.
+                    pass
+
                 
         
