@@ -39,8 +39,8 @@ class MakePresentationReady(Script):
         """Find all Works that are not presentation ready, and make them
         presentation ready.
         """
-        MakePresentationReadyMonitor(os.environ['DATA_DIRECTORY']).run(
-            self._db)
+        MakePresentationReadyMonitor(
+            self._db, os.environ['DATA_DIRECTORY']).run()
 
 
 class FillInVIAFAuthorNames(Script):

@@ -7,12 +7,12 @@ from mirror import CoverImageMirror
 
 from core.model import (
     Contributor,
-    CoverageProvider,
     DataSource,
     Edition,
     Identifier,
     Resource,
 )
+from core.coverage import CoverageProvider
 from core.monitor import Monitor
 from core.util.xmlparser import XMLParser
 from core.threem import ThreeMAPI as BaseThreeMAPI

@@ -17,9 +17,11 @@ from nose.tools import set_trace
 from core.util.xmlparser import (
     XMLParser,
 )
+from core.coverage import (
+    CoverageProvider,
+)
 from core.model import (
     Contributor,
-    CoverageProvider,
     get_one,
     get_one_or_create,
     Identifier,

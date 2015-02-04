@@ -177,36 +177,36 @@ class MakePresentationReadyMonitor(Monitor):
     delegated to other bits of code.
     """
 
-    def __init__(self, data_directory):
+    def __init__(self, _db, data_directory):
         super(MakePresentationReadyMonitor, self).__init__(
-            "Make Works Presentation Ready")
+            _db, "Make Works Presentation Ready")
         self.data_directory = data_directory
 
-    def run_once(self, _db, start, cutoff):
+    def run_once(self, start, cutoff):
 
         threem_image_mirror = ThreeMCoverImageMirror(
-            _db, self.data_directory)
+            self._db, self.data_directory)
         overdrive_image_mirror = OverdriveCoverImageMirror(
-            _db, self.data_directory)
+            self._db, self.data_directory)
         image_mirrors = { DataSource.THREEM : threem_image_mirror,
                           DataSource.OVERDRIVE : overdrive_image_mirror }
 
         image_scaler = ImageScaler(
-            _db, self.data_directory, image_mirrors.values())
+            self._db, self.data_directory, image_mirrors.values())
 
-        appeal_calculator = AppealCalculator(_db, self.data_directory)
+        appeal_calculator = AppealCalculator(self._db, self.data_directory)
 
         coverage_providers = dict(
-            oclc_gutenberg = OCLCMonitorForGutenberg(_db),
-            oclc_linked_data = LinkedDataCoverageProvider(_db),
-            amazon = AmazonCoverageProvider(_db),
+            oclc_gutenberg = OCLCMonitorForGutenberg(self._db),
+            oclc_linked_data = LinkedDataCoverageProvider(self._db),
+            amazon = AmazonCoverageProvider(self._db),
         )
 
         not_presentation_ready = or_(
             Work.presentation_ready==None,
             Work.presentation_ready==False)
 
-        unready_works = _db.query(Work).filter(
+        unready_works = self._db.query(Work).filter(
             not_presentation_ready).filter(
                 Work.presentation_ready_exception==None).order_by(
                     Work.last_update_time.desc()).limit(10)
@@ -214,14 +214,14 @@ class MakePresentationReadyMonitor(Monitor):
             print "%s works not presentation ready." % unready_works.count()
             for work in unready_works.all():
                 try:
-                    self.make_work_ready(_db, work, appeal_calculator, 
+                    self.make_work_ready(work, appeal_calculator, 
                                          coverage_providers, image_mirrors,
                                          image_scaler)
                 except Exception, e:
                     work.presentation_ready_exception = str(e)
-                _db.commit()
+                self._db.commit()
 
-    def make_work_ready(self, _db, work, appeal_calculator, 
+    def make_work_ready(self, work, appeal_calculator, 
                         coverage_providers, image_mirrors,
                         image_scaler):
         """Either make a work presentation ready, or raise an exception
@@ -251,7 +251,7 @@ class MakePresentationReadyMonitor(Monitor):
         #             identifier)
 
         # VIAF on all contributors.
-        viaf = VIAFClient(_db)
+        viaf = VIAFClient(self._db)
         for edition in work.editions:
             for contributor in primary_edition.contributors:
                 viaf.process_contributor(contributor)
