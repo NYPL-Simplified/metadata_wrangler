@@ -1,9 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Gather Amazon reviews for ISBNs and ASINs."""
 import os
 import sys
 bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
-from scripts import AmazonCoverageProviderScript
-AmazonCoverageProviderScript().run()
+from amazon import AmazonCoverageProvider
+from core.scripts import RunCoverageProviderScript
+RunCoverageProviderScript(AmazonCoverageProvider).run()

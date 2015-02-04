@@ -4,6 +4,7 @@ import datetime
 from lxml import etree
 
 from mirror import CoverImageMirror
+from core.coverage import CoverageProvider
 
 from core.model import (
     Contributor,

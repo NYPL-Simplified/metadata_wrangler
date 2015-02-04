@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Consolidate editions into works."""
 import os
 import sys

@@ -14,9 +14,7 @@ from bs4 import BeautifulSoup
 
 from nose.tools import set_trace
 
-from core.coverage import (
-    CoverageProvider,
-)
+from core.coverage import CoverageProvider
 from core.model import (
     get_one_or_create,
     Contributor,

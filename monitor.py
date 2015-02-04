@@ -1,11 +1,18 @@
 import datetime
+import os
 import requests
 
 from nose.tools import set_trace
 from sqlalchemy import or_
 from sqlalchemy.sql.functions import func
 
-from core.monitor import Monitor
+from threem import ThreeMAPI
+from core.overdrive import OverdriveAPI
+from core.opds_import import SimplifiedOPDSLookup
+from core.monitor import (
+    Monitor,
+    PresentationReadyMonitor,
+)
 from core.model import (
     DataSource,
     Edition,
@@ -42,12 +49,14 @@ class IdentifierResolutionMonitor(Monitor):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, content_server, overdrive_api, threem_api):
+    def __init__(self, _db):
         super(IdentifierResolutionMonitor, self).__init__(
-            "Identifier Resolution Manager", interval_seconds=15)
-        self.content_server = content_server
-        self.overdrive = overdrive_api
-        self.threem = threem_api
+            _db, "Identifier Resolution Manager", interval_seconds=15)
+        content_server_url = os.environ['CONTENT_SERVER_URL']
+        self.content_server = SimplifiedOPDSLookup(content_server_url)
+        self.overdrive = OverdriveAPI(self._db)
+        self.threem = ThreeMAPI(self._db)
+
 
     def run_once(self, _db, start, cutoff):
         now = datetime.datetime.utcnow()
@@ -170,37 +179,36 @@ class IdentifierResolutionMonitor(Monitor):
             task.exception = str(e)
             return False
 
-class MakePresentationReadyMonitor(Monitor):
+class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
     """Make works presentation ready.
 
     This is an EXTREMELY complicated process, but all the work can be
     delegated to other bits of code.
     """
 
-    def __init__(self, _db, data_directory):
-        super(MakePresentationReadyMonitor, self).__init__(
-            _db, "Make Works Presentation Ready")
-        self.data_directory = data_directory
+    def __init__(self, _db, force=False):
+        super(MetadataPresentationReadyMonitor, self).__init__(_db, [])
+        self.data_directory = os.environ['DATA_DIRECTORY']
+        self.force = force
+
+        self.threem_image_mirror = ThreeMCoverImageMirror(
+            self._db, self.data_directory)
+        self.overdrive_image_mirror = OverdriveCoverImageMirror(
+            self._db, self.data_directory)
+        self.image_mirrors = { DataSource.THREEM : self.threem_image_mirror,
+                          DataSource.OVERDRIVE : self.overdrive_image_mirror }
+
+        self.image_scaler = ImageScaler(
+            self._db, self.data_directory, self.image_mirrors.values())
+
+        self.appeal_calculator = AppealCalculator(self._db, self.data_directory)
+
+        self.oclc_gutenberg = OCLCMonitorForGutenberg(self._db)
+        self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
+        self.amazon = AmazonCoverageProvider(self._db)
+        self.viaf = VIAFClient(self._db)
 
     def run_once(self, start, cutoff):
-
-        threem_image_mirror = ThreeMCoverImageMirror(
-            self._db, self.data_directory)
-        overdrive_image_mirror = OverdriveCoverImageMirror(
-            self._db, self.data_directory)
-        image_mirrors = { DataSource.THREEM : threem_image_mirror,
-                          DataSource.OVERDRIVE : overdrive_image_mirror }
-
-        image_scaler = ImageScaler(
-            self._db, self.data_directory, image_mirrors.values())
-
-        appeal_calculator = AppealCalculator(self._db, self.data_directory)
-
-        coverage_providers = dict(
-            oclc_gutenberg = OCLCMonitorForGutenberg(self._db),
-            oclc_linked_data = LinkedDataCoverageProvider(self._db),
-            amazon = AmazonCoverageProvider(self._db),
-        )
 
         not_presentation_ready = or_(
             Work.presentation_ready==None,
@@ -210,20 +218,17 @@ class MakePresentationReadyMonitor(Monitor):
             not_presentation_ready).filter(
                 Work.presentation_ready_exception==None).order_by(
                     Work.last_update_time.desc()).limit(10)
-        while unready_works.count():
-            print "%s works not presentation ready." % unready_works.count()
-            for work in unready_works.all():
-                try:
-                    self.make_work_ready(work, appeal_calculator, 
-                                         coverage_providers, image_mirrors,
-                                         image_scaler)
-                except Exception, e:
-                    work.presentation_ready_exception = str(e)
-                self._db.commit()
+        print "%s works not presentation ready." % unready_works.count()
+        for work in unready_works.all():
+            try:
+                self.make_work_ready(work)
+            except Exception, e:
+                set_trace()
+                self.make_work_ready(work)
+                work.presentation_ready_exception = str(e)
+            self._db.commit()
 
-    def make_work_ready(self, work, appeal_calculator, 
-                        coverage_providers, image_mirrors,
-                        image_scaler):
+    def make_work_ready(self, work):
         """Either make a work presentation ready, or raise an exception
         explaining why that's not possible.
         """
@@ -231,7 +236,10 @@ class MakePresentationReadyMonitor(Monitor):
         for edition in work.editions:
             # OCLC Lookup on all Gutenberg editions.
             if edition.data_source.name==DataSource.GUTENBERG:
-                coverage_providers['oclc_gutenberg'].ensure_coverage(edition)
+                if not self.oclc_gutenberg.ensure_coverage(edition):
+                    # It's not a deal-breaker if we can't get OCLC
+                    # coverage on an edition.
+                    pass
                 did_oclc_lookup = True
 
         primary_edition = work.primary_edition
@@ -239,35 +247,28 @@ class MakePresentationReadyMonitor(Monitor):
             oclc_ids = primary_edition.equivalent_identifiers(
                 type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER])
             for o in oclc_ids:
-                coverage_providers['oclc_linked_data'].ensure_coverage(o)
+                self.oclc_linked_data.ensure_coverage(o)
 
-        # OCLC Linked Data on all ISBNs. Amazon on all ISBNs + ASINs.
-        # equivalent_identifiers = primary_edition.equivalent_identifiers(
-        #     type=[Identifier.ASIN, Identifier.ISBN])
-        # for identifier in equivalent_identifiers:
-        #     coverage_providers['amazon'].ensure_coverage(identifier)
-        #     if identifier.type==Identifier.ISBN:
-        #         coverage_providers['oclc_linked_data'].ensure_coverage(
-        #             identifier)
+        # OCLC Linked Data on all ISBNs.
+        equivalent_identifiers = primary_edition.equivalent_identifiers(
+            type=[Identifier.ISBN])
+        for identifier in equivalent_identifiers:
+            self.oclc_linked_data.ensure_coverage(identifier)
 
         # VIAF on all contributors.
-        viaf = VIAFClient(self._db)
         for edition in work.editions:
             for contributor in primary_edition.contributors:
-                viaf.process_contributor(contributor)
+                self.viaf.process_contributor(contributor)
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
-        #a ppeal_calculator.calculate_for_work(work)
+        self.appeal_calculator.calculate_for_work(work)
 
         # Make sure we have the cover for all editions.
         for edition in work.editions:
             n = edition.data_source.name
-            if n in image_mirrors:
-                image_mirrors[n].mirror_edition(edition)
-            image_scaler.scale_edition(edition)
+            if n in self.image_mirrors:
+                self.image_mirrors[n].mirror_edition(edition)
+                self.image_scaler.scale_edition(edition)
 
-        # Calculate presentation.
-        work.calculate_presentation()
-
-        # All done!
-        work.set_presentation_ready()
+        # Success!
+        return True

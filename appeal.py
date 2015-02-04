@@ -357,7 +357,6 @@ class FeatureCounter(Counter):
                 break
         print " Found %s distinct reviews" % len(seen_reviews)
         if seen_reviews:
-            set_trace()
             appeals = classifier.predict_proba(self.row())[0]
         else:
             appeals = [0,0,0,0]

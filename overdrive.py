@@ -14,6 +14,7 @@ from core.coverage import (
     CoverageProvider,
 )
 
+from core.coverage import CoverageProvider
 from core.model import (
     DataSource,
     Edition,

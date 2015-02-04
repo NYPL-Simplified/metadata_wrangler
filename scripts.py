@@ -7,41 +7,23 @@ from core.model import (
     Work,
 )
 from sqlalchemy.sql.functions import func
-from core.overdrive import OverdriveAPI
 from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
 from threem import (
-    ThreeMAPI,
     ThreeMCoverImageMirror,
 )    
 
-from core.opds_import import SimplifiedOPDSLookup
 from core.scripts import (
     WorkProcessingScript,
     Script,
 )
 from amazon import AmazonCoverageProvider
-from monitor import (
-    MakePresentationReadyMonitor,
-    IdentifierResolutionMonitor,
-)
 from gutenberg import (
     GutenbergBookshelfClient,
-    OCLCMonitorForGutenberg,
 )
 from appeal import AppealCalculator
 from viaf import VIAFClient
 from core.util.permanent_work_id import WorkIDCalculator
-
-class MakePresentationReady(Script):
-
-    def run(self):
-        """Find all Works that are not presentation ready, and make them
-        presentation ready.
-        """
-        MakePresentationReadyMonitor(
-            self._db, os.environ['DATA_DIRECTORY']).run()
-
 
 class FillInVIAFAuthorNames(Script):
 
@@ -53,17 +35,6 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
-
-
-class OCLCMonitorForGutenbergScript(Script):
-
-    def run(self):
-        OCLCMonitorForGutenberg(self._db).run()
-
-class AmazonCoverageProviderScript(Script):
-
-    def run(self):
-        AmazonCoverageProvider(self._db).run()
 
 class GutenbergBookshelfMonitorScript(Script):
     """Gather subject classifications and popularity measurements from
