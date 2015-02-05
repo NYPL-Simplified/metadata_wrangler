@@ -40,6 +40,8 @@ class AuthorNameCanonicalizer(object):
         TODO: When the author is "Ryan and Josh Shook" I really have no clue
         what to do.
         """
+        if not author_name:
+            return None
         if is_corporate_name(author_name):
             return author_name
         for splitter in (' with ', ' and '):
@@ -80,8 +82,7 @@ class AuthorNameCanonicalizer(object):
             if v:
                 return v
 
-        # All our techniques have failed. Let's just convert the
-        # shortened display name to a sort name and hope for the best.
+        # All our techniques have failed. Woe!
         return None
 
     def default_name(self, display_name):
@@ -136,7 +137,10 @@ class AuthorNameCanonicalizer(object):
         def comparable_name(s):
             return s.replace(",", "").replace(".", "")
 
-        test_working_display_name = comparable_name(display_name)
+        if display_name:
+            test_working_display_name = comparable_name(display_name)
+        else:
+            test_working_display_name = None
 
         if identifier.type != Identifier.ISBN:
             # We have no way of telling OCLC Linked Data which book
