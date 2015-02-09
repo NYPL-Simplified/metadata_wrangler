@@ -66,8 +66,6 @@ class IdentifierResolutionMonitor(Monitor):
 
         This is a defensive measure.
         """
-
-
         types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID, 
                  Identifier.THREEM_ID]
 
@@ -79,14 +77,28 @@ class IdentifierResolutionMonitor(Monitor):
                     Identifier.type.in_(types)).filter(
                         Edition.id==None).filter(UnresolvedIdentifier.id==None)
 
+        # Identifiers that have no LicensePools and no UnresolvedIdentifier.
         seemingly_resolved_but_no_licensepool = self._db.query(Identifier).outerjoin(
             Identifier.licensed_through).outerjoin(
                 Identifier.unresolved_identifier).filter(
                     Identifier.type.in_(types)).filter(
                         LicensePool.id==None).filter(UnresolvedIdentifier.id==None)
+
+        # Identifiers whose Editions have no Work because they are
+        # missing title, author or sort_author.
+        no_title_or_author = or_(
+            Edition.title==None, Edition.sort_author==None)
+        no_work_because_of_missing_metadata = self._db.query(Identifier).join(
+            Identifier.primarily_identifies).join(
+                Identifier.licensed_through).filter(
+                    no_title_or_author).filter(
+                        Edition.work_id==None)
+
         for q, msg, force in (
                 (licensepool_but_no_edition, 
                  "Creating UnresolvedIdentifiers for %d incompletely resolved Identifiers (LicensePool but no Edition).", True),
+                (no_work_because_of_missing_metadata, 
+                 "Creating UnresolvedIdentifiers for %d Identifiers that have no Work because their Editions are missing title or author.", True),
                 (seemingly_resolved_but_no_licensepool,
                  "Creating UnresolvedIdentifiers for %d identifiers missing both LicensePool and UnresolvedIdentifier.", False),
         ):
