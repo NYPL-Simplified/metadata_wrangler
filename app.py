@@ -54,6 +54,7 @@ def canonical_author_name():
         if display_name:
             author_name = canonicalizer.default_name(display_name)
             print "Defaulting to: %s" % author_name
+    Conf.db.commit()
     if author_name:
         return make_response(author_name, 200, {"Content-Type": "text/plain"})
     else:
