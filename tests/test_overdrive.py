@@ -34,7 +34,7 @@ class TestOverdrive(DatabaseTest):
 
     def test_annotate_edition_with_bibliographic_information(self):
 
-        wr, new = self._edition(with_license_pool=True)
+        wr, new = self._edition(with_license_pool=True, authors=[])
         raw, info = self.sample_json("overdrive_metadata.json")
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)

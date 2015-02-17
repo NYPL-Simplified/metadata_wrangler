@@ -1,5 +1,6 @@
 # encoding: utf-8
 
+import json
 import StringIO
 import os
 from nose.tools import set_trace, eq_
@@ -13,6 +14,7 @@ from ..core.model import (
 
 from ..oclc import (
     OCLCXMLParser,
+    OCLCLinkedData,
 )
 
 from . import (
@@ -338,7 +340,7 @@ class TestAuthorParser(DatabaseTest):
         s = u"杜格孫 (Dodgson, Charles Lutwidge,1832-1896)"
         self.assert_parse(s, s, Contributor.PRIMARY_AUTHOR_ROLE)
 
-class TestOCLCLinkedData(TestOCLC):
+class TestOCLCLinkedData(TestParser):
 
     def test_creator_names_picks_up_contributors(self):
         graph = json.loads(
