@@ -384,19 +384,21 @@ class AppealCalculator(object):
         self.feature_counter = FeatureCounter(self.feature_names)
 
     def calculate_for_work(self, work):
-        print "BEFORE pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
+        foo = "BEFORE pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
             work.primary_appeal, work.secondary_appeal,
             work.appeal_character or 0, work.appeal_language or 0,
             work.appeal_setting or 0, work.appeal_story or 0, work.title, work.author)
+        print foo.encode("utf8")
         old_language = work.appeal_language
         old_setting = work.appeal_setting
 
         self.feature_counter.calculate_appeals_for_work(
             work, self.amazon_api, self.classifier)
-        print "AFTER pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
+        foo = "AFTER pri=%s sec=%s cha=%.3f lan=%.3f set=%.3f sto=%.3f %s %s" % (
             work.primary_appeal, work.secondary_appeal,
             work.appeal_character, work.appeal_language,
             work.appeal_setting, work.appeal_story, work.title, work.author)
+        print foo.encode("utf8")
         if old_language:
             print "LANGUAGE DELTA: %.7f" % (old_language - work.appeal_language)
         if old_setting:
