@@ -32,7 +32,7 @@ class TestNameParser(DatabaseTest):
 
         contributor, new = self._contributor(None)
 
-        viaf, display, family, wikipedia = self.parser.info(contributor, xml, None)
+        viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
         eq_("10455", viaf)
         eq_("Will Eisner", display)
         eq_("Eisner", family)
@@ -41,7 +41,7 @@ class TestNameParser(DatabaseTest):
     def test_entry_without_wikipedia_name(self):
         xml = self.sample_data("palmer.xml")
 
-        viaf, display, family, wikipedia = self.parser.parse(xml)
+        viaf, display, family, sort, wikipedia = self.parser.parse(xml)
         eq_("2506349", viaf)
         eq_("Roy Ernest Palmer", display)
         eq_("Palmer", family)
@@ -49,7 +49,7 @@ class TestNameParser(DatabaseTest):
 
     def test_simple_corporate_entry(self):
         xml = self.sample_data("aquarius.xml")
-        viaf, display, family, wikipedia = self.parser.parse(xml)
+        viaf, display, family, sort, wikipedia = self.parser.parse(xml)
         eq_("159591140", viaf)
         eq_("Aquarius Paris", display)
         eq_("Aquarius", family)
@@ -61,7 +61,7 @@ class TestNameParser(DatabaseTest):
         # name takes precedence over the working name.
         xml = self.sample_data("mark_twain.xml")
 
-        viaf, display, family, wikipedia = self.parser.parse(
+        viaf, display, family, sort, wikipedia = self.parser.parse(
             xml, "Sam Clemens")
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
@@ -73,7 +73,7 @@ class TestNameParser(DatabaseTest):
 
         # The author is better known as Mark Twain, so this 
         # name wins by popularity if we don't specify a name going in.
-        viaf, display, family, wikipedia = self.parser.parse(xml, None)
+        viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
         eq_("Twain", family)
@@ -96,8 +96,8 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
         contributor, new = self._contributor(name)
-        viaf, display_name, family_name, wikipedia_name = self.parser.info(
-            contributor, xml, True)
+        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(
+            xml)
         # We can't find a VIAF number. The display name and family name
         # are obtained through heuristics.
         eq_(None, viaf)
@@ -109,8 +109,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("lancelyn_green.xml")
         name = "Green, Roger Lancelyn"
         contributor, new = self._contributor(name)
-        viaf, display_name, family_name, wikipedia_name = self.parser.info(
-            contributor, xml, True)
+        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml)
         eq_("29620265", viaf)
         eq_("Roger Lancelyn Green", display_name)
         eq_("Green", family_name)
@@ -122,10 +121,10 @@ class TestNameParser(DatabaseTest):
         # pick that up.
         xml = self.sample_data("kate_lister.xml")
         name = "Lister, Kate"
-        contributor, new = self._contributor(name)
-        viaf, display_name, family_name, wikipedia_name = self.parser.info(
-            contributor, xml, True)
+        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(
+            xml)
         eq_("68169992", viaf)
-        eq_("Kate Lister", display_name)
-        eq_("Lister", family_name)
+        eq_(None, display_name)
+        eq_(None, family_name)
+        eq_(None, sort_name)
         eq_(None, wikipedia_name)
