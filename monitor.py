@@ -295,6 +295,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                     else:
                         print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
                 except Exception, e:
+                    self.make_work_ready(work)
                     work.presentation_ready_exception = str(e)
                     print "=ERROR MAKING WORK PRESENTATION READY="
                     print e

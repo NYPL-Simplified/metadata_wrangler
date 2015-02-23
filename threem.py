@@ -94,8 +94,8 @@ class ItemListParser(XMLParser):
 
         item[Edition.published] = published_date
 
-        resources[Resource.DESCRIPTION] = value("Description")
-        resources[Resource.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
+        resources[Hyperlink.DESCRIPTION] = value("Description")
+        resources[Hyperlink.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
         resources["alternate"] = value("BookLinkURL").replace("&amp;", "&")
 
         item['extra']['fileSize'] = value("Size")
@@ -161,8 +161,8 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         edition.extra = info['extra']
 
         # Associate resources with the work record.
-        for rel, value in info[Resource].items():
-            if rel == Resource.DESCRIPTION:
+        for rel, value in info[Hyperlink].items():
+            if rel == Hyperlink.DESCRIPTION:
                 href = None
                 media_type = "text/html"
                 content = value
@@ -170,7 +170,7 @@ class ThreeMBibliographicMonitor(CoverageProvider):
                 href = value
                 media_type = None
                 content = None
-            identifier.add_resource(rel, href, input_source, pool, media_type, content)
+            pool.add_link(rel, href, input_source, media_type, content)
 
 
 class ThreeMCoverImageMirror(CoverImageMirror):

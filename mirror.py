@@ -7,6 +7,8 @@ import requests
 
 from core.model import (
     DataSource,
+    Hyperlink,
+    Representation,
     Resource,
 )
 from core.s3 import S3Uploader
@@ -103,18 +105,19 @@ class CoverImageMirror(object):
 
     def mirror_all_resources(self, q, force=False, scale=True):
         """Mirror all resources that match a query."""
-        # Only mirror images.
-        q = q.filter(Resource.rel==Resource.IMAGE)
+        # Only mirror cover images.
+        q = q.filter(Hyperlink.rel==Hyperlink.IMAGE)
         if not force:
             # Restrict to resources that are not already mirrored.
-            q = q.filter(Resource.mirror_date==None)
+            q = q.join(Hyperlink.resource).join(Resource.representation)
+            q = q.filter(Representation.mirrored_at==None)
         else:
             scale = True
         resultset = q.limit(100).all()
         while resultset:
             to_upload = []
-            for resource in resultset:
-                to_upload.append(self.mirror(resource))
+            for hyperlink in resultset:
+                to_upload.append(self.mirror(hyperlink.resource.representation))
                     
 
             self.uploader.upload_resources(to_upload)
@@ -129,8 +132,9 @@ class CoverImageMirror(object):
     def mirror_edition(self, edition):
         """Make sure that one specific edition has its cover(s) mirrored."""
         # Find all resources for this edition's primary identifier.
-        q = self._db.query(Resource).filter(
-            Resource.identifier==edition.primary_identifier)
+        resources = [l.resource for l in edition.primary_identifier.links]
+        q = self._db.query(Hyperlink).filter(
+            Hyperlink.identifier==edition.primary_identifier)
         self.mirror_all_resources(q)
 
     def filename_for(self, resource):
@@ -268,8 +272,9 @@ class ImageScaler(object):
                       destination_height=None, force=False, upload=True):
         """Make sure that one specific edition has its cover(s) scaled."""
         # Find all resources for this edition's primary identifier.
-        q = self._db.query(Resource).filter(
-            Resource.identifier==edition.primary_identifier)
+        set_trace()
+        q = self._db.query(Hyperlink).filter(
+            Hyperlink.identifier==edition.primary_identifier)
         self.scale_all_resources(
             q, destination_width, destination_height,
             force, upload)
@@ -281,31 +286,28 @@ class ImageScaler(object):
         destination_width = destination_width or self.DEFAULT_WIDTH
         destination_height = destination_height or self.DEFAULT_HEIGHT
 
-        q = q.filter(Resource.rel==Resource.IMAGE).filter(
-            Resource.mirrored==True)
+        q = q.join(Hyperlink.resource).join(Resource.representation).filter(
+            Hyperlink.rel==Hyperlink.IMAGE).filter(
+                Representation.mirrored_at!=None)
         if not force:
-            q = q.filter(Resource.scaled==False)
+            q = filter(Representation.thumbnail_id==None)
         resultset = q.limit(batch_size).all()
         while resultset:
             total = 0
             a = time.time()
             to_upload = []
-            for r in resultset:
-                set_trace()
-                already_scaled = r.scale(
+            for hyperlink in resultset:
+                representation = hyperlink.resource.representation
+                filename = "%s.jpg" % hyperlink.identifier.identifier
+                url = self.uploader.cover_image_url(
+                    hyperlink.data_source, hyperlink.identifier,
+                    filename, scaled_height
+                )
+                thumbnail = r.scale(
                     destination_width, destination_height, 
-                    self.original_expansions, self.scaled_expansions,
-                    self.original_variable_to_scaled_variable, force)
-                if not r.scaled_path:
-                    print "Could not scale %s" % r.href
-                elif already_scaled:
-                    pass
-                else:
-                    local_path = r.local_scaled_path(self.scaled_expansions)
-                    #print "%dx%d %s" % (r.scaled_height, r.scaled_width,
-                    #                    local_path)
-                    to_upload.append((local_path, r.scaled_url))
-                    total += 1
+                    url, Representation.JPEG_MEDIA_TYPE, force)
+                to_upload.append(thumbnail)
+                total += 1
             print "%.2f sec to scale %d" % ((time.time()-a), total)
             a = time.time()
             if upload:

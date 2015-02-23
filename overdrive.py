@@ -48,8 +48,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             pass
         else:
             value = str(value)
-        identifier.add_resource(
-            rel, url, input_source, pool, media_type, value)
+        pool.add_link(
+            rel, url, input_source, media_type, value)
 
     @classmethod
     def _add_value_as_measurement(
@@ -191,9 +191,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     format['id'])
                 for sample_info in format['samples']:
                     href = sample_info['url']
-                    resource, new = identifier.add_resource(
-                        Resource.SAMPLE, href, input_source,
-                        license_pool, media_type)
+                    resource, new = license_pool.add_link(
+                        Hyperlink.SAMPLE, href, input_source,
+                        media_type)
                     resource.file_size = format['fileSize']
 
         # Add resources: cover and descriptions
@@ -205,8 +205,10 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])
             media_type = link['type']
-            identifier.add_resource(Resource.IMAGE, href, input_source,
-                                    license_pool, media_type)
+            license_pool.add_resource(
+                Hyperlink.IMAGE, href, input_source,
+                media_type
+            )
 
         short = info.get('shortDescription')
         full = info.get('fullDescription')

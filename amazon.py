@@ -54,7 +54,6 @@ class AmazonAPI(object):
         url = self.BIBLIOGRAPHIC_URL % dict(asin=asin)
         representation, cached = Representation.get(
             self._db, url, get_method,
-            data_source=self.data_source, identifier=identifier,
             pause_before=pause,
             max_age=self.MAX_BIBLIOGRAPHIC_AGE)
         return representation
@@ -91,7 +90,6 @@ class AmazonAPI(object):
         representation, cached = Representation.get(
             self._db, url, get_method,
             extra_request_headers=extra_request_headers,
-            data_source=self.data_source, identifier=identifier,
             max_age=max_age, pause_before=pause)
         if not cached and not representation.content:
             print "No content!"

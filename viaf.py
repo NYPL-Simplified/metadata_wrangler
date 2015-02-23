@@ -346,9 +346,14 @@ class VIAFParser(XMLParser):
 
 class VIAFClient(object):
 
+    MAX_AGE = 3600 * 24 * 180
+    MAX_AGE = 0
+
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
     SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
     SUBDIR = "viaf"
+
+    MEDIA_TYPE = Representation.TEXT_XML_MEDIA_TYPE
 
     def __init__(self, _db):
         self._db = _db
@@ -379,19 +384,17 @@ class VIAFClient(object):
                 if duplicates[0].display_name == contributor.display_name:
                     contributor.merge_into(duplicates[0])
                 else:
-                    print "WARNING: POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (contributor.display_name, duplicates[0].display_name)
+                    print "[VIAF] [WARNING] POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (contributor.display_name, duplicates[0].display_name)
                     # TODO: This might be okay or it might be a
                     # problem we need to address. Whatever it is,
                     # don't merge the records.
                     pass
 
-
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
         r, cached = Representation.get(
-            self._db, url, data_source=self.data_source)
-
+            self._db, url, accept=self.MEDIA_TYPE, max_age=self.MAX_AGE)
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
@@ -399,7 +402,7 @@ class VIAFClient(object):
         name = sort_name or display_name
         url = self.SEARCH_URL.format(sort_name=name.encode("utf8"))
         r, cached = Representation.get(
-            self._db, url, data_source=self.data_source)
+            self._db, url, accept=self.MEDIA_TYPE, max_age=self.MAX_AGE)
         xml = r.content
         v = self.parser.parse_multiple(
             xml, sort_name, display_name, strict)
