@@ -203,7 +203,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])
             media_type = link['type']
-            pool.add_link(Hyperlink.IMAGE, href, input_source, media_type)
+            license_pool.add_link(Hyperlink.IMAGE, href, input_source, media_type)
 
         short = info.get('shortDescription')
         full = info.get('fullDescription')

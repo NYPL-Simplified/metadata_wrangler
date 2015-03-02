@@ -12,6 +12,7 @@ from core.model import (
     Edition,
     Hyperlink,
     Identifier,
+    Subject,
 )
 from core.coverage import CoverageProvider
 from core.monitor import Monitor
@@ -55,13 +56,25 @@ class ItemListParser(XMLParser):
     def author_names_from_string(cls, string):
         if not string:
             return
-        for author in string.split(";"):
-            yield author.strip()
+        return [author.strip() for author in string.split(";")]
+
+    @classmethod
+    def parse_genre_string(self, s):           
+        genres = []
+        if not s:
+            return genres
+        for i in s.split(","):
+            i = i.strip()
+            if not i:
+                continue
+            i = i.replace("&amp;amp;", "&amp;").replace("&amp;", "&").replace("&#39;", "'")
+            genres.append(i)
+        return genres
 
     def process_one(self, tag, namespaces):
         def value(threem_key):
             return self.text_of_optional_subtag(tag, threem_key)
-        resources = dict()
+        links = dict()
         identifiers = dict()
         subjects = []
         item = { Hyperlink : links,  Identifier: identifiers,
@@ -70,6 +83,8 @@ class ItemListParser(XMLParser):
 
         identifiers[Identifier.THREEM_ID] = value("ItemId")
         identifiers[Identifier.ISBN] = value("ISBN13")
+
+        item[Subject] = self.parse_genre_string(value("Genre"))
 
         item[Edition.title] = value("Title")
         item[Edition.subtitle] = value("SubTitle")
