@@ -129,8 +129,9 @@ class CoverImageMirror(object):
     def mirror_edition(self, edition):
         """Make sure that one specific edition has its cover(s) mirrored."""
         # Find all resources for this edition's primary identifier.
-        q = self._db.query(Resource).filter(
-            Resource.identifier==edition.primary_identifier)
+        q = self._db.query(Hyperlink).filter(
+            Hyperlink.identifier==edition.primary_identifier).filter(
+                Hyperlink.rel==Hyperlink.IMAGE)
         self.mirror_all_resources(q)
 
     def filename_for(self, resource):

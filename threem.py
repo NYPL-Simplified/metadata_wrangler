@@ -10,8 +10,8 @@ from core.model import (
     Contributor,
     DataSource,
     Edition,
+    Hyperlink,
     Identifier,
-    Resource,
 )
 from core.coverage import CoverageProvider
 from core.monitor import Monitor
@@ -63,7 +63,7 @@ class ItemListParser(XMLParser):
             return self.text_of_optional_subtag(tag, threem_key)
         resources = dict()
         identifiers = dict()
-        item = { Resource : resources,  Identifier: identifiers,
+        item = { Hyperlink : links,  Identifier: identifiers,
                  "extra": {} }
 
         identifiers[Identifier.THREEM_ID] = value("ItemId")
@@ -94,9 +94,9 @@ class ItemListParser(XMLParser):
 
         item[Edition.published] = published_date
 
-        resources[Resource.DESCRIPTION] = value("Description")
-        resources[Resource.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
-        resources["alternate"] = value("BookLinkURL").replace("&amp;", "&")
+        links[Hyperlink.DESCRIPTION] = value("Description")
+        links[Hyperlink.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
+        links["alternate"] = value("BookLinkURL").replace("&amp;", "&")
 
         item['extra']['fileSize'] = value("Size")
         item['extra']['numberOfPages'] = value("NumberOfPages")
@@ -161,8 +161,8 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         edition.extra = info['extra']
 
         # Associate resources with the work record.
-        for rel, value in info[Resource].items():
-            if rel == Resource.DESCRIPTION:
+        for rel, value in info[Hyperlink].items():
+            if rel == Hyperlink.DESCRIPTION:
                 href = None
                 media_type = "text/html"
                 content = value
@@ -170,7 +170,7 @@ class ThreeMBibliographicMonitor(CoverageProvider):
                 href = value
                 media_type = None
                 content = None
-            identifier.add_resource(rel, href, input_source, pool, media_type, content)
+            pool.add_link(rel, href, input_source, media_type, content)
 
 
 class ThreeMCoverImageMirror(CoverImageMirror):
