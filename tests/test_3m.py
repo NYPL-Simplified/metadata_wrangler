@@ -6,6 +6,7 @@ from ..core.model import (
     Resource,
     Identifier,
     Edition,
+    Subject,
 )
 from ..threem import (
     ItemListParser,
@@ -47,6 +48,7 @@ class TestItemListParser(object):
         eq_("The Incense Game", cooked[Edition.title])
         eq_("A Novel of Feudal Japan", cooked[Edition.subtitle])
         eq_(["Rowland, Laura Joh"], cooked[Contributor])
+        eq_(["Children's Health", "Mystery & Detective"], cooked[Classification])
         eq_("eng", cooked[Edition.language])
         eq_("St. Martin's Press", cooked[Edition.publisher])
         eq_("1.2 MB", cooked['extra']['fileSize'])

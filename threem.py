@@ -63,7 +63,9 @@ class ItemListParser(XMLParser):
             return self.text_of_optional_subtag(tag, threem_key)
         resources = dict()
         identifiers = dict()
+        subjects = []
         item = { Hyperlink : links,  Identifier: identifiers,
+                 Subject : subjects,
                  "extra": {} }
 
         identifiers[Identifier.THREEM_ID] = value("ItemId")
