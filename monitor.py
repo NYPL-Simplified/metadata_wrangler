@@ -336,6 +336,9 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         for edition in work.editions:
             for contributor in primary_edition.contributors:
                 self.viaf.process_contributor(contributor)
+                if not contributor.display_name:
+                    contributor.family_name, contributor.display_name = (
+                        contributor.default_names())
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
         self.appeal_calculator.calculate_for_work(work)
