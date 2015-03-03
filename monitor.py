@@ -290,8 +290,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             q = q.order_by(Work.last_update_time.desc())
             for work in q.all():
                 try:
-                    self.make_work_ready(work)
                     if self.make_work_ready(work):
+                        work.calculate_presentation()
                         work.set_presentation_ready()
                         print "=NEW PRESENTATION READY WORK!="
                         print repr(work)
