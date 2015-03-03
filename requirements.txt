@@ -12,3 +12,4 @@ tinys3
 pyld
 beautifulsoup4
 feedparser
+scikit-learn
