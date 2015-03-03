@@ -34,7 +34,9 @@ class ThreeMAPI(BaseThreeMAPI):
             identifier = edition.primary_identifier
             identifiers.append(identifier)
             edition_for_identifier[identifier] = edition
-            data = self.request("/items/%s" % identifier.identifier)
+            data = self.request(
+                "/items/%s" % identifier.identifier,
+                max_age=self.MAX_METADATA_AGE)
             identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
             results[identifier] = (edition, cooked)
 
