@@ -1,5 +1,6 @@
 import cPickle
 from nose.tools import set_trace
+import gzip
 import os
 import csv
 from csv import Dialect
@@ -215,7 +216,7 @@ class ClassifierFactory(object):
     @classmethod
     def feature_names(self, path):
         # Element 0 is 'identifier', element 1 is 'primary appeal'.
-        reader = csv.reader(open(path))
+        reader = csv.reader(gzip.open(path))
         return reader.next()[2:]
 
     @classmethod
@@ -223,7 +224,7 @@ class ClassifierFactory(object):
         labels = []
         data = []
 
-        reader = csv.reader(open(path))
+        reader = csv.reader(gzip.open(path))
         # Ignore the first row--it's the feature names.
         reader.next()
 
@@ -374,7 +375,7 @@ class AppealCalculator(object):
         self._db = _db
         self.amazon_api = AmazonAPI(self._db)
         self.training_dataset_path = os.path.join(
-            data_directory, "appeal", "training_dataset.csv")
+            data_directory, "appeal", "training_dataset.csv.gz")
         self.classifier_path = os.path.join(
             data_directory, "appeal", "classifier.pickle")
         self.feature_names = ClassifierFactory.feature_names(
