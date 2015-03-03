@@ -389,8 +389,7 @@ class VIAFClient(object):
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
-        r, cached = Representation.get(
-            self._db, url, data_source=self.data_source)
+        r, cached = Representation.get(self._db, url)
 
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
@@ -398,8 +397,7 @@ class VIAFClient(object):
     def lookup_by_name(self, sort_name, display_name=None, strict=True):
         name = sort_name or display_name
         url = self.SEARCH_URL.format(sort_name=name.encode("utf8"))
-        r, cached = Representation.get(
-            self._db, url, data_source=self.data_source)
+        r, cached = Representation.get(self._db, url)
         xml = r.content
         v = self.parser.parse_multiple(
             xml, sort_name, display_name, strict)

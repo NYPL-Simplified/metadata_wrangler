@@ -27,6 +27,7 @@ from core.model import (
     Identifier,
     Edition,
     DataSource,
+    Hyperlink,
     Representation,
     Resource,
     Subject,
@@ -135,9 +136,7 @@ class OCLCLinkedData(object):
             url = self.BASE_URL
 
         url = url % dict(id=identifier.identifier, type=foreign_type)
-        representation, cached = Representation.get(
-            self._db, url, data_source=self.source,
-            identifier=identifier)
+        representation, cached = Representation.get(self._db, url)
         try:
             data = jsonld.load_document(url)
         except Exception, e:
@@ -146,8 +145,7 @@ class OCLCLinkedData(object):
 
         if cached and not representation.content:
             representation, cached = Representation.get(
-                self._db, url, data_source=self.source,
-                identifier=identifier, max_age=0)
+                self._db, url, max_age=0)
             
         doc = {
             'contextUrl': None,
@@ -160,8 +158,7 @@ class OCLCLinkedData(object):
         """Turn an ISBN identifier into an OCLC Number identifier."""
         url = self.ISBN_BASE_URL % dict(id=isbn.identifier)
         representation, cached = Representation.get(
-            self._db, url, Representation.http_get_no_redirect, 
-            data_source=self.source, identifier=isbn)
+            self._db, url, Representation.http_get_no_redirect)
         if not representation.location:
             raise IOError(
                 "Expected %s to redirect, but couldn't find location." % url)
@@ -410,8 +407,7 @@ class OCLCClassifyAPI(object):
         """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
         url = self.BASE_URL + query_string
-        representation, cached = Representation.get(
-            self._db, url, data_source=self.source)
+        representation, cached = Representation.get(self._db, url)
         return representation.content
 
 
@@ -1033,6 +1029,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             workset_size=3)
 
     def process_edition(self, edition):
+        set_trace()
         if isinstance(edition, Identifier):
             identifier = edition
             title = "[unknown]"
@@ -1156,8 +1153,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # description.
         description_resources = []
         for description in edition['descriptions']:
-            description_resource, new = oclc_number.add_resource(
-                Resource.DESCRIPTION, None, self.oclc_linked_data,
+            uri = Hyperlink.generic_uri(
+                self.oclc_linked_data, original_identifier, 
+                Hyperlink.DESCRIPTION, description)
+            description_resource, new = oclc_number.add_link(
+                Hyperlink.DESCRIPTION, uri, self.oclc_linked_data,
                 content=description)
             description_resources.append(description_resource)
 

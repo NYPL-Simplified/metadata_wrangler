@@ -201,7 +201,8 @@ class IdentifierResolutionMonitor(Monitor):
             identifier = edition.primary_identifier
             if identifier in tasks_by_identifier:
                 # TODO: may need to uncomment this.
-                # edition.calculate_presentation()
+                edition.calculate_presentation()
+                edition.license_pool.calculate_work(even_if_no_author=True)
                 successes.append(tasks_by_identifier[identifier])
         for identifier, (status_code, exception) in messages.items():
             if identifier not in tasks_by_identifier:
@@ -240,6 +241,7 @@ class IdentifierResolutionMonitor(Monitor):
         try:
             coverage_provider.ensure_coverage(edition, force=True)
             edition.calculate_presentation()
+            edition.license_pool.calculate_work(even_if_no_author=True)
             return True
         except Exception, e:
             task.status_code = 500
@@ -258,15 +260,13 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         self.data_directory = os.environ['DATA_DIRECTORY']
         self.force = force
 
-        self.threem_image_mirror = ThreeMCoverImageMirror(
-            self._db, self.data_directory)
-        self.overdrive_image_mirror = OverdriveCoverImageMirror(
-            self._db, self.data_directory)
+        self.threem_image_mirror = ThreeMCoverImageMirror(self._db)
+        self.overdrive_image_mirror = OverdriveCoverImageMirror(self._db)
         self.image_mirrors = { DataSource.THREEM : self.threem_image_mirror,
                           DataSource.OVERDRIVE : self.overdrive_image_mirror }
 
         self.image_scaler = ImageScaler(
-            self._db, self.data_directory, self.image_mirrors.values())
+            self._db, self.image_mirrors.values())
 
         self.appeal_calculator = AppealCalculator(self._db, self.data_directory)
 
@@ -290,6 +290,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             q = q.order_by(Work.last_update_time.desc())
             for work in q.all():
                 try:
+                    self.make_work_ready(work)
                     if self.make_work_ready(work):
                         work.set_presentation_ready()
                         print "=NEW PRESENTATION READY WORK!="

@@ -235,6 +235,4 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 class OverdriveCoverImageMirror(CoverImageMirror):
     """Downloads images from Overdrive and writes them to disk."""
 
-    ORIGINAL_PATH_VARIABLE = "original_overdrive_covers_mirror"
-    SCALED_PATH_VARIABLE = "scaled_overdrive_covers_mirror"
     DATA_SOURCE = DataSource.OVERDRIVE

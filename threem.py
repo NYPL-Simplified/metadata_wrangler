@@ -1,5 +1,6 @@
 from nose.tools import set_trace
 
+import isbnlib
 import datetime
 from lxml import etree
 
@@ -162,11 +163,16 @@ class ThreeMBibliographicMonitor(CoverageProvider):
     def annotate_edition_with_bibliographic_information(
             self, db, edition, info, input_source):
 
-        # ISBN and 3M ID were associated with the work record earlier,
-        # so don't bother doing it again.
-
         pool = edition.license_pool
         identifier = edition.primary_identifier
+
+        isbn = info[Identifier].get(Identifier.ISBN, '')
+        if isbnlib.is_isbn10(isbn):
+            isbn = isbnlib.to_isbn13(isbn)
+        if isbnlib.is_isbn13(isbn):
+            isbn, ignore = Identifier.for_foreign_id(
+                self._db, Identifier.ISBN, isbn)
+            identifier.equivalent_to(self.input_source, isbn, 1)
 
         edition.title = info[Edition.title]
         edition.subtitle = info[Edition.subtitle]
@@ -199,8 +205,6 @@ class ThreeMBibliographicMonitor(CoverageProvider):
 class ThreeMCoverImageMirror(CoverImageMirror):
     """Downloads images from 3M and writes them to disk."""
 
-    ORIGINAL_PATH_VARIABLE = "original_threem_covers_mirror"
-    SCALED_PATH_VARIABLE = "scaled_threem_covers_mirror"
     DATA_SOURCE = DataSource.THREEM
 
     def filename_for(self, resource):
