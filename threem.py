@@ -179,7 +179,11 @@ class ThreeMBibliographicMonitor(CoverageProvider):
 
         edition.extra = info['extra']
 
-        # Associate resources with the work record.
+        # Associate subjects with the identifier.
+        for subject in info[Subject]:
+            identifier.classify(self.input_source, Subject.THREEM, subject)
+
+        # Associate resources with the identifier.
         for rel, value in info[Hyperlink].items():
             if rel == Hyperlink.DESCRIPTION:
                 href = None

@@ -200,6 +200,8 @@ class IdentifierResolutionMonitor(Monitor):
         for edition in editions:
             identifier = edition.primary_identifier
             if identifier in tasks_by_identifier:
+                # TODO: may need to uncomment this.
+                # edition.calculate_presentation()
                 successes.append(tasks_by_identifier[identifier])
         for identifier, (status_code, exception) in messages.items():
             if identifier not in tasks_by_identifier:
@@ -237,6 +239,7 @@ class IdentifierResolutionMonitor(Monitor):
             self._db, data_source, task.identifier.type, task.identifier.identifier)
         try:
             coverage_provider.ensure_coverage(edition, force=True)
+            edition.calculate_presentation()
             return True
         except Exception, e:
             task.status_code = 500
