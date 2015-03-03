@@ -1029,7 +1029,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
             workset_size=3)
 
     def process_edition(self, edition):
-        set_trace()
         if isinstance(edition, Identifier):
             identifier = edition
             title = "[unknown]"

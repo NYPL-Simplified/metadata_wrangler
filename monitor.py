@@ -289,6 +289,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         for q in unready_works, failed_works:
             q = q.order_by(Work.last_update_time.desc())
             for work in q.all():
+                # self.make_work_ready(work)
                 try:
                     if self.make_work_ready(work):
                         work.calculate_presentation()
