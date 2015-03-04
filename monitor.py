@@ -1,6 +1,7 @@
 import datetime
 import os
 import requests
+import traceback
 
 from nose.tools import set_trace
 from sqlalchemy import or_
@@ -300,9 +301,9 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                     else:
                         print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
                 except Exception, e:
-                    work.presentation_ready_exception = str(e)
+                    work.presentation_ready_exception = traceback.format_exc()
                     print "=ERROR MAKING WORK PRESENTATION READY="
-                    print e
+                    print work.presentation_ready_exception
                 self._db.commit()
 
     def make_work_ready(self, work):
