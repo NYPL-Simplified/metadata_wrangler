@@ -246,7 +246,7 @@ class IdentifierResolutionMonitor(Monitor):
             return True
         except Exception, e:
             task.status_code = 500
-            task.exception = str(e)
+            task.exception = traceback.format_exc()
             return False
 
 class MetadataPresentationReadyMonitor(PresentationReadyMonitor):

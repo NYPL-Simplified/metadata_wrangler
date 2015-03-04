@@ -58,7 +58,7 @@ class ItemListParser(XMLParser):
     @classmethod
     def author_names_from_string(cls, string):
         if not string:
-            return
+            return []
         return [author.strip() for author in string.split(";")]
 
     @classmethod
