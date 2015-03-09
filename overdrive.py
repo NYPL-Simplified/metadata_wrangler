@@ -137,7 +137,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         extra = dict()
         for inkey, outkey in (
                 ('gradeLevels', 'grade_levels'),
-                ('mediaType', 'medium'),
                 ('awards', 'awards'),
         ):
             if inkey in info:
