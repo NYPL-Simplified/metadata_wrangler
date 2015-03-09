@@ -63,7 +63,7 @@ class CoverImageMirror(object):
                     resource.representation, cached = Representation.get(
                         self._db, resource.url)
                 representation = resource.representation
-                if not representation.media_type.startswith('image/'):
+                if not representation.media_type or not representation.media_type.startswith('image/'):
                     representation.fetch_exception = (
                         'Representation is not an image as expected.')
                     continue
