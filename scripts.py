@@ -85,30 +85,33 @@ class IdentifierResolutionScript(Script):
 
 
 class CoverImageMirrorScript(Script):
-    """This is not needed in normal usage, but it's useful to have it around
-    in case the covers get screwed up."""
+    """This is not needed in normal usage, but it's useful to have it
+    around in case the covers get screwed up, or to do intial
+    bootstrapping of a large dataset.
+    """
     
-    def __init__(self, force=False, data_directory=None):
+    def __init__(self, force=False):
         self.force = force
         super(CoverImageMirrorScript, self).__init__()
 
     def run(self):
-        ThreeMCoverImageMirror(self._db, self.data_directory).run()
-        OverdriveCoverImageMirror(self._db, self.data_directory).run()
+        ThreeMCoverImageMirror(self._db).run()
+        OverdriveCoverImageMirror(self._db).run()
 
 
 class CoverImageScaleScript(Script):
-    """This is not needed in normal usage, but it's useful to have it around
-    in case the covers get screwed up."""
+    """This is not needed in normal usage, but it's useful to have it
+    around in case the covers get screwed up, or to do initial
+    bootstrapping of a large dataset.
+    """
 
-    def __init__(self, force=False, data_directory=None):
+    def __init__(self, force=False):
         self.force = force
         super(CoverImageScaleScript, self).__init__()
 
     def run(self):
         mirrors = [OverdriveCoverImageMirror, ThreeMCoverImageMirror]
-        ImageScaler(self._db, self.data_directory, mirrors).run(
-            force=self.force)
+        ImageScaler(self._db, mirrors).run(force=self.force)
 
 class PermanentWorkIDStressTestGenerationScript(Script):
     """Generate a stress test to use as the benchmark for the permanent

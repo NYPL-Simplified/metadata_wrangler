@@ -282,15 +282,23 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             Work.presentation_ready==None,
             Work.presentation_ready==False)
 
+        one_day_ago = datetime.datetime.utcnow()-datetime.timedelta(days=1)
+        
+
         base = self._db.query(Work).filter(not_presentation_ready)
-        failed_works = base.filter(Work.presentation_ready_exception!=None)
+        failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
         print "%s works not presentation ready." % unready_works.count()
         print "%s works have presentation ready failures." % failed_works.count()
-        for q in unready_works, failed_works:
-            q = q.order_by(Work.last_update_time.desc())
+        for q_orig, batch_size in (unready_works, 1000), (failed_works, None):
+            self._run_once_batch(q_orig, batch_size)
+
+    def _run_once_batch(self, query, batch_size):
+        q = query.order_by(Work.last_update_time.desc())
+        if batch_size:
+            q = q.limit(batch_size)
+        while q.count():
             for work in q.all():
-                # self.make_work_ready(work)
                 try:
                     if self.make_work_ready(work):
                         work.calculate_presentation()
@@ -304,7 +312,9 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                     work.presentation_ready_exception = traceback.format_exc()
                     print "=ERROR MAKING WORK PRESENTATION READY="
                     print work.presentation_ready_exception
-                self._db.commit()
+            self._db.commit()
+            if not batch_size:
+                break
 
     def make_work_ready(self, work):
         """Either make a work presentation ready, or raise an exception

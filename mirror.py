@@ -35,23 +35,23 @@ class CoverImageMirror(object):
 
     def run(self):
         """Mirror all image resources associated with this data source."""
-        q = self._db.query(Resource).filter(
-                Resource.data_source==self.data_source)
+        q = self._db.query(Hyperlink).filter(
+                Hyperlink.data_source==self.data_source)
         print "Mirroring %d images." % q.count()
         self.mirror_all_resources(q)
 
     def mirror_all_resources(self, q, force=False):
         """Mirror all resources that match a query."""
         # Only mirror images.
-        q = q.filter(Hyperlink.rel==Hyperlink.IMAGE)
         now = datetime.datetime.utcnow()
-        q = q.join(Hyperlink.resource).outerjoin(
-            Resource.representation)
+        q = q.filter(Hyperlink.rel==Hyperlink.IMAGE)
+        q = q.join(Hyperlink.resource).outerjoin(Resource.representation)
+        # Restrict to resources that are not already mirrored.
         if force:
-            # Restrict to resources that are not already mirrored.
             q = q.filter(Representation.mirrored_at < now)
         else:
             q = q.filter(Representation.mirrored_at == None)
+            q = q.filter(Representation.mirror_exception==None)
 
         resultset = q.limit(100).all()
         while resultset:
@@ -61,7 +61,7 @@ class CoverImageMirror(object):
                 resource = hyperlink.resource
                 if not resource.representation:
                     resource.representation, cached = Representation.get(
-                        self._db, hyperlink.resource.url)
+                        self._db, resource.url)
                 representation = resource.representation
                 extension = self.image_extensions_for_types.get(
                     representation.media_type, '')
@@ -166,9 +166,9 @@ class ImageScaler(object):
                 thumbnail, is_new = hyperlink.resource.representation.scale(
                     destination_height, destination_width,
                     destination_url, "image/jpeg", force=True)
-                if thumbnail.scaled_exception:
+                if thumbnail.scale_exception:
                     print "Could not scale %s: %s" % (
-                        r.url, thumbnail.scaled_exception)
+                        r.url, thumbnail.scale_exception)
                 elif not is_new:
                     pass
                 else:
