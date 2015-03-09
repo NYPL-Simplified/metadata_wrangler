@@ -1040,7 +1040,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_isbns = 0
             new_descriptions = 0
             new_subjects = 0
-            print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
+            try:
+                print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
+            except Exception, e:
+                # TODO: This needs to be fixed, but don't crash just
+                # because we can't print a status message.
+                pass
             editions = 0
             for edition in self.info_for(identifier):
                 edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
