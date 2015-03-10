@@ -147,6 +147,8 @@ class OCLCLinkedData(object):
             representation, cached = Representation.get(
                 self._db, url, max_age=0)
             
+        if not representation.content:
+            return None, False
         doc = {
             'contextUrl': None,
             'documentUrl': url,
