@@ -168,7 +168,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
 
 class CollectionCategorizationOverviewScript(Script):
 
-    def __init__(self, output_path=None, cutoff=1):
+    def __init__(self, output_path=None, cutoff=0):
         self.cutoff=cutoff
         if output_path:
             out = open(output_path, "w")
@@ -193,6 +193,12 @@ class CollectionCategorizationOverviewScript(Script):
         for type, identifier, name, fiction, audience, genre, ct in q:
             if ct < self.cutoff:
                 break
+            if fiction == True:
+                fiction = 'True'
+            elif fiction == False:
+                fiction = 'False'
+            else:
+                fiction = ''
             o = [type, identifier, name, fiction, audience, genre, ct]
             self.writer.writerow(map(self.ready, o))
                 
