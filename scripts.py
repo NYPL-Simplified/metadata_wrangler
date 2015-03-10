@@ -2,8 +2,10 @@ import csv
 import sys
 from nose.tools import set_trace
 import os
+from fast import FASTNames
 from core.model import (
     Edition,
+    Subject,
     Work,
 )
 from sqlalchemy.sql.functions import func
@@ -15,6 +17,7 @@ from threem import (
 
 from core.scripts import (
     WorkProcessingScript,
+    SubjectAssignmentScript,
     Script,
 )
 from amazon import AmazonCoverageProvider
@@ -163,6 +166,36 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         self.write_row(primary_author_name, author, original_title, title,
                        "ebook")
 
+class CollectionCategorizationOverviewScript(Script):
+
+    def __init__(self, output_path=None, cutoff=1):
+        self.cutoff=cutoff
+        if output_path:
+            out = open(output_path, "w")
+        else:
+            out = sys.stdout
+        self.writer = csv.writer(out)
+        self.writer.writerow(
+            ["Subject type", "Subject identifier", "Subject name",
+             "Fiction", "Audience", "Genre"])
+
+    def ready(self, x):
+        if isinstance(x, unicode):
+            return x.encode("utf8")
+        elif x:
+            return x
+        else:
+            return ''
+
+    def run(self):
+        q = "select s.type as type, s.identifier as identifier, s.name as name, s.fiction as fiction, s.audience as audience, g.name as genre, count(i.id) as ct from subjects s left join classifications c on s.id=c.subject_id left join identifiers i on c.identifier_id=i.id left join genres g on s.genre_id=g.id where s.type in ('Overdrive', '3M') group by s.type, s.identifier, s.name, s.fiction, s.audience, g.name order by ct desc;"
+        q = self._db.query("type", "identifier", "name", "fiction", "audience", "genre", "ct").from_statement(q)
+        for type, identifier, name, fiction, audience, genre, ct in q:
+            if ct < self.cutoff:
+                break
+            o = [type, identifier, name, fiction, audience, genre, ct]
+            self.writer.writerow(map(self.ready, o))
+                
 class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript):
     
     def __init__(self, input_path):
@@ -181,3 +214,15 @@ class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript)
             normalized_title = wi.normalize_title(title.decode("utf8"))
             normalized_author = wi.normalize_author(author.decode("utf8"))
             self.write_row(title, author, normalized_title, normalized_author, format)
+
+class FASTAwareSubjectAssignmentScript(SubjectAssignmentScript):
+
+    def __init__(self, force):
+        data_dir = os.environ['DATA_DIRECTORY']
+        self.fast = FASTNames.from_data_directory(data_dir)
+        super(FASTAwareSubjectAssignmentScript, self).__init__(force)
+
+    def process(self, subject):
+        if subject.type == Subject.FAST and subject.identifier:
+            subject.name = self.fast.get(subject.identifier, subject.name)
+        super(FASTAwareSubjectAssignmentScript, self).process(subject)
