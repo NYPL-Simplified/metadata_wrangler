@@ -23,7 +23,7 @@ class FASTNames(dict):
     @classmethod
     def from_data_directory(cls, data_directory):
         my_directory = os.path.join(data_directory, cls.SUBDIR)
-        names = FASTNames()
+        names = cls()
         consolidated_file = os.path.join(my_directory, "consolidated.csv.gz")
         a = time.time()
         if os.path.exists(consolidated_file):
@@ -42,14 +42,19 @@ class FASTNames(dict):
                 names.load_filehandle(gzip.open(path))
                 print "There are now %d names." % len(names)
 
-            writer = csv.writer(gzip.open(consolidated_file,"w"))
+            output = gzip.open(consolidated_file,"w")
+            writer = csv.writer(output)
             for k,v in names.items():
                 writer.writerow([k, v])
+            output.close()
         b = time.time()
         print "Done loading %s names in %.1f sec" % (cls.SUBDIR, b-a)
         return names
 
 class LCSHNames(FASTNames):
 
+    # TODO: This doesn't work on the childrens' subject classifications;
+    # we need to do something closer to real RDF work for those.
+
     SUBDIR = "LCSH"
-    triple_re = re.compile('^<http://id.loc.gov/authorities/subjects/([a-z]+[0-9]+)> <http://www.loc.gov/mads/rdf/v1#authoritativeLabel> "([^"]+)"@en')
+    triple_re = re.compile('^<http://id.loc.gov/authorities/[a-zA-Z]+/([a-z]+[0-9]+)> <http://www.loc.gov/mads/rdf/v1#authoritativeLabel> "([^"]+)"@en')
