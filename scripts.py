@@ -236,7 +236,5 @@ class FASTAwareSubjectAssignmentScript(SubjectAssignmentScript):
         if subject.type == Subject.FAST and subject.identifier:
             subject.name = self.fast.get(subject.identifier, subject.name)
         elif subject.type == Subject.LCSH and subject.identifier:
-            if subject.identifier not in self.lcsh and subject.identifier[0] in '0123456789':
-                subject.identifier = 'sh' + subject.identifier
             subject.name = self.lcsh.get(subject.identifier, subject.name)
         super(FASTAwareSubjectAssignmentScript, self).process(subject)
