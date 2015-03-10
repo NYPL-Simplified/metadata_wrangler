@@ -2,7 +2,10 @@ import csv
 import sys
 from nose.tools import set_trace
 import os
-from fast import FASTNames
+from fast import (
+    FASTNames,
+    LCSHNames,
+)
 from core.model import (
     Edition,
     Subject,
@@ -226,9 +229,14 @@ class FASTAwareSubjectAssignmentScript(SubjectAssignmentScript):
     def __init__(self, force):
         data_dir = os.environ['DATA_DIRECTORY']
         self.fast = FASTNames.from_data_directory(data_dir)
+        self.lcsh = LCSHNames.from_data_directory(data_dir)
         super(FASTAwareSubjectAssignmentScript, self).__init__(force)
 
     def process(self, subject):
         if subject.type == Subject.FAST and subject.identifier:
             subject.name = self.fast.get(subject.identifier, subject.name)
+        elif subject.type == Subject.LCSH and subject.identifier:
+            if subject.identifier not in self.lcsh and subject.identifier[0] in '0123456789':
+                subject.identifier = 'sh' + subject.identifier
+            subject.name = self.lcsh.get(subject.identifier, subject.name)
         super(FASTAwareSubjectAssignmentScript, self).process(subject)

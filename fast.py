@@ -27,7 +27,8 @@ class FASTNames(dict):
         consolidated_file = os.path.join(my_directory, "consolidated.csv.gz")
         a = time.time()
         if os.path.exists(consolidated_file):
-            print "Reading cached FAST names from %s" % consolidated_file
+            print "Reading cached %s names from %s" % (
+                cls.SUBDIR, consolidated_file)
             input_file = gzip.open(consolidated_file)
             reader = csv.reader(input_file)
             for k, v in reader:
@@ -45,5 +46,10 @@ class FASTNames(dict):
             for k,v in names.items():
                 writer.writerow([k, v])
         b = time.time()
-        print "Done loading FAST names in %.1f sec" % (b-a)
+        print "Done loading %s names in %.1f sec" % (cls.SUBDIR, b-a)
         return names
+
+class LCSHNames(FASTNames):
+
+    SUBDIR = "LCSH"
+    triple_re = re.compile('^<http://id.loc.gov/authorities/subjects/([a-z]+[0-9]+)> <http://www.loc.gov/mads/rdf/v1#authoritativeLabel> "([^"]+)"@en')

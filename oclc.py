@@ -270,7 +270,8 @@ class OCLCLinkedData(object):
     URI_TO_SUBJECT_TYPE = {
         re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
         re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
-        re.compile("http://id.loc.gov/authorities/subjects/sh([^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
     }
 
     ACCEPTABLE_TYPES = (
