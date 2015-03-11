@@ -191,7 +191,8 @@ class CollectionCategorizationOverviewScript(Script):
             return ''
 
     def run(self):
-        q = "select s.type as type, s.identifier as identifier, s.name as name, s.fiction as fiction, s.audience as audience, g.name as genre, count(i.id) as ct from subjects s left join classifications c on s.id=c.subject_id left join identifiers i on c.identifier_id=i.id left join genres g on s.genre_id=g.id where s.type in ('Overdrive', '3M') group by s.type, s.identifier, s.name, s.fiction, s.audience, g.name order by ct desc;"
+        # where s.type in ('Overdrive', '3M') 
+        q = "select s.type as type, s.identifier as identifier, s.name as name, s.fiction as fiction, s.audience as audience, g.name as genre, count(i.id) as ct from subjects s left join classifications c on s.id=c.subject_id left join identifiers i on c.identifier_id=i.id left join genres g on s.genre_id=g.id group by s.type, s.identifier, s.name, s.fiction, s.audience, g.name order by ct desc;"
         q = self._db.query("type", "identifier", "name", "fiction", "audience", "genre", "ct").from_statement(q)
         for type, identifier, name, fiction, audience, genre, ct in q:
             if ct < self.cutoff:
@@ -231,10 +232,17 @@ class FASTAwareSubjectAssignmentScript(SubjectAssignmentScript):
         self.fast = FASTNames.from_data_directory(data_dir)
         self.lcsh = LCSHNames.from_data_directory(data_dir)
         super(FASTAwareSubjectAssignmentScript, self).__init__(force)
+        self.success = 0
+
+    def run(self):
+        super(FASTAwareSubjectAssignmentScript, self).run()
+        print "Added names to %d subjects." % self.success
 
     def process(self, subject):
         if subject.type == Subject.FAST and subject.identifier:
             subject.name = self.fast.get(subject.identifier, subject.name)
+            self.success += 1
         elif subject.type == Subject.LCSH and subject.identifier:
             subject.name = self.lcsh.get(subject.identifier, subject.name)
+            self.success += 1
         super(FASTAwareSubjectAssignmentScript, self).process(subject)
