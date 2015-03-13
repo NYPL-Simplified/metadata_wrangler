@@ -4,8 +4,10 @@ import os
 from ..core.model import (
     Contributor,
     Resource,
+    Hyperlink,
     Identifier,
     Edition,
+    Subject,
 )
 from ..threem import (
     ItemListParser,
@@ -21,10 +23,19 @@ class TestItemListParser(object):
         path = os.path.join(cls.resource_path, filename)
         return open(path).read()
 
-    def text_parse_author_string(cls):
+    def test_parse_author_string(cls):
         authors = ItemListParser.author_names_from_string(
             "Walsh, Jill Paton; Sayers, Dorothy L.")
         eq_(authors, ["Walsh, Jill Paton", "Sayers, Dorothy L."])
+
+    def test_parse_genre_string(self):
+        f = ItemListParser.parse_genre_string
+        eq_(["Children's Health", "Health"], 
+            f("Children&amp;#39;s Health,Health,"))
+        
+        eq_(["Action & Adventure", "Science Fiction", "Fantasy", "Magic",
+             "Renaissance"], 
+            f("Action &amp;amp; Adventure,Science Fiction, Fantasy, Magic,Renaissance,"))
 
     def test_item_list(cls):
         data = cls.get_data("item_metadata_list.xml")
@@ -47,19 +58,20 @@ class TestItemListParser(object):
         eq_("The Incense Game", cooked[Edition.title])
         eq_("A Novel of Feudal Japan", cooked[Edition.subtitle])
         eq_(["Rowland, Laura Joh"], cooked[Contributor])
+        eq_(["Children's Health", "Mystery & Detective"], cooked[Subject])
         eq_("eng", cooked[Edition.language])
         eq_("St. Martin's Press", cooked[Edition.publisher])
         eq_("1.2 MB", cooked['extra']['fileSize'])
         eq_("304", cooked['extra']['numberOfPages'])
         eq_(datetime.datetime(year=2012, month=9, day=17), cooked[Edition.published])
 
-        summary = cooked[Resource][Resource.DESCRIPTION]
+        summary = cooked[Hyperlink][Hyperlink.DESCRIPTION]
         assert summary.startswith("<b>Winner")
 
         # Check the links
 
-        image = cooked[Resource][Resource.IMAGE]
+        image = cooked[Hyperlink][Hyperlink.IMAGE]
         assert image.startswith("http://ebook.3m.com/delivery")
 
-        alternate = cooked[Resource]["alternate"]
+        alternate = cooked[Hyperlink]["alternate"]
         assert alternate.startswith("http://ebook.3m.com/library")

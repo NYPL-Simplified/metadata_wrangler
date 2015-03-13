@@ -11,6 +11,7 @@ from nose.tools import (
 from . import DatabaseTest
 from ..core.model import (
     DataSource,
+    Hyperlink,
     Identifier,
     Measurement,
     Resource,
@@ -34,7 +35,7 @@ class TestOverdrive(DatabaseTest):
 
     def test_annotate_edition_with_bibliographic_information(self):
 
-        wr, new = self._edition(with_license_pool=True)
+        wr, new = self._edition(with_license_pool=True, authors=[])
         raw, info = self.sample_json("overdrive_metadata.json")
 
         input_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
@@ -67,23 +68,23 @@ class TestOverdrive(DatabaseTest):
             sorted(ids))
 
         # Associated resources.
-        resources = wr.primary_identifier.resources
-        eq_(3, len(resources))
+        links = wr.primary_identifier.links
+        eq_(3, len(links))
         long_description = [
-            x for x in resources if x.rel==Resource.DESCRIPTION
-            and x.href=="tag:full"
+            x.resource.representation for x in links
+            if x.rel==Hyperlink.DESCRIPTION
         ][0]
         assert long_description.content.startswith("<p>Software documentation")
 
         short_description = [
-            x for x in resources if x.rel==Resource.DESCRIPTION
-            and x.href=="tag:short"
+            x.resource.representation for x in links
+            if x.rel==Hyperlink.SHORT_DESCRIPTION
         ][0]
         assert short_description.content.startswith("<p>Software documentation")
         assert len(short_description.content) < len(long_description.content)
 
-        image = [x for x in resources if x.rel==Resource.IMAGE][0]
-        eq_('http://images.contentreserve.com/ImageType-100/0128-1/%7B3896665D-9D81-4CAC-BD43-FFC5066DE1F5%7DImg100.jpg', image.href)
+        image = [x.resource for x in links if x.rel==Hyperlink.IMAGE][0]
+        eq_('http://images.contentreserve.com/ImageType-100/0128-1/%7B3896665D-9D81-4CAC-BD43-FFC5066DE1F5%7DImg100.jpg', image.url)
 
         measurements = wr.primary_identifier.measurements
         popularity = [x for x in measurements
@@ -109,10 +110,8 @@ class TestOverdrive(DatabaseTest):
             self._db, wr, info, input_source)
         
         i = wr.primary_identifier
-        [sample] = [x for x in i.resources if x.rel == Resource.SAMPLE]
-        eq_("application/epub+zip", sample.media_type)
-        eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.href)
-        eq_(820171, sample.file_size)
+        [sample] = [x for x in i.links if x.rel == Hyperlink.SAMPLE]
+        eq_("http://excerpts.contentreserve.com/FormatType-410/1071-1/9BD/24F/82/BridesofConvenienceBundle9781426803697.epub", sample.resource.url)
 
     def test_annotate_edition_with_awards(self):
         wr, new = self._edition(with_license_pool=True)

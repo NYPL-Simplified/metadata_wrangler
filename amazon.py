@@ -1,3 +1,4 @@
+from nose.tools import set_trace
 from datetime import timedelta
 import isbnlib
 import random
@@ -91,8 +92,11 @@ class AmazonAPI(object):
             self._db, url, get_method,
             extra_request_headers=extra_request_headers,
             max_age=max_age, pause_before=pause)
-        if not cached and not representation.content:
+        if representation.status_code == 404:
+            print "Amazon has no knowledge of ASIN %s" % asin
+        elif not cached and not representation.content:
             print "No content!"
+            # Sleep to deal with possible rate limiting.
             time.sleep(60)
         return representation
 

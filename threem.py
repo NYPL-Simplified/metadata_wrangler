@@ -1,5 +1,6 @@
 from nose.tools import set_trace
 
+import isbnlib
 import datetime
 from lxml import etree
 
@@ -10,8 +11,9 @@ from core.model import (
     Contributor,
     DataSource,
     Edition,
+    Hyperlink,
     Identifier,
-    Resource,
+    Subject,
 )
 from core.coverage import CoverageProvider
 from core.monitor import Monitor
@@ -33,7 +35,9 @@ class ThreeMAPI(BaseThreeMAPI):
             identifier = edition.primary_identifier
             identifiers.append(identifier)
             edition_for_identifier[identifier] = edition
-            data = self.request("/items/%s" % identifier.identifier)
+            data = self.request(
+                "/items/%s" % identifier.identifier,
+                max_age=self.MAX_METADATA_AGE)
             identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
             results[identifier] = (edition, cooked)
 
@@ -54,20 +58,36 @@ class ItemListParser(XMLParser):
     @classmethod
     def author_names_from_string(cls, string):
         if not string:
-            return
-        for author in string.split(";"):
-            yield author.strip()
+            return []
+        return [author.strip() for author in string.split(";")]
+
+    @classmethod
+    def parse_genre_string(self, s):           
+        genres = []
+        if not s:
+            return genres
+        for i in s.split(","):
+            i = i.strip()
+            if not i:
+                continue
+            i = i.replace("&amp;amp;", "&amp;").replace("&amp;", "&").replace("&#39;", "'")
+            genres.append(i)
+        return genres
 
     def process_one(self, tag, namespaces):
         def value(threem_key):
             return self.text_of_optional_subtag(tag, threem_key)
-        resources = dict()
+        links = dict()
         identifiers = dict()
-        item = { Resource : resources,  Identifier: identifiers,
+        subjects = []
+        item = { Hyperlink : links,  Identifier: identifiers,
+                 Subject : subjects,
                  "extra": {} }
 
         identifiers[Identifier.THREEM_ID] = value("ItemId")
         identifiers[Identifier.ISBN] = value("ISBN13")
+
+        item[Subject] = self.parse_genre_string(value("Genre"))
 
         item[Edition.title] = value("Title")
         item[Edition.subtitle] = value("SubTitle")
@@ -94,9 +114,9 @@ class ItemListParser(XMLParser):
 
         item[Edition.published] = published_date
 
-        resources[Hyperlink.DESCRIPTION] = value("Description")
-        resources[Hyperlink.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
-        resources["alternate"] = value("BookLinkURL").replace("&amp;", "&")
+        links[Hyperlink.DESCRIPTION] = value("Description")
+        links[Hyperlink.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
+        links["alternate"] = value("BookLinkURL").replace("&amp;", "&")
 
         item['extra']['fileSize'] = value("Size")
         item['extra']['numberOfPages'] = value("NumberOfPages")
@@ -143,11 +163,16 @@ class ThreeMBibliographicMonitor(CoverageProvider):
     def annotate_edition_with_bibliographic_information(
             self, db, edition, info, input_source):
 
-        # ISBN and 3M ID were associated with the work record earlier,
-        # so don't bother doing it again.
-
         pool = edition.license_pool
         identifier = edition.primary_identifier
+
+        isbn = info[Identifier].get(Identifier.ISBN, '')
+        if isbnlib.is_isbn10(isbn):
+            isbn = isbnlib.to_isbn13(isbn)
+        if isbnlib.is_isbn13(isbn):
+            isbn, ignore = Identifier.for_foreign_id(
+                self._db, Identifier.ISBN, isbn)
+            identifier.equivalent_to(self.input_source, isbn, 1)
 
         edition.title = info[Edition.title]
         edition.subtitle = info[Edition.subtitle]
@@ -160,7 +185,11 @@ class ThreeMBibliographicMonitor(CoverageProvider):
 
         edition.extra = info['extra']
 
-        # Associate resources with the work record.
+        # Associate subjects with the identifier.
+        for subject in info[Subject]:
+            identifier.classify(self.input_source, Subject.THREEM, subject)
+
+        # Associate resources with the identifier.
         for rel, value in info[Hyperlink].items():
             if rel == Hyperlink.DESCRIPTION:
                 href = None
@@ -176,8 +205,6 @@ class ThreeMBibliographicMonitor(CoverageProvider):
 class ThreeMCoverImageMirror(CoverImageMirror):
     """Downloads images from 3M and writes them to disk."""
 
-    ORIGINAL_PATH_VARIABLE = "original_threem_covers_mirror"
-    SCALED_PATH_VARIABLE = "scaled_threem_covers_mirror"
     DATA_SOURCE = DataSource.THREEM
 
     def filename_for(self, resource):

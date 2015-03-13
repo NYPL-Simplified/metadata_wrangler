@@ -28,6 +28,7 @@ from core.model import (
     Identifier,
     Edition,
     DataSource,
+    Hyperlink,
     Representation,
     Resource,
     Subject,
@@ -270,7 +271,8 @@ class OCLCLinkedData(object):
     URI_TO_SUBJECT_TYPE = {
         re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
         re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
-        re.compile("http://id.loc.gov/authorities/subjects/sh([^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
     }
 
     ACCEPTABLE_TYPES = (
@@ -407,8 +409,7 @@ class OCLCClassifyAPI(object):
         """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
         url = self.BASE_URL + query_string
-        representation, cached = Representation.get(
-            self._db, url, data_source=self.source)
+        representation, cached = Representation.get(self._db, url)
         return representation.content
 
 
@@ -1041,7 +1042,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_isbns = 0
             new_descriptions = 0
             new_subjects = 0
-            print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
+            try:
+                print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
+            except Exception, e:
+                # TODO: This needs to be fixed, but don't crash just
+                # because we can't print a status message.
+                pass
             editions = 0
             for edition in self.info_for(identifier):
                 edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
@@ -1154,7 +1160,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         description_resources = []
         for description in edition['descriptions']:
             uri = Hyperlink.generic_uri(
-                self.oclc_linked_data, original_identifier,
+                self.oclc_linked_data, original_identifier, 
                 Hyperlink.DESCRIPTION, description)
             description_resource, new = oclc_number.add_link(
                 Hyperlink.DESCRIPTION, uri, self.oclc_linked_data,

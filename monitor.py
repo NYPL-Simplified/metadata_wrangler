@@ -1,6 +1,7 @@
 import datetime
 import os
 import requests
+import traceback
 
 from nose.tools import set_trace
 from sqlalchemy import or_
@@ -200,6 +201,9 @@ class IdentifierResolutionMonitor(Monitor):
         for edition in editions:
             identifier = edition.primary_identifier
             if identifier in tasks_by_identifier:
+                # TODO: may need to uncomment this.
+                edition.calculate_presentation()
+                edition.license_pool.calculate_work(even_if_no_author=True)
                 successes.append(tasks_by_identifier[identifier])
         for identifier, (status_code, exception) in messages.items():
             if identifier not in tasks_by_identifier:
@@ -237,10 +241,12 @@ class IdentifierResolutionMonitor(Monitor):
             self._db, data_source, task.identifier.type, task.identifier.identifier)
         try:
             coverage_provider.ensure_coverage(edition, force=True)
+            edition.calculate_presentation()
+            edition.license_pool.calculate_work(even_if_no_author=True)
             return True
         except Exception, e:
             task.status_code = 500
-            task.exception = str(e)
+            task.exception = traceback.format_exc()
             return False
 
 class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
@@ -255,15 +261,13 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         self.data_directory = os.environ['DATA_DIRECTORY']
         self.force = force
 
-        self.threem_image_mirror = ThreeMCoverImageMirror(
-            self._db, self.data_directory)
-        self.overdrive_image_mirror = OverdriveCoverImageMirror(
-            self._db, self.data_directory)
+        self.threem_image_mirror = ThreeMCoverImageMirror(self._db)
+        self.overdrive_image_mirror = OverdriveCoverImageMirror(self._db)
         self.image_mirrors = { DataSource.THREEM : self.threem_image_mirror,
                           DataSource.OVERDRIVE : self.overdrive_image_mirror }
 
         self.image_scaler = ImageScaler(
-            self._db, self.data_directory, self.image_mirrors.values())
+            self._db, self.image_mirrors.values())
 
         self.appeal_calculator = AppealCalculator(self._db, self.data_directory)
 
@@ -278,16 +282,26 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             Work.presentation_ready==None,
             Work.presentation_ready==False)
 
+        one_day_ago = datetime.datetime.utcnow()-datetime.timedelta(days=1)
+        
+
         base = self._db.query(Work).filter(not_presentation_ready)
-        failed_works = base.filter(Work.presentation_ready_exception!=None)
+        failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
         print "%s works not presentation ready." % unready_works.count()
         print "%s works have presentation ready failures." % failed_works.count()
-        for q in unready_works, failed_works:
-            q = q.order_by(Work.last_update_time.desc())
+        for q_orig, batch_size in (unready_works, 1000), (failed_works, None):
+            self._run_once_batch(q_orig, batch_size)
+
+    def _run_once_batch(self, query, batch_size):
+        q = query.order_by(Work.last_update_time.desc())
+        if batch_size:
+            q = q.limit(batch_size)
+        while q.count():
             for work in q.all():
                 try:
                     if self.make_work_ready(work):
+                        work.calculate_presentation()
                         work.set_presentation_ready()
                         print "=NEW PRESENTATION READY WORK!="
                         print repr(work)
@@ -295,11 +309,12 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                     else:
                         print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
                 except Exception, e:
-                    self.make_work_ready(work)
-                    work.presentation_ready_exception = str(e)
+                    work.presentation_ready_exception = traceback.format_exc()
                     print "=ERROR MAKING WORK PRESENTATION READY="
-                    print e
-                self._db.commit()
+                    print work.presentation_ready_exception
+            self._db.commit()
+            if not batch_size:
+                break
 
     def make_work_ready(self, work):
         """Either make a work presentation ready, or raise an exception
@@ -332,6 +347,9 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         for edition in work.editions:
             for contributor in primary_edition.contributors:
                 self.viaf.process_contributor(contributor)
+                if not contributor.display_name:
+                    contributor.family_name, contributor.display_name = (
+                        contributor.default_names())
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
         self.appeal_calculator.calculate_for_work(work)

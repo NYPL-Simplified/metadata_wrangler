@@ -18,10 +18,10 @@ from core.coverage import CoverageProvider
 from core.model import (
     DataSource,
     Edition,
+    Hyperlink,
     Identifier,
     Measurement,
     Representation,
-    Resource,
     Subject,
 )
 from core.monitor import Monitor
@@ -48,8 +48,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             pass
         else:
             value = str(value)
-        pool.add_link(
-            rel, url, input_source, media_type, value)
+        pool.add_link(rel, url, input_source, media_type, value)
 
     @classmethod
     def _add_value_as_measurement(
@@ -138,7 +137,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         extra = dict()
         for inkey, outkey in (
                 ('gradeLevels', 'grade_levels'),
-                ('mediaType', 'medium'),
                 ('awards', 'awards'),
         ):
             if inkey in info:
@@ -194,7 +192,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                     resource, new = license_pool.add_link(
                         Hyperlink.SAMPLE, href, input_source,
                         media_type)
-                    resource.file_size = format['fileSize']
 
         # Add resources: cover and descriptions
 
@@ -205,23 +202,20 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])
             media_type = link['type']
-            license_pool.add_resource(
-                Hyperlink.IMAGE, href, input_source,
-                media_type
-            )
+            license_pool.add_link(Hyperlink.IMAGE, href, input_source, media_type)
 
         short = info.get('shortDescription')
         full = info.get('fullDescription')
 
         if full:
             cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.DESCRIPTION, full,
-                "text/html", "tag:full")
+                input_source, identifier, license_pool,
+                Hyperlink.DESCRIPTION, full, "text/html")
 
         if short and short != full and (not full or not full.startswith(short)):
             cls._add_value_as_resource(
-                input_source, identifier, license_pool, Resource.DESCRIPTION, short,
-                "text/html", "tag:short")
+                input_source, identifier, license_pool,
+                Hyperlink.SHORT_DESCRIPTION, short, "text/html")
 
         # Add measurements: rating and popularity
         if info.get('starRating') is not None and info['starRating'] > 0:
@@ -240,6 +234,4 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 class OverdriveCoverImageMirror(CoverImageMirror):
     """Downloads images from Overdrive and writes them to disk."""
 
-    ORIGINAL_PATH_VARIABLE = "original_overdrive_covers_mirror"
-    SCALED_PATH_VARIABLE = "scaled_overdrive_covers_mirror"
     DATA_SOURCE = DataSource.OVERDRIVE
