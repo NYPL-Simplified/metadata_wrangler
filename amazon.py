@@ -343,7 +343,7 @@ class AmazonCoverageProvider(CoverageProvider):
             self.SERVICE_NAME,
             identifier_types,
             self.coverage_source,
-            workset_size=1)
+            workset_size=100)
        
     @property
     def editions_that_need_coverage(self):
