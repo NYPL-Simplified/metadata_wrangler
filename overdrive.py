@@ -196,8 +196,15 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         # Add resources: cover and descriptions
 
         wr.medium = medium
+        def _p(s):
+            if not s:
+                return 'None'
+            if isinstance(s, unicode):
+                return s.encode("utf8")
+            return s
+        
         if medium == Edition.BOOK_MEDIUM:
-            print medium, wr.title, wr.author
+            print _p(medium), _p(wr.title), _p(wr.author)
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])
