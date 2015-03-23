@@ -74,7 +74,13 @@ class OCLCMonitorForGutenberg(CoverageProvider):
         title, author = self.title_and_author(book)
         language = book.language
 
-        print '%s "%s" "%s" %r' % (book.primary_identifier.identifier, title, author, language)
+        def _f(s):
+            if not s:
+                return ''
+            if isinstance(s, unicode):
+                return s.encode("utf8")
+            return s
+        print '%s "%s" "%s" %r' % (_f(book.primary_identifier.identifier), _f(title), _f(author), _f(language))
         # Perform a title/author lookup
         xml = self.oclc_classify.lookup_by(title=title, author=author)
 

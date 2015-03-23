@@ -294,6 +294,13 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         
 
         base = self._db.query(Work).filter(not_presentation_ready)
+
+        # Uncommenting these lines will restrict to a certain type of
+        # book.
+        #
+        #base = base.join(Edition.primary_identifier).filter(
+        #                 Identifier.type==Identifier.GUTENBERG_ID)
+
         failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
         print "%s works not presentation ready." % unready_works.count()
