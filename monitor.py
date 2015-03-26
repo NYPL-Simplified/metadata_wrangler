@@ -298,8 +298,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         # Uncommenting these lines will restrict to a certain type of
         # book.
         #
-        #base = base.join(Edition.primary_identifier).filter(
-        #                 Identifier.type==Identifier.GUTENBERG_ID)
+        base = base.join(Work.editions).join(Edition.primary_identifier).filter(
+                         Identifier.type!=Identifier.GUTENBERG_ID)
 
         failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
@@ -374,7 +374,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                         contributor.default_names())
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
-        self.appeal_calculator.calculate_for_work(work)
+        # self.appeal_calculator.calculate_for_work(work)
 
         # Make sure we have the cover for all editions.
         for edition in work.editions:
