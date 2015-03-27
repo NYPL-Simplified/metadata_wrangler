@@ -298,8 +298,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         # Uncommenting these lines will restrict to a certain type of
         # book.
         #
-        base = base.join(Work.editions).join(Edition.primary_identifier).filter(
-                         Identifier.type!=Identifier.GUTENBERG_ID)
+        #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
+        #                 Identifier.type!=Identifier.GUTENBERG_ID)
 
         failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
@@ -343,6 +343,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         explaining why that's not possible.
         """
         did_oclc_lookup = False
+        oclc = LinkedDataCoverageProvider(self._db, processed_uris=set())
+
         for edition in work.editions:
             # OCLC Lookup on all Gutenberg editions.
             if edition.data_source.name==DataSource.GUTENBERG:
@@ -358,16 +360,14 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                 type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER])
             # For a given edition, it's a waste of time to process a
             # given document from OCLC Linked Data more than once.
-            oclc_linked_data = LinkedDataCoverageProvider(
-                self._db, identifier_tracker=set())
             for o in oclc_ids:
-                self.oclc_linked_data.ensure_coverage(o)
+                oclc.ensure_coverage(o)
 
         # OCLC Linked Data on all ISBNs.
         equivalent_identifiers = primary_edition.equivalent_identifiers(
             type=[Identifier.ISBN])
         for identifier in equivalent_identifiers:
-            self.oclc_linked_data.ensure_coverage(identifier)
+            oclc.ensure_coverage(identifier)
 
         # VIAF on all contributors.
         for edition in work.editions:

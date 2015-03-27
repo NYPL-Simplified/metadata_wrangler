@@ -379,7 +379,14 @@ class VIAFClient(object):
                 if duplicates[0].display_name == contributor.display_name:
                     contributor.merge_into(duplicates[0])
                 else:
-                    print "WARNING: POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (contributor.display_name, duplicates[0].display_name)
+                    d1 = contributor.display_name
+                    if isinstance(d1, unicode):
+                        d1 = d1.encode("utf8")
+                    d2 = duplicates[0].display_name
+                    if isinstance(d2, unicode):
+                        d2 = d2.encode("utf8")
+
+                    print "WARNING: POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (d1, d2)
                     # TODO: This might be okay or it might be a
                     # problem we need to address. Whatever it is,
                     # don't merge the records.
