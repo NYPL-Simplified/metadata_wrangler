@@ -138,7 +138,7 @@ class OCLCLinkedData(object):
         url = url % dict(id=identifier.identifier, type=foreign_type)
         if url in processed_uris:
             print "SKIPPING %s, already processed." % url
-            return None, False
+            return None, True
         processed_uris.add(url)
         representation, cached = Representation.get(self._db, url)
         try:
