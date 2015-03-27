@@ -356,6 +356,10 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         if did_oclc_lookup:
             oclc_ids = primary_edition.equivalent_identifiers(
                 type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER])
+            # For a given edition, it's a waste of time to process a
+            # given document from OCLC Linked Data more than once.
+            oclc_linked_data = LinkedDataCoverageProvider(
+                self._db, identifier_tracker=set())
             for o in oclc_ids:
                 self.oclc_linked_data.ensure_coverage(o)
 

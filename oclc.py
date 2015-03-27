@@ -1016,7 +1016,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, _db, services=None):
+    def __init__(self, _db, services=None, identifier_tracker=None):
         self.oclc = OCLCLinkedData(_db)
         self.db = _db
         self.oclc_linked_data = DataSource.lookup(
@@ -1024,6 +1024,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if not services:
             services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
         services = [DataSource.lookup(self.db, x) for x in services]
+        self.processed_identifiers = identifier_tracker
 
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME,
@@ -1322,7 +1323,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def graphs_for(self, identifier):
         #print "BEGIN GRAPHS FOR %r" % identifier
+        work_data = None
         if identifier.type in OCLCLinkedData.CAN_HANDLE:
+            if processed_identifiers:
+                if identifier in self.processed_identifiers:
+                    print "Skipping %s, already processed. "% identifier.identifier
+                    return
+                self.processed_identifiers.add(identifier)
+
             if identifier.type == Identifier.ISBN:
                 work_data = list(self.oclc.oclc_works_for_isbn(identifier))
             elif identifier.type == Identifier.OCLC_WORK:
