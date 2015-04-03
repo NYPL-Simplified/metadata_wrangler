@@ -37,31 +37,37 @@ class CoverImageMirror(object):
         """Mirror all image resources associated with this data source."""
         q = self._db.query(Hyperlink).filter(
                 Hyperlink.data_source==self.data_source)
-        print "Mirroring %d images." % q.count()
         self.mirror_all_resources(q)
 
     def mirror_all_resources(self, q, force=False):
         """Mirror all resources that match a query."""
         # Only mirror images.
+        batch_size=100
         now = datetime.datetime.utcnow()
         q = q.filter(Hyperlink.rel==Hyperlink.IMAGE)
         q = q.join(Hyperlink.resource).outerjoin(Resource.representation)
         # Restrict to resources that are not already mirrored.
         if force:
             q = q.filter(Representation.mirrored_at < now)
+            q = q.filter(Representation.fetch_exception==None)
         else:
             q = q.filter(Representation.mirrored_at == None)
+            q = q.filter(Representation.fetch_exception==None)
             q = q.filter(Representation.mirror_exception==None)
 
-        resultset = q.limit(100).all()
+        resultset = q.limit(batch_size).all()
+        ONE_YEAR = datetime.timedelta(days=365)
+        blacklist = set()
+        print "About to mirror %d images." % q.count()
         while resultset:
             print "Mirroring %d images." % len(resultset)
             to_upload = []
             for hyperlink in resultset:
+                blacklist.add(hyperlink.id)
                 resource = hyperlink.resource
                 if not resource.representation:
                     resource.representation, cached = Representation.get(
-                        self._db, resource.url)
+                        self._db, resource.url, max_age=ONE_YEAR)
                 representation = resource.representation
                 if not representation.media_type or not representation.media_type.startswith('image/'):
                     representation.fetch_exception = (
@@ -81,7 +87,9 @@ class CoverImageMirror(object):
             for rep in to_upload:
                 print "%s => %s %s" % (rep.url, rep.mirror_url, rep.mirrored_at)
             self._db.commit()
-            resultset = q.limit(100).all()
+            
+            resultset = q.filter(~Hyperlink.id.in_(blacklist)).limit(batch_size).all()
+            print "Blacklist size now %d" % len(blacklist)
         self._db.commit()
 
     types_for_image_extensions = { ".jpg" : "image/jpeg",
@@ -180,8 +188,7 @@ class ImageScaler(object):
                     # Most likely this resource doesn't need to be
                     # thumbnailed. Add it to the blacklist so we don't
                     # pick it up again.
-                    blacklist.add(thumbnail.id)
-                    
+                    blacklist.add(thumbnail.resource.id)
                 else:
                     to_upload.append(thumbnail)
                     total += 1

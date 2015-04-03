@@ -106,7 +106,7 @@ class OCLCLinkedData(object):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
-    def lookup(self, identifier_or_uri):
+    def lookup(self, identifier_or_uri, processed_uris):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
@@ -125,9 +125,9 @@ class OCLCLinkedData(object):
             type = identifier.type
         if not type or not identifier:
             return None, None
-        return self.lookup_by_identifier(identifier)
+        return self.lookup_by_identifier(identifier, processed_uris)
 
-    def lookup_by_identifier(self, identifier):
+    def lookup_by_identifier(self, identifier, processed_uris=[]):
         """Turn an Identifier into a JSON-LD document."""
         if identifier.type == Identifier.OCLC_WORK:
             foreign_type = 'work'
@@ -137,6 +137,10 @@ class OCLCLinkedData(object):
             url = self.BASE_URL
 
         url = url % dict(id=identifier.identifier, type=foreign_type)
+        if url in processed_uris:
+            print "SKIPPING %s, already processed." % url
+            return None, True
+        processed_uris.add(url)
         representation, cached = Representation.get(self._db, url)
         try:
             data = jsonld.load_document(url)
@@ -148,6 +152,8 @@ class OCLCLinkedData(object):
             representation, cached = Representation.get(
                 self._db, url, max_age=0)
             
+        if not representation.content:
+            return None, False
         doc = {
             'contextUrl': None,
             'documentUrl': url,
@@ -172,13 +178,13 @@ class OCLCLinkedData(object):
         return Identifier.for_foreign_id(
             self._db, Identifier.OCLC_NUMBER, oclc_number)[0]
 
-    def oclc_works_for_isbn(self, isbn):
+    def oclc_works_for_isbn(self, isbn, processed_uris=[]):
         """Yield every OCLC Work graph for the given ISBN."""
         # Find the OCLC Number for this ISBN.
         oclc_number = self.oclc_number_for_isbn(isbn)
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
-        oclc_number_data, was_new = self.lookup_by_identifier(oclc_number)
+        oclc_number_data, was_new = self.lookup_by_identifier(oclc_number, processed_uris)
         if not oclc_number_data:
             return
 
@@ -191,7 +197,9 @@ class OCLCLinkedData(object):
                 work_id = m.groups()[0]
                 identifier, was_new = Identifier.for_foreign_id(
                     self._db, Identifier.OCLC_WORK, work_id)
-                oclc_work_data, cached = self.lookup_by_identifier(identifier)
+
+                oclc_work_data, cached = self.lookup_by_identifier(
+                    identifier, processed_uris)
                 yield oclc_work_data
 
     @classmethod
@@ -972,6 +980,7 @@ class LinkedDataURLLister:
                     output.write(uri + ".jsonld")
                     output.write("\n")
 
+
 class LinkedDataCoverageProvider(CoverageProvider):
 
     """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
@@ -1015,7 +1024,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, _db, services=None):
+    def __init__(self, _db, services=None, processed_uris=None):
         self.oclc = OCLCLinkedData(_db)
         self.db = _db
         self.oclc_linked_data = DataSource.lookup(
@@ -1023,7 +1032,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if not services:
             services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
         services = [DataSource.lookup(self.db, x) for x in services]
-
+        self.replace_processed_uris = False
+        if processed_uris is None:
+            self.replace_processed_uris = True
+        else:
+            self.processed_uris = processed_uris
         super(LinkedDataCoverageProvider, self).__init__(
             self.SERVICE_NAME,
             services,
@@ -1031,6 +1044,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             workset_size=3)
 
     def process_edition(self, edition):
+        if self.replace_processed_uris:
+            print "Clearing out processed URIs."
+            self.processed_uris = set()
+        else:
+            print "Currently %d processed URIs." % len(self.processed_uris)
+
         if isinstance(edition, Identifier):
             identifier = edition
             title = "[unknown]"
@@ -1320,15 +1339,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, identifier):
-        #print "BEGIN GRAPHS FOR %r" % identifier
+        # print "BEGIN GRAPHS FOR %r" % identifier
+        work_data = None
         if identifier.type in OCLCLinkedData.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
-                work_data = list(self.oclc.oclc_works_for_isbn(identifier))
+                work_data = list(self.oclc.oclc_works_for_isbn(identifier, self.processed_uris))
             elif identifier.type == Identifier.OCLC_WORK:
-                work_data, cached = self.oclc.lookup(identifier)
+                work_data, cached = self.oclc.lookup(identifier, self.processed_uris)
             else:
                 # Look up and yield a single edition.
-                edition_data, cached = self.oclc.lookup(identifier)
+                edition_data, cached = self.oclc.lookup(identifier, self.processed_uris)
                 yield edition_data
                 work_data = None
 
@@ -1343,7 +1363,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     examples = self.oclc.extract_workexamples(graph)
                     for uri in examples:
                         #print "  Found example URI %s" % uri
-                        data, cached = self.oclc.lookup(uri)
+                        data, cached = self.oclc.lookup(uri, self.processed_uris)
                         yield data
 
         else:

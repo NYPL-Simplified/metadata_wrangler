@@ -6,6 +6,9 @@ import requests
 import time
 import os
 import re
+import urlparse
+import sys
+from bs4 import BeautifulSoup
 from cStringIO import StringIO
 from lxml import etree 
 from core.util.xmlparser import (
@@ -33,6 +36,8 @@ class AmazonAPI(object):
     MAX_BIBLIOGRAPHIC_AGE = timedelta(days=30*3)
     MAX_REVIEW_AGE = timedelta(days=30*6)
 
+    RATE_LIMIT_TEXT = "Sorry, we just need to make sure you're not a robot. For best results, please make sure your browser is accepting cookies."
+
     def __init__(self, _db):
         self._db = _db
         self.data_source = DataSource.lookup(_db, DataSource.AMAZON)
@@ -48,7 +53,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = 1 + random.random()
+            pause = (1 + random.random()) * 4
         asin = identifier.identifier
         if isbnlib.is_isbn13(asin):
             asin = isbnlib.to_isbn10(asin)
@@ -57,6 +62,19 @@ class AmazonAPI(object):
             self._db, url, get_method,
             pause_before=pause,
             max_age=self.MAX_BIBLIOGRAPHIC_AGE)
+        if self.RATE_LIMIT_TEXT in representation.content and cached:
+            # Force a refresh.
+            representation, cached = Representation.get(
+                self._db, url, get_method,
+                pause_before=pause,
+                max_age=0)
+        if self.RATE_LIMIT_TEXT in representation.content:
+            if sys.stdin.isatty():
+                # We're being run in a terminal. A human being can fix this.
+                representation = AmazonRateLimitCAPTCHAClient(self._db, url, captcha_content=representation.content).process()
+            else:
+                raise Exception("Rate limit triggered on %s" % url)
+
         return representation
 
     def get_reviews(self, identifier, page, force=False, get_method=None):
@@ -64,7 +82,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = random.random()
+            pause = (1 + random.random()) * 4
         get_method = get_method or Representation.browser_http_get
 
         if force:
@@ -92,6 +110,20 @@ class AmazonAPI(object):
             self._db, url, get_method,
             extra_request_headers=extra_request_headers,
             max_age=max_age, pause_before=pause)
+
+        if self.RATE_LIMIT_TEXT in representation.content and cached:
+            # Force a refresh.
+            representation, cached = Representation.get(
+                self._db, url, get_method,
+                pause_before=pause,
+                max_age=0)
+        if self.RATE_LIMIT_TEXT in representation.content:
+            if sys.stdin.isatty():
+                # We're being run in a terminal. A human being can fix this.
+                representation = AmazonRateLimitCAPTCHAClient(self._db, url, captcha_content=representation.content).process()
+            else:
+                raise Exception("Rate limit triggered on %s" % url)
+
         if representation.status_code == 404:
             print "Amazon has no knowledge of ASIN %s" % asin
         elif not cached and not representation.content:
@@ -125,7 +157,10 @@ class AmazonAPI(object):
             # print "%d reviews so far" % len(all_reviews)
         return all_reviews
 
-class AmazonBibliographicParser(XMLParser):
+class AmazonParser(XMLParser):
+    pass
+
+class AmazonBibliographicParser(AmazonParser):
 
     IDENTIFIER_IN_URL = re.compile("/dp/([^/]+)/")
     BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio', 'Audible',
@@ -166,6 +201,7 @@ class AmazonBibliographicParser(XMLParser):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
             string = string.encode("utf8")
+
         root = etree.parse(StringIO(string), parser)
 
         identifiers = []
@@ -234,8 +270,13 @@ class AmazonBibliographicParser(XMLParser):
                     category_keywords.add(l.text.strip())
             self.add_keywords(keywords, category_keywords, exclude_tags)
 
-        measurements[Measurement.RATING] = self.get_quality(root)
-        measurements[Measurement.POPULARITY] = self.get_popularity(root)
+        quality = self.get_quality(root)
+        if quality:
+            measurements[Measurement.RATING] = quality
+
+        popularity = self.get_popularity(root)
+        if popularity:
+            measurements[Measurement.POPULARITY] = popularity
         page_count = self.get_page_count(root)
         if page_count:
             measurements[Measurement.PAGE_COUNT] = page_count 
@@ -287,7 +328,7 @@ class AmazonBibliographicParser(XMLParser):
             return None
         return int(m.groups()[0])
 
-class AmazonReviewParser(XMLParser):
+class AmazonReviewParser(AmazonParser):
 
     NAMESPACES = {}
 
@@ -295,6 +336,7 @@ class AmazonReviewParser(XMLParser):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
             string = string.encode("utf8")
+
         for review in super(AmazonReviewParser, self).process_all(
                 string, "//html",
             parser=parser):
@@ -343,7 +385,7 @@ class AmazonCoverageProvider(CoverageProvider):
             self.SERVICE_NAME,
             identifier_types,
             self.coverage_source,
-            workset_size=100)
+            workset_size=10)
        
     @property
     def editions_that_need_coverage(self):
@@ -359,7 +401,6 @@ class AmazonCoverageProvider(CoverageProvider):
         if not bibliographic:
             return True
 
-        print identifier
         reviews = self.amazon.fetch_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(
@@ -378,3 +419,49 @@ class AmazonCoverageProvider(CoverageProvider):
             identifier.classify(
                 self.coverage_source, Subject.TAG, keyword)
         return True
+
+
+class AmazonRateLimitCAPTCHAClient(object):
+
+    def __init__(self, _db, captcha_url, captcha_content=None):
+
+        self._db = _db
+        self.captcha_url = captcha_url
+        if not captcha_content:
+            print "So the problematic URL is %s..." % captcha_url
+            rep, cached = Representation.get(_db, captcha_url, max_age=0)
+            if AmazonAPI.RATE_LIMIT_TEXT not in rep.content:
+                print "Looks fine to me:"
+                print rep.content
+                captcha_content = None
+            else:
+                self.captcha_content = rep.content
+        self.captcha_content = captcha_content
+
+    def process(self):
+        if not self.captcha_content:
+            return None
+
+        soup = BeautifulSoup(self.captcha_content)
+        form = soup.find('form', action='/errors/validateCaptcha')
+        fields = {}
+        for i in form.find_all('input', type='hidden'):
+            fields[i['name']] = i['value']
+
+        captcha_field_name = form.find('input', type='text')['name']
+
+        print "CAPTCHA URL is:"
+        for img in form.find_all('img'):
+            print img['src']
+        print "Enter CAPTCHA value from URL:"
+        value = sys.stdin.readline().strip()
+        fields[captcha_field_name] = value
+
+        field_data = [k + "=" + v for k, v in fields.items()]
+        url = urlparse.urljoin("http://www.amazon.com", form['action']) + "?" + "&".join(field_data)
+        print "Okay, trying %s" % url
+        referer = dict(Referer=self.captcha_url)
+        rep, cached = Representation.get(
+            self._db, url, extra_request_headers=referer, 
+            max_age=0)
+        return rep

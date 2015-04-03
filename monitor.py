@@ -239,10 +239,18 @@ class IdentifierResolutionMonitor(Monitor):
             self._db, data_source, task.identifier.type, task.identifier.identifier)
         license_pool, pool_is_new = LicensePool.for_foreign_id(
             self._db, data_source, task.identifier.type, task.identifier.identifier)
+        start = datetime.datetime.now()
         try:
             coverage_provider.ensure_coverage(edition, force=True)
+            after_coverage = datetime.datetime.now()
             edition.calculate_presentation()
+            after_calculate_presentation = datetime.datetime.now()
             edition.license_pool.calculate_work(even_if_no_author=True)
+            after_calculate_work = datetime.datetime.now()
+            e1 = (after_coverage-start).seconds
+            e2 = (after_calculate_presentation-after_coverage).seconds
+            e3 = (after_calculate_work-after_calculate_presentation).seconds
+            print "Ensure coverage: %.2fs. Calculate presentation: %.2fs. Calculate work: %.2fs." % (e1, e2, e3)
             return True
         except Exception, e:
             task.status_code = 500
@@ -286,6 +294,13 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         
 
         base = self._db.query(Work).filter(not_presentation_ready)
+
+        # Uncommenting these lines will restrict to a certain type of
+        # book.
+        #
+        #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
+        #                 Identifier.type!=Identifier.GUTENBERG_ID)
+
         failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
         unready_works = base.filter(Work.presentation_ready_exception==None)
         print "%s works not presentation ready." % unready_works.count()
@@ -300,12 +315,19 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         while q.count():
             for work in q.all():
                 try:
+                    start = datetime.datetime.now()
                     if self.make_work_ready(work):
+                        after_work_ready = datetime.datetime.now()
                         work.calculate_presentation()
+                        after_calculate_presentation = datetime.datetime.now()
                         work.set_presentation_ready()
                         print "=NEW PRESENTATION READY WORK!="
                         print repr(work)
                         print "=============================="
+                        e1 = (after_work_ready-start).seconds
+                        e2 = (after_calculate_presentation-after_work_ready).seconds
+                        print "Make work ready: %.2fs. Calculate presentation: %.2fs." % (e1, e2)
+
                     else:
                         print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
                 except Exception, e:
@@ -321,6 +343,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         explaining why that's not possible.
         """
         did_oclc_lookup = False
+        oclc = LinkedDataCoverageProvider(self._db, processed_uris=set())
+
         for edition in work.editions:
             # OCLC Lookup on all Gutenberg editions.
             if edition.data_source.name==DataSource.GUTENBERG:
@@ -334,14 +358,16 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         if did_oclc_lookup:
             oclc_ids = primary_edition.equivalent_identifiers(
                 type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER])
+            # For a given edition, it's a waste of time to process a
+            # given document from OCLC Linked Data more than once.
             for o in oclc_ids:
-                self.oclc_linked_data.ensure_coverage(o)
+                oclc.ensure_coverage(o)
 
         # OCLC Linked Data on all ISBNs.
         equivalent_identifiers = primary_edition.equivalent_identifiers(
             type=[Identifier.ISBN])
         for identifier in equivalent_identifiers:
-            self.oclc_linked_data.ensure_coverage(identifier)
+            oclc.ensure_coverage(identifier)
 
         # VIAF on all contributors.
         for edition in work.editions:
@@ -352,7 +378,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                         contributor.default_names())
 
         # Calculate appeal. This will obtain Amazon reviews as a side effect.
-        self.appeal_calculator.calculate_for_work(work)
+        # self.appeal_calculator.calculate_for_work(work)
 
         # Make sure we have the cover for all editions.
         for edition in work.editions:
