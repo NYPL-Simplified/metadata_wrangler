@@ -125,7 +125,15 @@ class AmazonAPI(object):
             # print "%d reviews so far" % len(all_reviews)
         return all_reviews
 
-class AmazonBibliographicParser(XMLParser):
+class AmazonParser(XMLParser):
+    RATE_LIMIT_TEXT = "Sorry, we just need to make sure you're not a robot. For best results, please make sure your browser is accepting cookies."
+
+    def check_rate_limit(self, string):
+        if RATE_LIMIT_TEXT in string:
+            raise Exception("Rate limit exceeded")
+
+
+class AmazonBibliographicParser(AmazonParser):
 
     IDENTIFIER_IN_URL = re.compile("/dp/([^/]+)/")
     BLACKLIST_FORMAT_SUBSTRINGS = ['Large Print', 'Audio', 'Audible',
@@ -166,6 +174,8 @@ class AmazonBibliographicParser(XMLParser):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
             string = string.encode("utf8")
+        self.check_rate_limit()
+
         root = etree.parse(StringIO(string), parser)
 
         identifiers = []
@@ -234,8 +244,13 @@ class AmazonBibliographicParser(XMLParser):
                     category_keywords.add(l.text.strip())
             self.add_keywords(keywords, category_keywords, exclude_tags)
 
-        measurements[Measurement.RATING] = self.get_quality(root)
-        measurements[Measurement.POPULARITY] = self.get_popularity(root)
+        quality = self.get_quality(root)
+        if quality:
+            measurements[Measurement.RATING] = quality
+
+        popularity = self.get_popularity(root)
+        if popularity:
+            measurements[Measurement.POPULARITY] = popularity
         page_count = self.get_page_count(root)
         if page_count:
             measurements[Measurement.PAGE_COUNT] = page_count 
@@ -287,7 +302,7 @@ class AmazonBibliographicParser(XMLParser):
             return None
         return int(m.groups()[0])
 
-class AmazonReviewParser(XMLParser):
+class AmazonReviewParser(AmazonParser):
 
     NAMESPACES = {}
 
@@ -295,6 +310,9 @@ class AmazonReviewParser(XMLParser):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
             string = string.encode("utf8")
+
+        self.check_rate_limit()
+
         for review in super(AmazonReviewParser, self).process_all(
                 string, "//html",
             parser=parser):
@@ -359,7 +377,6 @@ class AmazonCoverageProvider(CoverageProvider):
         if not bibliographic:
             return True
 
-        print identifier
         reviews = self.amazon.fetch_reviews(identifier)
         for type, other_identifier_id in bibliographic['identifiers']:
             other_identifier = Identifier.for_foreign_id(
