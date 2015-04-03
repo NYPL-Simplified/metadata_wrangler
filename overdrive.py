@@ -135,12 +135,16 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
         wr.sort_title = info.get('sortTitle')
         extra = dict()
-        for inkey, outkey in (
-                ('gradeLevels', 'grade_levels'),
-                ('awards', 'awards'),
-        ):
-            if inkey in info:
-                extra[outkey] = info.get(inkey)
+        if 'grade_levels' in info:
+            for i in info['grade_levels']:
+                identifier.classify(
+                    self.overdrive, Subject.FREEFORM_AUDIENCE, i['value'])
+
+        if 'awards' in info:
+            extra['awards'] = info.get('awards')
+            identifier.add_measurement(
+                input_source, Measurement.AWARDS, str(len(awards)))
+
         wr.extra = extra
 
         # Associate the Overdrive Edition with other identifiers
