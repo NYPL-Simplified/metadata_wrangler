@@ -33,6 +33,8 @@ class AmazonAPI(object):
     MAX_BIBLIOGRAPHIC_AGE = timedelta(days=30*3)
     MAX_REVIEW_AGE = timedelta(days=30*6)
 
+    RATE_LIMIT_TEXT = "Sorry, we just need to make sure you're not a robot. For best results, please make sure your browser is accepting cookies."
+
     def __init__(self, _db):
         self._db = _db
         self.data_source = DataSource.lookup(_db, DataSource.AMAZON)
@@ -57,6 +59,15 @@ class AmazonAPI(object):
             self._db, url, get_method,
             pause_before=pause,
             max_age=self.MAX_BIBLIOGRAPHIC_AGE)
+        if self.RATE_LIMIT_TEXT in representation.content and cached:
+            # Force a refresh.
+            representation, cached = Representation.get(
+                self._db, url, get_method,
+                pause_before=pause,
+                max_age=0)
+        if self.RATE_LIMIT_TEXT in representation.content:
+            raise Exception("Rate limit triggered on %s" % url)
+
         return representation
 
     def get_reviews(self, identifier, page, force=False, get_method=None):
@@ -92,6 +103,16 @@ class AmazonAPI(object):
             self._db, url, get_method,
             extra_request_headers=extra_request_headers,
             max_age=max_age, pause_before=pause)
+
+        if self.RATE_LIMIT_TEXT in representation.content and cached:
+            # Force a refresh.
+            representation, cached = Representation.get(
+                self._db, url, get_method,
+                pause_before=pause,
+                max_age=0)
+        if self.RATE_LIMIT_TEXT in representation.content:
+            raise Exception("Rate limit triggered on %s" % url)
+
         if representation.status_code == 404:
             print "Amazon has no knowledge of ASIN %s" % asin
         elif not cached and not representation.content:
@@ -126,12 +147,7 @@ class AmazonAPI(object):
         return all_reviews
 
 class AmazonParser(XMLParser):
-    RATE_LIMIT_TEXT = "Sorry, we just need to make sure you're not a robot. For best results, please make sure your browser is accepting cookies."
-
-    def check_rate_limit(self, string):
-        if RATE_LIMIT_TEXT in string:
-            raise Exception("Rate limit exceeded")
-
+    pass
 
 class AmazonBibliographicParser(AmazonParser):
 
