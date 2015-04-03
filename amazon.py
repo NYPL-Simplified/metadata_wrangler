@@ -53,7 +53,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = (1 + random.random()) * 10
+            pause = (1 + random.random()) * 4
         asin = identifier.identifier
         if isbnlib.is_isbn13(asin):
             asin = isbnlib.to_isbn10(asin)
@@ -82,7 +82,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = (1 + random.random()) * 10
+            pause = (1 + random.random()) * 4
         get_method = get_method or Representation.browser_http_get
 
         if force:
@@ -385,7 +385,7 @@ class AmazonCoverageProvider(CoverageProvider):
             self.SERVICE_NAME,
             identifier_types,
             self.coverage_source,
-            workset_size=100)
+            workset_size=10)
        
     @property
     def editions_that_need_coverage(self):
