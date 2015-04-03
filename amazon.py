@@ -6,6 +6,9 @@ import requests
 import time
 import os
 import re
+import urlparse
+import sys
+from bs4 import BeautifulSoup
 from cStringIO import StringIO
 from lxml import etree 
 from core.util.xmlparser import (
@@ -50,7 +53,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = 1 + random.random()
+            pause = (1 + random.random()) * 10
         asin = identifier.identifier
         if isbnlib.is_isbn13(asin):
             asin = isbnlib.to_isbn10(asin)
@@ -66,7 +69,11 @@ class AmazonAPI(object):
                 pause_before=pause,
                 max_age=0)
         if self.RATE_LIMIT_TEXT in representation.content:
-            raise Exception("Rate limit triggered on %s" % url)
+            if sys.stdin.isatty():
+                # We're being run in a terminal. A human being can fix this.
+                representation = AmazonRateLimitCAPTCHAClient(self._db, url, captcha_content=representation.content).process()
+            else:
+                raise Exception("Rate limit triggered on %s" % url)
 
         return representation
 
@@ -75,7 +82,7 @@ class AmazonAPI(object):
             pause = 0
         else:
             get_method = Representation.browser_http_get
-            pause = random.random()
+            pause = (1 + random.random()) * 10
         get_method = get_method or Representation.browser_http_get
 
         if force:
@@ -111,7 +118,11 @@ class AmazonAPI(object):
                 pause_before=pause,
                 max_age=0)
         if self.RATE_LIMIT_TEXT in representation.content:
-            raise Exception("Rate limit triggered on %s" % url)
+            if sys.stdin.isatty():
+                # We're being run in a terminal. A human being can fix this.
+                representation = AmazonRateLimitCAPTCHAClient(self._db, url, captcha_content=representation.content).process()
+            else:
+                raise Exception("Rate limit triggered on %s" % url)
 
         if representation.status_code == 404:
             print "Amazon has no knowledge of ASIN %s" % asin
@@ -190,7 +201,6 @@ class AmazonBibliographicParser(AmazonParser):
         parser = etree.HTMLParser()
         if isinstance(string, unicode):
             string = string.encode("utf8")
-        self.check_rate_limit()
 
         root = etree.parse(StringIO(string), parser)
 
@@ -327,8 +337,6 @@ class AmazonReviewParser(AmazonParser):
         if isinstance(string, unicode):
             string = string.encode("utf8")
 
-        self.check_rate_limit()
-
         for review in super(AmazonReviewParser, self).process_all(
                 string, "//html",
             parser=parser):
@@ -411,3 +419,49 @@ class AmazonCoverageProvider(CoverageProvider):
             identifier.classify(
                 self.coverage_source, Subject.TAG, keyword)
         return True
+
+
+class AmazonRateLimitCAPTCHAClient(object):
+
+    def __init__(self, _db, captcha_url, captcha_content=None):
+
+        self._db = _db
+        self.captcha_url = captcha_url
+        if not captcha_content:
+            print "So the problematic URL is %s..." % captcha_url
+            rep, cached = Representation.get(_db, captcha_url, max_age=0)
+            if AmazonAPI.RATE_LIMIT_TEXT not in rep.content:
+                print "Looks fine to me:"
+                print rep.content
+                captcha_content = None
+            else:
+                self.captcha_content = rep.content
+        self.captcha_content = captcha_content
+
+    def process(self):
+        if not self.captcha_content:
+            return None
+
+        soup = BeautifulSoup(self.captcha_content)
+        form = soup.find('form', action='/errors/validateCaptcha')
+        fields = {}
+        for i in form.find_all('input', type='hidden'):
+            fields[i['name']] = i['value']
+
+        captcha_field_name = form.find('input', type='text')['name']
+
+        print "CAPTCHA URL is:"
+        for img in form.find_all('img'):
+            print img['src']
+        print "Enter CAPTCHA value from URL:"
+        value = sys.stdin.readline().strip()
+        fields[captcha_field_name] = value
+
+        field_data = [k + "=" + v for k, v in fields.items()]
+        url = urlparse.urljoin("http://www.amazon.com", form['action']) + "?" + "&".join(field_data)
+        print "Okay, trying %s" % url
+        referer = dict(Referer=self.captcha_url)
+        rep, cached = Representation.get(
+            self._db, url, extra_request_headers=referer, 
+            max_age=0)
+        return rep
