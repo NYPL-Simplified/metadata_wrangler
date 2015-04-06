@@ -64,16 +64,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
     DATE_FORMAT = "%Y-%m-%d"
 
-    def metadata_lookup(self, identifier):
-        """Look up metadata for an Overdrive identifier.
-        """
-        url = self.overdrive.METADATA_ENDPOINT % dict(
-            collection_token=self.overdrive.collection_token,
-            item_id=identifier.identifier
-        )
-        status_code, headers, content = self.overdrive.get(url, {})
-        return json.loads(content)
-
     def process_edition(self, edition):
         identifier = edition.primary_identifier
         info = self.metadata_lookup(identifier)
