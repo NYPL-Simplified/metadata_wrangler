@@ -35,7 +35,10 @@ from threem import (
 )
 
 from appeal import AppealCalculator
-from gutenberg import OCLCMonitorForGutenberg
+from gutenberg import (
+    OCLCClassifyMonitor,
+    OCLCMonitorForGutenberg,
+)
 from amazon import AmazonCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
@@ -279,6 +282,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
 
         self.appeal_calculator = AppealCalculator(self._db, self.data_directory)
 
+        self.oclc_threem = OCLCClassifyMonitor(self._db, DataSource.THREEM)
         self.oclc_gutenberg = OCLCMonitorForGutenberg(self._db)
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
         self.amazon = AmazonCoverageProvider(self._db)
@@ -349,6 +353,12 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             # OCLC Lookup on all Gutenberg editions.
             if edition.data_source.name==DataSource.GUTENBERG:
                 if not self.oclc_gutenberg.ensure_coverage(edition):
+                    # It's not a deal-breaker if we can't get OCLC
+                    # coverage on an edition.
+                    pass
+                did_oclc_lookup = True
+            elif edition.data_source.name==DataSource.THREEM:
+                if not self.oclc_threem.ensure_coverage(edition):
                     # It's not a deal-breaker if we can't get OCLC
                     # coverage on an edition.
                     pass

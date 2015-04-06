@@ -35,10 +35,9 @@ from oclc import (
 )
 from core.util import LanguageCodes
 
-class OCLCMonitorForGutenberg(CoverageProvider):
+class OCLCClassifyMonitor(CoverageProvider):
 
-    """Track OCLC's opinions about books with the same title/author as 
-    Gutenberg works."""
+    """Does title/author lookups using OCLC Classify."""
 
     # Strips most non-alphanumerics from the title.
     # 'Alphanumerics' includes alphanumeric characters
@@ -49,13 +48,14 @@ class OCLCMonitorForGutenberg(CoverageProvider):
     # especially colons.
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
     
-    def __init__(self, _db):
+    def __init__(self, _db, input_source_name):
         self._db = _db
         self.oclc_classify = OCLCClassifyAPI(self._db)
-        input_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        input_source = DataSource.lookup(self._db, input_source_name)
         output_source = DataSource.lookup(self._db, DataSource.OCLC)
-        super(OCLCMonitorForGutenberg, self).__init__(
-            "OCLC Monitor for Gutenberg", input_source, output_source)
+        super(OCLCClassifyMonitor, self).__init__(
+            "OCLC Classify Monitor for %s" % input_source.name,
+            input_source, output_source)
 
     def oclc_safe_title(self, title):
         return self.NON_TITLE_SAFE.sub("", title)
@@ -158,6 +158,14 @@ class OCLCMonitorForGutenberg(CoverageProvider):
 
         print " Created %s records(s)." % len(records)
         return True
+
+class OCLCMonitorForGutenberg(OCLCClassifyMonitor):
+
+    """Track OCLC's opinions about books with the same title/author as 
+    Gutenberg works."""
+
+    def __init__(self, _db):
+        super(OCLCMonitorForGutenberg, self).__init__(_db, DataSource.GUTENBERG)
 
 class GutenbergBookshelfClient(object):
     """Get classifications and measurements of popularity from Gutenberg
