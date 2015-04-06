@@ -45,7 +45,7 @@ class AmazonAPI(object):
     def fetch(self, identifier):
         identifiers, subjects, rating = self.fetch_bibliographic_info(
             identifier)
-        # reviews = self.fetch_reviews(identifier)
+        reviews = self.fetch_reviews(identifier)
         reviews = []
         return identifiers, subjects, rating, reviews
     
@@ -141,6 +141,11 @@ class AmazonAPI(object):
         return None
 
     def fetch_reviews(self, identifier):
+        # TODO: Currently we don't use reviews enough to justify the
+        # large time expense fetching them. For the time being, act as
+        # though there are no reviews.
+        return []
+
         parser = AmazonReviewParser()
         all_reviews = []
         for page in range(1,11):
