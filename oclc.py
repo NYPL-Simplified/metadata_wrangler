@@ -29,6 +29,7 @@ from core.model import (
     Edition,
     DataSource,
     Hyperlink,
+    Measurement,
     Representation,
     Resource,
     Subject,
@@ -840,18 +841,21 @@ class OCLCXMLParser(XMLParser):
         title, authors_and_roles, language = result
 
         # Record some extra OCLC-specific information
-        extra = {
-            OCLC.EDITION_COUNT : work_tag.get('editions'),
-            OCLC.HOLDING_COUNT : work_tag.get('holdings'),
-        }
+        editions = work_tag.get('editions')
+        holdings = work_tag.get('holdings')
         
         # Get an identifier for this work.
         identifier, ignore = Identifier.for_foreign_id(
             _db, Identifier.OCLC_WORK, oclc_work_id
         )
 
-        # Create a Edition for source + identifier
         data_source=DataSource.lookup(_db, DataSource.OCLC)
+        identifier.add_measurement(data_source, Measurement.HOLDINGS, holdings)
+        identifier.add_measurement(
+            data_source, Measurement.PUBLISHED_EDITIONS, editions)
+
+
+        # Create a Edition for source + identifier
         edition, new = get_one_or_create(
             _db, Edition,
             data_source=data_source,
@@ -859,7 +863,6 @@ class OCLCXMLParser(XMLParser):
             create_method_kwargs=dict(
                 title=title,
                 language=language,
-                extra=extra,
             )
         )
 
