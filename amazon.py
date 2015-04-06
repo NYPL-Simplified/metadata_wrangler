@@ -45,7 +45,8 @@ class AmazonAPI(object):
     def fetch(self, identifier):
         identifiers, subjects, rating = self.fetch_bibliographic_info(
             identifier)
-        reviews = self.fetch_reviews(identifier)
+        # reviews = self.fetch_reviews(identifier)
+        reviews = []
         return identifiers, subjects, rating, reviews
     
     def get_bibliographic_info(self, identifier, get_method=None):
