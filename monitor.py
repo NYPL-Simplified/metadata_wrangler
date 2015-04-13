@@ -208,6 +208,7 @@ class IdentifierResolutionMonitor(Monitor):
                 edition.calculate_presentation()
                 edition.license_pool.calculate_work(even_if_no_author=True)
                 successes.append(tasks_by_identifier[identifier])
+                del tasks_by_identifier[identifier]
         for identifier, (status_code, exception) in messages.items():
             if identifier not in tasks_by_identifier:
                 # The server sent us a message about an identifier we
@@ -221,6 +222,13 @@ class IdentifierResolutionMonitor(Monitor):
             task = tasks_by_identifier[identifier]
             task.status_code = status_code
             task.exception = exception
+            failures.append(task)
+            del tasks_by_identifier[identifier]
+        # Anything left in tasks_by_identifier wasn't mentioned
+        # by the content server
+        for identifier, task in tasks_by_identifier.items():
+            task.status_code = 404
+            task.exception = "Not mentioned by content server."
             failures.append(task)
         return successes, failures
 
