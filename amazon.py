@@ -242,7 +242,8 @@ class AmazonBibliographicParser(AmazonParser):
                 continue
 
             if not 'Kindle' in format and not 'Hardcover' in format and not 'Paperback' in format:
-                print "Unknown format: %s" % format
+                pass
+                #print "Unknown format: %s" % format
             href = edition_tag.attrib['href']
             m = self.IDENTIFIER_IN_URL.search(href)
             if not m:
