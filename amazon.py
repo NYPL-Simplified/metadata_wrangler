@@ -286,6 +286,11 @@ class AmazonBibliographicParser(AmazonParser):
         page_count = self.get_page_count(root)
         if page_count:
             measurements[Measurement.PAGE_COUNT] = page_count 
+
+        bib[Subject.AGE_RANGE] = self.get_age_range(root)        
+        bib[Subject.GRADE_LEVEL] = self.get_grade_level(root)
+        bib[Subject.LEXILE_SCORE] = self.get_lexile_score(root)
+
         return bib
 
     def get_quality(self, root):
@@ -333,6 +338,26 @@ class AmazonBibliographicParser(AmazonParser):
         if not m:
             return None
         return int(m.groups()[0])
+
+    def _text_after_b_tag_with_contents(self, root, contents):
+        xpath = ("//b[text()[contains(.,'%s')]]/following-sibling::text()" 
+                 % contents)
+        contents = self._xpath1(root, xpath)
+        if contents:
+            return contents.strip()
+        return None
+
+    def get_age_range(self, root):
+        """Measure the age range, if it's available."""
+        return self._text_after_b_tag_with_contents(root, 'Age Range:')
+
+    def get_grade_level(self, root):
+        """Measure the grade level, if it's available."""
+        return self._text_after_b_tag_with_contents(root, 'Grade Level:')
+
+    def get_lexile_score(self, root):
+        """Measure the Lexile score, if it's available."""
+        return self._text_after_b_tag_with_contents(root, 'Lexile Measure:')
 
 class AmazonReviewParser(AmazonParser):
 
@@ -421,9 +446,19 @@ class AmazonCoverageProvider(CoverageProvider):
             identifier.add_measurement(
                 self.coverage_source, quantity, measurement, weight)
         
+        # These classifications are just okay.
         for keyword in bibliographic['keywords']:
             identifier.classify(
                 self.coverage_source, Subject.TAG, keyword)
+
+        # These classifications are highly trustworthy.
+        for classification in [
+                Subject.LEXILE, Subject.GRADE_LEVEL, Subject.AGE_RANGE]:
+            value = bibliographic[classification]
+            if value:
+                identifier.classify(
+                    self.coverage_source, classification, value, weight=100)
+
         return True
 
 
