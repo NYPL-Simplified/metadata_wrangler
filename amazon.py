@@ -76,7 +76,7 @@ class AmazonAPI(object):
             else:
                 raise Exception("Rate limit triggered on %s" % url)
 
-        return representation
+        return representation, cached
 
     def get_reviews(self, identifier, page, force=False, get_method=None):
         if get_method:
@@ -135,7 +135,7 @@ class AmazonAPI(object):
 
     def fetch_bibliographic_info(self, identifier):
         parser = AmazonBibliographicParser()
-        representation = self.get_bibliographic_info(identifier)
+        representation, ignore = self.get_bibliographic_info(identifier)
         if representation.has_content:
             return parser.process_all(representation.content)
         return None
