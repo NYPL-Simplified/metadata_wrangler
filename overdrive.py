@@ -128,7 +128,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         if 'grade_levels' in info:
             for i in info['grade_levels']:
                 identifier.classify(
-                    self.overdrive, Subject.FREEFORM_AUDIENCE, i['value'])
+                    self.overdrive, Subject.GRADE_LEVEL, i['value'], 100)
 
         if 'awards' in info:
             extra['awards'] = info.get('awards')
