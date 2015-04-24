@@ -466,7 +466,7 @@ class AmazonCoverageProvider(CoverageProvider):
         # These classifications are highly trustworthy.
         for classification in [
                 Subject.LEXILE_SCORE, Subject.GRADE_LEVEL, Subject.AGE_RANGE]:
-            value = bibliographic[classification]
+            value = bibliographic.get(classification)
             if value:
                 identifier.classify(
                     self.coverage_source, classification, value, weight=100)
