@@ -140,11 +140,12 @@ class AmazonAPI(object):
             return parser.process_all(representation.content)
         return None
 
-    def fetch_reviews(self, identifier):
+    def fetch_reviews(self, identifier, force=False):
         # TODO: Currently we don't use reviews enough to justify the
         # large time expense fetching them. For the time being, act as
         # though there are no reviews.
-        return []
+        if not force:
+            return []
 
         parser = AmazonReviewParser()
         all_reviews = []
