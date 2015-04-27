@@ -155,6 +155,13 @@ class VIAFParser(XMLParser):
             if source.text.startswith("WKP|"):
                 return source.text[4:]
 
+    def sort_names_by_popularity(self, cluster):
+        sort_name_popularity = Counter()
+        for possible_sort_name in self.sort_names_for_cluster(cluster):
+            if possible_sort_name.endswith(","):
+                possible_sort_name = possible_sort_name[:-1]
+            sort_name_popularity[possible_sort_name] += 1
+        return sort_name_popularity
 
     def extract_viaf_info(self, cluster, working_sort_name=None,
                           working_display_name=False, strict=False):
@@ -181,18 +188,13 @@ class VIAFParser(XMLParser):
 
         # If we don't have a working sort name, find the most popular
         # sort name in this cluster and use it as the sort name.
-        sort_name_popularity = Counter()
-        if not sort_name:
-            for possible_sort_name in self.sort_names_for_cluster(cluster):
-                if possible_sort_name.endswith(","):
-                    possible_sort_name = possible_sort_name[:-1]
-                sort_name_popularity[possible_sort_name] += 1
+        sort_name_popularity = self.sort_names_by_popularity(cluster)
 
         # Does this cluster have a Wikipedia page?
         wikipedia_name = self.extract_wikipedia_name(cluster)
         if wikipedia_name:
             display_name = self.wikipedia_name_to_display_name(wikipedia_name)
-            working_display_name = wikipedia_name
+            working_display_name = display_name
             # TODO: There's a problem here when someone's record has a
             # Wikipedia page other than their personal page (e.g. for
             # a band they're in.)
@@ -206,7 +208,9 @@ class VIAFParser(XMLParser):
             # name for it to even be considered. Otherwise it's a
             # better bet to try to munge the original name.
             for v in (possible_given, possible_family, possible_extra):
-                if v and (not working_sort_name or v in working_sort_name):
+                if not v:
+                    continue
+                if not working_sort_name or v in working_sort_name:
                     # print "FOUND %s in %s" % (v, working_name)
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
@@ -222,6 +226,13 @@ class VIAFParser(XMLParser):
 
         if sort_name_popularity and not sort_name:
             sort_name, ignore = sort_name_popularity.most_common(1)[0]
+
+        if display_name:
+            parts = display_name.split(" ")
+            if len(parts) == 2:
+                parts = parts + [None]
+            for i in range(5):
+                candidates.append(parts)
 
         display_nameparts = self.best_choice(candidates)
         if display_nameparts[1]: # Family name

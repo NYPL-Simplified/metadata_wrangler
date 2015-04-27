@@ -56,9 +56,9 @@ class TestNameParser(DatabaseTest):
         eq_(None, wikipedia)
 
     def test_many_names(self):
-        # Even if we pass in "Sam Clemens" as the working name,
-        # the family name we get back is "Twain", because the Wikipedia
-        # name takes precedence over the working name.
+        # Even if we pass in "Sam Clemens" as the working name, the
+        # family name we get back is "Twain", because we give very
+        # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
 
         viaf, display, family, sort, wikipedia = self.parser.parse(
