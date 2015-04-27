@@ -109,6 +109,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("lancelyn_green.xml")
         name = "Green, Roger Lancelyn"
         contributor, new = self._contributor(name)
+        set_trace()
         viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml)
         eq_("29620265", viaf)
         eq_("Roger Lancelyn Green", display_name)
