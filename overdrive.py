@@ -123,7 +123,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         for i in info.get('subjects', []):
             c = identifier.classify(
                 input_source, Subject.OVERDRIVE, i['value'],
-                100
+                weight=100
             )
 
         wr.sort_title = info.get('sortTitle')
@@ -131,20 +131,21 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         if 'grade_levels' in info:
             for i in info['grade_levels']:
                 identifier.classify(
-                    input_source, Subject.GRADE_LEVEL, i['value'], 100)
+                    input_source, Subject.GRADE_LEVEL, i['value'], weight=100)
 
         if 'ATOS' in info:
             identifier.classify(
-                input_source, Subject.ATOS_SCORE, str(info['ATOS']), 100)
+                input_source, Subject.ATOS_SCORE, str(info['ATOS']), weight=100)
 
         if 'lexileScore' in info:
             identifier.classify(
                 input_source, Subject.LEXILE_SCORE, str(info['lexileScore']),
-                100)
+                weight=100)
 
         if 'interestLevel' in info:
             identifier.classify(
-                input_source, Subject.INTEREST_LEVEL, info['interestLevel'], 100)
+                input_source, Subject.INTEREST_LEVEL, info['interestLevel'],
+                weight=100)
 
         if 'awards' in info:
             extra['awards'] = info.get('awards', [])
