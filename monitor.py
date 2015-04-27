@@ -7,18 +7,25 @@ from nose.tools import set_trace
 from sqlalchemy import or_
 from sqlalchemy.sql.functions import func
 
+from fast import (
+    FASTNames,
+    LCSHNames,
+)
+
 from threem import ThreeMAPI
 from core.overdrive import OverdriveAPI
 from core.opds_import import SimplifiedOPDSLookup
 from core.monitor import (
     Monitor,
     PresentationReadyMonitor,
+    SubjectAssignmentMonitor,
 )
 from core.model import (
     DataSource,
     Edition,
     Identifier,
     LicensePool,
+    Subject,
     UnresolvedIdentifier,
     Work,
 )
@@ -399,3 +406,20 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
 
         # Success!
         return True
+
+class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
+
+    def __init__(self, _db):
+        data_dir = os.environ['DATA_DIRECTORY']
+        self.fast = FASTNames.from_data_directory(data_dir)
+        self.lcsh = LCSHNames.from_data_directory(data_dir)
+        self.fast = self.lcsh = {}
+        super(FASTAwareSubjectAssignmentMonitor, self).__init__(_db)
+
+    def process_batch(self, batch):
+        for subject in batch:
+            if subject.type == Subject.FAST and subject.identifier:
+                subject.name = self.fast.get(subject.identifier, subject.name)
+            elif subject.type == Subject.LCSH and subject.identifier:
+                subject.name = self.lcsh.get(subject.identifier, subject.name)
+        super(FASTAwareSubjectAssignmentMonitor, self).process_batch(batch)
