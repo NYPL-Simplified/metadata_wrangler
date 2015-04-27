@@ -230,9 +230,10 @@ class VIAFParser(XMLParser):
         if display_name:
             parts = display_name.split(" ")
             if len(parts) == 2:
-                parts = parts + [None]
-            for i in range(5):
-                candidates.append(parts)
+                # Pretty clearly given name+family name.
+                # If it gets more complicated than this we can't
+                # be confident.
+                candidates.append(parts + [None])
 
         display_nameparts = self.best_choice(candidates)
         if display_nameparts[1]: # Family name
