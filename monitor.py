@@ -313,7 +313,11 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
         #                 Identifier.type!=Identifier.GUTENBERG_ID)
 
-        failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
+        should_try_again = or_(
+            Work.presentation_ready_attempt <= one_day_ago,
+            Work.presentation_ready_attempt==None,
+            )
+        failed_works = base.filter(Work.presentation_ready_exception!=None).filter(should_try_again)
         unready_works = base.filter(Work.presentation_ready_exception==None)
         print "%s works not presentation ready." % unready_works.count()
         print "%s works have presentation ready failures." % failed_works.count()
