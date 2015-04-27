@@ -65,8 +65,8 @@ class TestNameParser(DatabaseTest):
             xml, "Sam Clemens")
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
-        eq_("Twain", family)
         eq_("Mark_Twain", wikipedia)
+        eq_("Twain", family)
 
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
@@ -126,5 +126,5 @@ class TestNameParser(DatabaseTest):
         eq_("68169992", viaf)
         eq_(None, display_name)
         eq_(None, family_name)
-        eq_(None, sort_name)
+        eq_("Lister, Kate", sort_name)
         eq_(None, wikipedia_name)
