@@ -97,8 +97,13 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
         contributor, new = self._contributor(name)
+        set_trace()
         viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(
-            xml)
+            xml, working_sort_name=name)
+        # TODO: This is just broken. We need to make this work,
+        # preferably in a way that lets the (very similar) "Samuel
+        # Clemens" case also work.
+
         # We can't find a VIAF number. The display name and family name
         # are obtained through heuristics.
         eq_(None, viaf)

@@ -142,12 +142,13 @@ class VIAFParser(XMLParser):
         # we at least found a VIAF ID.
         return viaf_id, None, None, None, None
 
-    def parse(self, xml, working_sort_name=None, working_display_name=None):
+    def parse(self, xml, working_sort_name=None, working_display_name=None,
+              strict=False):
         """Parse a VIAF response containing a single cluster into a name
         3-tuple."""
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         return self.extract_viaf_info(
-            tree, working_sort_name, working_display_name)
+            tree, working_sort_name, working_display_name, strict=strict)
 
     def extract_wikipedia_name(self, cluster):
         """Extract Wiki name from a single VIAF cluster."""
