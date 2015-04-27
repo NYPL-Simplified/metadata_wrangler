@@ -2,10 +2,6 @@ import csv
 import sys
 from nose.tools import set_trace
 import os
-from fast import (
-    FASTNames,
-    LCSHNames,
-)
 from core.model import (
     Edition,
     Subject,
@@ -20,7 +16,6 @@ from threem import (
 
 from core.scripts import (
     WorkProcessingScript,
-    SubjectAssignmentScript,
     Script,
 )
 from amazon import AmazonCoverageProvider
@@ -224,25 +219,3 @@ class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript)
             normalized_title = wi.normalize_title(title.decode("utf8"))
             normalized_author = wi.normalize_author(author.decode("utf8"))
             self.write_row(title, author, normalized_title, normalized_author, format)
-
-class FASTAwareSubjectAssignmentScript(SubjectAssignmentScript):
-
-    def __init__(self, force):
-        data_dir = os.environ['DATA_DIRECTORY']
-        self.fast = FASTNames.from_data_directory(data_dir)
-        self.lcsh = LCSHNames.from_data_directory(data_dir)
-        super(FASTAwareSubjectAssignmentScript, self).__init__(force)
-        self.success = 0
-
-    def run(self):
-        super(FASTAwareSubjectAssignmentScript, self).run()
-        print "Added names to %d subjects." % self.success
-
-    def process(self, subject):
-        if subject.type == Subject.FAST and subject.identifier:
-            subject.name = self.fast.get(subject.identifier, subject.name)
-            self.success += 1
-        elif subject.type == Subject.LCSH and subject.identifier:
-            subject.name = self.lcsh.get(subject.identifier, subject.name)
-            self.success += 1
-        super(FASTAwareSubjectAssignmentScript, self).process(subject)

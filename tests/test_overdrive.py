@@ -11,6 +11,7 @@ from nose.tools import (
 from . import DatabaseTest
 from ..core.model import (
     DataSource,
+    Edition,
     Hyperlink,
     Identifier,
     Measurement,
@@ -97,7 +98,7 @@ class TestOverdrive(DatabaseTest):
 
         # Un-schematized metadata.
 
-        eq_("eBook", wr.extra['medium'])
+        eq_(Edition.BOOK_MEDIUM, wr.medium)
         eq_("Agile Documentation A Pattern Guide to Producing Lightweight Documents for Software Projects", wr.sort_title)
 
 

@@ -24,6 +24,7 @@ from core.model import (
     Contributor,
     get_one,
     get_one_or_create,
+    Hyperlink,
     Identifier,
     Edition,
     DataSource,

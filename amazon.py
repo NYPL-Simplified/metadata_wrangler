@@ -76,7 +76,7 @@ class AmazonAPI(object):
             else:
                 raise Exception("Rate limit triggered on %s" % url)
 
-        return representation
+        return representation, cached
 
     def get_reviews(self, identifier, page, force=False, get_method=None):
         if get_method:
@@ -135,16 +135,17 @@ class AmazonAPI(object):
 
     def fetch_bibliographic_info(self, identifier):
         parser = AmazonBibliographicParser()
-        representation = self.get_bibliographic_info(identifier)
+        representation, ignore = self.get_bibliographic_info(identifier)
         if representation.has_content:
             return parser.process_all(representation.content)
         return None
 
-    def fetch_reviews(self, identifier):
+    def fetch_reviews(self, identifier, force=False):
         # TODO: Currently we don't use reviews enough to justify the
         # large time expense fetching them. For the time being, act as
         # though there are no reviews.
-        return []
+        if not force:
+            return []
 
         parser = AmazonReviewParser()
         all_reviews = []
@@ -242,7 +243,8 @@ class AmazonBibliographicParser(AmazonParser):
                 continue
 
             if not 'Kindle' in format and not 'Hardcover' in format and not 'Paperback' in format:
-                print "Unknown format: %s" % format
+                pass
+                #print "Unknown format: %s" % format
             href = edition_tag.attrib['href']
             m = self.IDENTIFIER_IN_URL.search(href)
             if not m:
@@ -286,6 +288,11 @@ class AmazonBibliographicParser(AmazonParser):
         page_count = self.get_page_count(root)
         if page_count:
             measurements[Measurement.PAGE_COUNT] = page_count 
+
+        bib[Subject.AGE_RANGE] = self.get_age_range(root)        
+        bib[Subject.GRADE_LEVEL] = self.get_grade_level(root)
+        bib[Subject.LEXILE_SCORE] = self.get_lexile_score(root)
+
         return bib
 
     def get_quality(self, root):
@@ -333,6 +340,36 @@ class AmazonBibliographicParser(AmazonParser):
         if not m:
             return None
         return int(m.groups()[0])
+
+    def _text_after_b_tag_with_contents(self, root, contents):
+        xpath = ("//b[text()[contains(.,'%s')]]/following-sibling::text()" 
+                 % contents)
+        contents = self._xpath1(root, xpath)
+        if contents:
+            return contents.strip()
+        return None
+
+    def _text_after_span_with_contents(self, root, contents):
+        xpath = ('//span[@class="byLinePipe"][text()[contains(.,"%s")]]/following-sibling::span/text()'
+                 % contents)
+        contents = self._xpath1(root, xpath)
+        if contents:
+            return contents.strip()
+        return None
+
+    def get_age_range(self, root):
+        """Measure the age range, if it's available."""
+        return (self._text_after_b_tag_with_contents(root, 'Age Range:')
+                or self._text_after_span_with_contents(root, "Age Level:"))
+
+    def get_grade_level(self, root):
+        """Measure the grade level, if it's available."""
+        return (self._text_after_b_tag_with_contents(root, 'Grade Level:')
+                or self._text_after_span_with_contents(root, "Grade Level:"))
+
+    def get_lexile_score(self, root):
+        """Measure the Lexile score, if it's available."""
+        return self._text_after_b_tag_with_contents(root, 'Lexile Measure:')
 
 class AmazonReviewParser(AmazonParser):
 
@@ -421,9 +458,19 @@ class AmazonCoverageProvider(CoverageProvider):
             identifier.add_measurement(
                 self.coverage_source, quantity, measurement, weight)
         
+        # These classifications are just okay.
         for keyword in bibliographic['keywords']:
             identifier.classify(
                 self.coverage_source, Subject.TAG, keyword)
+
+        # These classifications are highly trustworthy.
+        for classification in [
+                Subject.LEXILE_SCORE, Subject.GRADE_LEVEL, Subject.AGE_RANGE]:
+            value = bibliographic.get(classification)
+            if value:
+                identifier.classify(
+                    self.coverage_source, classification, value, weight=100)
+
         return True
 
 

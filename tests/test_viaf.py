@@ -56,17 +56,17 @@ class TestNameParser(DatabaseTest):
         eq_(None, wikipedia)
 
     def test_many_names(self):
-        # Even if we pass in "Sam Clemens" as the working name,
-        # the family name we get back is "Twain", because the Wikipedia
-        # name takes precedence over the working name.
+        # Even if we pass in "Sam Clemens" as the working name, the
+        # family name we get back is "Twain", because we give very
+        # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
 
         viaf, display, family, sort, wikipedia = self.parser.parse(
             xml, "Sam Clemens")
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
-        eq_("Twain", family)
         eq_("Mark_Twain", wikipedia)
+        eq_("Twain", family)
 
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
@@ -79,13 +79,14 @@ class TestNameParser(DatabaseTest):
         eq_("Twain", family)
         eq_(None, wikipedia)
 
-        # But if we go in expecting something like "Sam Clemens",
-        # that's what we'll get.
-        viaf, display, family, wikipedia = self.parser.parse(
-            xml, "Sam Clemens")
+        # Even if we go in expecting something like "Sam Clemens",
+        # we get the consensus result.
+        viaf, display, family, sort, wikipedia = self.parser.parse(
+            xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", viaf)
-        eq_("Samuel Langhorne Clemens", display)
-        eq_("Clemens", family)
+        eq_("Mark Twain", display)
+        eq_("Twain, Mark", sort)
+        eq_("Twain", family)
         eq_(None, wikipedia)
         
     def test_ignore_results_if_author_not_in_viaf(self):
@@ -96,8 +97,13 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
         contributor, new = self._contributor(name)
+        set_trace()
         viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(
-            xml)
+            xml, working_sort_name=name)
+        # TODO: This is just broken. We need to make this work,
+        # preferably in a way that lets the (very similar) "Samuel
+        # Clemens" case also work.
+
         # We can't find a VIAF number. The display name and family name
         # are obtained through heuristics.
         eq_(None, viaf)
@@ -109,7 +115,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("lancelyn_green.xml")
         name = "Green, Roger Lancelyn"
         contributor, new = self._contributor(name)
-        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml)
+        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml, working_sort_name=name)
         eq_("29620265", viaf)
         eq_("Roger Lancelyn Green", display_name)
         eq_("Green", family_name)
@@ -126,5 +132,5 @@ class TestNameParser(DatabaseTest):
         eq_("68169992", viaf)
         eq_(None, display_name)
         eq_(None, family_name)
-        eq_(None, sort_name)
+        eq_("Lister, Kate", sort_name)
         eq_(None, wikipedia_name)

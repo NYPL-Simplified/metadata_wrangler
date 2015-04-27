@@ -121,19 +121,37 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 contributor.extra = dict(description=creator['bioText'])
 
         for i in info.get('subjects', []):
-            c = identifier.classify(input_source, Subject.OVERDRIVE, i['value'])
+            c = identifier.classify(
+                input_source, Subject.OVERDRIVE, i['value'],
+                weight=100
+            )
 
         wr.sort_title = info.get('sortTitle')
         extra = dict()
         if 'grade_levels' in info:
             for i in info['grade_levels']:
                 identifier.classify(
-                    self.overdrive, Subject.FREEFORM_AUDIENCE, i['value'])
+                    input_source, Subject.GRADE_LEVEL, i['value'], weight=100)
+
+        if 'ATOS' in info:
+            identifier.classify(
+                input_source, Subject.ATOS_SCORE, str(info['ATOS']), weight=100)
+
+        if 'lexileScore' in info:
+            identifier.classify(
+                input_source, Subject.LEXILE_SCORE, str(info['lexileScore']),
+                weight=100)
+
+        if 'interestLevel' in info:
+            identifier.classify(
+                input_source, Subject.INTEREST_LEVEL, info['interestLevel'],
+                weight=100)
 
         if 'awards' in info:
-            extra['awards'] = info.get('awards')
+            extra['awards'] = info.get('awards', [])
+            num_awards = len(extra['awards'])
             identifier.add_measurement(
-                input_source, Measurement.AWARDS, str(len(awards)))
+                input_source, Measurement.AWARDS, str(num_awards))
 
         wr.extra = extra
 
