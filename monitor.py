@@ -134,7 +134,7 @@ class IdentifierResolutionMonitor(Monitor):
         threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
 
         for data_source_name, handler, arg, batch_size in (
-                    (DataSource.GUTENBERG, self.resolve_content_server, None, 100),
+                    (DataSource.GUTENBERG, self.resolve_content_server, None, 10),
                     (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
                     (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
         ):
