@@ -134,7 +134,7 @@ class IdentifierResolutionMonitor(Monitor):
         threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
 
         for data_source_name, handler, arg, batch_size in (
-                    (DataSource.GUTENBERG, self.resolve_content_server, None, 100),
+                    (DataSource.GUTENBERG, self.resolve_content_server, None, 10),
                     (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
                     (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
         ):
@@ -192,8 +192,8 @@ class IdentifierResolutionMonitor(Monitor):
         for task in batch:
             tasks_by_identifier[task.identifier] = task
         try:
-            response = self.content_server.lookup(
-                [x.identifier for x in batch])
+            identifiers = [x.identifier for x in batch]
+            response = self.content_server.lookup(identifiers)
         except requests.exceptions.ConnectionError:
             return 500, self.LICENSE_SOURCE_NOT_ACCESSIBLE
 
@@ -215,6 +215,7 @@ class IdentifierResolutionMonitor(Monitor):
                 edition.calculate_presentation()
                 edition.license_pool.calculate_work(even_if_no_author=True)
                 successes.append(tasks_by_identifier[identifier])
+                del tasks_by_identifier[identifier]
         for identifier, (status_code, exception) in messages.items():
             if identifier not in tasks_by_identifier:
                 # The server sent us a message about an identifier we
@@ -228,6 +229,13 @@ class IdentifierResolutionMonitor(Monitor):
             task = tasks_by_identifier[identifier]
             task.status_code = status_code
             task.exception = exception
+            failures.append(task)
+            del tasks_by_identifier[identifier]
+        # Anything left in tasks_by_identifier wasn't mentioned
+        # by the content server
+        for identifier, task in tasks_by_identifier.items():
+            task.status_code = 404
+            task.exception = "Not mentioned by content server."
             failures.append(task)
         return successes, failures
 
@@ -295,59 +303,43 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         self.amazon = AmazonCoverageProvider(self._db)
         self.viaf = VIAFClient(self._db)
 
-    def run_once(self, start, cutoff):
-
+    def work_query(self):
         not_presentation_ready = or_(
             Work.presentation_ready==None,
             Work.presentation_ready==False)
-
-        one_day_ago = datetime.datetime.utcnow()-datetime.timedelta(days=1)
-        
-
         base = self._db.query(Work).filter(not_presentation_ready)
-
         # Uncommenting these lines will restrict to a certain type of
         # book.
         #
         #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
         #                 Identifier.type!=Identifier.GUTENBERG_ID)
+        return base
 
-        failed_works = base.filter(Work.presentation_ready_exception!=None).filter(Work.presentation_ready_attempt <= one_day_ago)
-        unready_works = base.filter(Work.presentation_ready_exception==None)
-        print "%s works not presentation ready." % unready_works.count()
-        print "%s works have presentation ready failures." % failed_works.count()
-        for q_orig, batch_size in (unready_works, 1000), (failed_works, None):
-            self._run_once_batch(q_orig, batch_size)
+    def process_batch(self, batch):
+        for work in batch:
+            try:
+                self.process_work(work)
+            except Exception, e:
+                work.presentation_ready_exception = traceback.format_exc()
+                print "=ERROR MAKING WORK PRESENTATION READY="
+                print work.presentation_ready_exception
+        self._db.commit()
 
-    def _run_once_batch(self, query, batch_size):
-        q = query.order_by(Work.last_update_time.desc())
-        if batch_size:
-            q = q.limit(batch_size)
-        while q.count():
-            for work in q.all():
-                try:
-                    start = datetime.datetime.now()
-                    if self.make_work_ready(work):
-                        after_work_ready = datetime.datetime.now()
-                        work.calculate_presentation()
-                        after_calculate_presentation = datetime.datetime.now()
-                        work.set_presentation_ready()
-                        print "=NEW PRESENTATION READY WORK!="
-                        print repr(work)
-                        print "=============================="
-                        e1 = (after_work_ready-start).seconds
-                        e2 = (after_calculate_presentation-after_work_ready).seconds
-                        print "Make work ready: %.2fs. Calculate presentation: %.2fs." % (e1, e2)
+    def process_work(self, work):
+        if self.make_work_ready(work):
+            after_work_ready = datetime.datetime.now()
+            work.calculate_presentation()
+            after_calculate_presentation = datetime.datetime.now()
+            work.set_presentation_ready()
+            print "=NEW PRESENTATION READY WORK!="
+            print repr(work)
+            print "=============================="
+            e1 = (after_work_ready-start).seconds
+            e2 = (after_calculate_presentation-after_work_ready).seconds
+            print "Make work ready: %.2fs. Calculate presentation: %.2fs." % (e1, e2)
 
-                    else:
-                        print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
-                except Exception, e:
-                    work.presentation_ready_exception = traceback.format_exc()
-                    print "=ERROR MAKING WORK PRESENTATION READY="
-                    print work.presentation_ready_exception
-            self._db.commit()
-            if not batch_size:
-                break
+        else:
+            print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
 
     def make_work_ready(self, work):
         """Either make a work presentation ready, or raise an exception

@@ -1044,7 +1044,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.SERVICE_NAME,
             services,
             self.oclc_linked_data,
-            workset_size=3)
+            workset_size=10)
 
     def process_edition(self, edition):
         if self.replace_processed_uris:

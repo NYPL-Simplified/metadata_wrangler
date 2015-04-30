@@ -66,7 +66,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
 
     def process_edition(self, edition):
         identifier = edition.primary_identifier
-        info = self.metadata_lookup(identifier)
+        info = self.overdrive.metadata_lookup(identifier)
         return self.annotate_edition_with_bibliographic_information(
             self._db, edition, info, self.input_source
         )

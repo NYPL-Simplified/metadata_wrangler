@@ -4,7 +4,10 @@ import flask
 from flask import Flask, make_response
 from core.util.flask_util import problem
 from core.opds import VerboseAnnotator
-from core.app_server import URNLookupController
+from core.app_server import (
+    HeartbeatController,
+    URNLookupController,
+)
 from core.model import (
     production_session,
     Identifier,
@@ -29,6 +32,10 @@ else:
     Conf.testing = False
     _db = production_session()
     Conf.initialize(_db)
+
+@app.route('/heartbeat')
+def hearbeat():
+    return HeartbeatController().heartbeat()
 
 @app.route('/lookup')
 def lookup():
