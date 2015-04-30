@@ -192,8 +192,8 @@ class IdentifierResolutionMonitor(Monitor):
         for task in batch:
             tasks_by_identifier[task.identifier] = task
         try:
-            response = self.content_server.lookup(
-                [x.identifier for x in batch])
+            identifiers = [x.identifier for x in batch]
+            response = self.content_server.lookup(identifiers)
         except requests.exceptions.ConnectionError:
             return 500, self.LICENSE_SOURCE_NOT_ACCESSIBLE
 
