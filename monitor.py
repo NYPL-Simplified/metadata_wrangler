@@ -316,7 +316,10 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         return base
 
     def process_batch(self, batch):
+        biggest_id = 0
         for work in batch:
+            if work.id > biggest_id:
+                biggest_id = work.id
             try:
                 self.process_work(work)
             except Exception, e:
@@ -324,8 +327,10 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                 print "=ERROR MAKING WORK PRESENTATION READY="
                 print work.presentation_ready_exception
         self._db.commit()
+        return biggest_id
 
     def process_work(self, work):
+        start = datetime.datetime.now()
         if self.make_work_ready(work):
             after_work_ready = datetime.datetime.now()
             work.calculate_presentation()

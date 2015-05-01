@@ -5,16 +5,6 @@ import sys
 bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..", "..")
 sys.path.append(os.path.abspath(package_dir))
-from metadata.core.scripts import WorkReclassifierScript
-
-args = list(sys.argv[1:])
-force = False
-if 'force' in args:
-   force = True
-   args.remove('force')
-if args:
-   restrict_to_source = args[0]
-else:
-   restrict_to_source = None
-
-WorkReclassifierScript(force, restrict_to_source).run()
+from metadata.core.monitor import ReclassifierMonitor
+from metadata.core.scripts import RunMonitorScript
+RunMonitorScript(ReclassifierMonitor).run()
