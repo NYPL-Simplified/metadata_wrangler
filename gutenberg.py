@@ -119,6 +119,10 @@ class OCLCClassifyMonitor(CoverageProvider):
                     # This also shouldn't happen, but if it does,
                     # there's nothing we can do.
                     pass                    
+                elif representation_type == OCLCXMLParser.NO_INPUT_STATUS:
+                    # This _really_ shouldn't happen, but if it does,
+                    # there's nothing we can do.                    
+                    pass
                 else:
                     raise IOError("Got unexpected representation type from lookup: %s" % representation_type)
         # Connect the Gutenberg book to the OCLC works looked up by
