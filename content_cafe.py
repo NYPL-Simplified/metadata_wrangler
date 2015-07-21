@@ -77,7 +77,6 @@ class ContentCafeAPI(object):
             return True
 
         self.mirror.uploader.mirror_one(representation)
-        set_trace()
         self.scaler.scale_edition(isbn_identifier)
         self.get_descriptions(isbn_identifier, args)
         self.get_excerpt(isbn_identifier, args)
@@ -158,15 +157,14 @@ class ContentCafeAPI(object):
     @classmethod
     def _scrape_list(cls, soup):
         table = soup.find('table', id='Table_Main')
-        if not table:
-            set_trace()
-        for header in table.find_all('td', class_='SectionHeader'):
-            content = header.parent.next_sibling
-            if content.name != 'tr':
-                return
-            if not content.td:
-                return
-            yield content.td.encode_contents()
+        if table:
+            for header in table.find_all('td', class_='SectionHeader'):
+                content = header.parent.next_sibling
+                if content.name != 'tr':
+                    continue
+                if not content.td:
+                    continue
+                yield content.td.encode_contents()
 
     @classmethod
     def _scrape_one(cls, soup):
