@@ -1048,10 +1048,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def process_edition(self, edition):
         if self.replace_processed_uris:
-            print "Clearing out processed URIs."
+            #print "Clearing out processed URIs."
             self.processed_uris = set()
         else:
-            print "Currently %d processed URIs." % len(self.processed_uris)
+            #print "Currently %d processed URIs." % len(self.processed_uris)
+            pass
 
         if isinstance(edition, Identifier):
             identifier = edition

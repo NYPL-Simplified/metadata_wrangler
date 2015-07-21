@@ -245,11 +245,10 @@ class OverdriveBibliographicMonitor(CoverageProvider):
                 input_source, identifier, Measurement.RATING,
                 info['starRating'])
 
-        if info['popularity']:
+        if info.get('popularity'):
             cls._add_value_as_measurement(
                 input_source, identifier, Measurement.POPULARITY,
                 info['popularity'])
-
         return True
 
 

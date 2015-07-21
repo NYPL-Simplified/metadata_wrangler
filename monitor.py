@@ -340,7 +340,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         # book.
         #
         #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
-        #                 Identifier.type!=Identifier.GUTENBERG_ID)
+        #                 Identifier.type!=Identifier.AXIS_360_ID)
         return base
 
     def process_batch(self, batch):
