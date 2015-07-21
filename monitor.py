@@ -32,7 +32,7 @@ from core.model import (
 from core.opds_import import DetailedOPDSImporter
 
 from mirror import ImageScaler
-from content_cafe import ContentCafeBibliographicMonitor
+from content_cafe import ContentCafeCoverageProvider
 from overdrive import (
     OverdriveBibliographicMonitor,
     OverdriveCoverImageMirror,
@@ -136,7 +136,7 @@ class IdentifierResolutionMonitor(Monitor):
 
         overdrive_coverage_provider = OverdriveBibliographicMonitor(self._db)
         threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
-        content_cafe_provider = ContentCafeBibliographicMonitor(self._db)
+        content_cafe_provider = ContentCafeCoverageProvider(self._db)
 
         for data_source_name, identifier_type, handler, arg, batch_size in (
                 (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),

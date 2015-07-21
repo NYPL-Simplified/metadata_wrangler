@@ -148,7 +148,8 @@ class ImageScaler(object):
         else:
             identifier = edition.primary_identifier
         q = self._db.query(Hyperlink).filter(
-            Hyperlink.identifier==identifier)
+            Hyperlink.identifier==identifier).filter(
+                Hyperlink.rel==Hyperlink.IMAGE)
         self.scale_all_resources(
             q, destination_height, destination_width,
             upload=upload)
@@ -202,9 +203,8 @@ class ImageScaler(object):
                     blacklist.add(hyperlink.resource.id)
                     if thumbnail.resource:
                         blacklist.add(thumbnail.resource.id)
-                    if not is_new:
-                        to_upload.append(thumbnail)
-                        total += 1
+                    to_upload.append(thumbnail)
+                    total += 1
             #print "%.2f sec to scale %d" % ((time.time()-a), total)
             a = time.time()
             if upload:
