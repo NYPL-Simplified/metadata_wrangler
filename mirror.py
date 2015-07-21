@@ -14,6 +14,7 @@ from sqlalchemy.orm import (
 
 from core.model import (
     DataSource,
+    Identifier,
     Hyperlink,
     Resource,
     Representation,
@@ -27,6 +28,7 @@ class CoverImageMirror(object):
     """
 
     DATA_SOURCE = None
+    ONE_YEAR = datetime.timedelta(days=365)
 
     def __init__(self, db):
         self._db = db
@@ -56,41 +58,42 @@ class CoverImageMirror(object):
             q = q.filter(Representation.mirror_exception==None)
 
         resultset = q.limit(batch_size).all()
-        ONE_YEAR = datetime.timedelta(days=365)
         blacklist = set()
-        print "About to mirror %d images." % q.count()
+        #print "About to mirror %d images." % q.count()
         while resultset:
-            print "Mirroring %d images." % len(resultset)
+            #print "Mirroring %d images." % len(resultset)
             to_upload = []
             for hyperlink in resultset:
                 blacklist.add(hyperlink.id)
-                resource = hyperlink.resource
-                if not resource.representation:
-                    resource.representation, cached = Representation.get(
-                        self._db, resource.url, max_age=ONE_YEAR)
-                representation = resource.representation
-                if not representation.media_type or not representation.media_type.startswith('image/'):
-                    representation.fetch_exception = (
-                        'Representation is not an image as expected.')
-                    continue
-
-                extension = self.image_extensions_for_types.get(
-                    representation.media_type, '')
-                filename = "cover" + extension
-                representation.mirror_url = self.uploader.cover_image_url(
-                    hyperlink.data_source, hyperlink.identifier,
-                    filename)
-
-                to_upload.append(representation)
-
+                representation = self.mirror_hyperlink(hyperlink)
+                if not representation.fetch_exception:
+                    to_upload.append(representation)
             self.uploader.mirror_batch(to_upload)
             for rep in to_upload:
                 print "%s => %s %s" % (rep.url, rep.mirror_url, rep.mirrored_at)
-            self._db.commit()
-            
             resultset = q.filter(~Hyperlink.id.in_(blacklist)).limit(batch_size).all()
-            print "Blacklist size now %d" % len(blacklist)
+            #print "Blacklist size now %d" % len(blacklist)
         self._db.commit()
+
+    def mirror_hyperlink(self, hyperlink):
+        resource = hyperlink.resource
+        if not resource.representation:
+            resource.representation, cached = Representation.get(
+                self._db, resource.url, max_age=self.ONE_YEAR)
+            representation = resource.representation
+            if not representation.media_type or not representation.media_type.startswith('image/'):
+                representation.fetch_exception = (
+                    'Representation is not an image as expected.')
+                return representation
+
+            extension = self.image_extensions_for_types.get(
+                representation.media_type, '')
+            filename = "cover" + extension
+            representation.mirror_url = self.uploader.cover_image_url(
+                hyperlink.data_source, hyperlink.identifier,
+                filename)
+        self._db.commit()
+        return resource.representation
 
     types_for_image_extensions = { ".jpg" : "image/jpeg",
                                    ".gif" : "image/gif",
@@ -102,9 +105,13 @@ class CoverImageMirror(object):
 
     def mirror_edition(self, edition):
         """Make sure that one specific edition has its cover(s) mirrored."""
+        if isinstance(edition, Identifier):
+            identifier = edition
+        else:
+            identifier = edition.primary_identifier
         # Find all resources for this edition's primary identifier.
         q = self._db.query(Hyperlink).filter(
-            Hyperlink.identifier==edition.primary_identifier).filter(
+            Hyperlink.identifier==identifier).filter(
                 Hyperlink.rel==Hyperlink.IMAGE)
         self.mirror_all_resources(q)
 
@@ -136,8 +143,12 @@ class ImageScaler(object):
                       destination_width=None, upload=True):
         """Make sure that one specific edition has its cover(s) scaled."""
         # Find all resources for this edition's primary identifier.
+        if isinstance(edition, Identifier):
+            identifier = edition
+        else:
+            identifier = edition.primary_identifier
         q = self._db.query(Hyperlink).filter(
-            Hyperlink.identifier==edition.primary_identifier)
+            Hyperlink.identifier==identifier)
         self.scale_all_resources(
             q, destination_height, destination_width,
             upload=upload)
@@ -170,7 +181,7 @@ class ImageScaler(object):
         blacklist = set()
         resultset = q.limit(batch_size).all()
         while len(resultset):
-            print "About to scale %d" % len(resultset)
+            #print "About to scale %d" % len(resultset)
             total = 0
             a = time.time()
             to_upload = []
@@ -184,20 +195,22 @@ class ImageScaler(object):
                 if thumbnail.scale_exception:
                     print "Could not scale %s: %s" % (
                         hyperlink.resource.url, thumbnail.scale_exception)
-                elif not is_new:
+                else:
                     # Most likely this resource doesn't need to be
                     # thumbnailed. Add it to the blacklist so we don't
                     # pick it up again.
-                    blacklist.add(thumbnail.resource.id)
-                else:
-                    to_upload.append(thumbnail)
-                    total += 1
-            print "%.2f sec to scale %d" % ((time.time()-a), total)
+                    blacklist.add(hyperlink.resource.id)
+                    if thumbnail.resource:
+                        blacklist.add(thumbnail.resource.id)
+                    if not is_new:
+                        to_upload.append(thumbnail)
+                        total += 1
+            #print "%.2f sec to scale %d" % ((time.time()-a), total)
             a = time.time()
             if upload:
                 self.uploader.mirror_batch(to_upload)
             self._db.commit()
-            print "%.2f sec to upload %d" % ((time.time()-a), total)
+            #print "%.2f sec to upload %d" % ((time.time()-a), total)
             a = time.time()
             resultset = q.filter(~Resource.id.in_(blacklist)).limit(batch_size).all()
 

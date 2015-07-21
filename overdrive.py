@@ -67,6 +67,9 @@ class OverdriveBibliographicMonitor(CoverageProvider):
     def process_edition(self, edition):
         identifier = edition.primary_identifier
         info = self.overdrive.metadata_lookup(identifier)
+        if info.get('errorCode') == 'NotFound':
+            # TODO: We need to represent some kind of permanent failure.
+            raise Exception("ID not recognized by Overdrive")
         return self.annotate_edition_with_bibliographic_information(
             self._db, edition, info, self.input_source
         )
@@ -86,7 +89,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         license_pool = wr.license_pool
 
         # First get the easy stuff.
-        wr.title = info['title']
+        wr.title = info.get('title', None) or wr.title
         wr.subtitle = info.get('subtitle', None)
         wr.series = info.get('series', None)
         wr.publisher = info.get('publisher', None)

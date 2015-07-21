@@ -32,6 +32,7 @@ from core.model import (
 from core.opds_import import DetailedOPDSImporter
 
 from mirror import ImageScaler
+from content_cafe import ContentCafeBibliographicMonitor
 from overdrive import (
     OverdriveBibliographicMonitor,
     OverdriveCoverImageMirror,
@@ -51,7 +52,10 @@ from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
 class IdentifierResolutionMonitor(Monitor):
-    """Turn an UnresolvedIdentifier into an Edition with a LicensePool."""
+    """Turn an UnresolvedIdentifier into an Edition with a LicensePool.
+
+    Or (for ISBNs) just a bunch of Resources.
+    """
 
     LICENSE_SOURCE_RETURNED_ERROR = "Underlying license source returned error."
     LICENSE_SOURCE_RETURNED_WRONG_CONTENT_TYPE = (
@@ -78,7 +82,7 @@ class IdentifierResolutionMonitor(Monitor):
         This is a defensive measure.
         """
         types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID, 
-                 Identifier.THREEM_ID]
+                 Identifier.THREEM_ID, Identifier.AXIS_360_ID]
 
         # Find Identifiers that have LicensePools but no Editions and no
         # UnresolvedIdentifier.
@@ -132,15 +136,19 @@ class IdentifierResolutionMonitor(Monitor):
 
         overdrive_coverage_provider = OverdriveBibliographicMonitor(self._db)
         threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
+        content_cafe_provider = ContentCafeBibliographicMonitor(self._db)
 
-        for data_source_name, handler, arg, batch_size in (
-                    (DataSource.GUTENBERG, self.resolve_content_server, None, 10),
-                    (DataSource.THREEM, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
-                    (DataSource.OVERDRIVE, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
+        for data_source_name, identifier_type, handler, arg, batch_size in (
+                (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
+                (DataSource.THREEM, None, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
+                (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
+                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_identifiers_through_coverage_provider, content_cafe_provider, 10),
         ):
             batches = 0
             data_source = DataSource.lookup(self._db, data_source_name)
-            identifier_type = data_source.primary_identifier_type
+            identifier_type = (
+                identifier_type or data_source.primary_identifier_type)
+
             q = self._db.query(UnresolvedIdentifier).join(
                 UnresolvedIdentifier.identifier).filter(
                     Identifier.type==identifier_type).filter(
@@ -183,7 +191,7 @@ class IdentifierResolutionMonitor(Monitor):
                     if not f.first_attempt:
                         f.first_attempt = now
                 self._db.commit()
-        self._db.commit()
+            self._db.commit()
 
     def resolve_content_server(self, batch, data_source, ignore):
         successes = []
@@ -249,6 +257,26 @@ class IdentifierResolutionMonitor(Monitor):
                 successes.append(task)
             else:
                 failures.append(task)
+        return successes, failures
+
+    def resolve_identifiers_through_coverage_provider(
+            self, batch, data_source, coverage_provider):
+        successes = []
+        failures = []
+        for task in batch:
+            identifier = task.identifier
+            start = datetime.datetime.now()
+            try:
+                coverage_provider.ensure_coverage(identifier, force=True)
+                after_coverage = datetime.datetime.now()
+                print "Ensure coverage: %.2fs." % (after_coverage-start).seconds
+                successes.append(task)
+            except Exception, e:
+                task.status_code = 500
+                task.exception = traceback.format_exc()
+                failures.append(task)
+                print "FAILURE on %s" % task.identifier
+                print task.exception
         return successes, failures
 
     def resolve_one_through_coverage_provider(
