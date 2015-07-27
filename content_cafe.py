@@ -1,5 +1,6 @@
 import os
 import requests
+import logging
 from nose.tools import set_trace
 from bs4 import BeautifulSoup
 
@@ -95,7 +96,7 @@ class ContentCafeAPI(object):
         hyperlinks = []
         already_seen = set()
         if not phrase_indicating_missing_data in response.content:
-            self.log.info("Found %s %s Content!", identifier.identifier, rel))
+            self.log.info("Found %s %s Content!", identifier.identifier, rel)
             soup = BeautifulSoup(response.content, "lxml")
             resource_contents = scrape_method(soup)
             if resource_contents:
