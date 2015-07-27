@@ -3,6 +3,7 @@ import datetime
 import gzip
 import os
 import random
+import logging
 import urlparse
 import requests
 import time
@@ -34,6 +35,7 @@ class CoverImageMirror(object):
         self._db = db
         self.data_source = DataSource.lookup(self._db, self.DATA_SOURCE)
         self.uploader = S3Uploader()
+        self.log = logging.getLogger("Cover Image Mirror")
 
     def run(self):
         """Mirror all image resources associated with this data source."""
@@ -70,7 +72,7 @@ class CoverImageMirror(object):
                     to_upload.append(representation)
             self.uploader.mirror_batch(to_upload)
             for rep in to_upload:
-                print "%s => %s %s" % (rep.url, rep.mirror_url, rep.mirrored_at)
+                self.log.info("%s => %s %s" % (rep.url, rep.mirror_url, rep.mirrored_at))
             resultset = q.filter(~Hyperlink.id.in_(blacklist)).limit(batch_size).all()
             #print "Blacklist size now %d" % len(blacklist)
         self._db.commit()
@@ -125,6 +127,7 @@ class ImageScaler(object):
         self._db = db
         self.data_source_ids = []
         self.uploader = S3Uploader()
+        self.log = logging.getLogger("Cover Image Scaler")
 
         for mirror in mirrors:
             data_source_name = mirror.DATA_SOURCE
@@ -182,7 +185,7 @@ class ImageScaler(object):
         blacklist = set()
         resultset = q.limit(batch_size).all()
         while len(resultset):
-            #print "About to scale %d" % len(resultset)
+            self.log.debug("About to scale %d", len(resultset))
             total = 0
             a = time.time()
             to_upload = []
@@ -194,8 +197,8 @@ class ImageScaler(object):
                     destination_height, destination_width,
                     destination_url, "image/jpeg", force=True)
                 if thumbnail.scale_exception:
-                    print "Could not scale %s: %s" % (
-                        hyperlink.resource.url, thumbnail.scale_exception)
+                    self.log.error("Could not scale %s: %s" % (
+                        hyperlink.resource.url, thumbnail.scale_exception))
                 else:
                     # Most likely this resource doesn't need to be
                     # thumbnailed. Add it to the blacklist so we don't
@@ -205,12 +208,12 @@ class ImageScaler(object):
                         blacklist.add(thumbnail.resource.id)
                     to_upload.append(thumbnail)
                     total += 1
-            #print "%.2f sec to scale %d" % ((time.time()-a), total)
+            self.log.debug("%.2f sec to scale %d", (time.time()-a), total)
             a = time.time()
             if upload:
                 self.uploader.mirror_batch(to_upload)
             self._db.commit()
-            #print "%.2f sec to upload %d" % ((time.time()-a), total)
+            self.log.debug("%.2f sec to upload %d", (time.time()-a), total)
             a = time.time()
             resultset = q.filter(~Resource.id.in_(blacklist)).limit(batch_size).all()
 

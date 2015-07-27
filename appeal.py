@@ -3,6 +3,7 @@ from nose.tools import set_trace
 import gzip
 import os
 import csv
+import logging
 from csv import Dialect
 from cStringIO import StringIO
 from collections import Counter
@@ -356,7 +357,7 @@ class FeatureCounter(Counter):
                     break
             if a > 100:
                 break
-        print " Found %s distinct reviews" % len(seen_reviews)
+        logging.info(" Found %s distinct reviews" % len(seen_reviews))
         if seen_reviews:
             appeals = classifier.predict_proba(self.row())[0]
         else:
@@ -389,7 +390,7 @@ class AppealCalculator(object):
             work.primary_appeal, work.secondary_appeal,
             work.appeal_character or 0, work.appeal_language or 0,
             work.appeal_setting or 0, work.appeal_story or 0, work.title, work.author)
-        print foo.encode("utf8")
+        logging.info(foo)
         old_language = work.appeal_language
         old_setting = work.appeal_setting
 
@@ -399,9 +400,8 @@ class AppealCalculator(object):
             work.primary_appeal, work.secondary_appeal,
             work.appeal_character, work.appeal_language,
             work.appeal_setting, work.appeal_story, work.title, work.author)
-        print foo.encode("utf8")
+        logging.info(foo)
         if old_language:
-            print "LANGUAGE DELTA: %.7f" % (old_language - work.appeal_language)
+            logging.info("LANGUAGE DELTA: %.7f" % (old_language - work.appeal_language))
         if old_setting:
-            print "SETTING DELTA: %.7f" % (old_setting - work.appeal_setting)
-        print ""
+            logging.info("SETTING DELTA: %.7f" % (old_setting - work.appeal_setting))

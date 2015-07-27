@@ -1,6 +1,9 @@
 from nose.tools import set_trace
 import os
+import logging
 import flask
+import urlparse
+
 from flask import Flask, make_response
 from core.util.flask_util import problem
 from core.opds import VerboseAnnotator
@@ -21,10 +24,12 @@ app.debug = True
 
 class Conf:
     db = None
+    log = None
 
     @classmethod
     def initialize(cls, _db):
         cls.db = _db
+        cls.log = logging.getLogger("Metadata web app")
 
 if os.environ.get('TESTING') == "True":
     Conf.testing = True
@@ -53,14 +58,13 @@ def canonical_author_name():
         return problem(type, title, status)
         
     canonicalizer = AuthorNameCanonicalizer(Conf.db)
-    print "Incoming display name: %s" % display_name
-    print "Incoming identifier: %r" % identifier
     author_name = canonicalizer.canonicalize(identifier, display_name)
-    print "Canonicalizer said: %s" % author_name
+    Conf.log.info("Incoming display name/identifier: %r/%s. Canonicalizer said: %s",
+                  display_name, identifier, author_name)
     if not author_name:
         if display_name:
             author_name = canonicalizer.default_name(display_name)
-            print "Defaulting to: %s" % author_name
+            Conf.log.info("Defaulting to %s for %r", author_name, identifier)
     Conf.db.commit()
     if author_name:
         return make_response(author_name, 200, {"Content-Type": "text/plain"})
@@ -71,6 +75,13 @@ def canonical_author_name():
 if __name__ == '__main__':
 
     debug = True
-    host = "0.0.0.0"
-    port = int(os.environ['METADATA_WEB_APP_PORT'])
+    url = os.environ['METADATA_WEB_APP_URL']
+    scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
+    if ':' in netloc:
+        host, port = netloc.split(':')
+        port = int(port)
+    else:
+        host = netloc
+        port = 80
+    Conf.log.info("Starting app on %s:%s", host, port)
     app.run(debug=debug, host=host, port=port)

@@ -1,6 +1,7 @@
 import datetime
 import isbnlib
 import json
+import logging
 from nose.tools import set_trace
 
 from core.overdrive import (
@@ -29,6 +30,8 @@ from core.util import LanguageCodes
 
 class OverdriveBibliographicMonitor(CoverageProvider):
     """Fill in bibliographic metadata for Overdrive records."""
+
+    cls_log = logging.getLogger("Overdrive Bibliographic Monitor")
 
     def __init__(self, _db):
         self._db = _db
@@ -171,8 +174,7 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             elif format['id'].startswith('music-'):
                 medium = Edition.MUSIC_MEDIUM
             else:
-                print format['id']
-                set_trace()
+                cls.cls_log.warn("Unfamiliar format: %s", format['id'])
             for new_id in format.get('identifiers', []):
                 t = new_id['type']
                 v = new_id['value']
@@ -219,7 +221,10 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             return s
         
         if medium == Edition.BOOK_MEDIUM:
-            print _p(medium), _p(wr.title), _p(wr.author)
+            cls.cls_log.info(
+                "Processing %s/%s/%s",
+                _p(medium), _p(wr.title), _p(wr.author)
+            )
         if 'images' in info and 'cover' in info['images']:
             link = info['images']['cover']
             href = OverdriveAPI.make_link_safe(link['href'])

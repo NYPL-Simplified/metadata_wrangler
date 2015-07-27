@@ -158,7 +158,7 @@ class ThreeMBibliographicMonitor(CoverageProvider):
             self.annotate_edition_with_bibliographic_information(
                 self._db, edition, info, self.input_source
             )
-            print edition
+            self.log.info("Processed edition %r", edition)
 
     def annotate_edition_with_bibliographic_information(
             self, db, edition, info, input_source):

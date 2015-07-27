@@ -1,5 +1,6 @@
 import gzip
 import csv
+import logging
 import os
 import re
 from nose.tools import set_trace
@@ -27,7 +28,7 @@ class FASTNames(dict):
         consolidated_file = os.path.join(my_directory, "consolidated.csv.gz")
         a = time.time()
         if os.path.exists(consolidated_file):
-            print "Reading cached %s names from %s" % (
+            logging.info("Reading cached %s names from %s",
                 cls.SUBDIR, consolidated_file)
             input_file = gzip.open(consolidated_file)
             reader = csv.reader(input_file)
@@ -38,9 +39,10 @@ class FASTNames(dict):
                 if not i.endswith(".nt.gz") and not i.endswith(".nt"):
                     continue
                 path = os.path.join(my_directory, i)
-                print "Loading %s" % path
+                logging.info("Loading %s names from %s", cls.SUBDIR, path)
                 names.load_filehandle(gzip.open(path))
-                print "There are now %d names." % len(names)
+                logging.info(
+                    "There are now %d %s names.", cls.SUBDIR, len(names))
 
             output = gzip.open(consolidated_file,"w")
             writer = csv.writer(output)
@@ -48,7 +50,7 @@ class FASTNames(dict):
                 writer.writerow([k, v])
             output.close()
         b = time.time()
-        print "Done loading %s names in %.1f sec" % (cls.SUBDIR, b-a)
+        logging.info("Done loading %s names in %.1f sec", cls.SUBDIR, b-a)
         return names
 
 class LCSHNames(FASTNames):

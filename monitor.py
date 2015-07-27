@@ -120,7 +120,7 @@ class IdentifierResolutionMonitor(Monitor):
 
             count = q.count()
             if count:
-                print msg % count
+                self.log.info(msg, count)
                 for i in q:
                     UnresolvedIdentifier.register(self._db, i, force=force)
         
@@ -153,20 +153,25 @@ class IdentifierResolutionMonitor(Monitor):
                 UnresolvedIdentifier.identifier).filter(
                     Identifier.type==identifier_type).filter(
                         needs_processing)
-            print "%d unresolved identifiers of type %s" % (
-                q.count(), identifier_type)
+            self.log.info(
+                "%d unresolved identifiers of type %s",
+                q.count(), identifier_type
+            )
             while q.count() and batches < 10:
                 batches += 1
                 unresolved_identifiers = q.order_by(func.random()).limit(
                     batch_size).all()
-                print "Handling %d unresolved identifiers." % len(
-                    unresolved_identifiers) 
+                self.log.info(
+                    "Handling %d unresolved identifiers.", 
+                    len(unresolved_identifiers)
+                )
                 successes, failures = handler(
                     unresolved_identifiers, data_source, arg)
                 if isinstance(successes, int):
                     # There was a problem getting any information at all from
                     # the server.
-                    print "Got unexpected response code %d" % successes
+                    self.log.error(
+                        "Got unexpected response code %d", successes)
                     if successes / 100 == 5:
                         # A 5xx error means we probably won't get any
                         # other information from the server for a
@@ -177,16 +182,17 @@ class IdentifierResolutionMonitor(Monitor):
                     # better luck if we choose different identifiers,
                     # so keep going.
                     successes = failures = []
-                print "%d successes, %d failures." % (
+                self.log.info(
+                    "%d successes, %d failures.",
                     len(successes), len(failures)
                 )
                 for s in successes:
-                    print s.identifier
+                    self.log.info("Success: %r", s.identifier)
                     self._db.delete(s)
                 for f in failures:
                     if not f.exception:
                         f.exception = self.UNKNOWN_FAILURE
-                    print f.identifier, f.exception
+                    self.log.info("Failure: %r %r", f.identifier, f.exception)
                     f.most_recent_attempt = now
                     if not f.first_attempt:
                         f.first_attempt = now
@@ -269,14 +275,19 @@ class IdentifierResolutionMonitor(Monitor):
             try:
                 coverage_provider.ensure_coverage(identifier, force=True)
                 after_coverage = datetime.datetime.now()
-                print "Ensure coverage: %.2fs." % (after_coverage-start).seconds
+                self.log.debug(
+                    "Ensure coverage ran in %.2fs.",
+                    (after_coverage-start).seconds
+                )
                 successes.append(task)
             except Exception, e:
                 task.status_code = 500
                 task.exception = traceback.format_exc()
                 failures.append(task)
-                print "FAILURE on %s" % task.identifier
-                print task.exception
+                self.log.error(
+                    "FAILURE on %s: %r", task.identifier, e,
+                    exc_info=e
+                )
         return successes, failures
 
     def resolve_one_through_coverage_provider(
@@ -296,7 +307,10 @@ class IdentifierResolutionMonitor(Monitor):
             e1 = (after_coverage-start).seconds
             e2 = (after_calculate_presentation-after_coverage).seconds
             e3 = (after_calculate_work-after_calculate_presentation).seconds
-            print "Ensure coverage: %.2fs. Calculate presentation: %.2fs. Calculate work: %.2fs." % (e1, e2, e3)
+            self.log.debug(
+                "Ensure coverage ran in %.2fs. Calculate presentation ran in %.2fs. Calculate work ran in %.2fs.", 
+                e1, e2, e3
+            )
             return True
         except Exception, e:
             task.status_code = 500
@@ -352,8 +366,10 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                 self.process_work(work)
             except Exception, e:
                 work.presentation_ready_exception = traceback.format_exc()
-                print "=ERROR MAKING WORK PRESENTATION READY="
-                print work.presentation_ready_exception
+                self.log.error(
+                    "ERROR MAKING WORK PRESENTATION READY: %s",
+                    e, exc_info=e
+                )
         self._db.commit()
         return biggest_id
 
@@ -364,15 +380,17 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             work.calculate_presentation()
             after_calculate_presentation = datetime.datetime.now()
             work.set_presentation_ready()
-            print "=NEW PRESENTATION READY WORK!="
-            print repr(work)
-            print "=============================="
+            self.log.info("NEW PRESENTATION READY WORK! %r", work)
             e1 = (after_work_ready-start).seconds
             e2 = (after_calculate_presentation-after_work_ready).seconds
-            print "Make work ready: %.2fs. Calculate presentation: %.2fs." % (e1, e2)
-
+            self.log.debug(
+                "Make work ready took %.2fs. Calculate presentation took %.2fs.", e1, e2
+            )
         else:
-            print "=WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?="
+            self.log.error(
+                "WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?: %r", 
+                work
+            )
 
     def make_work_ready(self, work):
         """Either make a work presentation ready, or raise an exception

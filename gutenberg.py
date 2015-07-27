@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import random
+import logging
 import re
 import requests
 import shutil
@@ -80,7 +81,7 @@ class OCLCClassifyMonitor(CoverageProvider):
             if isinstance(s, unicode):
                 return s.encode("utf8")
             return s
-        print '%s "%s" "%s" %r' % (_f(book.primary_identifier.identifier), _f(title), _f(author), _f(language))
+        self.log.info('%s "%s" "%s" %r', _f(book.primary_identifier.identifier), _f(title), _f(author), _f(language))
         # Perform a title/author lookup
         xml = self.oclc_classify.lookup_by(title=title, author=author)
 
@@ -160,7 +161,7 @@ class OCLCClassifyMonitor(CoverageProvider):
                 book.primary_identifier.equivalent_to(
                     self.output_source, r.primary_identifier, strength)
 
-        print " Created %s records(s)." % len(records)
+        self.log.info("Created %s records(s).", len(records))
         return True
 
 class OCLCMonitorForGutenberg(OCLCClassifyMonitor):
@@ -184,6 +185,7 @@ class GutenbergBookshelfClient(object):
     def __init__(self, _db):
         self._db = _db
         self.data_source = DataSource.lookup(self._db, DataSource.GUTENBERG)
+        self.log = logging.getLogger("Gutenberg Bookshelf client")
 
     def do_get_with_captcha_trapdoor(self, *args, **kwargs):
         status_code, headers, content = Representation.browser_http_get(*args, **kwargs)
@@ -259,23 +261,22 @@ class GutenbergBookshelfClient(object):
                 Identifier.type==Identifier.GUTENBERG_ID)
 
     def set_favorites(self, ids):
-        # TODO: Once we have lists this should be a list.
-        print "%d Favorites:" % len(ids)
+        # This should be a list.
+        self.log.info("%d Favorites", len(ids))
         identifiers = self._gutenberg_id_lookup(ids)
         for identifier in identifiers:
             identifier.add_measurement(
                 self.data_source, Measurement.GUTENBERG_FAVORITE,
                 1)
-            print "", self._title(identifier)
+            self.log.debug("Favorite: %s", self._title(identifier))
 
     def set_download_counts(self, all_download_counts):
-        print "Downloads:"
         identifiers = self._gutenberg_id_lookup(all_download_counts.keys())
         for identifier in identifiers:
             identifier.add_measurement(
                 self.data_source, Measurement.DOWNLOADS,
                 all_download_counts[identifier.identifier])
-            print "%d\t%s" % (
+            self.log.debug("Downloads: %d\t%s",
                 all_download_counts[identifier.identifier],
                 self._title(identifier))
 
@@ -286,7 +287,10 @@ class GutenbergBookshelfClient(object):
                 identifier.classify(
                     self.data_source, Subject.GUTENBERG_BOOKSHELF, 
                     classification)
-                print "%s\t%s" % (classification.encode("utf8"), self._title(identifier))
+                self.log.debug(
+                    "%s\t%s", classification.encode("utf8"), 
+                    self._title(identifier)
+                )
 
     def process_shelf(self, representation, handled):
         texts = set()

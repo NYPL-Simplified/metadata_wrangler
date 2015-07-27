@@ -58,6 +58,7 @@ class ContentCafeAPI(object):
         self.data_source = DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
         self.user_id = user_id or os.environ['CONTENT_CAFE_USER_ID']
         self.password = password or os.environ['CONTENT_CAFE_PASSWORD']
+        self.log = logging.getLogger("Content Cafe API")
 
     def mirror_resources(self, isbn_identifier):
         """Associate a number of resources with the given ISBN.
@@ -88,13 +89,13 @@ class ContentCafeAPI(object):
             phrase_indicating_missing_data,
             rel, scrape_method):
         url = url % args
-        print url
+        self.log.info("Getting associated resources for %s", url)
         response = requests.get(url)
         content_type = response.headers['Content-Type']
         hyperlinks = []
         already_seen = set()
         if not phrase_indicating_missing_data in response.content:
-            print " %s %s Content!" % (identifier.identifier, rel)
+            self.log.info("Found %s %s Content!", identifier.identifier, rel))
             soup = BeautifulSoup(response.content, "lxml")
             resource_contents = scrape_method(soup)
             if resource_contents:
@@ -106,8 +107,9 @@ class ContentCafeAPI(object):
                         rel, None, self.data_source, media_type="text/html", 
                         content=content)
                     hyperlinks.append(hyperlink)
-                    print " ", hyperlink.resource.representation.content[:75]
-            print
+                    self.log.debug(
+                        "Content: %s", 
+                        hyperlink.resource.representation.content[:75])
         return hyperlinks
 
     def get_reviews(self, identifier, args):

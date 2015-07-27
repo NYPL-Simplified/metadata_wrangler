@@ -3,6 +3,7 @@ from datetime import timedelta
 import isbnlib
 import random
 import requests
+import logging
 import time
 import os
 import re
@@ -126,9 +127,9 @@ class AmazonAPI(object):
                 raise Exception("Rate limit triggered on %s" % url)
 
         if representation.status_code == 404:
-            print "Amazon has no knowledge of ASIN %s" % asin
+            logging.info("Amazon has no knowledge of ASIN %s" % asin)
         elif not cached and not representation.content:
-            print "No content!"
+            logging.info("No content for ASIN %s!" % asin)
             # Sleep to deal with possible rate limiting.
             time.sleep(60)
         return representation
@@ -248,7 +249,7 @@ class AmazonBibliographicParser(AmazonParser):
             href = edition_tag.attrib['href']
             m = self.IDENTIFIER_IN_URL.search(href)
             if not m:
-                print "Could not find identifier in %s" % href
+                logging.info("Could not find identifier in %s" % href)
                 continue
 
             identifier = m.groups()[0]
@@ -481,11 +482,10 @@ class AmazonRateLimitCAPTCHAClient(object):
         self._db = _db
         self.captcha_url = captcha_url
         if not captcha_content:
-            print "So the problematic URL is %s..." % captcha_url
+            logging.info("So the problematic URL is %s..." % captcha_url)
             rep, cached = Representation.get(_db, captcha_url, max_age=0)
             if AmazonAPI.RATE_LIMIT_TEXT not in rep.content:
-                print "Looks fine to me:"
-                print rep.content
+                logging.info("Looks fine to me: %r", rep.content)
                 captcha_content = None
             else:
                 self.captcha_content = rep.content
@@ -503,16 +503,16 @@ class AmazonRateLimitCAPTCHAClient(object):
 
         captcha_field_name = form.find('input', type='text')['name']
 
-        print "CAPTCHA URL is:"
+        logging.info("CAPTCHA URL is:")
         for img in form.find_all('img'):
-            print img['src']
-        print "Enter CAPTCHA value from URL:"
+            logging.info(img['src'])
+        logging.info("Enter CAPTCHA value from URL:")
         value = sys.stdin.readline().strip()
         fields[captcha_field_name] = value
 
         field_data = [k + "=" + v for k, v in fields.items()]
         url = urlparse.urljoin("http://www.amazon.com", form['action']) + "?" + "&".join(field_data)
-        print "Okay, trying %s" % url
+        logging.info("Okay, trying %s" % url)
         referer = dict(Referer=self.captcha_url)
         rep, cached = Representation.get(
             self._db, url, extra_request_headers=referer, 

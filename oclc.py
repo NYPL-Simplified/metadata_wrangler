@@ -2,6 +2,7 @@
 import collections
 import datetime
 import json
+import logging
 import md5
 import os
 import pprint
@@ -106,6 +107,7 @@ class OCLCLinkedData(object):
     def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+        self.log = logging.getLogger("OCLC Linked Data Client")
 
     def lookup(self, identifier_or_uri, processed_uris):
         """Perform an OCLC Open Data lookup for the given identifier."""
@@ -139,14 +141,14 @@ class OCLCLinkedData(object):
 
         url = url % dict(id=identifier.identifier, type=foreign_type)
         if url in processed_uris:
-            # print "SKIPPING %s, already processed." % url
+            self.log.debug("SKIPPING %s, already processed.", url)
             return None, True
         processed_uris.add(url)
         representation, cached = Representation.get(self._db, url)
         try:
             data = jsonld.load_document(url)
         except Exception, e:
-            print "EXCEPTION", url, e
+            self.log.error("EXCEPTION on %s: %s", url, e, exc_info=e)
             return None, False
 
         if cached and not representation.content:
@@ -317,7 +319,7 @@ class OCLCLinkedData(object):
             # Kind of weird, but okay.
             id_type = Identifier.OCLC_WORK
         else:
-            print "EXPECTED OCLC ID, got %s" % id_type
+            self.log.warn("EXPECTED OCLC ID, got %s" % id_type)
             return no_value
 
         for k, repository in (
@@ -357,7 +359,7 @@ class OCLCLinkedData(object):
             if 'schema:name' in result:
                 name = result['schema:name']
             else:
-                # print "WEIRD INTERNAL LOOKUP: %r" % result
+                self.log.warn("WEIRD INTERNAL LOOKUP: %r" % result)
                 continue
             use_type = None
             type_objs = []
@@ -438,6 +440,7 @@ class OCLCXMLParser(XMLParser):
     NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
 
     LIST_TYPE = "works"
+    log = logging.getLogger("OCLC XML Parser")
 
     @classmethod
     def parse(cls, _db, xml, **restrictions):
@@ -479,7 +482,7 @@ class OCLCXMLParser(XMLParser):
             edition, ignore = cls.extract_edition(
                 _db, work_tag, existing_authors, **restrictions)
             if edition:
-                print "EXTRACTED %r" % edition
+                cls.log.info("EXTRACTED %r", edition)
             records = []
             if edition:
                 records.append(edition)
@@ -507,7 +510,7 @@ class OCLCXMLParser(XMLParser):
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
-            #print "Extracting SWIDs from search results."
+            cls.log.debug("Extracting SWIDs from search results.")
             records = cls.extract_swids(_db, tree, **restrictions)
         elif representation_type == cls.NOT_FOUND_STATUS:
             # No problem; OCLC just doesn't have any data.
@@ -535,8 +538,10 @@ class OCLCXMLParser(XMLParser):
                 # TODO: 'swid' is what it's called in older representations.
                 # That code can be removed once we replace all representations.
                 work_identifier = work_tag.get('wi') or work_tag.get('swid')
-                #print "WORK ID %s (%s, %r, %s)" % (
-                #    work_identifier, title, author_names, language)
+                cls.log.debug(
+                    "WORK ID %s (%s, %r, %s)",
+                    work_identifier, title, author_names, language
+                )
                 swids.append(work_identifier)
         return swids
 
@@ -728,7 +733,10 @@ class OCLCXMLParser(XMLParser):
             if similarity < threshold:
                 # The title of the book under consideration is not
                 # similar enough to the given title.
-                # print " FAILURE TO RESEMBLE: %s vs %s (%.2f)" % (title, must_resemble_title, similarity)
+                cls.log.debug( 
+                    "FAILURE TO RESEMBLE: %s vs %s (%.2f)",
+                    title, must_resemble_title, similarity
+                )
                 return None
 
             # The semicolon is frequently used to separate multiple
@@ -737,7 +745,9 @@ class OCLCXMLParser(XMLParser):
             # semicolons.
             if (not ' ; ' in must_resemble_title
                 and ' ; ' in title and threshold > 0):
-                # print "SEMICOLON DISQUALIFICATION: %s" % title
+                cls.log.debug(
+                    "SEMICOLON DISQUALIFICATION: %s", title
+                )
                 return None
 
         # Apply restrictions. If they're not met, return None.
@@ -748,7 +758,9 @@ class OCLCXMLParser(XMLParser):
             restrict_to_language = set(restrictions['language'])
             if language != restrict_to_language:
                 # This record is for a book in a different language
-                # print "WRONG LANGUAGE: %s" % language
+                cls.log.debug(
+                    "WRONG LANGUAGE: %s", language
+                )
                 return None
 
         if 'authors' in restrictions:
@@ -1048,10 +1060,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def process_edition(self, edition):
         if self.replace_processed_uris:
-            #print "Clearing out processed URIs."
+            self.log.debug("Clearing out processed URIs.")
             self.processed_uris = set()
         else:
-            #print "Currently %d processed URIs." % len(self.processed_uris)
+            self.log.debug(
+                "Currently %d processed URIs.", len(self.processed_uris)
+            )
             pass
 
         if isinstance(edition, Identifier):
@@ -1065,26 +1079,25 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_isbns = 0
             new_descriptions = 0
             new_subjects = 0
-            try:
-                print u"%s (%s)" % (title, repr(identifier).decode("utf8"))
-            except Exception, e:
-                # TODO: This needs to be fixed, but don't crash just
-                # because we can't print a status message.
-                pass
+            self.log.info("Processing edition %s/%s", title, identifier)
             editions = 0
             for edition in self.info_for(identifier):
                 edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
                 if edition:
                     new_records += 1
-                    print "", edition.publisher, len(isbns), len(descriptions)
+                    self.log.info(
+                        edition.publisher, len(isbns), len(descriptions)
+                    )
                 new_isbns += len(isbns)
-                #for isbn in isbns:
-                #    print " NEW ISBN: %s" % isbn
+                for isbn in isbns:
+                    self.log.debug("NEW ISBN: %s", isbn)
                 new_descriptions += len(descriptions)
                 new_subjects += len(subjects)
 
-            print "Total: %s editions, %s ISBNs, %s descriptions, %s classifications." % (
-                editions, new_isbns, new_descriptions, new_subjects)
+            self.log.info(
+                "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
+                editions, new_isbns, new_descriptions, new_subjects
+            )
         except IOError, e:
             if ", but couldn't find location" in e.message:
                 # OCLC doesn't know about an ISBN.
@@ -1093,7 +1106,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return True
 
     def process_oclc_edition(self, original_identifier, edition):
-        #print "   Processing edition %s: %r" % (edition['oclc_id'], edition['titles'])
+        self.log.debug(
+            "Processing edition %s: %r", edition.get('oclc_id'),
+            edition.get('titles')
+        )
         publisher = None
         if edition['publishers']:
             publisher = edition['publishers'][0]
@@ -1343,7 +1359,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         return r
 
     def graphs_for(self, identifier):
-        # print "BEGIN GRAPHS FOR %r" % identifier
+        self.log.debug("BEGIN GRAPHS FOR %r", identifier)
         work_data = None
         if identifier.type in OCLCLinkedData.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
@@ -1362,11 +1378,13 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     work_data = [work_data]
                 for data in work_data:
                     # Turn the work graph into a bunch of edition graphs.
-                    #print " Handling work graph %s" % data['documentUrl']
+                    self.log.debug(
+                        "Handling work graph %s", data['documentUrl']
+                    )
                     graph = self.oclc.graph(data)
                     examples = self.oclc.extract_workexamples(graph)
                     for uri in examples:
-                        #print "  Found example URI %s" % uri
+                        self.log.debug("Found example URI %s", uri)
                         data, cached = self.oclc.lookup(uri, self.processed_uris)
                         yield data
 
@@ -1377,4 +1395,4 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 if i.output.type in OCLCLinkedData.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph
-        #print "END GRAPHS FOR %r" % identifier
+        self.log.debug("END GRAPHS FOR %r", identifier)

@@ -1,6 +1,7 @@
 import os
 from nose.tools import set_trace
 from lxml import etree
+import logging
 import re
 
 from collections import Counter, defaultdict
@@ -26,6 +27,8 @@ class VIAFParser(XMLParser):
 
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
+    log = logging.getLogger("VIAF Parser")
+
     @classmethod
     def name_matches(cls, n1, n2):
         return n1.replace(".", "").lower() == n2.replace(".", "").lower()
@@ -41,7 +44,7 @@ class VIAFParser(XMLParser):
 
         :return: a 3-tuple (display name, family name, Wikipedia name)
         """
-        print "Starting point: %s" % contributor.name
+        self.log.info("Starting point for lookup: %s" % contributor.name)
 
         if not contributor.viaf:
             contributor.viaf = viaf
@@ -53,12 +56,11 @@ class VIAFParser(XMLParser):
             if not family_name:
                 family_name = default_family
 
-        print " VIAF ID: %s" % viaf
+        self.log.info("VIAF ID: %s" % viaf)
         if wikipedia_name:
-            print " Wikipedia name: %s" % wikipedia_name
-        print " Display name: %s" % display_name
-        print " Family name: %s" % family_name
-        print
+            self.log.info("Wikipedia name: %s" % wikipedia_name)
+        self.log.info("Display name: %s" % display_name)
+        self.log.info("Family name: %s" % family_name)
         return viaf, display_name, family_name, wikipedia_name
 
     def sort_names_for_cluster(self, cluster):
@@ -212,7 +214,9 @@ class VIAFParser(XMLParser):
                 if not v:
                     continue
                 if not working_sort_name or v in working_sort_name:
-                    # print "FOUND %s in %s" % (v, working_name)
+                    self.log.debug(
+                        "FOUND %s in %s", v, working_sort_name
+                    )
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
                     if possible_sort_name and possible_sort_name.endswith(","):
@@ -220,9 +224,11 @@ class VIAFParser(XMLParser):
                         sort_name_popularity[possible_sort_name] += 1
                     break
             else:
-                #print "  EXCLUDED %s/%s/%s for lack of resemblance to %s" % (
-                #    possible_given, possible_family, possible_extra,
-                #    working_name)
+                self.log.debug(
+                    "EXCLUDED %s/%s/%s for lack of resemblance to %s",
+                    possible_given, possible_family, possible_extra,
+                    working_sort_name
+                )
                 pass
 
         if sort_name_popularity and not sort_name:
@@ -272,8 +278,10 @@ class VIAFParser(XMLParser):
         given_name_for_family_name = defaultdict(Counter)
         extra_for_given_name_and_family_name = defaultdict(Counter)
         for given_name, family_name, name_extra in possibilities:
-            #print "  POSSIBILITY: %s/%s/%s" % (
-            #    given_name, family_name, name_extra)
+            self.log.debug(
+                "POSSIBILITY: %s/%s/%s",
+                given_name, family_name, name_extra
+            )
             if family_name:
                 family_names[family_name] += 1
                 if given_name:
@@ -404,7 +412,9 @@ class VIAFClient(object):
                     if isinstance(d2, unicode):
                         d2 = d2.encode("utf8")
 
-                    print "WARNING: POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s" % (d1, d2)
+                    self.log.warn(
+                        "POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s", (d1, d2)
+                    )
                     # TODO: This might be okay or it might be a
                     # problem we need to address. Whatever it is,
                     # don't merge the records.
