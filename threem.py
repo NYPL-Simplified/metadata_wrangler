@@ -38,8 +38,10 @@ class ThreeMAPI(BaseThreeMAPI):
             data = self.request(
                 "/items/%s" % identifier.identifier,
                 max_age=self.MAX_METADATA_AGE)
-            identifier, raw, cooked = list(self.item_list_parser.parse(data))[0]
-            results[identifier] = (edition, cooked)
+            all_data = list(self.item_list_parser.parse(data))
+            if all_data:
+                identifier, raw, cooked = all_data[0]
+                results[identifier] = (edition, cooked)
 
         return results
       
