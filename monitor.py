@@ -128,23 +128,37 @@ class IdentifierResolutionMonitor(Monitor):
     def run_once(self, start, cutoff):
         self.create_missing_unresolved_identifiers()
 
+        self.overdrive_coverage_provider = OverdriveBibliographicMonitor(self._db)
+        self.threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
+        self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
+
+
+        providers_need_resolving = [
+                (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
+                (DataSource.THREEM, None, self.resolve_through_coverage_provider, self.threem_coverage_provider, 25),
+                (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, self.overdrive_coverage_provider, 25),
+                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_identifiers_through_coverage_provider, self.content_cafe_provider, 25),
+        ]
+
+
+        while providers_need_resolving:
+            providers_need_resolving = self.run_through_providers_once(
+                providers_need_resolving)
+            self._db.commit()
+
+    def run_through_providers_once(self, providers):
+
         now = datetime.datetime.utcnow()
         one_day_ago = now - datetime.timedelta(days=1)
         needs_processing = or_(
             UnresolvedIdentifier.exception==None,
             UnresolvedIdentifier.most_recent_attempt < one_day_ago)
 
-        overdrive_coverage_provider = OverdriveBibliographicMonitor(self._db)
-        threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
-        content_cafe_provider = ContentCafeCoverageProvider(self._db)
-
-        for data_source_name, identifier_type, handler, arg, batch_size in (
-                (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
-                (DataSource.THREEM, None, self.resolve_through_coverage_provider, threem_coverage_provider, 25),
-                (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, overdrive_coverage_provider, 25),
-                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_identifiers_through_coverage_provider, content_cafe_provider, 10),
-        ):
-            batches = 0
+        new_providers = []
+        for provider in providers:
+            (data_source_name, identifier_type, handler, arg, 
+             batch_size) = provider
+            complete_server_failure = False
             data_source = DataSource.lookup(self._db, data_source_name)
             identifier_type = (
                 identifier_type or data_source.primary_identifier_type)
@@ -153,51 +167,52 @@ class IdentifierResolutionMonitor(Monitor):
                 UnresolvedIdentifier.identifier).filter(
                     Identifier.type==identifier_type).filter(
                         needs_processing)
+            count = q.count()               
             self.log.info(
                 "%d unresolved identifiers of type %s",
-                q.count(), identifier_type
+                count, identifier_type
             )
-            while q.count() and batches < 10:
-                batches += 1
-                unresolved_identifiers = q.order_by(func.random()).limit(
-                    batch_size).all()
-                self.log.info(
-                    "Handling %d unresolved identifiers.", 
-                    len(unresolved_identifiers)
-                )
-                successes, failures = handler(
-                    unresolved_identifiers, data_source, arg)
-                if isinstance(successes, int):
-                    # There was a problem getting any information at all from
-                    # the server.
-                    self.log.error(
-                        "Got unexpected response code %d", successes)
-                    if successes / 100 == 5:
-                        # A 5xx error means we probably won't get any
-                        # other information from the server for a
-                        # while. Give up on this server for now.
-                        break
+            unresolved_identifiers = q.order_by(func.random()).limit(
+                batch_size).all()
+            self.log.info(
+                "Handling %d unresolved identifiers of type %s.", 
+                len(unresolved_identifiers), identifier_type
+            )
+            successes, failures = handler(
+                unresolved_identifiers, data_source, arg)
+            if isinstance(successes, int):
+                # There was a problem getting any information at all from
+                # the server.
+                self.log.error(
+                    "Got unexpected response code %d", successes)
+                if successes / 100 == 5:
+                    # A 5xx error means we probably won't get any
+                    # other information from the server for a
+                    # while. Give up on this server for now.
+                    complete_server_failure = True
 
-                    # Some other kind of error means we might have
-                    # better luck if we choose different identifiers,
-                    # so keep going.
-                    successes = failures = []
-                self.log.info(
-                    "%d successes, %d failures.",
-                    len(successes), len(failures)
-                )
-                for s in successes:
-                    self.log.info("Success: %r", s.identifier)
-                    self._db.delete(s)
-                for f in failures:
-                    if not f.exception:
-                        f.exception = self.UNKNOWN_FAILURE
-                    self.log.info("Failure: %r %r", f.identifier, f.exception)
-                    f.most_recent_attempt = now
-                    if not f.first_attempt:
-                        f.first_attempt = now
-                self._db.commit()
-            self._db.commit()
+                # Some other kind of error means we might have
+                # better luck if we choose different identifiers,
+                # so keep going.
+                successes = failures = []
+            self.log.info(
+                "%d successes, %d failures.",
+                len(successes), len(failures)
+            )
+            for s in successes:
+                self.log.info("Success: %r", s.identifier)
+                self._db.delete(s)
+            for f in failures:
+                if not f.exception:
+                    f.exception = self.UNKNOWN_FAILURE
+                self.log.warn("Failure: %r %r", f.identifier, f.exception)
+                f.most_recent_attempt = now
+                if not f.first_attempt:
+                    f.first_attempt = now
+            if not complete_server_failure and count > batch_size:
+                # Theres' more work to be done.
+                new_providers.append(provider)
+        return new_providers
 
     def resolve_content_server(self, batch, data_source, ignore):
         successes = []

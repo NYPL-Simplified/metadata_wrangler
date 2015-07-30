@@ -50,13 +50,16 @@ def lookup():
 def canonical_author_name():
     urn = flask.request.args.get('urn')
     display_name = flask.request.args.get('display_name')
-    identifier = URNLookupController.parse_urn(Conf.db, urn, False)
-    if not isinstance(identifier, Identifier):
-        # Error.
-        status, title = identifier
-        type = URNLookupController.COULD_NOT_PARSE_URN_TYPE
-        return problem(type, title, status)
-        
+    if urn:
+        identifier = URNLookupController.parse_urn(Conf.db, urn, False)
+        if not isinstance(identifier, Identifier):
+            # Error.
+            status, title = identifier
+            type = URNLookupController.COULD_NOT_PARSE_URN_TYPE
+            return problem(type, title, status)
+    else:
+        identifier = None
+
     canonicalizer = AuthorNameCanonicalizer(Conf.db)
     author_name = canonicalizer.canonicalize(identifier, display_name)
     Conf.log.info("Incoming display name/identifier: %r/%s. Canonicalizer said: %s",

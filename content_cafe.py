@@ -90,7 +90,7 @@ class ContentCafeAPI(object):
             phrase_indicating_missing_data,
             rel, scrape_method):
         url = url % args
-        self.log.info("Getting associated resources for %s", url)
+        self.log.debug("Getting associated resources for %s", url)
         response = requests.get(url)
         content_type = response.headers['Content-Type']
         hyperlinks = []

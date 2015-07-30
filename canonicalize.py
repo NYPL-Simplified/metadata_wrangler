@@ -63,7 +63,7 @@ class AuthorNameCanonicalizer(object):
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
         """    
-        if identifier.type != Identifier.ISBN:
+        if identifier and identifier.type != Identifier.ISBN:
             # The only identifier we can do a useful lookup on is
             # ISBN.
             identifier = None
