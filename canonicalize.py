@@ -1,5 +1,6 @@
 """Use external services to canonicalize names."""
 from nose.tools import set_trace
+import logging
 from oclc import OCLCLinkedData
 from core.util import MetadataSimilarity
 from core.util.personal_names import (
@@ -28,6 +29,7 @@ class AuthorNameCanonicalizer(object):
         self._db = _db
         self.oclcld = oclcld or OCLCLinkedData(_db)
         self.viaf = viaf or VIAFClient(_db)
+        self.log = logging.getLogger("Author name canonicalizer")
 
     @classmethod
     def primary_author_name(self, author_name):
@@ -92,13 +94,19 @@ class AuthorNameCanonicalizer(object):
     def _canonicalize(self, identifier, display_name):
         # The best outcome would be that we already have a Contributor
         # with this exact display name and a known sort name.
+        self.log.debug("Attempting to canonicalize %s", display_name)
         contributors = self._db.query(Contributor).filter(
             Contributor.display_name==display_name).filter(
                 Contributor.name != None).all()
         sort_name = None
         if contributors and False:
             # Yes, awesome. Use this name.
-            return contributors[0].name
+            sort_name = contributors[0].name
+            self.log.debug(
+                "Found existing contributor for %s: %s",
+                display_name, sort_name
+            )
+            return sort_name
 
         # Looking in the database didn't work. Let's ask OCLC
         # Linked Data about this ISBN and see if it gives us an
@@ -148,8 +156,14 @@ class AuthorNameCanonicalizer(object):
             return None
 
         try:
+            self.log.debug(
+                "Asking OCLC about works for ISBN %s", identifier
+            )
             works = list(self.oclcld.oclc_works_for_isbn(identifier))
         except IOError, e:
+            self.log.error(
+                "OCLC errored out: %s", e, exc_info=e
+            )
             works = []
         shortest_candidate = None
         uris = []
@@ -179,5 +193,7 @@ class AuthorNameCanonicalizer(object):
     def sort_name_from_viaf(self, display_name):
         viaf, display_name, family_name, sort_name, wikipedia_name = (
                 self.viaf.lookup_by_name(None, display_name))
+        self.log.debug("Asked VIAF for sort name for %s. Response: %s",
+                       display_name, sort_name)
         return sort_name
 

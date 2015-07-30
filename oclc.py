@@ -130,7 +130,7 @@ class OCLCLinkedData(object):
             return None, None
         return self.lookup_by_identifier(identifier, processed_uris)
 
-    def lookup_by_identifier(self, identifier, processed_uris=[]):
+    def lookup_by_identifier(self, identifier, processed_uris=set()):
         """Turn an Identifier into a JSON-LD document."""
         if identifier.type == Identifier.OCLC_WORK:
             foreign_type = 'work'
@@ -181,13 +181,14 @@ class OCLCLinkedData(object):
         return Identifier.for_foreign_id(
             self._db, Identifier.OCLC_NUMBER, oclc_number)[0]
 
-    def oclc_works_for_isbn(self, isbn, processed_uris=[]):
+    def oclc_works_for_isbn(self, isbn, processed_uris=set()):
         """Yield every OCLC Work graph for the given ISBN."""
         # Find the OCLC Number for this ISBN.
         oclc_number = self.oclc_number_for_isbn(isbn)
 
         # Retrieve the OCLC Linked Data document for that OCLC Number.
-        oclc_number_data, was_new = self.lookup_by_identifier(oclc_number, processed_uris)
+        oclc_number_data, was_new = self.lookup_by_identifier(
+            oclc_number, processed_uris)
         if not oclc_number_data:
             return
 
