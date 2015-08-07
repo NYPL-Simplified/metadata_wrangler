@@ -1,14 +1,18 @@
 import os
+from collections import Counter
+import datetime
 import requests
 import logging
 from nose.tools import set_trace
 from bs4 import BeautifulSoup
+from suds.client import Client as SudsClient
 
 from sqlalchemy import and_
 from core.coverage import CoverageProvider
 from core.model import (
     DataSource,
     Hyperlink,
+    Measurement,
     Resource,
     Identifier,
 )
@@ -44,6 +48,7 @@ class ContentCafeAPI(object):
     """Associates up to four resources with an ISBN."""
 
     BASE_URL = "http://contentcafe2.btol.com/"
+    ONE_YEAR_AGO = datetime.timedelta(days=365)
 
     image_url = BASE_URL + "ContentCafe/Jacket.aspx?userID=%(userid)s&password=%(password)s&Type=L&Value=%(isbn)s"
     overview_url= BASE_URL + "ContentCafeClient/ContentCafe.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
@@ -55,11 +60,15 @@ class ContentCafeAPI(object):
     def __init__(self, db, mirror, user_id=None, password=None):
         self._db = db
         self.mirror = mirror
-        self.scaler = ImageScaler(db, [self.mirror])
+        if self.mirror:
+            self.scaler = ImageScaler(db, [self.mirror])
+        else:
+            self.scaler = None
         self.data_source = DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
         self.user_id = user_id or os.environ['CONTENT_CAFE_USER_ID']
         self.password = password or os.environ['CONTENT_CAFE_PASSWORD']
         self.log = logging.getLogger("Content Cafe API")
+        self.soap_client = ContentCafeSOAPClient(self.user_id, self.password)
 
     def mirror_resources(self, isbn_identifier):
         """Associate a number of resources with the given ISBN.
@@ -84,6 +93,8 @@ class ContentCafeAPI(object):
         self.get_excerpt(isbn_identifier, args)
         self.get_reviews(isbn_identifier, args)
         self.get_author_notes(isbn_identifier, args)
+        self.measure_popularity(isbn_identifier, self.soap_client.ONE_YEAR_AGO)
+        
 
     def get_associated_web_resources(
             self, identifier, args, url, 
@@ -157,6 +168,19 @@ class ContentCafeAPI(object):
             'No excerpt info exists for this item', Hyperlink.SAMPLE,
             self._scrape_one)
 
+    def measure_popularity(self, identifier, cutoff=None):
+        if identifier.type != Identifier.ISBN:
+            raise Error("I can only measure the popularity of ISBNs.")
+        value = self.soap_client.estimated_popularity(identifier.identifier)
+        # Even a complete lack of popularity data is useful--it tells
+        # us there's no need to check again anytime soon.
+        measurement = identifier.add_measurement(
+            self.data_source, Measurement.POPULARITY, value)
+
+        # Since there is no associated Edition, now is a good time to
+        # normalize the value.
+        return measurement.normalized_value
+
     @classmethod
     def _scrape_list(cls, soup):
         table = soup.find('table', id='Table_Main')
@@ -178,3 +202,73 @@ class ContentCafeAPI(object):
             return [table.tr.td.encode_contents()]
         else:
             return []
+
+class ContentCafeSOAPError(IOError):
+    pass
+
+class ContentCafeSOAPClient(object):
+
+    WSDL_URL = "http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx?WSDL"
+
+    DEMAND_HISTORY = "DemandHistoryDetail"
+
+    ONE_YEAR_AGO = datetime.timedelta(days=365)
+
+    def __init__(self, user_id, password, wsdl_url=None):
+        wsdl_url = wsdl_url or self.WSDL_URL
+        self.user_id=user_id
+        self.password = password
+        self.soap = SudsClient(wsdl_url)
+
+    def get_content(self, key, content):
+        data = self.soap.service.Single(
+            userID=self.user_id, password=self.password,
+            key=key, content=content)
+        if hasattr(data, 'Error'):
+            raise ContentCafeSOAPError(data.Error)
+        else:
+            return data
+
+    def estimated_popularity(self, key, cutoff=None):
+        data = self.get_content(key, self.DEMAND_HISTORY)
+        gathered = self.gather_popularity(data)
+        return self.estimate_popularity(gathered, cutoff)
+
+    def gather_popularity(self, detail):
+        by_year_and_month = Counter()
+        [request_item] = detail.RequestItems.RequestItem
+        items = request_item.DemandHistoryItems
+        if items == '':
+            # This ISBN is completely unknown.
+            return None
+        for history in items.DemandHistoryItem:
+            key = datetime.date(history.Year, history.Month, 1)
+            by_year_and_month[key] += int(history.Demand)
+        return by_year_and_month
+
+    def estimate_popularity(self, by_year_and_month, cutoff=None):
+        """Turn demand data into a library-friendly estimate of popularity.
+
+        :return: The book's maximum recent popularity, or one-half its
+        maximum all-time popularity, whichever is greater. If there are no
+        measurements, returns None. This is different from zero, which
+        indicates a measured lack of demand.
+
+        :param cutoff: The point at which "recent popularity" stops.
+        """
+        lifetime = []
+        recent = []
+        if by_year_and_month is None:
+            return None
+        if isinstance(cutoff, datetime.timedelta):
+            cutoff = datetime.date.today() - cutoff
+        for k, v in by_year_and_month.items():
+            lifetime.append(v)
+            if not cutoff or k >= cutoff:
+                recent.append(v)
+        if recent:
+            return max(max(recent), max(lifetime) * 0.5)
+        elif lifetime:
+            return max(lifetime) * 0.5
+        else:
+            return None

@@ -1,3 +1,4 @@
+import isbnlib
 import datetime
 import os
 import requests
@@ -6,6 +7,9 @@ import traceback
 from nose.tools import set_trace
 from sqlalchemy import or_
 from sqlalchemy.sql.functions import func
+from sqlalchemy.orm import (
+    aliased,
+)
 
 from fast import (
     FASTNames,
@@ -19,10 +23,12 @@ from core.monitor import (
     Monitor,
     PresentationReadyMonitor,
     SubjectAssignmentMonitor,
+    IdentifierSweepMonitor,
 )
 from core.model import (
     DataSource,
     Edition,
+    Equivalency,
     Identifier,
     LicensePool,
     Subject,
@@ -32,7 +38,10 @@ from core.model import (
 from core.opds_import import DetailedOPDSImporter
 
 from mirror import ImageScaler
-from content_cafe import ContentCafeCoverageProvider
+from content_cafe import (
+    ContentCafeCoverageProvider,
+    ContentCafeAPI,
+)
 from overdrive import (
     OverdriveBibliographicMonitor,
     OverdriveCoverImageMirror,
@@ -47,6 +56,7 @@ from gutenberg import (
     OCLCClassifyMonitor,
     OCLCMonitorForGutenberg,
 )
+from content_cafe import ContentCafeAPI
 from amazon import AmazonCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
@@ -481,3 +491,41 @@ class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
             elif subject.type == Subject.LCSH and subject.identifier:
                 subject.name = self.lcsh.get(subject.identifier, subject.name)
         super(FASTAwareSubjectAssignmentMonitor, self).process_batch(batch)
+
+
+class ContentCafeDemandMeasurementSweep(IdentifierSweepMonitor):
+    """Ensure that every ISBN directly associated with a commercial
+    identifier has a recent demand measurement.
+    """
+
+    def __init__(self, _db, batch_size=100, interval_seconds=3600*48):
+        super(ContentCafeDemandMeasurementSweep, self).__init__(
+            _db, 
+            "Content Cafe demand measurement sweep", 
+            interval_seconds)
+        self.client = ContentCafeAPI(_db, mirror=None)
+        self.batch_size = batch_size
+
+    def identifier_query(self):
+        # TODO: Outer join to Measurement. If measurement value is
+        # None or less than a year old, skip it.
+        input_identifier = aliased(Identifier)
+
+        output_join_clause = Identifier.id==Equivalency.output_id
+        input_join_clause = input_identifier.id==Equivalency.input_id
+
+        qu = self._db.query(Identifier).join(
+            Equivalency, output_join_clause).join(
+                input_identifier, input_join_clause
+            ).filter(Identifier.type==Identifier.ISBN).filter(
+                input_identifier.type.in_(
+                    [Identifier.OVERDRIVE_ID, Identifier.THREEM_ID, 
+                     Identifier.AXIS_360_ID])
+            ).order_by(Identifier.id)
+        return qu
+
+    def process_identifier(self, identifier):
+        isbn = identifier.identifier
+        if isbn and (isbnlib.is_isbn10(isbn) or isbnlib.is_isbn13(isbn)):
+            self.client.measure_popularity(identifier, self.client.ONE_YEAR_AGO)
+        return True
