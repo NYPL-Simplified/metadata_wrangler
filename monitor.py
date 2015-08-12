@@ -17,6 +17,7 @@ from fast import (
 )
 
 from threem import ThreeMAPI
+from core.config import Configuration
 from core.overdrive import OverdriveAPI
 from core.opds_import import SimplifiedOPDSLookup
 from core.monitor import (
@@ -77,11 +78,11 @@ class IdentifierResolutionMonitor(Monitor):
     def __init__(self, _db):
         super(IdentifierResolutionMonitor, self).__init__(
             _db, "Identifier Resolution Manager", interval_seconds=5)
-        content_server_url = os.environ['CONTENT_WEB_APP_URL']
+        content_server_url = Configuration.integration_url(
+            Configuration.CONTENT_SERVER_INTEGRATION, required=True)
         self.content_server = SimplifiedOPDSLookup(content_server_url)
         self.overdrive = OverdriveAPI(self._db)
         self.threem = ThreeMAPI(self._db)
-
 
     def create_missing_unresolved_identifiers(self):
         """Find any Identifiers that should have LicensePools but don't,
@@ -351,7 +352,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
 
     def __init__(self, _db, force=False):
         super(MetadataPresentationReadyMonitor, self).__init__(_db, [])
-        self.data_directory = os.environ['DATA_DIRECTORY']
+        self.data_directory = Configuration.data_directory()
         self.force = force
 
         self.threem_image_mirror = ThreeMCoverImageMirror(self._db)
@@ -478,7 +479,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
 class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
 
     def __init__(self, _db):
-        data_dir = os.environ['DATA_DIRECTORY']
+        data_dir = Configuration.data_directory()
         self.fast = FASTNames.from_data_directory(data_dir)
         self.lcsh = LCSHNames.from_data_directory(data_dir)
         self.fast = self.lcsh = {}

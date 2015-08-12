@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from suds.client import Client as SudsClient
 
 from sqlalchemy import and_
+from core.config import Configuration
 from core.coverage import CoverageProvider
 from core.model import (
     DataSource,
@@ -65,8 +66,9 @@ class ContentCafeAPI(object):
         else:
             self.scaler = None
         self.data_source = DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
-        self.user_id = user_id or os.environ['CONTENT_CAFE_USER_ID']
-        self.password = password or os.environ['CONTENT_CAFE_PASSWORD']
+        integration = Configuration.integration("Content Cafe")
+        self.user_id = user_id or integration['username']
+        self.password = password or integration['password']
         self.log = logging.getLogger("Content Cafe API")
         self.soap_client = ContentCafeSOAPClient(self.user_id, self.password)
 

@@ -15,6 +15,7 @@ from core.model import (
     production_session,
     Identifier,
 )
+from core.config import Configuration
 from canonicalize import AuthorNameCanonicalizer
 
 app = Flask(__name__)
@@ -78,7 +79,8 @@ def canonical_author_name():
 if __name__ == '__main__':
 
     debug = True
-    url = os.environ['METADATA_WEB_APP_URL']
+    url = Configuration.integration_url(
+        Configuration.METADATA_WRANGLER_INTEGRATION, required=True)
     scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
     if ':' in netloc:
         host, port = netloc.split(':')
