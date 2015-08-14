@@ -360,7 +360,8 @@ class OCLCLinkedData(object):
             if 'schema:name' in result:
                 name = result['schema:name']
             else:
-                self.log.warn("WEIRD INTERNAL LOOKUP: %r" % result)
+                logging.getLogger("OCLC Linked Data Client").warn(
+                    "WEIRD OCLC INTERNAL LOOKUP: %r", result)
                 continue
             use_type = None
             type_objs = []
@@ -1379,8 +1380,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     work_data = [work_data]
                 for data in work_data:
                     # Turn the work graph into a bunch of edition graphs.
+                    if not data:
+                        continue
                     self.log.debug(
-                        "Handling work graph %s", data['documentUrl']
+                        "Handling work graph %s", data.get('documentUrl')
                     )
                     graph = self.oclc.graph(data)
                     examples = self.oclc.extract_workexamples(graph)
