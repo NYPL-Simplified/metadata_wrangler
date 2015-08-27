@@ -27,7 +27,7 @@ class ThreeMAPI(BaseThreeMAPI):
         super(ThreeMAPI, self).__init__(*args, **kwargs)
         self.item_list_parser = ItemListParser()
 
-    def get_bibliographic_info_for(self, editions):
+    def get_bibliographic_info_for(self, editions, max_age=None):
         results = dict()
         identifiers = []
         edition_for_identifier = dict()
@@ -37,12 +37,11 @@ class ThreeMAPI(BaseThreeMAPI):
             edition_for_identifier[identifier] = edition
             data = self.request(
                 "/items/%s" % identifier.identifier,
-                max_age=self.MAX_METADATA_AGE)
+                max_age=max_age or self.MAX_METADATA_AGE)
             all_data = list(self.item_list_parser.parse(data))
             if all_data:
                 identifier, raw, cooked = all_data[0]
                 results[identifier] = (edition, cooked)
-
         return results
       
 

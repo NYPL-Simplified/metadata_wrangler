@@ -380,6 +380,7 @@ class VIAFClient(object):
         self._db = _db
         self.data_source = DataSource.lookup(self._db, DataSource.VIAF)
         self.parser = VIAFParser()
+        self.log = logging.getLogger("VIAF Client")
 
     def process_contributor(self, contributor):
 
