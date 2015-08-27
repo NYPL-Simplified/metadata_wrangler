@@ -414,7 +414,7 @@ class VIAFClient(object):
                         d2 = d2.encode("utf8")
 
                     self.log.warn(
-                        "POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s", (d1, d2)
+                        "POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s", d1, d2
                     )
                     # TODO: This might be okay or it might be a
                     # problem we need to address. Whatever it is,
