@@ -52,6 +52,8 @@ class OverdriveBibliographicMonitor(CoverageProvider):
         metadata = OverdriveRepresentationExtractor.book_info_to_metadata(
             info
         )
+        if not metadata:
+            raise Exception("Could not extract metadata from Overdrive data: %r" % info)
         metadata.apply(edition)
 
     media_type_for_overdrive_type = {
