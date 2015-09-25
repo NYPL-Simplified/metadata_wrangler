@@ -5,7 +5,8 @@ import logging
 from nose.tools import set_trace
 
 from core.overdrive import (
-    OverdriveAPI
+    OverdriveAPI,
+    OverdriveRepresentationExtractor,
 )
 
 from mirror import (
@@ -52,9 +53,6 @@ class OverdriveBibliographicMonitor(CoverageProvider):
             info
         )
         metadata.apply(edition)
-        return self.annotate_edition_with_bibliographic_information(
-            self._db, edition, info, self.input_source
-        )
 
     media_type_for_overdrive_type = {
         "ebook-pdf-adobe" : "application/pdf",
