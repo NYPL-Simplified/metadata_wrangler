@@ -18,111 +18,8 @@ from core.model import (
 from core.coverage import CoverageProvider
 from core.monitor import Monitor
 from core.util.xmlparser import XMLParser
-from core.threem import ThreeMAPI as BaseThreeMAPI
+from core.threem import ThreeMAPI
 from core.util import LanguageCodes
-
-class ThreeMAPI(BaseThreeMAPI):
-
-    def __init__(self, *args, **kwargs):
-        super(ThreeMAPI, self).__init__(*args, **kwargs)
-        self.item_list_parser = ItemListParser()
-
-    def get_bibliographic_info_for(self, editions, max_age=None):
-        results = dict()
-        identifiers = []
-        edition_for_identifier = dict()
-        for edition in editions:
-            identifier = edition.primary_identifier
-            identifiers.append(identifier)
-            edition_for_identifier[identifier] = edition
-            data = self.request(
-                "/items/%s" % identifier.identifier,
-                max_age=max_age or self.MAX_METADATA_AGE)
-            all_data = list(self.item_list_parser.parse(data))
-            if all_data:
-                identifier, raw, cooked = all_data[0]
-                results[identifier] = (edition, cooked)
-        return results
-      
-
-class ItemListParser(XMLParser):
-
-    DATE_FORMAT = "%Y-%m-%d"
-    YEAR_FORMAT = "%Y"
-
-    NAMESPACES = {}
-
-    def parse(self, xml):
-        for i in self.process_all(xml, "//Item"):
-            yield i
-
-    @classmethod
-    def author_names_from_string(cls, string):
-        if not string:
-            return []
-        return [author.strip() for author in string.split(";")]
-
-    @classmethod
-    def parse_genre_string(self, s):           
-        genres = []
-        if not s:
-            return genres
-        for i in s.split(","):
-            i = i.strip()
-            if not i:
-                continue
-            i = i.replace("&amp;amp;", "&amp;").replace("&amp;", "&").replace("&#39;", "'")
-            genres.append(i)
-        return genres
-
-    def process_one(self, tag, namespaces):
-        def value(threem_key):
-            return self.text_of_optional_subtag(tag, threem_key)
-        links = dict()
-        identifiers = dict()
-        subjects = []
-        item = { Hyperlink : links,  Identifier: identifiers,
-                 Subject : subjects,
-                 "extra": {} }
-
-        identifiers[Identifier.THREEM_ID] = value("ItemId")
-        identifiers[Identifier.ISBN] = value("ISBN13")
-
-        item[Subject] = self.parse_genre_string(value("Genre"))
-
-        item[Edition.title] = value("Title")
-        item[Edition.subtitle] = value("SubTitle")
-        item[Edition.publisher] = value("Publisher")
-        language = value("Language")
-        language = LanguageCodes.two_to_three.get(language, language)
-        item[Edition.language] = language
-
-        author_string = value('Authors')
-        item[Contributor] = list(self.author_names_from_string(author_string))
-
-        published_date = None
-        published = value("PubDate")
-        formats = [self.DATE_FORMAT, self.YEAR_FORMAT]
-        if not published:
-            published = value("PubYear")
-            formats = [self.YEAR_FORMAT]
-
-        for format in formats:
-            try:
-                published_date = datetime.datetime.strptime(published, format)
-            except ValueError, e:
-                pass
-
-        item[Edition.published] = published_date
-
-        links[Hyperlink.DESCRIPTION] = value("Description")
-        links[Hyperlink.IMAGE] = value("CoverLinkURL").replace("&amp;", "&")
-        links["alternate"] = value("BookLinkURL").replace("&amp;", "&")
-
-        item['extra']['fileSize'] = value("Size")
-        item['extra']['numberOfPages'] = value("NumberOfPages")
-
-        return identifiers[Identifier.THREEM_ID], etree.tostring(tag), item
 
 
 class ThreeMBibliographicMonitor(CoverageProvider):
@@ -142,66 +39,19 @@ class ThreeMBibliographicMonitor(CoverageProvider):
         self.batch_size=batch_size
 
     def process_edition(self, edition):
-        self.current_batch.append(edition)
-        if len(self.current_batch) >= self.batch_size:
-            self.process_batch(self.current_batch)
-            self.current_batch = []
+        by_identifier = self.api.get_bibliographic_info_for([edition])
+        [(edition, metadata)] = by_identifier.values()
+        metadata.apply(
+            edition,
+            replace_identifiers=True,
+            replace_subjects=True,
+            replace_contributions=True,
+            replace_links=True,
+            replace_formats=True,
+        )
+        self.log.info("Processed edition %r", edition)
         return True
-
-    def commit_workset(self):
-        # Process any uncompleted batch.
-        self.process_batch(self.current_batch)
-        super(ThreeMBibliographicMonitor, self).commit_workset()
-
-    def process_batch(self, batch):
-        for edition, info in self.api.get_bibliographic_info_for(
-                batch).values():
-            self.annotate_edition_with_bibliographic_information(
-                self._db, edition, info, self.input_source
-            )
-            self.log.info("Processed edition %r", edition)
-
-    def annotate_edition_with_bibliographic_information(
-            self, db, edition, info, input_source):
-
-        pool = edition.license_pool
-        identifier = edition.primary_identifier
-
-        isbn = info[Identifier].get(Identifier.ISBN, '')
-        if isbnlib.is_isbn10(isbn):
-            isbn = isbnlib.to_isbn13(isbn)
-        if isbnlib.is_isbn13(isbn):
-            isbn, ignore = Identifier.for_foreign_id(
-                self._db, Identifier.ISBN, isbn)
-            identifier.equivalent_to(self.input_source, isbn, 1)
-
-        edition.title = info[Edition.title]
-        edition.subtitle = info[Edition.subtitle]
-        edition.publisher = info[Edition.publisher]
-        edition.language = info[Edition.language]
-        edition.published = info[Edition.published]
-
-        for name in info[Contributor]:
-            edition.add_contributor(name, Contributor.AUTHOR_ROLE)
-
-        edition.extra = info['extra']
-
-        # Associate subjects with the identifier.
-        for subject in info[Subject]:
-            identifier.classify(self.input_source, Subject.THREEM, subject)
-
-        # Associate resources with the identifier.
-        for rel, value in info[Hyperlink].items():
-            if rel == Hyperlink.DESCRIPTION:
-                href = None
-                media_type = "text/html"
-                content = value
-            else:
-                href = value
-                media_type = None
-                content = None
-            pool.add_link(rel, href, input_source, media_type, content)
-
+        
 
 class ThreeMCoverImageMirror(CoverImageMirror):
     """Downloads images from 3M and writes them to disk."""
