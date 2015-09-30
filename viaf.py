@@ -152,11 +152,17 @@ class VIAFParser(XMLParser):
         return self.extract_viaf_info(
             tree, working_sort_name, working_display_name, strict=strict)
 
+    wikidata_id = re.compile("^Q[0-9]")
+
     def extract_wikipedia_name(self, cluster):
         """Extract Wiki name from a single VIAF cluster."""
         for source in self._xpath(cluster, './/*[local-name()="sources"]/*[local-name()="source"]'):
             if source.text.startswith("WKP|"):
-                return source.text[4:]
+                # This could be a Wikipedia page, which is great,or it
+                # could be a Wikidata ID, which we don't want.
+                potential_wikipedia = source.text[4:]
+                if not self.wikidata_id.search(potential_wikipedia):
+                    return potential_wikipedia
 
     def sort_names_by_popularity(self, cluster):
         sort_name_popularity = Counter()

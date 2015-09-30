@@ -38,6 +38,18 @@ class TestNameParser(DatabaseTest):
         eq_("Eisner", family)
         eq_("Will_Eisner", wikipedia)
 
+    def test_entry_with_wikipedia_name_that_is_actually_wikidata_id(self):
+
+        xml = self.sample_data("michelle_belanger.xml")
+
+        contributor, new = self._contributor(None)
+
+        viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
+        eq_('38770861', viaf)
+        eq_("Michelle A. Belanger", display)
+        eq_("Belanger", family)
+        eq_(None, wikipedia)
+
     def test_entry_without_wikipedia_name(self):
         xml = self.sample_data("palmer.xml")
 
