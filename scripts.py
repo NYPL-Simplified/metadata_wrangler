@@ -3,10 +3,13 @@ import sys
 from nose.tools import set_trace
 import os
 from core.model import (
+    DataSource,
     Edition,
+    Identifier,
     Subject,
     Work,
 )
+from oclc import LinkedDataCoverageProvider
 from sqlalchemy.sql.functions import func
 from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
@@ -15,6 +18,7 @@ from threem import (
 )    
 
 from core.scripts import (
+    Explain,
     WorkProcessingScript,
     Script,
 )
@@ -220,3 +224,54 @@ class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript)
             normalized_title = wi.normalize_title(title.decode("utf8"))
             normalized_author = wi.normalize_author(author.decode("utf8"))
             self.write_row(title, author, normalized_title, normalized_author, format)
+
+
+class RedoOCLC(Explain):
+
+    def __init__(self):
+        id_type, identifier = sys.argv[1:]
+        self.identifier, ignore = Identifier.for_foreign_id(
+            self._db, id_type, identifier
+        )
+        self.oclcld = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+        self.coverage = LinkedDataCoverageProvider(self._db)
+
+    def run(self):
+        t1 = self._db.begin_nested()
+        t2 = self._db.begin_nested()
+        for edition in self.identifier.primarily_identifies:
+            print "BEFORE"
+            self.explain(self._db, edition)
+            print "-" * 80
+
+        identifier_ids = self.identifier.equivalent_identifier_ids(
+            levels=5, threshold=0)
+        from core.model import Equivalency
+        equivalencies = self._db.query(Equivalency).filter(
+            Equivalency.data_source == self.oclcld).filter(
+                Equivalency.input_id.in_(identifier_ids),
+            )
+        identifiers = list(self._db.query(Identifier).filter(
+            Identifier.id.in_(identifier_ids)
+        ))
+
+        identifiers = [(e.output.type, e.output.identifier) 
+                       for e in equivalencies]
+        for e in equivalencies:
+            self._db.delete(e)
+        
+        self.coverage.process_edition(self.identifier)
+
+        t2.commit()
+        new_identifier_ids = self.identifier.equivalent_identifier_ids(
+            levels=5, threshold=0)
+        new_identifiers = list(self._db.query(Identifier).filter(
+            Identifier.id.in_(new_identifier_ids)
+        ))
+        for edition in self.identifier.primarily_identifies:
+            if edition.work:
+                edition.work.calculate_presentation
+            print "-" * 80
+            print "AFTER"
+            self.explain(self._db, edition)
+        t1.commit()

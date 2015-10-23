@@ -1183,8 +1183,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
         else:
             strength = 1
 
-        original_identifier.equivalent_to(
-            self.oclc_linked_data, oclc_number, strength)
+        if strength > 0:
+            original_identifier.equivalent_to(
+                self.oclc_linked_data, oclc_number, strength)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
@@ -1396,6 +1397,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
             # We got an identifier we can't handle. Turn it into a number
             # of identifiers we can handle.
             for i in identifier.equivalencies:
+                if i.strength <= 0.7:
+                    # TODO: This is a stopgap to make sure we don't
+                    # turn low-strength equivalencies into
+                    # high-strength ones.
+                    continue
                 if i.output.type in OCLCLinkedData.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph
