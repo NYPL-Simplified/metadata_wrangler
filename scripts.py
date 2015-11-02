@@ -5,6 +5,7 @@ import os
 from core.model import (
     DataSource,
     Edition,
+    Equivalency,
     Identifier,
     Subject,
     Work,
@@ -229,49 +230,60 @@ class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript)
 class RedoOCLC(Explain):
 
     def __init__(self):
-        id_type, identifier = sys.argv[1:]
-        self.identifier, ignore = Identifier.for_foreign_id(
-            self._db, id_type, identifier
-        )
         self.oclcld = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         self.coverage = LinkedDataCoverageProvider(self._db)
 
     def run(self):
-        t1 = self._db.begin_nested()
-        t2 = self._db.begin_nested()
-        for edition in self.identifier.primarily_identifies:
+        id_type, identifier = sys.argv[1:]
+        identifier, ignore = Identifier.for_foreign_id(
+            self._db, id_type, identifier
+        )
+
+#        for edition in identifier.primarily_identifies:
+#            print "BEFORE"
+#            self.explain(self._db, edition)
+#            print "-" * 80
+        self.fix_identifier(identifier)
+
+    def fix_identifier(self, primary_identifier):
+        equivalent_ids = primary_identifier.equivalent_identifier_ids(
+            levels=6, threshold=0)
+        return self.fix_identifier_with_equivalents(primary_identifier, equivalent_ids)
+
+    def fix_identifier_with_equivalents(self, primary_identifier, equivalent_ids):
+        for edition in primary_identifier.primarily_identifies:
             print "BEFORE"
             self.explain(self._db, edition)
             print "-" * 80
 
-        identifier_ids = self.identifier.equivalent_identifier_ids(
-            levels=5, threshold=0)
-        from core.model import Equivalency
+        t1 = self._db.begin_nested()
+
         equivalencies = self._db.query(Equivalency).filter(
             Equivalency.data_source == self.oclcld).filter(
-                Equivalency.input_id.in_(identifier_ids),
+                Equivalency.input_id.in_(equivalent_ids)
             )
-        identifiers = list(self._db.query(Identifier).filter(
-            Identifier.id.in_(identifier_ids)
-        ))
-
-        identifiers = [(e.output.type, e.output.identifier) 
-                       for e in equivalencies]
+        print "DELETING %d" % equivalencies.count()
         for e in equivalencies:
+            if e.strength == 0:
+                print "DELETING %r" % e
             self._db.delete(e)
-        
-        self.coverage.process_edition(self.identifier)
-
-        t2.commit()
-        new_identifier_ids = self.identifier.equivalent_identifier_ids(
-            levels=5, threshold=0)
-        new_identifiers = list(self._db.query(Identifier).filter(
-            Identifier.id.in_(new_identifier_ids)
-        ))
-        for edition in self.identifier.primarily_identifies:
-            if edition.work:
-                edition.work.calculate_presentation
-            print "-" * 80
-            print "AFTER"
-            self.explain(self._db, edition)
         t1.commit()
+
+        #print "AFTER DELETION:"
+        #edition.work.calculate_presentation()
+        #self.explain(self._db, edition)
+
+        self.coverage.process_edition(primary_identifier)
+
+        equivalent_ids = primary_identifier.equivalent_identifier_ids(
+            levels=6, threshold=0)
+        equivalencies = self._db.query(Equivalency).filter(
+            Equivalency.data_source == self.oclcld).filter(
+                Equivalency.input_id.in_(equivalent_ids),
+            )
+
+        for edition in primary_identifier.primarily_identifies:
+            if edition.work:
+                edition.work.calculate_presentation()
+            self.explain(self._db, edition)
+        print "I WOULD NOW EXPECT EVERYTHING TO BE FINE."
