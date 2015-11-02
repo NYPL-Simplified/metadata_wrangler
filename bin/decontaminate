@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+"""Gather Amazon reviews for ISBNs and ASINs."""
+import os
+import sys
+bin_dir = os.path.split(__file__)[0]
+package_dir = os.path.join(bin_dir, "..")
+sys.path.append(os.path.abspath(package_dir))
+
+from pdb import set_trace
+from core.model import (
+
+    production_session,
+    DataSource,
+    Identifier,
+    Work,
+    Edition,
+    Equivalency,
+)
+from scripts import RedoOCLC
+from core.scripts import Explain
+import csv
+import sys
+out = csv.writer(sys.stdout)
+
+seen_identifiers = set()
+
+fixer = RedoOCLC()
+_db = fixer._db
+
+def fix_contamination(edition, equivalents):
+    fixer.fix_identifier_with_equivalents(edition.primary_identifier, equivalents)
+
+def explain_contamination(edition):
+    id = edition.primary_identifier
+    if id in seen_identifiers:
+        return
+    seen_identifiers.add(id)
+    if edition.work:
+        audience = edition.work.audience
+    else:
+        audience = 'n/a'
+    out.writerow(["DATA", edition.primary_identifier.type, edition.primary_identifier.identifier, edition.title.encode("utf8"), edition.sort_author.encode("utf8"), audience])
+    #Explain.explain(_db, edition)
+
+def explain_eq(eq):
+    identifier = eq.input
+    ids = identifier.equivalent_identifier_ids(levels=6, threshold=0)
+
+    qu = _db.query(Identifier).filter(Identifier.id.in_(ids)).filter(
+        Identifier.type.in_([
+            Identifier.THREEM_ID, Identifier.OVERDRIVE_ID, Identifier.AXIS_360_ID, Identifier.GUTENBERG_ID
+        ])
+    )
+    contaminated = qu.all()
+    seen = set()
+    if contaminated:
+        for i in contaminated:
+            for edition in i.primarily_identifies:
+                if edition in seen:
+                    continue
+                seen.add(edition)
+                if edition.work:
+                    old_audience = edition.work.audience
+                #explain_contamination(edition)
+                fix_contamination(edition, ids)
+                if edition.work:
+                    new_audience = edition.work.audience
+                    print "DATA !@# Decontaminated edition %d (%s, %s, %s->%s)" % (edition.id, edition.title, edition.author, old_audience, new_audience)
+                else:
+                    print "DATA !@# Decontaminated edition %d (%s, %s, no work)" % (edition.id, edition.title, edition.author)
+
+contaminants = _db.query(Equivalency).filter(Equivalency.strength==0).order_by(Equivalency.id.asc())
+for contaminant in contaminants:
+    explain_eq(contaminant)
+    _db.commit()
+
+
