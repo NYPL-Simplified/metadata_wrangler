@@ -65,9 +65,10 @@ def explain_eq(eq):
                 fix_contamination(edition, ids)
                 if edition.work:
                     new_audience = edition.work.audience
-                    print "DATA !@# Decontaminated edition %d (%s, %s, %s->%s)" % (edition.id, edition.title, edition.author, old_audience, new_audience)
+                    output = "DATA !@# Decontaminated edition %d (%s, %s, %s->%s)" % (edition.id, edition.title, edition.author, old_audience, new_audience)
                 else:
-                    print "DATA !@# Decontaminated edition %d (%s, %s, no work)" % (edition.id, edition.title, edition.author)
+                    output = "DATA !@# Decontaminated edition %d (%s, %s, no work)" % (edition.id, edition.title, edition.author)
+                print output.encode("utf8")
 
 contaminants = _db.query(Equivalency).filter(Equivalency.strength==0).order_by(Equivalency.id.asc())
 for contaminant in contaminants:
