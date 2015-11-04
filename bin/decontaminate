@@ -74,5 +74,3 @@ contaminants = _db.query(Equivalency).filter(Equivalency.strength==0).order_by(E
 for contaminant in contaminants:
     explain_eq(contaminant)
     _db.commit()
-
-
