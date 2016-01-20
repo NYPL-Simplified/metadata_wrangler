@@ -74,7 +74,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("mark_twain.xml")
 
         viaf, display, family, sort, wikipedia = self.parser.parse(
-            xml, "Sam Clemens")
+            xml, working_display_name="Sam Clemens")
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
         eq_("Mark_Twain", wikipedia)
