@@ -74,7 +74,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("mark_twain.xml")
 
         viaf, display, family, sort, wikipedia = self.parser.parse(
-            xml, "Sam Clemens")
+            xml, working_display_name="Sam Clemens")
         eq_("50566653", viaf)
         eq_("Mark Twain", display)
         eq_("Mark_Twain", wikipedia)
@@ -109,17 +109,12 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
         contributor, new = self._contributor(name)
-        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(
+        viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(
             xml, working_sort_name=name)
-        # TODO: This is just broken. We need to make this work,
-        # preferably in a way that lets the (very similar) "Samuel
-        # Clemens" case also work.
 
-        # We can't find a VIAF number. The display name and family name
-        # are obtained through heuristics.
         eq_(None, viaf)
-        eq_("J. J. Howard", display_name)
-        eq_("Howard", family_name)
+        eq_(None, display_name)
+        eq_(None, family_name)
         eq_(None, wikipedia_name)
 
     def test_multiple_results_with_success(self):
