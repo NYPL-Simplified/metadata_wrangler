@@ -12,8 +12,6 @@ tinys3
 pyld
 beautifulsoup4
 feedparser
-scipy
-scikit-learn
 elasticsearch
 uwsgi
 python-dateutil
