@@ -20,6 +20,7 @@ before_install:
 
 install:
   - pip install -r requirements.txt
+  - python -m textblob.download_corpora
   - cp config.json.sample config.json
   - export SIMPLIFIED_CONFIGURATION_FILE="$TRAVIS_BUILD_DIR/config.json"
 
