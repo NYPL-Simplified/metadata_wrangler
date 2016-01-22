@@ -23,7 +23,6 @@ from core.scripts import (
     WorkProcessingScript,
     Script,
 )
-from amazon import AmazonCoverageProvider
 from gutenberg import (
     GutenbergBookshelfClient,
 )

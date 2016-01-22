@@ -57,13 +57,11 @@ from threem import (
     ThreeMCoverImageMirror,
 )
 
-from appeal import AppealCalculator
 from gutenberg import (
     OCLCClassifyMonitor,
     OCLCMonitorForGutenberg,
 )
 from content_cafe import ContentCafeAPI
-from amazon import AmazonCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
@@ -368,12 +366,9 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         self.image_scaler = ImageScaler(
             self._db, self.image_mirrors.values())
 
-        self.appeal_calculator = AppealCalculator(self._db, self.data_directory)
-
         self.oclc_threem = OCLCClassifyMonitor(self._db, DataSource.THREEM)
         self.oclc_gutenberg = OCLCMonitorForGutenberg(self._db)
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
-        self.amazon = AmazonCoverageProvider(self._db)
         self.viaf = VIAFClient(self._db)
 
     def work_query(self):
@@ -467,9 +462,6 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names())
-
-        # Calculate appeal. This will obtain Amazon reviews as a side effect.
-        # self.appeal_calculator.calculate_for_work(work)
 
         # Make sure we have the cover for all editions.
         for edition in work.editions:
