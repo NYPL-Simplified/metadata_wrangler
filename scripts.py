@@ -26,7 +26,6 @@ from core.scripts import (
 from gutenberg import (
     GutenbergBookshelfClient,
 )
-from appeal import AppealCalculator
 from viaf import VIAFClient
 from core.util.permanent_work_id import WorkIDCalculator
 
@@ -49,20 +48,6 @@ class GutenbergBookshelfMonitorScript(Script):
         db = self._db
         GutenbergBookshelfClient(db).full_update()
         db.commit()
-
-class WorkAppealCalculationScript(WorkProcessingScript):
-
-    def __init__(self, data_directory, *args, **kwargs):
-        super(WorkAppealCalculationScript, self).__init__(*args, **kwargs)
-        self.calculator = AppealCalculator(self.db, data_directory)
-
-    def query_hook(self, q):
-        if not self.force:
-            q = q.filter(Work.primary_appeal==None)        
-        return q
-
-    def process_work(self, work):
-        self.calculator.calculate_for_work(work)
 
 
 class WorkPresentationCalculationScript(WorkProcessingScript):
