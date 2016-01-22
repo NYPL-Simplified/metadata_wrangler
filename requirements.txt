@@ -9,11 +9,13 @@ flask
 textblob
 isbnlib
 tinys3
-pyld
-beautifulsoup4
 feedparser
 elasticsearch
 uwsgi
 python-dateutil
-suds
 loggly-python-handler
+
+# Used only by metadata
+pyld
+beautifulsoup4
+suds
