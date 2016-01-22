@@ -16,15 +16,12 @@ from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
 from threem import (
     ThreeMCoverImageMirror,
-)    
+)
 
 from core.scripts import (
     Explain,
     WorkProcessingScript,
     Script,
-)
-from gutenberg import (
-    GutenbergBookshelfClient,
 )
 from viaf import VIAFClient
 from core.util.permanent_work_id import WorkIDCalculator
@@ -39,15 +36,6 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
-
-class GutenbergBookshelfMonitorScript(Script):
-    """Gather subject classifications and popularity measurements from
-    Gutenberg's 'bookshelf' wiki.
-    """
-    def run(self):
-        db = self._db
-        GutenbergBookshelfClient(db).full_update()
-        db.commit()
 
 
 class WorkPresentationCalculationScript(WorkProcessingScript):
