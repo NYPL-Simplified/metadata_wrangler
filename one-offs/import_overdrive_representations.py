@@ -7,9 +7,6 @@ import time
 import datetime
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
-from integration.amazon import (
-    AmazonCoverageProvider,
-)
 from model import (
     production_session,
     DataSource,

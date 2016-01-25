@@ -10,11 +10,6 @@ import csv
 import datetime
 from collections import defaultdict
 
-from integration.appeal import (
-    ClassifierFactory,
-    FeatureCounter,
-    WakaDialect
-)
 from model import (
     CirculationEvent,
     DataSource,
