@@ -11,13 +11,6 @@ python:
 
 cache: pip
 
-git:
-  submodules: false
-
-before_install:
-  - echo -e "machine github.com\n  login simplified-bot\n  password $CI_USER_PASSWORD" >> ~/.netrc
-  - git submodule update --init --recursive
-
 install:
   - pip install -r requirements.txt
   - python -m textblob.download_corpora
