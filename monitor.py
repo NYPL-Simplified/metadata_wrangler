@@ -25,6 +25,7 @@ from core.overdrive import (
     OverdriveAPI,
     OverdriveBibliographicCoverageProvider,
 )
+from core.threem import ThreeMBibliographicCoverageProvider
 from core.opds_import import SimplifiedOPDSLookup
 from core.classifier import Classifier
 from core.monitor import (
@@ -52,11 +53,7 @@ from content_cafe import (
     ContentCafeAPI,
 )
 from overdrive import OverdriveCoverImageMirror
-from threem import (
-    ThreeMBibliographicMonitor,
-    ThreeMCoverImageMirror,
-)
-
+from threem import ThreeMCoverImageMirror
 from gutenberg import (
     OCLCClassifyMonitor,
     OCLCMonitorForGutenberg,
@@ -141,7 +138,7 @@ class IdentifierResolutionMonitor(Monitor):
         self.create_missing_unresolved_identifiers()
 
         self.overdrive_coverage_provider = OverdriveBibliographicCoverageProvider(self._db)
-        self.threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
+        self.threem_coverage_provider = ThreeMBibliographicCoverageProvider(self._db)
         self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
 
         providers_need_resolving = [
