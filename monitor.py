@@ -84,8 +84,6 @@ class IdentifierResolutionMonitor(Monitor):
         content_server_url = Configuration.integration_url(
             Configuration.CONTENT_SERVER_INTEGRATION, required=True)
         self.content_server = SimplifiedOPDSLookup(content_server_url)
-        self.overdrive = OverdriveAPI(self._db)
-        self.threem = ThreeMAPI(self._db)
 
     def create_missing_unresolved_identifiers(self):
         """Find any Identifiers that should have LicensePools but don't,
@@ -146,14 +144,12 @@ class IdentifierResolutionMonitor(Monitor):
         self.threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
         self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
 
-
         providers_need_resolving = [
                 (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
                 (DataSource.THREEM, None, self.resolve_through_coverage_provider, self.threem_coverage_provider, 25),
                 (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, self.overdrive_coverage_provider, 25),
                 (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_identifiers_through_coverage_provider, self.content_cafe_provider, 25),
         ]
-
 
         while providers_need_resolving:
             providers_need_resolving = self.run_through_providers_once(
@@ -167,10 +163,9 @@ class IdentifierResolutionMonitor(Monitor):
         needs_processing = or_(
             UnresolvedIdentifier.exception==None,
             UnresolvedIdentifier.most_recent_attempt < one_day_ago)
-
         new_providers = []
         for provider in providers:
-            (data_source_name, identifier_type, handler, arg, 
+            (data_source_name, identifier_type, handler, provider, 
              batch_size) = provider
             complete_server_failure = False
             data_source = DataSource.lookup(self._db, data_source_name)
@@ -181,7 +176,7 @@ class IdentifierResolutionMonitor(Monitor):
                 UnresolvedIdentifier.identifier).filter(
                     Identifier.type==identifier_type).filter(
                         needs_processing)
-            count = q.count()               
+            count = q.count()
             self.log.info(
                 "%d unresolved identifiers of type %s",
                 count, identifier_type
@@ -189,11 +184,11 @@ class IdentifierResolutionMonitor(Monitor):
             unresolved_identifiers = q.order_by(func.random()).limit(
                 batch_size).all()
             self.log.info(
-                "Handling %d unresolved identifiers of type %s.", 
+                "Handling %d unresolved identifiers of type %s.",
                 len(unresolved_identifiers), identifier_type
             )
             successes, failures = handler(
-                unresolved_identifiers, data_source, arg)
+                unresolved_identifiers, data_source, provider)
             if isinstance(successes, int):
                 # There was a problem getting any information at all from
                 # the server.
@@ -254,7 +249,6 @@ class IdentifierResolutionMonitor(Monitor):
         for edition in editions:
             identifier = edition.primary_identifier
             if identifier in tasks_by_identifier:
-                # TODO: may need to uncomment this.
                 edition.calculate_presentation()
                 edition.license_pool.calculate_work(even_if_no_author=True)
                 successes.append(tasks_by_identifier[identifier])
@@ -270,14 +264,14 @@ class IdentifierResolutionMonitor(Monitor):
                 # information. That's a server-side problem.
                 status_code == 500
             task = tasks_by_identifier[identifier]
-            task.status_code = status_code
+            task.status = status_code
             task.exception = exception
             failures.append(task)
             del tasks_by_identifier[identifier]
         # Anything left in tasks_by_identifier wasn't mentioned
         # by the content server
         for identifier, task in tasks_by_identifier.items():
-            task.status_code = 404
+            task.status = 404
             task.exception = "Not mentioned by content server."
             failures.append(task)
         return successes, failures
@@ -310,7 +304,7 @@ class IdentifierResolutionMonitor(Monitor):
                 )
                 successes.append(task)
             except Exception, e:
-                task.status_code = 500
+                task.status = 500
                 task.exception = traceback.format_exc()
                 failures.append(task)
                 self.log.error(
@@ -342,7 +336,7 @@ class IdentifierResolutionMonitor(Monitor):
             )
             return True
         except Exception, e:
-            task.status_code = 500
+            task.status = 500
             task.exception = traceback.format_exc()
             return False
 
@@ -355,16 +349,12 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
 
     def __init__(self, _db, force=False):
         super(MetadataPresentationReadyMonitor, self).__init__(_db, [])
-        self.data_directory = Configuration.data_directory()
         self.force = force
-
-        self.threem_image_mirror = ThreeMCoverImageMirror(self._db)
-        self.overdrive_image_mirror = OverdriveCoverImageMirror(self._db)
-        self.image_mirrors = { DataSource.THREEM : self.threem_image_mirror,
-                          DataSource.OVERDRIVE : self.overdrive_image_mirror }
-
-        self.image_scaler = ImageScaler(
-            self._db, self.image_mirrors.values())
+        self.image_mirrors = {
+                DataSource.THREEM : ThreeMCoverImageMirror(self._db),
+                DataSource.OVERDRIVE : OverdriveCoverImageMirror(self._db)
+        }
+        self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
 
         self.oclc_threem = OCLCClassifyMonitor(self._db, DataSource.THREEM)
         self.oclc_gutenberg = OCLCMonitorForGutenberg(self._db)

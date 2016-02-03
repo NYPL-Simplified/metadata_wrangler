@@ -50,17 +50,11 @@ class WorkPresentationCalculationScript(WorkProcessingScript):
             q = q.filter(Work.fiction==None).filter(Work.audience==None)
         return q
 
+
 class IdentifierResolutionScript(Script):
 
-
     def run(self):
-        content_server_url = Configuration.integration_url(
-            Configuration.CONTENT_SERVER_INTEGRATION, required=True)
-        content_server = SimplifiedOPDSLookup(content_server_url)
-        overdrive = OverdriveAPI(self._db)
-        threem = ThreeMAPI(self._db)
-        IdentifierResolutionMonitor(content_server, overdrive, threem).run(
-            self._db)
+        IdentifierResolutionMonitor(self._db).run(self._db)
 
 
 class CoverImageMirrorScript(Script):
