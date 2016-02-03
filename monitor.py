@@ -21,7 +21,10 @@ from fast import (
 
 from threem import ThreeMAPI
 from core.config import Configuration
-from core.overdrive import OverdriveAPI
+from core.overdrive import (
+    OverdriveAPI,
+    OverdriveBibliographicCoverageProvider,
+)
 from core.opds_import import SimplifiedOPDSLookup
 from core.classifier import Classifier
 from core.monitor import (
@@ -48,10 +51,7 @@ from content_cafe import (
     ContentCafeCoverageProvider,
     ContentCafeAPI,
 )
-from overdrive import (
-    OverdriveBibliographicMonitor,
-    OverdriveCoverImageMirror,
-)
+from overdrive import OverdriveCoverImageMirror
 from threem import (
     ThreeMBibliographicMonitor,
     ThreeMCoverImageMirror,
@@ -140,7 +140,7 @@ class IdentifierResolutionMonitor(Monitor):
     def run_once(self, start, cutoff):
         self.create_missing_unresolved_identifiers()
 
-        self.overdrive_coverage_provider = OverdriveBibliographicMonitor(self._db)
+        self.overdrive_coverage_provider = OverdriveBibliographicCoverageProvider(self._db)
         self.threem_coverage_provider = ThreeMBibliographicMonitor(self._db)
         self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
 
