@@ -51,12 +51,6 @@ class WorkPresentationCalculationScript(WorkProcessingScript):
         return q
 
 
-class IdentifierResolutionScript(Script):
-
-    def run(self):
-        IdentifierResolutionMonitor(self._db).run(self._db)
-
-
 class CoverImageMirrorScript(Script):
     """This is not needed in normal usage, but it's useful to have it
     around in case the covers get screwed up, or to do intial
