@@ -30,14 +30,14 @@ from core.util.summary import SummaryEvaluator
 class ContentCafeCoverageProvider(CoverageProvider):
     def __init__(self, _db):
         self._db = _db
+        self.input_identifier_types = [Identifier.ISBN]
+        self.output_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
         self.mirror = ContentCafeCoverImageMirror(self._db)
         self.content_cafe = ContentCafeAPI(self._db, self.mirror)
-        input_identifier_types = [Identifier.ISBN]
-        output_source = DataSource.CONTENT_CAFE
 
         super(ContentCafeCoverageProvider, self).__init__(
             "Content Cafe Coverage Provider",
-            input_identifier_types, output_source,
+            self.input_identifier_types, self.output_source,
             workset_size=25)
 
     def process_item(self, identifier):

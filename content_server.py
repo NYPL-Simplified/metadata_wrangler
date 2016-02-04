@@ -13,7 +13,7 @@ from core.coverage import (
 )
 
 class ContentServerException(Exception):
-    # Raised when the ContentServer can't connect
+    # Raised when the ContentServer can't connect or returns bad data
     pass
 
 class ContentServerCoverageProvider(CoverageProvider):
