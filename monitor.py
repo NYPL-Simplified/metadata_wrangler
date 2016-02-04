@@ -26,7 +26,6 @@ from core.overdrive import (
     OverdriveBibliographicCoverageProvider,
 )
 from core.threem import ThreeMBibliographicCoverageProvider
-from core.opds_import import SimplifiedOPDSLookup
 from core.classifier import Classifier
 from core.monitor import (
     Monitor,
@@ -45,11 +44,7 @@ from core.model import (
     UnresolvedIdentifier,
     Work,
 )
-from core.opds_import import DetailedOPDSImporter
-from core.coverage import (
-    CoverageProvider,
-    CoverageFailure,
-)
+from core.coverage import CoverageFailure
 
 from mirror import ImageScaler
 from content_cafe import (
@@ -63,7 +58,6 @@ from gutenberg import (
     OCLCClassifyMonitor,
     OCLCMonitorForGutenberg,
 )
-from content_cafe import ContentCafeAPI
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
@@ -73,9 +67,6 @@ class IdentifierResolutionMonitor(Monitor):
     Or (for ISBNs) just a bunch of Resources.
     """
 
-    LICENSE_SOURCE_RETURNED_ERROR = "Underlying license source returned error."
-    LICENSE_SOURCE_RETURNED_WRONG_CONTENT_TYPE = (
-        "Underlying license source served unhandlable media type (%s).")
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
@@ -83,9 +74,6 @@ class IdentifierResolutionMonitor(Monitor):
     def __init__(self, _db):
         super(IdentifierResolutionMonitor, self).__init__(
             _db, "Identifier Resolution Manager", interval_seconds=5)
-        content_server_url = Configuration.integration_url(
-            Configuration.CONTENT_SERVER_INTEGRATION, required=True)
-        self.content_server = SimplifiedOPDSLookup(content_server_url)
 
     def create_missing_unresolved_identifiers(self):
         """Find any Identifiers that should have LicensePools but don't,
