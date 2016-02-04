@@ -27,18 +27,23 @@ from core.util.summary import SummaryEvaluator
 class ContentCafeCoverageProvider(CoverageProvider):
     def __init__(self, _db):
         self._db = _db
-        self.input_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
-        self.output_source = self.input_source
         self.mirror = ContentCafeCoverImageMirror(self._db)
         self.content_cafe = ContentCafeAPI(self._db, self.mirror)
+        input_identifier_types = [Identifier.ISBN]
+        output_source = DataSource.CONTENT_CAFE
 
         super(ContentCafeCoverageProvider, self).__init__(
             "Content Cafe Coverage Provider",
-            self.input_source, self.output_source)
+            input_identifier_types, output_source,
+            workset_size=25)
 
-    def process_edition(self, identifier):
-        self.content_cafe.mirror_resources(identifier)
-        return True
+    def process_item(self, identifier):
+        try:
+            self.content_cafe.mirror_resources(identifier)
+            return identifier
+        except Exception as e:
+            return CoverageFailure(self, identifier, repr(e), transient=True)
+
 
 class ContentCafeCoverImageMirror(CoverImageMirror):
     """Downloads images from Content Cafe."""
