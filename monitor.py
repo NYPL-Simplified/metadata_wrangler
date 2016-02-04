@@ -248,6 +248,8 @@ class IdentifierResolutionMonitor(Monitor):
                     failures.append(failure)
                 else:
                     successes.append(unresolved_identifier)
+            except requests.exceptions.ConnectionError:
+                return 500, self.LICENSE_SOURCE_NOT_ACCESSIBLE
             except Exception as e:
                 failure = self.process_failure(
                     unresolved_identifier,
