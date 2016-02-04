@@ -56,6 +56,7 @@ from content_cafe import (
     ContentCafeCoverageProvider,
     ContentCafeAPI,
 )
+from content_server import CotentServerCoverageProvider
 from overdrive import OverdriveCoverImageMirror
 from threem import ThreeMCoverImageMirror
 from gutenberg import (
@@ -144,12 +145,13 @@ class IdentifierResolutionMonitor(Monitor):
         self.overdrive_coverage_provider = OverdriveBibliographicCoverageProvider(self._db)
         self.threem_coverage_provider = ThreeMBibliographicCoverageProvider(self._db)
         self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
+        self.oa_content_server = ContentServerCoverageProvider(self._db)
 
         providers_need_resolving = [
-                (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
-                (DataSource.THREEM, None, self.resolve_through_coverage_provider, self.threem_coverage_provider, 25),
-                (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, self.overdrive_coverage_provider, 25),
-                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_through_coverage_provider, self.content_cafe_provider, 25),
+                (DataSource.GUTENBERG, None, self.oa_content_server, 10),
+                (DataSource.THREEM, None, self.threem_coverage_provider, 25),
+                (DataSource.OVERDRIVE, None, self.overdrive_coverage_provider, 25),
+                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.content_cafe_provider, 25),
         ]
 
         while providers_need_resolving:
@@ -166,7 +168,7 @@ class IdentifierResolutionMonitor(Monitor):
             UnresolvedIdentifier.most_recent_attempt < one_day_ago)
         new_providers = []
         for provider in providers:
-            (data_source_name, identifier_type, handler, provider, 
+            (data_source_name, identifier_type, provider,
              batch_size) = provider
             complete_server_failure = False
             data_source = DataSource.lookup(self._db, data_source_name)
@@ -188,7 +190,7 @@ class IdentifierResolutionMonitor(Monitor):
                 "Handling %d unresolved identifiers of type %s.",
                 len(unresolved_identifiers), identifier_type
             )
-            successes, failures = handler(
+            successes, failures = self.resolve_through_coverage_provider(
                 unresolved_identifiers, data_source, provider)
             if isinstance(successes, int):
                 # There was a problem getting any information at all from
@@ -223,59 +225,6 @@ class IdentifierResolutionMonitor(Monitor):
                 # Theres' more work to be done.
                 new_providers.append(provider)
         return new_providers
-
-    def resolve_content_server(self, batch, data_source, ignore):
-        successes = []
-        failures = []
-        tasks_by_identifier = dict()
-        for task in batch:
-            tasks_by_identifier[task.identifier] = task
-        try:
-            identifiers = [x.identifier for x in batch]
-            response = self.content_server.lookup(identifiers)
-        except requests.exceptions.ConnectionError:
-            return 500, self.LICENSE_SOURCE_NOT_ACCESSIBLE
-
-        if response.status_code != 200:
-            return response.status_code, self.LICENSE_SOURCE_RETURNED_ERROR
-
-        content_type = response.headers['content-type']
-        if not content_type.startswith("application/atom+xml"):
-            return 500, self.LICENSE_SOURCE_RETURNED_WRONG_CONTENT_TYPE % (
-                content_type)
-
-        # We got an OPDS feed. Import it.
-        importer = DetailedOPDSImporter(self._db, response.text)
-        editions, messages = importer.import_from_feed()
-        for edition in editions:
-            identifier = edition.primary_identifier
-            if identifier in tasks_by_identifier:
-                edition.calculate_presentation()
-                edition.license_pool.calculate_work(even_if_no_author=True)
-                successes.append(tasks_by_identifier[identifier])
-                del tasks_by_identifier[identifier]
-        for identifier, (status_code, exception) in messages.items():
-            if identifier not in tasks_by_identifier:
-                # The server sent us a message about an identifier we
-                # didn't ask for. No thanks.
-                continue
-            if status_code / 100 == 2:
-                # The server sent us a 2xx status code for this
-                # identifier but didn't actually give us any
-                # information. That's a server-side problem.
-                status_code == 500
-            task = tasks_by_identifier[identifier]
-            task.status = status_code
-            task.exception = exception
-            failures.append(task)
-            del tasks_by_identifier[identifier]
-        # Anything left in tasks_by_identifier wasn't mentioned
-        # by the content server
-        for identifier, task in tasks_by_identifier.items():
-            task.status = 404
-            task.exception = "Not mentioned by content server."
-            failures.append(task)
-        return successes, failures
 
     def resolve_through_coverage_provider(
             self, batch, data_source, coverage_provider):
