@@ -9,7 +9,10 @@ from suds.client import Client as SudsClient
 
 from sqlalchemy import and_
 from core.config import Configuration
-from core.coverage import CoverageProvider
+from core.coverage import (
+    CoverageProvider,
+    CoverageFailure,
+)
 from core.model import (
     DataSource,
     Hyperlink,

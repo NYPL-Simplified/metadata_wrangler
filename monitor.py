@@ -46,6 +46,10 @@ from core.model import (
     Work,
 )
 from core.opds_import import DetailedOPDSImporter
+from core.coverage import (
+    CoverageProvider,
+    CoverageFailure,
+)
 
 from mirror import ImageScaler
 from content_cafe import (
