@@ -145,7 +145,7 @@ class IdentifierResolutionMonitor(Monitor):
                 (DataSource.GUTENBERG, None, self.resolve_content_server, None, 10),
                 (DataSource.THREEM, None, self.resolve_through_coverage_provider, self.threem_coverage_provider, 25),
                 (DataSource.OVERDRIVE, None, self.resolve_through_coverage_provider, self.overdrive_coverage_provider, 25),
-                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_identifiers_through_coverage_provider, self.content_cafe_provider, 25),
+                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.resolve_through_coverage_provider, self.content_cafe_provider, 25),
         ]
 
         while providers_need_resolving:
@@ -277,65 +277,41 @@ class IdentifierResolutionMonitor(Monitor):
             self, batch, data_source, coverage_provider):
         successes = []
         failures = []
-        for task in batch:
-            if self.resolve_one_through_coverage_provider(
-                task, data_source, coverage_provider):
-                successes.append(task)
-            else:
-                failures.append(task)
-        return successes, failures
-
-    def resolve_identifiers_through_coverage_provider(
-            self, batch, data_source, coverage_provider):
-        successes = []
-        failures = []
-        for task in batch:
-            identifier = task.identifier
+        for unresolved_identifier in batch:
+            identifier = unresolved_identifier.identifier
             start = datetime.datetime.now()
             try:
-                coverage_provider.ensure_coverage(identifier, force=True)
+                record = coverage_provider.ensure_coverage(identifier, force=True)
                 after_coverage = datetime.datetime.now()
                 self.log.debug(
                     "Ensure coverage ran in %.2fs.",
                     (after_coverage-start).seconds
                 )
-                successes.append(task)
-            except Exception, e:
-                task.status = 500
-                task.exception = traceback.format_exc()
-                failures.append(task)
-                self.log.error(
-                    "FAILURE on %s: %r", task.identifier, e,
-                    exc_info=e
+                if isinstance(record, CoverageFailure):
+                    failure = self.process_failure(
+                        unresolved_identifier,
+                        record.exception
+                    )
+                    failures.append(failure)
+                else:
+                    successes.append(unresolved_identifier)
+            except Exception as e:
+                failure = self.process_failure(
+                    unresolved_identifier,
+                    traceback.format_exc()
                 )
+                failures.append(failure)
         return successes, failures
 
-    def resolve_one_through_coverage_provider(
-            self, task, data_source, coverage_provider):
-        edition, is_new = Edition.for_foreign_id(
-            self._db, data_source, task.identifier.type, task.identifier.identifier)
-        license_pool, pool_is_new = LicensePool.for_foreign_id(
-            self._db, data_source, task.identifier.type, task.identifier.identifier)
-        start = datetime.datetime.now()
-        try:
-            coverage_provider.ensure_coverage(edition, force=True)
-            after_coverage = datetime.datetime.now()
-            edition.calculate_presentation()
-            after_calculate_presentation = datetime.datetime.now()
-            edition.license_pool.calculate_work(even_if_no_author=True)
-            after_calculate_work = datetime.datetime.now()
-            e1 = (after_coverage-start).seconds
-            e2 = (after_calculate_presentation-after_coverage).seconds
-            e3 = (after_calculate_work-after_calculate_presentation).seconds
-            self.log.debug(
-                "Ensure coverage ran in %.2fs. Calculate presentation ran in %.2fs. Calculate work ran in %.2fs.", 
-                e1, e2, e3
-            )
-            return True
-        except Exception, e:
-            task.status = 500
-            task.exception = traceback.format_exc()
-            return False
+    def process_failure(self, unresolved_identifier, exception):
+        unresolved_identifier.status = 500
+        unresolved_identifier.exception = exception
+        self.log.error(
+            "FAILURE on %s: %s",
+            unresolved_identifier.identifier, exception
+        )
+        return unresolved_identifier
+
 
 class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
     """Make works presentation ready.
