@@ -3,11 +3,7 @@ import collections
 import datetime
 import json
 import logging
-import md5
-import os
-import pprint
 import re
-import time
 import urllib
 
 import isbnlib
@@ -24,16 +20,13 @@ from core.coverage import (
 )
 from core.model import (
     Contributor,
-    get_one,
     get_one_or_create,
     Hyperlink,
     Identifier,
     Edition,
     DataSource,
-    Hyperlink,
     Measurement,
     Representation,
-    Resource,
     Subject,
 )
 from core.util import MetadataSimilarity
@@ -83,7 +76,7 @@ class ldq(object):
         if isinstance(vs, dict) and '@value' in vs:
             yield vs['@value']
             return
-            
+
         for v in vs:
             if isinstance(v, basestring):
                 yield v
@@ -155,7 +148,7 @@ class OCLCLinkedData(object):
         if cached and not representation.content:
             representation, cached = Representation.get(
                 self._db, url, max_age=0)
-            
+
         if not representation.content:
             return None, False
         doc = {
@@ -220,7 +213,8 @@ class OCLCLinkedData(object):
         for book in cls.books(graph):
             values = book.get(field_name, [])
             for creator_uri in ldq.values(
-                ldq.restrict_to_language(values, 'en')):
+                ldq.restrict_to_language(values, 'en')
+            ):
                 internal_results = cls.internal_lookup(graph, creator_uri)
                 if internal_results:
                     for obj in internal_results:
@@ -230,7 +224,7 @@ class OCLCLinkedData(object):
                 else:
                     uris.append(creator_uri)
         return names, uris
-               
+
     @classmethod
     def graph(cls, raw_data):
         if not raw_data or not raw_data['document']:
@@ -388,7 +382,7 @@ class OCLCLinkedData(object):
                     use_type = Subject.TAG
                     break
                 # print "", type_id, result
-                    
+
             if use_type:
                 for value in ldq.values(name):
                     subjects[use_type].add(value)
@@ -418,7 +412,7 @@ class OCLCClassifyAPI(object):
                 v = v.encode("utf8")
             args[k] = v
         return urllib.urlencode(sorted(args.items()))
-       
+
     def lookup_by(self, **kwargs):
         """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
@@ -457,7 +451,7 @@ class OCLCXMLParser(XMLParser):
 
         workset_record = None
         editions = []
-        edition_records = [] 
+        edition_records = []
 
         if representation_type == cls.UNEXPECTED_ERROR_STATUS:
             raise IOError("Unexpected error from OCLC API: %s" % xml)
@@ -470,7 +464,7 @@ class OCLCXMLParser(XMLParser):
         # The real action happens here.
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
             authors_tag = cls._xpath1(tree, "//oclc:authors")
-            
+
             work_tag = cls._xpath1(tree, "//oclc:work")
             if work_tag is not None:
                 author_string = work_tag.get('author')
@@ -547,7 +541,7 @@ class OCLCXMLParser(XMLParser):
                     primary_author=primary_author)
                 if contributor:
                     results.append(contributor)
-        
+
         return results
 
     @classmethod
@@ -559,7 +553,7 @@ class OCLCXMLParser(XMLParser):
         )
 
     @classmethod
-    def _parse_single_author(cls, _db, author, 
+    def _parse_single_author(cls, _db, author,
                              lc=None, viaf=None,
                              existing_authors=[],
                              default_role=Contributor.AUTHOR_ROLE,
@@ -579,7 +573,7 @@ class OCLCXMLParser(XMLParser):
         else:
             roles = []
 
-        # Author string now looks like 
+        # Author string now looks like
         # "Giles, Lionel, 1875-1958"
         m = cls.LIFESPAN.search(author)
         kwargs = dict()
@@ -675,7 +669,7 @@ class OCLCXMLParser(XMLParser):
         authors = []
         if not author_string:
             return authors
-        for author in author_string.split("|"):            
+        for author in author_string.split("|"):
             author, roles, default_role_used = cls._parse_single_author(
                 _db, author, existing_authors=existing_authors,
                 default_role=default_role,
@@ -720,7 +714,7 @@ class OCLCXMLParser(XMLParser):
             if similarity < threshold:
                 # The title of the book under consideration is not
                 # similar enough to the given title.
-                cls.log.debug( 
+                cls.log.debug(
                     "FAILURE TO RESEMBLE: %s vs %s (%.2f)",
                     title, must_resemble_title, similarity
                 )
@@ -810,7 +804,7 @@ class OCLCXMLParser(XMLParser):
             raise ValueError("Work has no owi")
 
         item_type = work_tag.get("itemtype")
-        if (item_type.startswith('itemtype-book') 
+        if (item_type.startswith('itemtype-book')
             or item_type.startswith('itemtype-compfile')):
             medium = Edition.BOOK_MEDIUM
         elif item_type.startswith('itemtype-audiobook') or item_type.startswith('itemtype-music'):
@@ -848,7 +842,7 @@ class OCLCXMLParser(XMLParser):
             _db, Identifier.OCLC_WORK, oclc_work_id
         )
 
-        data_source=DataSource.lookup(_db, DataSource.OCLC)
+        data_source = DataSource.lookup(_db, DataSource.OCLC)
         identifier.add_measurement(data_source, Measurement.HOLDINGS, holdings)
         identifier.add_measurement(
             data_source, Measurement.PUBLISHED_EDITIONS, editions)
@@ -962,17 +956,18 @@ class LinkedDataURLLister:
 
     See scripts/generate_oclcld_url_list for why this is useful.
     """
-    def __init__(self, db, data_directory, output_file):
-        self.db = db
+    def __init__(self, _db, data_directory, output_file):
+        self._db = _db
         self.data_directory = data_directory
         self.output_file = output_file
-        self.oclc = OCLCLinkedData(db)
+        self.oclc = OCLCLinkedData(self._db)
 
     def run(self):
         a = 0
         with open(self.output_file, "w") as output:
-            for wi in self.db.query(Identifier).filter(
-                    Identifier.type==Identifier.OCLC_WORK).yield_per(100):
+            for wi in self._db.query(Identifier).filter(
+                    Identifier.type == Identifier.OCLC_WORK
+                ).yield_per(100):
                 data, cached = self.oclc.lookup(wi)
                 graph = self.oclc.graph(data)
                 examples = self.oclc.extract_workexamples(graph)
@@ -1194,7 +1189,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         'ebooks',
         ])
 
-    # These tags indicate that the record as a whole is useless 
+    # These tags indicate that the record as a whole is useless
     # for our purposes.
     #
     # However, they are not reliably assigned to records that are
@@ -1235,7 +1230,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     type_objs.append(this_type_obj)
                 elif isinstance(this_type_obj, basestring):
                     type_objs.append({"@id": this_type_obj})
-        types = [i['@id'] for i in type_objs if 
+        types = [i['@id'] for i in type_objs if
                  i['@id'] not in self.UNUSED_TYPES]
         if not types:
             # This book is not available in any format we're
@@ -1303,7 +1298,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # ISBN on there, it's probably wrong. Unless someone stuck a
         # description on there, there's no point in discussing
         # OCLC+LD's view of a Project Gutenberg work.
-        if ('Project Gutenberg' in publisher_names and not descriptions):
+        if 'Project Gutenberg' in publisher_names and not descriptions:
             return None
 
         creator_viafs = []
