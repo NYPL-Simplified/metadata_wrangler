@@ -467,7 +467,6 @@ class OCLCXMLParser(XMLParser):
             raise IOError("Got single-work summary from OCLC despite requesting detail: %s" % xml)
 
         # The real action happens here.
-
         if representation_type == cls.SINGLE_WORK_DETAIL_STATUS:
             authors_tag = cls._xpath1(tree, "//oclc:authors")
             
@@ -494,21 +493,6 @@ class OCLCXMLParser(XMLParser):
                 # succeed either.
                 return representation_type, records
 
-            # data_source = DataSource.lookup(_db, DataSource.OCLC)
-            # for edition_tag in cls._xpath(work_tag, '//oclc:edition'):
-            #     edition_record, ignore = cls.extract_edition_record(
-            #         _db, edition_tag, existing_authors, **restrictions)
-            #     if not edition_record:
-            #         # This edition did not become a Edition because it
-            #         # didn't meet one of the restrictions.
-            #         continue
-            #     records.append(edition_record)
-            #     # Identify the edition with the work based on its
-            #     # primary identifier.
-            #     edition.primary_identifier.equivalent_to(
-            #         data_source, edition_record.primary_identifier)
-            #     edition_record.primary_identifier.equivalent_to(
-            #         data_source, edition.primary_identifier)
         elif representation_type == cls.MULTI_WORK_STATUS:
             # The representation lists a set of works that match the
             # search query.
