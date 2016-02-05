@@ -327,7 +327,6 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         explaining why that's not possible.
         """
         did_oclc_lookup = False
-        oclc = LinkedDataCoverageProvider(self._db, processed_uris=set())
 
         for edition in work.editions:
             accepted_data_sources = [DataSource.GUTENBERG, DataSource.THREEM]
@@ -345,13 +344,13 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
             # For a given edition, it's a waste of time to process a
             # given document from OCLC Linked Data more than once.
             for o in oclc_ids:
-                oclc.ensure_coverage(o)
+                self.oclc_linked_data.ensure_coverage(o)
 
         # OCLC Linked Data on all ISBNs.
         equivalent_identifiers = primary_edition.equivalent_identifiers(
             type=[Identifier.ISBN])
         for identifier in equivalent_identifiers:
-            oclc.ensure_coverage(identifier)
+            self.oclc_linked_data.ensure_coverage(identifier)
 
         # VIAF on all contributors.
         for edition in work.editions:

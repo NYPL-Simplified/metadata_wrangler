@@ -20,6 +20,7 @@ from core.util.xmlparser import (
 )
 from core.coverage import (
     CoverageProvider,
+    CoverageFailure,
 )
 from core.model import (
     Contributor,
@@ -109,7 +110,7 @@ class OCLCLinkedData(object):
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         self.log = logging.getLogger("OCLC Linked Data Client")
 
-    def lookup(self, identifier_or_uri, processed_uris):
+    def lookup(self, identifier_or_uri, processed_uris=set()):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
@@ -989,9 +990,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
     This (maybe) associates a edition with a (potentially) large
     number of ISBNs, which can be used as input into other services.
     """
-
-    SERVICE_NAME = "OCLC Linked Data from OCLC Classify"
-
     # We want to present metadata about a book independent of its
     # format, and metadata from audio books usually contains
     # information about the format.
@@ -1025,74 +1023,58 @@ class LinkedDataCoverageProvider(CoverageProvider):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
-    def __init__(self, _db, services=None, processed_uris=None):
-        self.oclc = OCLCLinkedData(_db)
-        self.db = _db
-        self.oclc_linked_data = DataSource.lookup(
-            _db, DataSource.OCLC_LINKED_DATA)
-        if not services:
-            services = [DataSource.OCLC, DataSource.OVERDRIVE, DataSource.THREEM]
-        services = [DataSource.lookup(self.db, x) for x in services]
-        self.replace_processed_uris = False
-        if processed_uris is None:
-            self.replace_processed_uris = True
-        else:
-            self.processed_uris = processed_uris
+    def __init__(self, _db):
+        self._db = _db
+        self.api = OCLCLinkedData(self._db)
+        self.output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
+        input_identifier_types = [
+            Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
+            Identifier.OVERDRIVE_ID, Identifier.THREEM_ID
+        ]
         super(LinkedDataCoverageProvider, self).__init__(
-            self.SERVICE_NAME,
-            services,
-            self.oclc_linked_data,
-            workset_size=10)
+            "OCLC Linked Data Coverage Provider", input_identifier_types,
+            self.output_source, workset_size=10
+        )
 
-    def process_edition(self, edition):
-        if self.replace_processed_uris:
-            self.log.debug("Clearing out processed URIs.")
-            self.processed_uris = set()
-        else:
-            self.log.debug(
-                "Currently %d processed URIs.", len(self.processed_uris)
-            )
-            pass
+    def process_item(self, identifier):
+        edition = self.edition(identifier)
+        if isinstance(edition, CoverageFailure):
+            return edition
 
-        if isinstance(edition, Identifier):
-            identifier = edition
-            title = "[unknown]"
-        else:
-            identifier = edition.primary_identifier
-            title = edition.title
         try:
-            new_records = 0
-            new_isbns = 0
-            new_descriptions = 0
-            new_subjects = 0
-            self.log.info("Processing edition %s/%s", title, identifier)
-            editions = 0
+            # Create counters.
+            new_editions = new_isbns = new_descriptions = new_subjects = 0
+            self.log.info("Processing identifier %r", identifier)
+
             for edition in self.info_for(identifier):
                 edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
                 if edition:
-                    new_records += 1
+                    new_editions += 1
                     self.log.info(
                         edition.publisher, len(isbns), len(descriptions)
                     )
                 new_isbns += len(isbns)
                 for isbn in isbns:
-                    self.log.debug("NEW ISBN: %s", isbn)
+                    self.log.info("NEW ISBN: %s", isbn)
                 new_descriptions += len(descriptions)
                 new_subjects += len(subjects)
 
             self.log.info(
                 "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
-                editions, new_isbns, new_descriptions, new_subjects
+                new_editions, new_isbns, new_descriptions, new_subjects
             )
-        except IOError, e:
+        except IOError as e:
             if ", but couldn't find location" in e.message:
-                # OCLC doesn't know about an ISBN.
-                return True
-            return False
-        return True
+                exception = "OCLC doesn't know about this ISBN: %r" % e
+                return CoverageFailure(
+                    self, identifier, exception, transient=False
+                )
+            exception = "OCLC raised an error: %r" % e
+            return CoverageFailure(self, identifier, exception, transient=True)
+        return identifier
 
     def process_oclc_edition(self, original_identifier, edition):
-        self.log.debug(
+        self.log.info(
             "Processing edition %s: %r", edition.get('oclc_id'),
             edition.get('titles')
         )
@@ -1117,7 +1099,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 pass
 
         oclc_number, new = Identifier.for_foreign_id(
-            self.db, edition['oclc_id_type'],
+            self._db, edition['oclc_id_type'],
             edition['oclc_id'])
 
         # Associate classifications with the OCLC number.
@@ -1125,7 +1107,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         for subject_type, subject_ids in edition['subjects'].items():
             for subject_id in subject_ids:
                 new_class = oclc_number.classify(
-                    self.oclc_linked_data, subject_type, subject_id)
+                    self.output_source, subject_type, subject_id)
                 classifications.append(new_class)
 
         # Create new ISBNs associated with the OCLC
@@ -1134,7 +1116,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         new_isbns_for_this_oclc_number = []
         for isbn in edition['isbns']:
             isbn_identifier, new = Identifier.for_foreign_id(
-                self.db, Identifier.ISBN, isbn)
+                self._db, Identifier.ISBN, isbn)
             if new:
                 new_isbns_for_this_oclc_number.append(isbn_identifier)
 
@@ -1169,13 +1151,13 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         if strength > 0:
             original_identifier.equivalent_to(
-                self.oclc_linked_data, oclc_number, strength)
+                self.output_source, oclc_number, strength)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
         for isbn_identifier in new_isbns_for_this_oclc_number:
             oclc_number.equivalent_to(
-                self.oclc_linked_data, isbn_identifier, 1)
+                self.output_source, isbn_identifier, 1)
 
         # Create a description resource for every description.  When
         # there's more than one description for a given edition, only
@@ -1186,20 +1168,20 @@ class LinkedDataCoverageProvider(CoverageProvider):
         description_resources = []
         for description in edition['descriptions']:
             uri = Hyperlink.generic_uri(
-                self.oclc_linked_data, original_identifier, 
+                self.output_source, original_identifier,
                 Hyperlink.DESCRIPTION, description)
             description_resource, new = oclc_number.add_link(
-                Hyperlink.DESCRIPTION, uri, self.oclc_linked_data,
+                Hyperlink.DESCRIPTION, uri, self.output_source,
                 content=description)
             description_resources.append(description_resource)
 
         ld_wr = None
         return ld_wr, new_isbns_for_this_oclc_number, description_resources, classifications
 
-    def info_for(self, work_identifier):
-        for data in self.graphs_for(work_identifier):
-            subgraph = self.oclc.graph(data)
-            for book in self.oclc.books(subgraph):
+    def info_for(self, identifier):
+        for data in self.graphs_for(identifier):
+            subgraph = self.api.graph(data)
+            for book in self.api.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
                     yield info
@@ -1350,12 +1332,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
         work_data = None
         if identifier.type in OCLCLinkedData.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
-                work_data = list(self.oclc.oclc_works_for_isbn(identifier, self.processed_uris))
+                work_data = list(self.api.oclc_works_for_isbn(identifier))
             elif identifier.type == Identifier.OCLC_WORK:
-                work_data, cached = self.oclc.lookup(identifier, self.processed_uris)
+                work_data, cached = self.api.lookup(identifier)
             else:
                 # Look up and yield a single edition.
-                edition_data, cached = self.oclc.lookup(identifier, self.processed_uris)
+                edition_data, cached = self.api.lookup(identifier)
                 yield edition_data
                 work_data = None
 
@@ -1370,11 +1352,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     self.log.debug(
                         "Handling work graph %s", data.get('documentUrl')
                     )
-                    graph = self.oclc.graph(data)
-                    examples = self.oclc.extract_workexamples(graph)
+                    graph = self.api.graph(data)
+                    examples = self.api.extract_workexamples(graph)
                     for uri in examples:
                         self.log.debug("Found example URI %s", uri)
-                        data, cached = self.oclc.lookup(uri, self.processed_uris)
+                        data, cached = self.api.lookup(uri)
                         yield data
 
         else:
