@@ -271,8 +271,7 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         }
         self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
 
-        self.oclc_threem = OCLCClassifyCoverageProvider(self._db, DataSource.THREEM)
-        self.oclc_gutenberg = OCLCClassifyCoverageProvider(self._db, DataSource.GUTENBERG)
+        self.oclc_classify = OCLCClassifyCoverageProvider(self._db)
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
         self.viaf = VIAFClient(self._db)
 
@@ -331,18 +330,12 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         oclc = LinkedDataCoverageProvider(self._db, processed_uris=set())
 
         for edition in work.editions:
+            accepted_data_sources = [DataSource.GUTENBERG, DataSource.THREEM]
             # OCLC Lookup on all Gutenberg editions.
-            if edition.data_source.name==DataSource.GUTENBERG:
-                if not self.oclc_gutenberg.ensure_coverage(edition):
-                    # It's not a deal-breaker if we can't get OCLC
-                    # coverage on an edition.
-                    pass
-                did_oclc_lookup = True
-            elif edition.data_source.name==DataSource.THREEM:
-                if not self.oclc_threem.ensure_coverage(edition):
-                    # It's not a deal-breaker if we can't get OCLC
-                    # coverage on an edition.
-                    pass
+            if edition.data_source.name in accepted_data_sources:
+                # CoverageFailure's aren't being captured because it's not a
+                # deal-breaker if we can't get OCLC coverage on an edition.
+                self.oclc_classify.ensure_coverage(edition):
                 did_oclc_lookup = True
 
         primary_edition = work.primary_edition
