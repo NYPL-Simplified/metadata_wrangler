@@ -1,40 +1,12 @@
-import datetime
-import json
-import os
-import random
-import logging
 import re
-import requests
-import shutil
-from StringIO import StringIO
-import tarfile
-import time
-from urlparse import urljoin, urlparse
-
-from bs4 import BeautifulSoup
-
 from nose.tools import set_trace
 
 from core.coverage import CoverageProvider
-from core.model import (
-    get_one_or_create,
-    Contributor,
-    Edition,
-    DataSource,
-    Measurement,
-    Representation,
-    Resource,
-    Identifier,
-    LicensePool,
-    Subject,
-)
-
-from core.monitor import Monitor
+from core.model import DataSource
 from oclc import (
     OCLCClassifyAPI,
     OCLCXMLParser,
 )
-from core.util import LanguageCodes
 
 class OCLCClassifyCoverageProvider(CoverageProvider):
     """Does title/author lookups using OCLC Classify."""
@@ -53,7 +25,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         self.oclc_classify = OCLCClassifyAPI(self._db)
         input_source = DataSource.lookup(self._db, input_source_name)
         output_source = DataSource.lookup(self._db, DataSource.OCLC)
-        super(OCLCClassifyMonitor, self).__init__(
+        super(OCLCClassifyCoverageProvider, self).__init__(
             "OCLC Classify Monitor for %s" % input_source.name,
             input_source, output_source)
 
