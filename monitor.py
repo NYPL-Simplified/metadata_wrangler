@@ -54,10 +54,7 @@ from content_cafe import (
 from content_server import CotentServerCoverageProvider
 from overdrive import OverdriveCoverImageMirror
 from threem import ThreeMCoverImageMirror
-from gutenberg import (
-    OCLCClassifyMonitor,
-    OCLCMonitorForGutenberg,
-)
+from gutenberg import OCLCClassifyCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
@@ -274,8 +271,8 @@ class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
         }
         self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
 
-        self.oclc_threem = OCLCClassifyMonitor(self._db, DataSource.THREEM)
-        self.oclc_gutenberg = OCLCMonitorForGutenberg(self._db)
+        self.oclc_threem = OCLCClassifyCoverageProvider(self._db, DataSource.THREEM)
+        self.oclc_gutenberg = OCLCClassifyCoverageProvider(self._db, DataSource.GUTENBERG)
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
         self.viaf = VIAFClient(self._db)
 

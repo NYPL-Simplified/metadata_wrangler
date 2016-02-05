@@ -36,8 +36,7 @@ from oclc import (
 )
 from core.util import LanguageCodes
 
-class OCLCClassifyMonitor(CoverageProvider):
-
+class OCLCClassifyCoverageProvider(CoverageProvider):
     """Does title/author lookups using OCLC Classify."""
 
     # Strips most non-alphanumerics from the title.
@@ -163,11 +162,3 @@ class OCLCClassifyMonitor(CoverageProvider):
 
         self.log.info("Created %s records(s).", len(records))
         return True
-
-class OCLCMonitorForGutenberg(OCLCClassifyMonitor):
-
-    """Track OCLC's opinions about books with the same title/author as 
-    Gutenberg works."""
-
-    def __init__(self, _db):
-        super(OCLCMonitorForGutenberg, self).__init__(_db, DataSource.GUTENBERG)
