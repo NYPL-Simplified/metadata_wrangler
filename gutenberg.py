@@ -27,15 +27,16 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
 
     def __init__(self, _db):
-        self._db = _db
-        self.api = OCLCClassifyAPI(self._db)
         input_identifier_types = [
             Identifier.THREEM_ID, Identifier.GUTENBERG_ID, Identifier.URI
         ]
-        output_source = DataSource.lookup(self._db, DataSource.OCLC)
+        output_source = DataSource.lookup(_db, DataSource.OCLC)
         super(OCLCClassifyCoverageProvider, self).__init__(
             "OCLC Classify Coverage Provider", input_identifier_types,
             output_source)
+
+        self._db = _db
+        self.api = OCLCClassifyAPI(self._db)
 
     def oclc_safe_title(self, title):
         return self.NON_TITLE_SAFE.sub("", title)
