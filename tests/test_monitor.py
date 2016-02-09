@@ -1,7 +1,7 @@
 from nose.tools import set_trace, eq_
 from . import DatabaseTest
 from ..monitor import IdentifierResolutionMonitor
-from core.model import (
+from ..core.model import (
     Equivalency,
     DataSource,
 )
