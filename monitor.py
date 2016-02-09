@@ -72,6 +72,15 @@ class IdentifierResolutionMonitor(Monitor):
         super(IdentifierResolutionMonitor, self).__init__(
             _db, "Identifier Resolution Manager", interval_seconds=5)
 
+        self.viaf = VIAFClient(self._db)
+        self.image_mirrors = {
+            DataSource.THREEM : ThreeMCoverImageMirror(self._db),
+            DataSource.OVERDRIVE : OverdriveCoverImageMirror(self._db)
+        }
+        self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
+        self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
+
+
     def create_missing_unresolved_identifiers(self):
         """Find any Identifiers that should have LicensePools but don't,
         and also don't have an UnresolvedIdentifier record.
@@ -122,128 +131,153 @@ class IdentifierResolutionMonitor(Monitor):
                 self.log.info(msg, count)
                 for i in q:
                     UnresolvedIdentifier.register(self._db, i, force=force)
-        
 
-    def run_once(self, start, cutoff):
-        self.create_missing_unresolved_identifiers()
-
-        self.overdrive_coverage_provider = OverdriveBibliographicCoverageProvider(self._db)
-        self.threem_coverage_provider = ThreeMBibliographicCoverageProvider(self._db)
-        self.content_cafe_provider = ContentCafeCoverageProvider(self._db)
-        self.oa_content_server = ContentServerCoverageProvider(self._db)
-
-        providers_need_resolving = [
-                (DataSource.GUTENBERG, None, self.oa_content_server, 10),
-                (DataSource.THREEM, None, self.threem_coverage_provider, 25),
-                (DataSource.OVERDRIVE, None, self.overdrive_coverage_provider, 25),
-                (DataSource.CONTENT_CAFE, Identifier.ISBN, self.content_cafe_provider, 25),
-        ]
-
-        while providers_need_resolving:
-            providers_need_resolving = self.run_through_providers_once(
-                providers_need_resolving)
-            self._db.commit()
-
-    def run_through_providers_once(self, providers):
-
+    def fetch_unresolved_identifiers(self):
         now = datetime.datetime.utcnow()
         one_day_ago = now - datetime.timedelta(days=1)
         needs_processing = or_(
             UnresolvedIdentifier.exception==None,
             UnresolvedIdentifier.most_recent_attempt < one_day_ago)
-        new_providers = []
-        for provider in providers:
-            (data_source_name, identifier_type, provider,
-             batch_size) = provider
-            complete_server_failure = False
-            data_source = DataSource.lookup(self._db, data_source_name)
-            identifier_type = (
-                identifier_type or data_source.primary_identifier_type)
+        q = self._db.query(UnresolvedIdentifier).join(
+            UnresolvedIdentifier.identifier).filter(needs_processing)
+        count = q.count()
+        self.log.info("%d unresolved identifiers", count)
 
-            q = self._db.query(UnresolvedIdentifier).join(
-                UnresolvedIdentifier.identifier).filter(
-                    Identifier.type==identifier_type).filter(
-                        needs_processing)
-            count = q.count()
-            self.log.info(
-                "%d unresolved identifiers of type %s",
-                count, identifier_type
-            )
-            unresolved_identifiers = q.order_by(func.random()).limit(
-                batch_size).all()
-            self.log.info(
-                "Handling %d unresolved identifiers of type %s.",
-                len(unresolved_identifiers), identifier_type
-            )
-            successes, failures = self.resolve_through_coverage_provider(
-                unresolved_identifiers, data_source, provider)
-            if isinstance(successes, int):
-                # There was a problem getting any information at all from
-                # the server.
-                self.log.error(
-                    "Got unexpected response code %d", successes)
-                if successes / 100 == 5:
-                    # A 5xx error means we probably won't get any
-                    # other information from the server for a
-                    # while. Give up on this server for now.
-                    complete_server_failure = True
+        return q.order_by(func.random()).all()
 
-                # Some other kind of error means we might have
-                # better luck if we choose different identifiers,
-                # so keep going.
-                successes = failures = []
-            self.log.info(
-                "%d successes, %d failures.",
-                len(successes), len(failures)
-            )
-            for s in successes:
-                self.log.info("Success: %r", s.identifier)
-                self._db.delete(s)
-            for f in failures:
-                if not f.exception:
-                    f.exception = self.UNKNOWN_FAILURE
-                self.log.warn("Failure: %r %r", f.identifier, f.exception)
-                f.most_recent_attempt = now
-                if not f.first_attempt:
-                    f.first_attempt = now
-            if not complete_server_failure and count > batch_size:
-                # Theres' more work to be done.
-                new_providers.append(provider)
-        return new_providers
+    @property
+    def providers(self):
+        overdrive = OverdriveBibliographicCoverageProvider(self._db)
+        threem = ThreeMBibliographicCoverageProvider(self._db)
+        content_cafe = ContentCafeCoverageProvider(self._db)
+        content_server = ContentServerCoverageProvider(self._db)
+        oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
-    def resolve_through_coverage_provider(
-            self, batch, data_source, coverage_provider):
-        successes = []
-        failures = []
-        for unresolved_identifier in batch:
+        return [overdrive, threem, content_cafe, content_server, oclc_classify]
+
+    def run_once(self, start, cutoff):
+        self.create_missing_unresolved_identifiers()
+        unresolved_identifiers = self.fetch_unresolved_identifiers()
+        self.log.info(
+            "Processing %i unresolved identifiers", len(unresolved_identifiers)
+        )
+
+        for unresolved_identifier in unresolved_identifiers:
+            # Evaluate which providers this Identifier needs coverage from.
             identifier = unresolved_identifier.identifier
-            start = datetime.datetime.now()
-            try:
-                record = coverage_provider.ensure_coverage(identifier, force=True)
-                after_coverage = datetime.datetime.now()
-                self.log.debug(
-                    "Ensure coverage ran in %.2fs.",
-                    (after_coverage-start).seconds
-                )
-                if isinstance(record, CoverageFailure):
-                    failure = self.process_failure(
-                        unresolved_identifier,
-                        record.exception
+            eligible_providers = [provider for provider in self.providers
+                    if identifier.type in provider.input_identifier_types]
+            self.log.info("Ensuring coverage for %r", identifier)
+            self._log_providers(identifier, eligible_providers)
+
+            # Goes through all relevant providers and tries to ensure coverage
+            # tracking exceptions & failures as necessary.
+            for provider in eligible_providers[:]:
+                try:
+                    record = provider.ensure_coverage(identifier, force=True)
+                    if isinstance(record, CoverageFailure):
+                        self.process_failure(
+                            unresolved_identifier, record.exception
+                        )
+                    else:
+                        # We're covered! Never think of this provider again.
+                        eligible_providers.remove(provider)
+                except Exception as e:
+                    self.process_failure(
+                        unresolved_identifier, traceback.format_exc()
                     )
-                    failures.append(failure)
-                else:
-                    successes.append(unresolved_identifier)
-            except requests.exceptions.ConnectionError:
-                return 500, self.LICENSE_SOURCE_NOT_ACCESSIBLE
-            except ContentServerException as e:
-                return 500, repr(e)
-            except Exception as e:
-                failure = self.process_failure(
-                    unresolved_identifier,
-                    traceback.format_exc()
+            if eligible_providers:
+                # This identifier is still unresolved. It's lacking coverage for
+                # 1 or more providers its eligible for. Update its attempts and
+                # exception message.
+                now = datetime.datetime.utcnow()
+                if not unresolved_identifier.exception:
+                    unresolved_identifier.exception = self.UNKNOWN_FAILURE
+                self.log.warn(
+                    "Failure: %r %s", identifier,
+                    unresolved_identifier.exception
                 )
-                failures.append(failure)
-        return successes, failures
+                self._log_providers(identifier, providers)
+                unresolved_identifier.most_recent_attempt = now
+                if not unresolved_identifier.first_attempt:
+                    unresolved_identifier.first_attempt = now
+            elif has_unresolved_equivalents(identifier):
+                # This identifier isn't ready to have its work processed because
+                # it has other equivalent identifiers that haven't been resolved
+                # yet. Once they've all been resolved, the work'll be processed
+                # and set to presentation-ready.
+                pass
+            else:
+                try:
+                    self.resolve_equivalent_oclc_identifiers(identifier)
+                    self.process_work(unresolved_identifier)
+                except Exception as e:
+                    process_failure(
+                        unresolved_identifier, traceback.format_exc()
+                    )
+            self._db.commit()
+
+    def _log_providers(self, identifier, providers):
+        """Logs a list of coverage providers"""
+
+        providers_str = ", ".join([p.service_name for p in providers])
+        self.log.info(
+            "%r requires coverage from: %s", identifier, providers_str
+        )
+
+    def process_work(self, unresolved_identifier):
+        """Fill in VIAF data and cover images where possible before setting
+        a previously-unresolved identifier's work as presentation ready."""
+
+        work = None
+        license_pool = unresolved_identifier.identifier.licensed_through
+        if license_pool:
+            work, created = license_pool.calculate_work(even_if_no_author=True)
+        if work:
+            self.resolve_viaf(work)
+            self.resolve_cover(work)
+            work.calculate_presentation()
+            work.set_presentation_ready()
+            self._db.delete(unresolved_identifier)
+        else:
+            exception = "Work could not be calculated for %r" % unresolved_identifier.identifier
+            process_failure(unresolved_identifier, exception)
+
+    def has_unresolved_equivalents(self, identifier):
+        """Determines whether an identifier has equivalent identifiers that are
+        unresolved. Returns a boolean value."""
+        equivalent_identifiers = [eq.output for eq in identifier.equivalencies]
+        equivalent_identifiers += [eq.input for eq in 
+                identifier.inbound_equivalencies]
+        unresolved_equivalents = [eq_id.unresolved_identifier for eq_id in
+                equivalent_identifiers if eq_id.unresolved_identifier]
+        return not not unresolved_equivalents
+
+    def resolve_equivalent_oclc_identifiers(self, identifier):
+        primary_edition = identifier.equivalencies
+        oclc_ids = primary_edition.equivalent_identifiers(
+            type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
+        )
+        for oclc_id in oclc_ids:
+            self.oclc_linked_data.ensure_coverage(oclc_id)
+
+    def resolve_viaf(self, work):
+        """Get VIAF data on all contributors."""
+        viaf = VIAFClient(self._db)
+        for edition in work.editions:
+            for contributor in primary_edition.contributors:
+                viaf.process_contributor(contributor)
+                if not contributor.display_name:
+                    contributor.family_name, contributor.display_name = (
+                        contributor.default_names())
+
+    def resolve_cover_image(self, work):
+        """Make sure we have the cover for all editions."""
+        for edition in work.editions:
+            data_source_name = edition.data_source.name
+            if data_source_name in self.image_mirrors:
+                self.image_mirrors[data_source_name].mirror_edition(edition)
+                self.image_scaler.scale_edition(edition)
 
     def process_failure(self, unresolved_identifier, exception):
         unresolved_identifier.status = 500
@@ -253,122 +287,6 @@ class IdentifierResolutionMonitor(Monitor):
             unresolved_identifier.identifier, exception
         )
         return unresolved_identifier
-
-
-class MetadataPresentationReadyMonitor(PresentationReadyMonitor):
-    """Make works presentation ready.
-
-    This is an EXTREMELY complicated process, but all the work can be
-    delegated to other bits of code.
-    """
-
-    def __init__(self, _db, force=False):
-        super(MetadataPresentationReadyMonitor, self).__init__(_db, [])
-        self.force = force
-        self.image_mirrors = {
-                DataSource.THREEM : ThreeMCoverImageMirror(self._db),
-                DataSource.OVERDRIVE : OverdriveCoverImageMirror(self._db)
-        }
-        self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
-
-        self.oclc_classify = OCLCClassifyCoverageProvider(self._db)
-        self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
-        self.viaf = VIAFClient(self._db)
-
-    def work_query(self):
-        not_presentation_ready = or_(
-            Work.presentation_ready==None,
-            Work.presentation_ready==False)
-        base = self._db.query(Work).filter(not_presentation_ready)
-        # Uncommenting these lines will restrict to a certain type of
-        # book.
-        #
-        #base = base.join(Work.editions).join(Edition.primary_identifier).filter(
-        #                 Identifier.type!=Identifier.AXIS_360_ID)
-        return base
-
-    def process_batch(self, batch):
-        biggest_id = 0
-        for work in batch:
-            if work.id > biggest_id:
-                biggest_id = work.id
-            try:
-                self.process_work(work)
-            except Exception, e:
-                work.presentation_ready_exception = traceback.format_exc()
-                self.log.error(
-                    "ERROR MAKING WORK PRESENTATION READY: %s",
-                    e, exc_info=e
-                )
-        self._db.commit()
-        return biggest_id
-
-    def process_work(self, work):
-        start = datetime.datetime.now()
-        if self.make_work_ready(work):
-            after_work_ready = datetime.datetime.now()
-            work.calculate_presentation()
-            after_calculate_presentation = datetime.datetime.now()
-            work.set_presentation_ready()
-            self.log.info("NEW PRESENTATION READY WORK! %r", work)
-            e1 = (after_work_ready-start).seconds
-            e2 = (after_calculate_presentation-after_work_ready).seconds
-            self.log.debug(
-                "Make work ready took %.2fs. Calculate presentation took %.2fs.", e1, e2
-            )
-        else:
-            self.log.error(
-                "WORK STILL NOT PRESENTATION READY BUT NO EXCEPTION. WHAT GIVES?: %r", 
-                work
-            )
-
-    def make_work_ready(self, work):
-        """Either make a work presentation ready, or raise an exception
-        explaining why that's not possible.
-        """
-        did_oclc_lookup = False
-
-        for edition in work.editions:
-            accepted_data_sources = [DataSource.GUTENBERG, DataSource.THREEM]
-            # OCLC Lookup on all Gutenberg editions.
-            if edition.data_source.name in accepted_data_sources:
-                # CoverageFailure's aren't being captured because it's not a
-                # deal-breaker if we can't get OCLC coverage on an edition.
-                self.oclc_classify.ensure_coverage(edition):
-                did_oclc_lookup = True
-
-        primary_edition = work.primary_edition
-        if did_oclc_lookup:
-            oclc_ids = primary_edition.equivalent_identifiers(
-                type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER])
-            # For a given edition, it's a waste of time to process a
-            # given document from OCLC Linked Data more than once.
-            for o in oclc_ids:
-                self.oclc_linked_data.ensure_coverage(o)
-
-        # OCLC Linked Data on all ISBNs.
-        equivalent_identifiers = primary_edition.equivalent_identifiers(
-            type=[Identifier.ISBN])
-        for identifier in equivalent_identifiers:
-            self.oclc_linked_data.ensure_coverage(identifier)
-
-        # VIAF on all contributors.
-        for edition in work.editions:
-            for contributor in primary_edition.contributors:
-                self.viaf.process_contributor(contributor)
-                if not contributor.display_name:
-                    contributor.family_name, contributor.display_name = (
-                        contributor.default_names())
-
-        # Make sure we have the cover for all editions.
-        for edition in work.editions:
-            n = edition.data_source.name
-            if n in self.image_mirrors:
-                self.image_mirrors[n].mirror_edition(edition)
-                self.image_scaler.scale_edition(edition)
-
-        # Success!
-        return True
 
 class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
 
