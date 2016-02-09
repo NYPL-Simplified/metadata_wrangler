@@ -155,6 +155,10 @@ class IdentifierResolutionMonitor(Monitor):
 
         return [overdrive, threem, content_cafe, content_server, oclc_classify]
 
+    def eligible_providers_for(self, identifier):
+        return [provider for provider in self.providers if identifier.type in
+                provider.input_identifier_types]
+
     def run_once(self, start, cutoff):
         self.create_missing_unresolved_identifiers()
         unresolved_identifiers = self.fetch_unresolved_identifiers()
@@ -165,8 +169,7 @@ class IdentifierResolutionMonitor(Monitor):
         for unresolved_identifier in unresolved_identifiers:
             # Evaluate which providers this Identifier needs coverage from.
             identifier = unresolved_identifier.identifier
-            eligible_providers = [provider for provider in self.providers
-                    if identifier.type in provider.input_identifier_types]
+            eligible_providers = self.eligible_providers_for(identifer)
             self.log.info("Ensuring coverage for %r", identifier)
             self._log_providers(identifier, eligible_providers)
 
@@ -254,6 +257,11 @@ class IdentifierResolutionMonitor(Monitor):
         return not not unresolved_equivalents
 
     def resolve_equivalent_oclc_identifiers(self, identifier):
+        """Ensures OCLC coverage for an identifier.
+
+        This has to be called after the OCLCClassify coverage is run to confirm
+        that equivalent OCLC identifiers are available.
+        """
         primary_edition = identifier.equivalencies
         oclc_ids = primary_edition.equivalent_identifiers(
             type=[Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
