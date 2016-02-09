@@ -198,11 +198,6 @@ class RedoOCLC(Explain):
         identifier, ignore = Identifier.for_foreign_id(
             self._db, id_type, identifier
         )
-
-#        for edition in identifier.primarily_identifies:
-#            print "BEFORE"
-#            self.explain(self._db, edition)
-#            print "-" * 80
         self.fix_identifier(identifier)
 
     def fix_identifier(self, primary_identifier):
@@ -229,11 +224,7 @@ class RedoOCLC(Explain):
             self._db.delete(e)
         t1.commit()
 
-        #print "AFTER DELETION:"
-        #edition.work.calculate_presentation()
-        #self.explain(self._db, edition)
-
-        self.coverage.process_edition(primary_identifier)
+        self.coverage.process_item(primary_identifier)
 
         equivalent_ids = primary_identifier.equivalent_identifier_ids(
             levels=6, threshold=0)
