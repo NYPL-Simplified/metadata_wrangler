@@ -19,7 +19,7 @@ from fast import (
     LCSHNames,
 )
 
-from threem import ThreeMAPI
+from core.threem import ThreeMAPI
 from core.config import Configuration
 from core.overdrive import (
     OverdriveAPI,
@@ -51,11 +51,11 @@ from content_cafe import (
     ContentCafeCoverageProvider,
     ContentCafeAPI,
 )
-from content_server import CotentServerCoverageProvider
-from overdrive import OverdriveCoverImageMirror
-from threem import ThreeMCoverImageMirror
+from content_server import ContentServerCoverageProvider
 from gutenberg import OCLCClassifyCoverageProvider
 from oclc import LinkedDataCoverageProvider
+from overdrive import OverdriveCoverImageMirror
+from threem import ThreeMCoverImageMirror
 from viaf import VIAFClient
 
 class IdentifierResolutionMonitor(Monitor):
