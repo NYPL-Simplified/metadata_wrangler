@@ -1,10 +1,7 @@
 from nose.tools import set_trace, eq_
 from . import DatabaseTest
 from ..monitor import IdentifierResolutionMonitor
-from ..core.model import (
-    DataSource,
-    Identifier,
-)
+from ..core.model import Identifier
 
 class DummyIdentifierResolutionMonitor(IdentifierResolutionMonitor):
     """An IdentifierRestolutionMonitor for testing"""
@@ -49,18 +46,6 @@ class TestIdentifierResolutionMonitor(DatabaseTest):
         eq_(2, len(threem_providers))
         eq_(1, len(oclc_providers))
         eq_(2, len(isbn_providers))
-
-    def test_has_unresolved_equivalents(self):
-        identifier = self._identifier()
-        eq_(False, self.monitor.has_unresolved_equivalents(identifier))
-
-        eq_identifier = self._identifier()
-        unresolved = self._unresolved_identifier(eq_identifier)
-        identifier.equivalent_to(
-            DataSource.lookup(self._db, DataSource.GUTENBERG), eq_identifier, 1
-        )
-        self._db.commit()
-        eq_(True, self.monitor.has_unresolved_equivalents(identifier))
 
     def test_process_failure(self):
         exception = u"Hello from the other siiiiide"

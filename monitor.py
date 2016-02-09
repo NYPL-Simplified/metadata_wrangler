@@ -204,12 +204,6 @@ class IdentifierResolutionMonitor(Monitor):
                 unresolved_identifier.most_recent_attempt = now
                 if not unresolved_identifier.first_attempt:
                     unresolved_identifier.first_attempt = now
-            elif has_unresolved_equivalents(identifier):
-                # This identifier isn't ready to have its work processed because
-                # it has other equivalent identifiers that haven't been resolved
-                # yet. Once they've all been resolved, the work'll be processed
-                # and set to presentation-ready.
-                pass
             else:
                 try:
                     self.resolve_equivalent_oclc_identifiers(identifier)
@@ -245,16 +239,6 @@ class IdentifierResolutionMonitor(Monitor):
         else:
             exception = "Work could not be calculated for %r" % unresolved_identifier.identifier
             process_failure(unresolved_identifier, exception)
-
-    def has_unresolved_equivalents(self, identifier):
-        """Determines whether an identifier has equivalent identifiers that are
-        unresolved. Returns a boolean value."""
-        equivalent_identifiers = [eq.output for eq in identifier.equivalencies]
-        equivalent_identifiers += [eq.input for eq in 
-                identifier.inbound_equivalencies]
-        unresolved_equivalents = [eq_id.unresolved_identifier for eq_id in
-                equivalent_identifiers if eq_id.unresolved_identifier]
-        return not not unresolved_equivalents
 
     def resolve_equivalent_oclc_identifiers(self, identifier):
         """Ensures OCLC coverage for an identifier.
