@@ -31,9 +31,10 @@ class ContentServerCoverageProvider(CoverageProvider):
         self.importer = OPDSImporter(self._db, DataSource.OA_CONTENT_SERVER)
         input_identifier_types = [Identifier.GUTENBERG_ID]
         output_source = DataSource.OA_CONTENT_SERVER
-        super(ContentServerCoverageProvider, self).__init__(_db,
+        super(ContentServerCoverageProvider, self).__init__(
                 "OA Content Server Coverage Provider",
-                input_identifier_types, output_source, workset_size=10)
+                input_identifier_types, output_source, workset_size=10
+        )
 
     def process_item(self, identifier):
         response = self.content_server.lookup(identifier)
