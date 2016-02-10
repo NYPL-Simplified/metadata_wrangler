@@ -12,9 +12,12 @@ from ..core.model import (
     Edition,
     )
 
+from ..core.metadata_layer import Metadata
+
 from ..oclc import (
     OCLCXMLParser,
     OCLCLinkedData,
+    LinkedDataCoverageProvider,
 )
 
 from . import (
@@ -360,3 +363,30 @@ class TestOCLCLinkedData(TestParser):
                  "http://viaf.org/viaf/221233754", 
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
+
+
+class TestLinkedDataCoverageProvider(DatabaseTest):
+    def test_process_oclc_edition(self):
+        # it returns a metadata object
+        oclc_record = dict(
+            oclc_id_type="OCLC Work ID", oclc_id="1401160532",
+            titles="Book Title",
+            descriptions=["Hi there! I am a book. I am \
+            made of paper and have many beneficial pages."],
+            subjects={},
+            creator_viafs=["http://viaf.org/viaf/71398958/"],
+            publishers=[],
+            publication_dates=[],
+            types=[],
+            isbns=[],
+        )
+
+        identifier = self._identifier(identifier_type = oclc_record['oclc_id_type'])
+        identifier.identifier = oclc_record['oclc_id']
+
+        oclc_edition_data = LinkedDataCoverageProvider(self._db).process_oclc_edition(
+            identifier, oclc_record
+        )
+
+        eq_(True, isinstance(oclc_edition_data[0], Metadata))
+        pass

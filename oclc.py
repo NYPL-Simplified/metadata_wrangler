@@ -29,6 +29,10 @@ from core.model import (
     Representation,
     Subject,
 )
+from core.metadata_layer import (
+    ContributorData,
+    Metadata,
+)
 from core.util import MetadataSimilarity
 
 
@@ -1236,13 +1240,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_editions = new_isbns = new_descriptions = new_subjects = 0
             self.log.info("Processing identifier %r", identifier)
 
-            for edition in self.api.info_for(identifier):
-                edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
-                if edition:
-                    new_editions += 1
-                    self.log.info(
-                        edition.publisher, len(isbns), len(descriptions)
-                    )
+            for oclc_edition in self.api.info_for(identifier):
+                metadata, isbns, descriptions, subjects = self.process_oclc_edition(identifier, oclc_edition)
+                metadata.apply(edition)
                 new_isbns += len(isbns)
                 for isbn in isbns:
                     self.log.info("NEW ISBN: %s", isbn)
@@ -1349,6 +1349,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             oclc_number.equivalent_to(
                 self.output_source, isbn_identifier, 1)
 
+        metadata = Metadata(self.output_source)
+        # Return contributor information.
+        for viaf in edition['creator_viafs']:
+            contributor = ContributorData(viaf=viaf)
+            metadata.contributors.append(contributor)
+
         # Create a description resource for every description.  When
         # there's more than one description for a given edition, only
         # one of them is actually a description. The others are tables
@@ -1365,5 +1371,4 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 content=description)
             description_resources.append(description_resource)
 
-        ld_wr = None
-        return ld_wr, new_isbns_for_this_oclc_number, description_resources, classifications
+        return metadata, new_isbns_for_this_oclc_number, description_resources, classifications
