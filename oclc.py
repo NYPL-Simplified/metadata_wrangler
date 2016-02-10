@@ -450,7 +450,7 @@ class OCLCLinkedData(object):
 
     UNUSABLE_RECORD = object()
 
-    def fix_tag(self, tag):
+    def _fix_tag(self, tag):
         if tag.endswith('.'):
             tag = tag[:-1]
         l = tag.lower()
@@ -459,6 +459,166 @@ class OCLCLinkedData(object):
         if l == 'cd' or l == 'cds':
             return None
         return tag
+
+    def info_for(self, identifier):
+        for data in self.graphs_for(identifier):
+            subgraph = self.graph(data)
+            for book in self.books(subgraph):
+                info = self.info_for_book_graph(subgraph, book)
+                if info:
+                    yield info
+
+    def info_for_book_graph(self, subgraph, book):
+        isbns = set([])
+        descriptions = []
+
+        type_objs = []
+        for type_name in ('rdf:type', '@type'):
+            these_type_objs = book.get(type_name, [])
+            if not isinstance(these_type_objs, list):
+                these_type_objs = [these_type_objs]
+            for this_type_obj in these_type_objs:
+                if isinstance(this_type_obj, dict):
+                    type_objs.append(this_type_obj)
+                elif isinstance(this_type_obj, basestring):
+                    type_objs.append({"@id": this_type_obj})
+        types = [i['@id'] for i in type_objs if
+                 i['@id'] not in self.UNUSED_TYPES]
+        if not types:
+            # This book is not available in any format we're
+            # interested in from a metadata perspective.
+            return None
+
+        (oclc_id_type,
+         oclc_id,
+         titles,
+         descriptions,
+         subjects,
+         creator_uris,
+         publisher_uris,
+         publication_dates,
+         example_uris) = self.extract_useful_data(subgraph, book)
+
+        example_graphs = self.internal_lookup(
+            subgraph, example_uris)
+        for example in example_graphs:
+            for isbn_name in 'schema:isbn', 'isbn':
+                for isbn in ldq.values(example.get(isbn_name, [])):
+                    if len(isbn) == 10:
+                        isbn = isbnlib.to_isbn13(isbn)
+                    elif len(isbn) != 13:
+                        continue
+                    if isbn:
+                        isbns.add(isbn)
+
+        # Consolidate subjects and apply a blacklist.
+        tags = set()
+        for tag in subjects.get(Subject.TAG, []):
+            fixed = self._fix_tag(tag)
+            if fixed == self.UNUSABLE_RECORD:
+                return None
+            elif fixed:
+                tags.add(fixed)
+        if tags:
+            subjects[Subject.TAG] = tags
+        elif Subject.TAG in subjects:
+            del subjects[Subject.TAG]
+
+        # Something interesting has to come out of this
+        # work--something we couldn't get from another source--or
+        # there's no point.
+        if not isbns and not descriptions and not subjects:
+            return None
+
+        publishers = self.internal_lookup(
+            subgraph, publisher_uris)
+        publisher_names = [
+            i['schema:name'] for i in publishers
+            if 'schema:name' in i]
+        publisher_names = list(ldq.values(
+            ldq.restrict_to_language(publisher_names, 'en')))
+
+        for n in publisher_names:
+            if (n in self.PUBLISHER_BLACKLIST
+                or 'Audio' in n or 'Video' in n or 'n Tape' in n
+                or 'Comic' in n or 'Music' in n):
+                # This book is from a publisher that will probably not
+                # give us metadata we can use.
+                return None
+
+        # Project Gutenberg texts don't have ISBNs, so if there's an
+        # ISBN on there, it's probably wrong. Unless someone stuck a
+        # description on there, there's no point in discussing
+        # OCLC+LD's view of a Project Gutenberg work.
+        if 'Project Gutenberg' in publisher_names and not descriptions:
+            return None
+
+        creator_viafs = []
+        for uri in creator_uris:
+            if not uri.startswith("http://viaf.org"):
+                continue
+            viaf = uri[uri.rindex('/')+1:]
+            creator_viafs.append(viaf)
+
+        r = dict(
+            oclc_id_type=oclc_id_type,
+            oclc_id=oclc_id,
+            titles=titles,
+            descriptions=descriptions,
+            subjects=subjects,
+            creator_viafs=creator_viafs,
+            publishers=publisher_names,
+            publication_dates=publication_dates,
+            types=types,
+            isbns=isbns,
+        )
+        return r
+
+    def graphs_for(self, identifier):
+        self.log.debug("BEGIN GRAPHS FOR %r", identifier)
+        work_data = None
+        if identifier.type in self.CAN_HANDLE:
+            if identifier.type == Identifier.ISBN:
+                work_data = list(self.oclc_works_for_isbn(identifier))
+            elif identifier.type == Identifier.OCLC_WORK:
+                work_data, cached = self.lookup(identifier)
+            else:
+                # Look up and yield a single edition.
+                edition_data, cached = self.lookup(identifier)
+                yield edition_data
+                work_data = None
+
+            if work_data:
+                # We have one or more work graphs.
+                if not isinstance(work_data, list):
+                    work_data = [work_data]
+                for data in work_data:
+                    # Turn the work graph into a bunch of edition graphs.
+                    if not data:
+                        continue
+                    self.log.debug(
+                        "Handling work graph %s", data.get('documentUrl')
+                    )
+                    graph = self.graph(data)
+                    examples = self.extract_workexamples(graph)
+                    for uri in examples:
+                        self.log.debug("Found example URI %s", uri)
+                        data, cached = self.lookup(uri)
+                        yield data
+
+        else:
+            # We got an identifier we can't handle. Turn it into a number
+            # of identifiers we can handle.
+            for i in identifier.equivalencies:
+                if i.strength <= 0.7:
+                    # TODO: This is a stopgap to make sure we don't
+                    # turn low-strength equivalencies into
+                    # high-strength ones.
+                    continue
+                if i.output.type in self.CAN_HANDLE:
+                    for graph in self.graphs_for(i.output):
+                        yield graph
+        self.log.debug("END GRAPHS FOR %r", identifier)
 
 
 class OCLCClassifyAPI(object):
@@ -1076,7 +1236,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_editions = new_isbns = new_descriptions = new_subjects = 0
             self.log.info("Processing identifier %r", identifier)
 
-            for edition in self.info_for(identifier):
+            for edition in self.api.info_for(identifier):
                 edition, isbns, descriptions, subjects = self.process_oclc_edition(identifier, edition)
                 if edition:
                     new_editions += 1
@@ -1207,163 +1367,3 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         ld_wr = None
         return ld_wr, new_isbns_for_this_oclc_number, description_resources, classifications
-
-    def info_for(self, identifier):
-        for data in self.graphs_for(identifier):
-            subgraph = self.api.graph(data)
-            for book in self.api.books(subgraph):
-                info = self.info_for_book_graph(subgraph, book)
-                if info:
-                    yield info
-
-    def info_for_book_graph(self, subgraph, book):
-        isbns = set([])
-        descriptions = []
-
-        type_objs = []
-        for type_name in ('rdf:type', '@type'):
-            these_type_objs = book.get(type_name, [])
-            if not isinstance(these_type_objs, list):
-                these_type_objs = [these_type_objs]
-            for this_type_obj in these_type_objs:
-                if isinstance(this_type_obj, dict):
-                    type_objs.append(this_type_obj)
-                elif isinstance(this_type_obj, basestring):
-                    type_objs.append({"@id": this_type_obj})
-        types = [i['@id'] for i in type_objs if
-                 i['@id'] not in self.UNUSED_TYPES]
-        if not types:
-            # This book is not available in any format we're
-            # interested in from a metadata perspective.
-            return None
-
-        (oclc_id_type,
-         oclc_id,
-         titles,
-         descriptions,
-         subjects,
-         creator_uris,
-         publisher_uris,
-         publication_dates,
-         example_uris) = self.api.extract_useful_data(subgraph, book)
-
-        example_graphs = self.api.internal_lookup(
-            subgraph, example_uris)
-        for example in example_graphs:
-            for isbn_name in 'schema:isbn', 'isbn':
-                for isbn in ldq.values(example.get(isbn_name, [])):
-                    if len(isbn) == 10:
-                        isbn = isbnlib.to_isbn13(isbn)
-                    elif len(isbn) != 13:
-                        continue
-                    if isbn:
-                        isbns.add(isbn)
-
-        # Consolidate subjects and apply a blacklist.
-        tags = set()
-        for tag in subjects.get(Subject.TAG, []):
-            fixed = self.api.fix_tag(tag)
-            if fixed == self.UNUSABLE_RECORD:
-                return None
-            elif fixed:
-                tags.add(fixed)
-        if tags:
-            subjects[Subject.TAG] = tags
-        elif Subject.TAG in subjects:
-            del subjects[Subject.TAG]
-
-        # Something interesting has to come out of this
-        # work--something we couldn't get from another source--or
-        # there's no point.
-        if not isbns and not descriptions and not subjects:
-            return None
-
-        publishers = self.api.internal_lookup(
-            subgraph, publisher_uris)
-        publisher_names = [
-            i['schema:name'] for i in publishers
-            if 'schema:name' in i]
-        publisher_names = list(ldq.values(
-            ldq.restrict_to_language(publisher_names, 'en')))
-
-        for n in publisher_names:
-            if (n in self.PUBLISHER_BLACKLIST
-                or 'Audio' in n or 'Video' in n or 'n Tape' in n
-                or 'Comic' in n or 'Music' in n):
-                # This book is from a publisher that will probably not
-                # give us metadata we can use.
-                return None
-
-        # Project Gutenberg texts don't have ISBNs, so if there's an
-        # ISBN on there, it's probably wrong. Unless someone stuck a
-        # description on there, there's no point in discussing
-        # OCLC+LD's view of a Project Gutenberg work.
-        if 'Project Gutenberg' in publisher_names and not descriptions:
-            return None
-
-        creator_viafs = []
-        for uri in creator_uris:
-            if not uri.startswith("http://viaf.org"):
-                continue
-            viaf = uri[uri.rindex('/')+1:]
-            creator_viafs.append(viaf)
-
-        r = dict(
-            oclc_id_type=oclc_id_type,
-            oclc_id=oclc_id,
-            titles=titles,
-            descriptions=descriptions,
-            subjects=subjects,
-            creator_viafs=creator_viafs,
-            publishers=publisher_names,
-            publication_dates=publication_dates,
-            types=types,
-            isbns=isbns,
-        )
-        return r
-
-    def graphs_for(self, identifier):
-        self.log.debug("BEGIN GRAPHS FOR %r", identifier)
-        work_data = None
-        if identifier.type in self.api.CAN_HANDLE:
-            if identifier.type == Identifier.ISBN:
-                work_data = list(self.api.oclc_works_for_isbn(identifier))
-            elif identifier.type == Identifier.OCLC_WORK:
-                work_data, cached = self.api.lookup(identifier)
-            else:
-                # Look up and yield a single edition.
-                edition_data, cached = self.api.lookup(identifier)
-                yield edition_data
-                work_data = None
-
-            if work_data:
-                # We have one or more work graphs.
-                if not isinstance(work_data, list):
-                    work_data = [work_data]
-                for data in work_data:
-                    # Turn the work graph into a bunch of edition graphs.
-                    if not data:
-                        continue
-                    self.log.debug(
-                        "Handling work graph %s", data.get('documentUrl')
-                    )
-                    graph = self.api.graph(data)
-                    examples = self.api.extract_workexamples(graph)
-                    for uri in examples:
-                        self.log.debug("Found example URI %s", uri)
-                        data, cached = self.api.lookup(uri)
-                        yield data
-
-        else:
-            # We got an identifier we can't handle. Turn it into a number
-            # of identifiers we can handle.
-            for i in identifier.equivalencies:
-                if i.strength <= 0.7:
-                    # TODO: This is a stopgap to make sure we don't
-                    # turn low-strength equivalencies into
-                    # high-strength ones.
-                    continue
-                if i.output.type in self.api.CAN_HANDLE:
-                    for graph in self.graphs_for(i.output):
-                        yield graph
-        self.log.debug("END GRAPHS FOR %r", identifier)
