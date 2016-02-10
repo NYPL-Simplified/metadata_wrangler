@@ -98,6 +98,39 @@ class OCLCLinkedData(object):
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
                       Identifier.ISBN])
 
+    # We want to present metadata about a book independent of its
+    # format, and metadata from audio books usually contains
+    # information about the format.
+    UNUSED_TYPES = set([
+        'j.1:Audiobook',
+        'j.1:Compact_Cassette',
+        'j.1:Compact_Disc',
+        'j.2:Audiobook',
+        'j.2:Compact_Cassette',
+        'j.2:Compact_Disc',
+        'j.2:LP_record',
+        'schema:AudioObject',
+    ])
+
+    # Publishers who are known to publish related but irrelevant
+    # books, who basically republish Gutenberg books, who publish
+    # books with generic-looking covers, or who are otherwise not good
+    # sources of metadata.
+    PUBLISHER_BLACKLIST = set([
+        "General Books",
+        "Cliffs Notes",
+        "North Books",
+        "Emereo",
+        "Emereo Publishing",
+        "Kessinger",
+        "Kessinger Publishing",
+        "Kessinger Pub.",
+        "Recorded Books",
+        ])
+
+    # Barnes and Noble have boring book covers, but their ISBNs are likely
+    # to have reviews associated with them.
+
     def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
@@ -393,6 +426,39 @@ class OCLCLinkedData(object):
     @classmethod
     def internal_lookup(cls, graph, uris):
         return [x for x in graph if x['@id'] in uris]
+
+    # These tags are useless for our purposes.
+    POINTLESS_TAGS = set([
+        'large type', 'large print', '(binding)', 'movable books',
+        'electronic books', 'braille books', 'board books',
+        'electronic resource', u'états-unis', 'etats-unis',
+        'ebooks',
+        ])
+
+    # These tags indicate that the record as a whole is useless
+    # for our purposes.
+    #
+    # However, they are not reliably assigned to records that are
+    # actually useless, so we treat them the same as POINTLESS_TAGS.
+    TAGS_FOR_UNUSABLE_RECORDS = set([
+        'audiobook', 'audio book', 'sound recording', 'compact disc',
+        'talking book', 'books on cd', 'audiocassettes', 'playaway',
+        'vhs',
+    ])
+
+    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
+
+    UNUSABLE_RECORD = object()
+
+    def fix_tag(self, tag):
+        if tag.endswith('.'):
+            tag = tag[:-1]
+        l = tag.lower()
+        if any([x in l for x in self.FILTER_TAGS]):
+            return None
+        if l == 'cd' or l == 'cds':
+            return None
+        return tag
 
 
 class OCLCClassifyAPI(object):
@@ -950,6 +1016,7 @@ class OCLCXMLParser(XMLParser):
             edition_record.add_contributor(author, roles)
         return edition_record, new
 
+
 class LinkedDataURLLister:
     """Gets all the work URLs, parses the graphs, and prints out a list of
     all the edition URLs.
@@ -985,38 +1052,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
     This (maybe) associates a edition with a (potentially) large
     number of ISBNs, which can be used as input into other services.
     """
-    # We want to present metadata about a book independent of its
-    # format, and metadata from audio books usually contains
-    # information about the format.
-    UNUSED_TYPES = set([
-        'j.1:Audiobook',
-        'j.1:Compact_Cassette',
-        'j.1:Compact_Disc',
-        'j.2:Audiobook',
-        'j.2:Compact_Cassette',
-        'j.2:Compact_Disc',
-        'j.2:LP_record',
-        'schema:AudioObject',
-    ])
-
-    # Publishers who are known to publish related but irrelevant
-    # books, who basically republish Gutenberg books, who publish
-    # books with generic-looking covers, or who are otherwise not good
-    # sources of metadata.
-    PUBLISHER_BLACKLIST = set([
-        "General Books",
-        "Cliffs Notes",
-        "North Books",
-        "Emereo",
-        "Emereo Publishing",
-        "Kessinger",
-        "Kessinger Publishing",
-        "Kessinger Pub.",
-        "Recorded Books",
-        ])
-
-    # Barnes and Noble have boring book covers, but their ISBNs are likely
-    # to have reviews associated with them.
 
     def __init__(self, _db):
         self._db = _db
@@ -1181,41 +1216,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 if info:
                     yield info
 
-    # These tags are useless for our purposes.
-    POINTLESS_TAGS = set([
-        'large type', 'large print', '(binding)', 'movable books',
-        'electronic books', 'braille books', 'board books',
-        'electronic resource', u'états-unis', 'etats-unis',
-        'ebooks',
-        ])
-
-    # These tags indicate that the record as a whole is useless
-    # for our purposes.
-    #
-    # However, they are not reliably assigned to records that are
-    # actually useless, so we treat them the same as POINTLESS_TAGS.
-    TAGS_FOR_UNUSABLE_RECORDS = set([
-        'audiobook', 'audio book', 'sound recording', 'compact disc',
-        'talking book', 'books on cd', 'audiocassettes', 'playaway',
-        'vhs',
-    ])
-
-    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
-
-    UNUSABLE_RECORD = object()
-
-    def fix_tag(self, tag):
-        if tag.endswith('.'):
-            tag = tag[:-1]
-        l = tag.lower()
-        #if any([x in l for x in self.TAGS_FOR_UNUSABLE_RECORDS]):
-        #    return self.UNUSABLE_RECORD
-        if any([x in l for x in self.FILTER_TAGS]):
-            return None
-        if l == 'cd' or l == 'cds':
-            return None
-        return tag
-
     def info_for_book_graph(self, subgraph, book):
         isbns = set([])
         descriptions = []
@@ -1245,9 +1245,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
          creator_uris,
          publisher_uris,
          publication_dates,
-         example_uris) = OCLCLinkedData.extract_useful_data(subgraph, book)
+         example_uris) = self.api.extract_useful_data(subgraph, book)
 
-        example_graphs = OCLCLinkedData.internal_lookup(
+        example_graphs = self.api.internal_lookup(
             subgraph, example_uris)
         for example in example_graphs:
             for isbn_name in 'schema:isbn', 'isbn':
@@ -1262,7 +1262,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # Consolidate subjects and apply a blacklist.
         tags = set()
         for tag in subjects.get(Subject.TAG, []):
-            fixed = self.fix_tag(tag)
+            fixed = self.api.fix_tag(tag)
             if fixed == self.UNUSABLE_RECORD:
                 return None
             elif fixed:
@@ -1278,7 +1278,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         if not isbns and not descriptions and not subjects:
             return None
 
-        publishers = OCLCLinkedData.internal_lookup(
+        publishers = self.api.internal_lookup(
             subgraph, publisher_uris)
         publisher_names = [
             i['schema:name'] for i in publishers
@@ -1325,7 +1325,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
     def graphs_for(self, identifier):
         self.log.debug("BEGIN GRAPHS FOR %r", identifier)
         work_data = None
-        if identifier.type in OCLCLinkedData.CAN_HANDLE:
+        if identifier.type in self.api.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
                 work_data = list(self.api.oclc_works_for_isbn(identifier))
             elif identifier.type == Identifier.OCLC_WORK:
@@ -1363,7 +1363,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     # turn low-strength equivalencies into
                     # high-strength ones.
                     continue
-                if i.output.type in OCLCLinkedData.CAN_HANDLE:
+                if i.output.type in self.api.CAN_HANDLE:
                     for graph in self.graphs_for(i.output):
                         yield graph
         self.log.debug("END GRAPHS FOR %r", identifier)
