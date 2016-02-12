@@ -370,7 +370,8 @@ class OCLCLinkedData(object):
         ):
             values = book.get(k, [])
             repository.extend(ldq.values(
-                ldq.restrict_to_language(values, 'en')))
+                ldq.restrict_to_language(values, 'en')
+            ))
 
         genres = book.get('schema:genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
@@ -420,7 +421,6 @@ class OCLCLinkedData(object):
                 elif type_id == 'schema:Intangible':
                     use_type = Subject.TAG
                     break
-                # print "", type_id, result
 
             if use_type:
                 for value in ldq.values(name):
@@ -1270,22 +1270,23 @@ class LinkedDataCoverageProvider(CoverageProvider):
             "Processing edition %s: %r", edition.get('oclc_id'),
             edition.get('titles')
         )
-        publisher = None
+        metadata = Metadata(self.output_source)
+
         if edition['publishers']:
-            publisher = edition['publishers'][0]
+            metadata.publisher = edition['publishers'][0]
 
         # We should never need this title, but it's helpful
         # for documenting what's going on.
         title = None
         if edition['titles']:
-            title = edition['titles'][0]
+            metadata.title = edition['titles'][0]
 
         # Try to find a publication year.
         publication_date = None
         for d in edition['publication_dates']:
             d = d[:4]
             try:
-                publication_date = datetime.datetime.strptime(
+                metadata.published = datetime.datetime.strptime(
                     d[:4], "%Y")
             except Exception, e:
                 pass
@@ -1293,6 +1294,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         oclc_number, new = Identifier.for_foreign_id(
             self._db, edition['oclc_id_type'],
             edition['oclc_id'])
+        metadata.primary_identifier = oclc_number
 
         # Associate classifications with the OCLC number.
         classifications = []
@@ -1320,30 +1322,12 @@ class LinkedDataCoverageProvider(CoverageProvider):
             and not len(edition['descriptions'])):
             return None, [], [], []
 
-        # Identify the OCLC Number with the OCLC Work.
-        w = original_identifier.primarily_identifies
-        if w:
-            # How similar is the title of the edition to the title of
-            # the work, and how much overlap is there between the
-            # listed authors?
-            original_identifier_record = w[0]
-            if title:
-                title_strength = MetadataSimilarity.title_similarity(
-                    title, original_identifier_record.title)
-            else:
-                title_strength = 0
-            original_identifier_viafs = set([c.viaf for c in original_identifier_record.contributors
-                                   if c.viaf])
-            author_strength = MetadataSimilarity._proportion(
-                original_identifier_viafs, set(edition['creator_viafs']))
-            original_identifier_viafs, edition['creator_viafs'], author_strength
-            strength = (title_strength * 0.8) + (author_strength * 0.2)
-        else:
-            strength = 1
+        # Return contributor information.
+        for viaf in edition['creator_viafs']:
+            contributor = ContributorData(viaf=viaf)
+            metadata.contributors.append(contributor)
 
-        if strength > 0:
-            original_identifier.equivalent_to(
-                self.output_source, oclc_number, strength)
+        self.set_equivalency(original_identifier, oclc_number, metadata)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
@@ -1375,3 +1359,32 @@ class LinkedDataCoverageProvider(CoverageProvider):
             description_resources.append(description_resource)
 
         return metadata, new_isbns_for_this_oclc_number, description_resources, classifications
+
+    def set_equivalency(self, identifier, oclc_identifier, metadata):
+        """Identify the OCLC Number with the OCLC Work"""
+
+        primary_edition = identifier.primarily_identifies
+        if primary_edition:
+            if metadata.title:
+                title_strength = MetadataSimilarity.title_similarity(
+                    metadata.title, primary_edition.title
+                )
+            else:
+                title_strength = 0
+            edition_viafs = set(
+                [c.viaf for c in primary_edition.contributors if c.viaf]
+            )
+            metadata_viafs = set(
+                [c.viaf for c in metadata.contributors if c.viaf]
+            )
+            author_strength = MetadataSimilarity._proportion(
+                existing_viafs, edition_viafs
+            )
+            strength = (title_strength * 0.8) + (author_strength * 0.2)
+        else:
+            strength = 1
+
+        if strength > 0:
+            identifier.equivalent_to(
+                self.output_source, oclc_identifier, strength
+            )
