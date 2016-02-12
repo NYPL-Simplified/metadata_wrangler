@@ -389,4 +389,3 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         )
 
         eq_(True, isinstance(oclc_edition_data[0], Metadata))
-        pass

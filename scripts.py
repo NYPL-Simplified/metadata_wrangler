@@ -238,3 +238,21 @@ class RedoOCLC(Explain):
                 edition.work.calculate_presentation()
             self.explain(self._db, edition)
         print "I WOULD NOW EXPECT EVERYTHING TO BE FINE."
+
+class RedoOCLCforThreeM(Script):
+
+    def __init__(self):
+        self.input_data_source = DataSource.lookup(self._db, )
+        self.coverage = LinkedDataCoverageProvider(self._db)
+
+    def run(self):
+        """"""
+        # destroy linked data coverage record
+        # run oclc classify if there's no isbn equivalence
+        # ensure coverage by linked data coverage provider
+        pass
+
+    def fetch_threem_works_without_authors(self):
+        """Pulls out ThreeM Editions that don't have authors, along with their
+        OCLC Linked Data coverage records & ISBN identifiers"""
+        pass
