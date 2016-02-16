@@ -99,6 +99,8 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
+    VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/$")
+
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
                       Identifier.ISBN])
 
@@ -544,7 +546,7 @@ class OCLCLinkedData(object):
 
         for n in publisher_names:
             if (n in self.PUBLISHER_BLACKLIST
-                or 'Audio' in n or 'Video' in n or 'n Tape' in n
+                or 'Audio' in n or 'Video' in n or 'Tape' in n
                 or 'Comic' in n or 'Music' in n):
                 # This book is from a publisher that will probably not
                 # give us metadata we can use.
@@ -559,7 +561,7 @@ class OCLCLinkedData(object):
 
         creator_viafs = []
         for uri in creator_uris:
-            if not uri.startswith("http://viaf.org"):
+            if not self.VIAF_ID.search(uri):
                 continue
             viaf = uri[uri.rindex('/')+1:]
             creator_viafs.append(viaf)
@@ -1351,9 +1353,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         metadata = Metadata(self.output_source)
         # Return contributor information.
-        VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/$")
         for viaf in edition['creator_viafs']:
-            viaf = VIAF_ID.search(viaf).groups()[0]
+            viaf = self.api.VIAF_ID.search(viaf).groups()[0]
             contributor = ContributorData(viaf=viaf)
             metadata.contributors.append(contributor)
 
