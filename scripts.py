@@ -17,7 +17,7 @@ from mirror import ImageScaler
 from threem import (
     ThreeMCoverImageMirror,
 )
-
+from gutenberg import OCLCClassifyCoverageProvider
 from core.scripts import (
     Explain,
     WorkProcessingScript,
@@ -239,20 +239,70 @@ class RedoOCLC(Explain):
             self.explain(self._db, edition)
         print "I WOULD NOW EXPECT EVERYTHING TO BE FINE."
 
-class RedoOCLCforThreeM(Script):
 
-    def __init__(self):
-        self.input_data_source = DataSource.lookup(self._db, )
+class RedoOCLCForThreeMScript(Script):
+
+    def __init__(self, test_session=None):
+        # Allows tests to run without db session overlap.
+        if test_session:
+            self._session = test_session
+        self.input_data_source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         self.coverage = LinkedDataCoverageProvider(self._db)
+        self.oclc_classify = OCLCClassifyCoverageProvider(self._db)
+        self.viaf = VIAFClient(self._db)
 
-    def run(self):
-        """"""
-        # destroy linked data coverage record
-        # run oclc classify if there's no isbn equivalence
-        # ensure coverage by linked data coverage provider
-        pass
+    def do_run(self):
+        """Re-runs OCLC Linked Data coverage provider to get viafs. Fetches
+        author information and recalculates presentation."""
+        identifiers = self.fetch_authorless_threem_identifiers()
+        self.delete_coverage_records(identifiers)
+        self.ensure_isbn_identifier(identifiers)
+        for identifier in identifiers:
+            self.coverage.ensure_coverage(identifier)
 
-    def fetch_threem_works_without_authors(self):
-        """Pulls out ThreeM Editions that don't have authors, along with their
-        OCLC Linked Data coverage records & ISBN identifiers"""
-        pass
+            # Recalculate everything so the contributors can be seen.
+            for contributor in identifier.primary_edition.contributors:
+                self.viaf.process_contributor(contributor)
+            identifier.primary_edition.calculate_presentation()
+            if identifier.licensed_through:
+                identifier.licensed_through.calculate_work()
+
+
+    def fetch_authorless_threem_identifiers(self):
+        """Returns a list of ThreeM identifiers that don't have contributors"""
+        all_threem = self._db.query(Identifier).join(Identifier.primarily_identifies
+            ).outerjoin(Identifier.coverage_records).filter(
+            Identifier.type == Identifier.THREEM_ID).all()
+
+        authorless_identifiers = []
+        for identifier in all_threem:
+            contributors = 0
+            for edition in identifier.primarily_identifies:
+                contributors += len(edition.contributors)
+            if contributors == 0:
+                authorless_identifiers.append(identifier)
+        return authorless_identifiers
+
+    def delete_coverage_records(self, identifiers):
+        """Deletes existing OCLC Linked Data coverage records to re-run and
+        capture author data"""
+        t1 = self._db.begin_nested()
+
+        for identifier in identifiers:
+            for coverage_record in identifier.coverage_records:
+                if coverage_record.data_source == self.input_data_source:
+                    self._db.delete(coverage_record)
+
+        t1.commit()
+
+    def ensure_isbn_identifier(self, identifiers):
+        """Runs OCLCClassify to get ISBN numbers if they're not available."""
+        identifiers_without_isbn = []
+        for identifier in identifiers:
+            equivalencies = identifier.equivalencies
+            equivalent_types = [eq.output.type for eq in equivalencies]
+            if Identifier.ISBN not in equivalent_types:
+                identifiers_without_isbn.append(identifier)
+
+        for identifier in identifiers_without_isbn:
+            self.oclc_classify.ensure_coverage(identifier)
