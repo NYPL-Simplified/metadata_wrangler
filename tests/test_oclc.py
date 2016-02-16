@@ -388,4 +388,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             identifier, oclc_record
         )
 
-        eq_(True, isinstance(oclc_edition_data[0], Metadata))
+        metadata_obj = oclc_edition_data[0]
+        eq_(True, isinstance(metadata_obj, Metadata))
+        eq_(1, len(metadata_obj.contributors))
+        eq_("71398958", metadata_obj.contributors[0].viaf)

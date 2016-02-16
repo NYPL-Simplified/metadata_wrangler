@@ -1351,7 +1351,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         metadata = Metadata(self.output_source)
         # Return contributor information.
+        VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/$")
         for viaf in edition['creator_viafs']:
+            viaf = VIAF_ID.search(viaf).groups()[0]
             contributor = ContributorData(viaf=viaf)
             metadata.contributors.append(contributor)
 
