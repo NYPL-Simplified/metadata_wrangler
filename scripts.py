@@ -3,6 +3,7 @@ import sys
 from nose.tools import set_trace
 import os
 from core.model import (
+    Contribution,
     DataSource,
     Edition,
     Equivalency,
@@ -267,21 +268,12 @@ class RedoOCLCForThreeMScript(Script):
             if identifier.licensed_through:
                 identifier.licensed_through.calculate_work()
 
-
     def fetch_authorless_threem_identifiers(self):
         """Returns a list of ThreeM identifiers that don't have contributors"""
-        all_threem = self._db.query(Identifier).join(Identifier.primarily_identifies
-            ).outerjoin(Identifier.coverage_records).filter(
-            Identifier.type == Identifier.THREEM_ID).all()
-
-        authorless_identifiers = []
-        for identifier in all_threem:
-            contributors = 0
-            for edition in identifier.primarily_identifies:
-                contributors += len(edition.contributors)
-            if contributors == 0:
-                authorless_identifiers.append(identifier)
-        return authorless_identifiers
+        qu = self._db.query(Identifier).join(Identifier.primarily_identifies)
+        qu = qu.outerjoin(Edition.contributions).filter(Contribution.id==None)
+        qu = qu.filter(Identifier.type == Identifier.THREEM_ID)
+        return qu.all()
 
     def delete_coverage_records(self, identifiers):
         """Deletes existing OCLC Linked Data coverage records to re-run and
