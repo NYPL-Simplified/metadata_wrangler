@@ -9,5 +9,5 @@ sys.path.append(os.path.abspath(package_dir))
 from core.scripts import RefreshMaterializedViewsScript
 from scripts import RedoOCLCForThreeMScript
 
-RedoOCLCForThreeMScript.run()
-RefreshMaterializedViewsScript.run()
+RedoOCLCForThreeMScript().run()
+RefreshMaterializedViewsScript().run()
