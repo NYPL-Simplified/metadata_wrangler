@@ -1314,7 +1314,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
                             metadata.apply(edition)
                             new_editions += 1
                     elif num_isbns:
-                        edition = Edition(primary_identifier=metadata.primary_identifier)
+                        edition = get_one_or_create(
+                            self._db, Edition, data_source=self.output_source,
+                            primary_identifier=metadata.primary_identifier
+                        )
                         metadata.apply(edition)
                         new_editions += 1
 
