@@ -1233,10 +1233,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
         )
 
     def process_item(self, identifier):
-        edition = self.edition(identifier)
-        if isinstance(edition, CoverageFailure):
-            return edition
-
         try:
             # Create counters.
             new_editions = new_isbns = new_descriptions = new_subjects = 0
@@ -1244,17 +1240,26 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
             for oclc_edition in self.api.info_for(identifier):
                 metadata, isbns, descriptions, subjects = self.process_oclc_edition(identifier, oclc_edition)
-                metadata.apply(edition)
-                new_isbns += len(isbns)
-                for isbn in isbns:
-                    self.log.info("NEW ISBN: %s", isbn)
-                new_descriptions += len(descriptions)
-                new_subjects += len(subjects)
+                if metadata:
+                    oclc_editions = metadata.primary_identifier.primarily_identifies
+                    if oclc_editions:
+                        for edition in oclc_editions:
+                            metadata.apply(edition)
+                            new_editions += 1
+                    elif isbns:
+                        edition = Edition(primary_identifier=metadata.primary_identifier)
+                        metadata.apply(edition)
+                        new_editions += 1
+                        for isbn in isbns:
+                            self.log.info("NEW ISBN: %s", isbn)
 
-            self.log.info(
-                "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
-                new_editions, new_isbns, new_descriptions, new_subjects
-            )
+                    new_isbns += len(isbns)
+                    new_descriptions += len(descriptions)
+                    new_subjects += len(subjects)
+                    self.log.info(
+                        "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
+                        new_editions, new_isbns, new_descriptions, new_subjects
+                    )
         except IOError as e:
             if ", but couldn't find location" in e.message:
                 exception = "OCLC doesn't know about this ISBN: %r" % e
