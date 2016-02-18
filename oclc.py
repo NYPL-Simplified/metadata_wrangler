@@ -505,8 +505,7 @@ class OCLCLinkedData(object):
          publication_dates,
          example_uris) = self.extract_useful_data(subgraph, book)
 
-        example_graphs = self.internal_lookup(
-            subgraph, example_uris)
+        example_graphs = self.internal_lookup(subgraph, example_uris)
         for example in example_graphs:
             for isbn_name in 'schema:isbn', 'isbn':
                 for isbn in ldq.values(example.get(isbn_name, [])):
@@ -561,10 +560,10 @@ class OCLCLinkedData(object):
 
         creator_viafs = []
         for uri in creator_uris:
-            if not self.VIAF_ID.search(uri):
-                continue
-            viaf = uri[uri.rindex('/')+1:]
-            creator_viafs.append(viaf)
+            viaf_uri_match = self.VIAF_ID.search(uri)
+            if viaf_uri_match:
+                viaf = viaf_uri_match.groups()[0]
+                creator_viafs.append(viaf)
 
         r = dict(
             oclc_id_type=oclc_id_type,
@@ -1297,8 +1296,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 pass
 
         oclc_number, new = Identifier.for_foreign_id(
-            self._db, edition['oclc_id_type'],
-            edition['oclc_id'])
+            self._db, edition['oclc_id_type'], edition['oclc_id']
+        )
         metadata.primary_identifier = oclc_number
 
         # Associate classifications with the OCLC number.
@@ -1319,21 +1318,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
             if new:
                 new_isbns_for_this_oclc_number.append(isbn_identifier)
 
-        # Return contributor information.
-        for viaf in edition['creator_viafs']:
-            contributor = ContributorData(viaf=viaf)
-            metadata.contributors.append(contributor)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
         for isbn_identifier in new_isbns_for_this_oclc_number:
-            oclc_number.equivalent_to(
-                self.output_source, isbn_identifier, 1)
+            oclc_number.equivalent_to(self.output_source, isbn_identifier, 1)
 
-        metadata = Metadata(self.output_source)
         # Return contributor information.
         for viaf in edition['creator_viafs']:
-            viaf = self.api.VIAF_ID.search(viaf).groups()[0]
             contributor = ContributorData(viaf=viaf)
             metadata.contributors.append(contributor)
 
