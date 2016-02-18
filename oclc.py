@@ -1252,7 +1252,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                         new_editions += 1
                         for isbn in isbns:
                             self.log.info("NEW ISBN: %s", isbn)
-
+                    self.set_equivalency(identifier, metadata)
                     new_isbns += len(isbns)
                     new_descriptions += len(descriptions)
                     new_subjects += len(subjects)
@@ -1319,20 +1319,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
             if new:
                 new_isbns_for_this_oclc_number.append(isbn_identifier)
 
-        # If this OCLC Number didn't tell us about any ISBNs
-        # we didn't already know, and there is no description,
-        # we don't need to create a Edition for it--it's
-        # redundant.
-        if (len(new_isbns_for_this_oclc_number) == 0
-            and not len(edition['descriptions'])):
-            return None, [], [], []
-
         # Return contributor information.
         for viaf in edition['creator_viafs']:
             contributor = ContributorData(viaf=viaf)
             metadata.contributors.append(contributor)
-
-        self.set_equivalency(original_identifier, oclc_number, metadata)
 
         # Associate all newly created ISBNs with the OCLC
         # Number.
@@ -1365,7 +1355,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         return metadata, new_isbns_for_this_oclc_number, description_resources, classifications
 
-    def set_equivalency(self, identifier, oclc_identifier, metadata):
+    def set_equivalency(self, identifier, metadata):
         """Identify the OCLC Number with the OCLC Work"""
 
         primary_edition = identifier.primarily_identifies
@@ -1383,7 +1373,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 [c.viaf for c in metadata.contributors if c.viaf]
             )
             author_strength = MetadataSimilarity._proportion(
-                existing_viafs, edition_viafs
+                edition_viafs, metadata_viafs
             )
             strength = (title_strength * 0.8) + (author_strength * 0.2)
         else:
@@ -1391,5 +1381,5 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         if strength > 0:
             identifier.equivalent_to(
-                self.output_source, oclc_identifier, strength
+                self.output_source, metadata.primary_identifier, strength
             )
