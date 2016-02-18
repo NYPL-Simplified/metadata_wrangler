@@ -364,8 +364,6 @@ class TestOCLCLinkedData(TestParser):
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
 
-
-class TestLinkedDataCoverageProvider(DatabaseTest):
     def test_process_oclc_edition(self):
         # it returns a metadata object
         oclc_record = dict(
@@ -374,7 +372,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             descriptions=["Hi there! I am a book. I am \
             made of paper and have many beneficial pages."],
             subjects={},
-            creator_viafs=["http://viaf.org/viaf/71398958/"],
+            creator_viafs=["71398958"],
             publishers=[],
             publication_dates=[],
             types=[],
@@ -384,9 +382,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         identifier = self._identifier(identifier_type = oclc_record['oclc_id_type'])
         identifier.identifier = oclc_record['oclc_id']
 
-        oclc_edition_data = LinkedDataCoverageProvider(self._db).process_oclc_edition(
-            identifier, oclc_record
-        )
+        oclc_edition_data = OCLCLinkedData(self._db).process_oclc_edition(oclc_record)
 
         metadata_obj = oclc_edition_data[0]
         eq_(True, isinstance(metadata_obj, Metadata))
