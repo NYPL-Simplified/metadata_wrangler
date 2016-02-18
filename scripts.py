@@ -13,6 +13,7 @@ from core.model import (
 )
 from oclc import LinkedDataCoverageProvider
 from sqlalchemy.sql.functions import func
+from sqlalchemy.sql.expression import or_
 from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
 from threem import (
@@ -260,7 +261,7 @@ class RedoOCLCForThreeMScript(Script):
         self.ensure_isbn_identifier(identifiers)
         for identifier in identifiers:
             self.coverage.ensure_coverage(identifier)
-
+            self.merge_contributors(identifier)
             # Recalculate everything so the contributors can be seen.
             for contributor in identifier.primary_edition.contributors:
                 self.viaf.process_contributor(contributor)
@@ -298,3 +299,21 @@ class RedoOCLCForThreeMScript(Script):
 
         for identifier in identifiers_without_isbn:
             self.oclc_classify.ensure_coverage(identifier)
+
+    def merge_contributors(self, identifier):
+        """Gives a ThreeM primary edition any contributors found via OCLC-LD"""
+        qu = self._db.query(Identifier).join(Identifier.inbound_equivalencies)
+        qu = qu.filter(or_(
+            Identifier.type == Identifier.OCLC_WORK,
+            Identifier.type == Identifier.OCLC_NUMBER
+        )).filter(Equivalency.input_id == identifier.id)
+
+        oclc_contributions = []
+        for oclc_identifier in qu.all():
+            editions = oclc_identifier.primarily_identifies
+            for edition in editions:
+                oclc_contributions += edition.contributions
+
+        for contribution in oclc_contributions:
+            for edition in identifier.primarily_identifies:
+                edition.add_contributor(contribution.contributor, contribution.role)

@@ -5,6 +5,7 @@ from ..core.model import (
     Identifier,
     DataSource,
     CoverageRecord,
+    Contributor,
 )
 
 class DummyCoverageProvider(object):
@@ -70,7 +71,6 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         eq_(0, len(coverage_records_after))
 
     def test_ensure_isbn_identifier(self):
-
         self.script.oclc_classify = DummyCoverageProvider()
         eq_(0, self.script.oclc_classify.hit_count)
 
@@ -90,3 +90,25 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         self._db.commit()
         self.script.ensure_isbn_identifier(identifiers)
         eq_(1, self.script.oclc_classify.hit_count)
+
+    def test_merge_contributors(self):
+        oclc_work = self._identifier(identifier_type=Identifier.OCLC_WORK)
+        oclc_number = self._identifier(identifier_type=Identifier.OCLC_NUMBER)
+        for oclc_id in [oclc_work, oclc_number]:
+            # Create editions for each OCLC Identifier, give them a contributor,
+            # and set them equivalent.
+            edition = self._edition(
+                data_source_name = self.script.input_data_source.name,
+                identifier_type = oclc_id.type,
+                identifier_id = oclc_id.identifier,
+                title = "King Kong Ain't Got Nothin On Me"
+            )
+            edition.contributors[0].name = "Denzel Washington"
+            self.edition1.primary_identifier.equivalent_to(
+                self.script.input_data_source, oclc_id, 1
+            )
+            self._db.commit()
+        eq_(0, len(self.edition1.contributors))
+        self.script.merge_contributors(self.edition1.primary_identifier)
+        eq_(2, len(self.edition1.contributors))
+        eq_("Denzel Washington", self.edition1.contributors[0].name)
