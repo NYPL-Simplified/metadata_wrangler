@@ -34,6 +34,7 @@ from core.metadata_layer import (
     Metadata,
     LinkData,
     IdentifierData,
+    SubjectData,
 )
 from core.util import MetadataSimilarity
 
@@ -581,6 +582,70 @@ class OCLCLinkedData(object):
             isbns=isbns,
         )
         return r
+
+    def process_oclc_edition(self, edition):
+        self.log.info(
+            "Processing edition %s: %r", edition.get('oclc_id'),
+            edition.get('titles')
+        )
+        metadata = Metadata(self.source)
+
+        if edition['publishers']:
+            metadata.publisher = edition['publishers'][0]
+        if edition['titles']:
+            # We should never need this title, but it's helpful
+            # for documenting what's going on.
+            metadata.title = edition['titles'][0]
+        for d in edition['publication_dates']:
+            # Try to find a publication year.
+            try:
+                metadata.published = datetime.datetime.strptime(
+                    d[:4], "%Y")
+            except Exception, e:
+                pass
+
+        oclc_identifier, new = Identifier.for_foreign_id(
+            self._db, edition['oclc_id_type'], edition['oclc_id']
+        )
+        metadata.primary_identifier = oclc_identifier
+
+        # Associate subjects with the OCLC number.
+        for subject_type, subject_ids in edition['subjects'].items():
+            for subject_id in subject_ids:
+                subject = SubjectData(type=subject_type, identifier=subject_id)
+                metadata.subjects.append(subject)
+
+        # Create new ISBNs associated with the OCLC
+        # number. This will help us get metadata from other
+        # sources that use ISBN as input.
+        new_isbns = 0
+        for isbn in edition['isbns']:
+            isbn_identifier, new = Identifier.for_foreign_id(
+                self._db, Identifier.ISBN, isbn)
+            metadata.identifiers.append(isbn_identifier)
+            if new:
+                new_isbns += 1
+
+        # Return contributor information.
+        for viaf in edition['creator_viafs']:
+            contributor = ContributorData(viaf=viaf)
+            metadata.contributors.append(contributor)
+
+        # Create a description resource for every description.  When
+        # there's more than one description for a given edition, only
+        # one of them is actually a description. The others are tables
+        # of contents or some other stuff we don't need. Unfortunately
+        # I can't think of an automatic way to tell which is the good
+        # description.
+        for description in edition['descriptions']:
+            description = LinkData(
+                Hyperlink.DESCRIPTION,
+                media_type=Representation.TEXT_PLAIN,
+                content=description,
+            )
+            metadata.links.append(description)
+
+        return metadata, new_isbns
 
     def graphs_for(self, identifier):
         self.log.debug("BEGIN GRAPHS FOR %r", identifier)
@@ -1241,22 +1306,20 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.log.info("Processing identifier %r", identifier)
 
             for oclc_edition in self.api.info_for(identifier):
-                metadata, isbns, descriptions, subjects = self.process_oclc_edition(identifier, oclc_edition)
+                metadata, num_isbns = self.api.process_oclc_edition(identifier, oclc_edition)
                 if metadata:
                     oclc_editions = metadata.primary_identifier.primarily_identifies
                     if oclc_editions:
                         for edition in oclc_editions:
                             metadata.apply(edition)
                             new_editions += 1
-                    elif isbns:
+                    elif num_isbns:
                         edition = Edition(primary_identifier=metadata.primary_identifier)
                         metadata.apply(edition)
                         new_editions += 1
-                        for isbn in isbns:
-                            self.log.info("NEW ISBN: %s", isbn)
 
                     self.set_equivalency(identifier, metadata)
-                    new_isbns += isbns
+                    new_isbns += num_isbns
                     new_descriptions += len(metadata.links)
                     new_subjects += len(metadata.subjects)
                     self.log.info(
@@ -1272,70 +1335,6 @@ class LinkedDataCoverageProvider(CoverageProvider):
             exception = "OCLC raised an error: %r" % e
             return CoverageFailure(self, identifier, exception, transient=True)
         return identifier
-
-    def process_oclc_edition(self, original_identifier, edition):
-        self.log.info(
-            "Processing edition %s: %r", edition.get('oclc_id'),
-            edition.get('titles')
-        )
-        metadata = Metadata(self.output_source)
-
-        if edition['publishers']:
-            metadata.publisher = edition['publishers'][0]
-        if edition['titles']:
-            # We should never need this title, but it's helpful
-            # for documenting what's going on.
-            metadata.title = edition['titles'][0]
-        for d in edition['publication_dates']:
-            # Try to find a publication year.
-            try:
-                metadata.published = datetime.datetime.strptime(
-                    d[:4], "%Y")
-            except Exception, e:
-                pass
-
-        oclc_identifier, new = Identifier.for_foreign_id(
-            self._db, edition['oclc_id_type'], edition['oclc_id']
-        )
-        metadata.primary_identifier = oclc_identifier
-
-        # Associate subjects with the OCLC number.
-        for subject_type, subject_ids in edition['subjects'].items():
-            for subject_id in subject_ids:
-                subject = SubjectData(type=subject_type, identifier=subject_id)
-                metadata.subjects.append(subject)
-
-        # Create new ISBNs associated with the OCLC
-        # number. This will help us get metadata from other
-        # sources that use ISBN as input.
-        new_isbns = 0
-        for isbn in edition['isbns']:
-            isbn_identifier, new = Identifier.for_foreign_id(
-                self._db, Identifier.ISBN, isbn)
-            metadata.identifiers.append(isbn_identifier)
-            if new:
-                new_isbns += 1
-
-        # Return contributor information.
-        for viaf in edition['creator_viafs']:
-            contributor = ContributorData(viaf=viaf)
-            metadata.contributors.append(contributor)
-
-        # Create a description resource for every description.  When
-        # there's more than one description for a given edition, only
-        # one of them is actually a description. The others are tables
-        # of contents or some other stuff we don't need. Unfortunately
-        # I can't think of an automatic way to tell which is the good
-        # description.
-        for description in edition['descriptions']:
-            description = LinkData(
-                Hyperlink.DESCRIPTION,
-                media_type=Representation.TEXT_PLAIN,
-                content=description,
-            )
-            metadata.links.append(description)
-
-        return metadata, new_isbns
 
     def set_equivalency(self, identifier, metadata):
         """Identify the OCLC Number with the OCLC Work"""
