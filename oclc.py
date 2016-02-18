@@ -32,6 +32,8 @@ from core.model import (
 from core.metadata_layer import (
     ContributorData,
     Metadata,
+    LinkData,
+    IdentifierData,
 )
 from core.util import MetadataSimilarity
 
@@ -574,7 +576,8 @@ class OCLCLinkedData(object):
             creator_viafs=creator_viafs,
             publishers=publisher_names,
             publication_dates=publication_dates,
-            types=types,
+            # This isn't actually being used anywhere.
+            # types=types,
             isbns=isbns,
         )
         return r
@@ -1251,10 +1254,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
                         new_editions += 1
                         for isbn in isbns:
                             self.log.info("NEW ISBN: %s", isbn)
+
                     self.set_equivalency(identifier, metadata)
-                    new_isbns += len(isbns)
-                    new_descriptions += len(descriptions)
-                    new_subjects += len(subjects)
+                    new_isbns += isbns
+                    new_descriptions += len(metadata.links)
+                    new_subjects += len(metadata.subjects)
                     self.log.info(
                         "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
                         new_editions, new_isbns, new_descriptions, new_subjects
@@ -1278,51 +1282,39 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
         if edition['publishers']:
             metadata.publisher = edition['publishers'][0]
-
-        # We should never need this title, but it's helpful
-        # for documenting what's going on.
-        title = None
         if edition['titles']:
+            # We should never need this title, but it's helpful
+            # for documenting what's going on.
             metadata.title = edition['titles'][0]
-
-        # Try to find a publication year.
-        publication_date = None
         for d in edition['publication_dates']:
-            d = d[:4]
+            # Try to find a publication year.
             try:
                 metadata.published = datetime.datetime.strptime(
                     d[:4], "%Y")
             except Exception, e:
                 pass
 
-        oclc_number, new = Identifier.for_foreign_id(
+        oclc_identifier, new = Identifier.for_foreign_id(
             self._db, edition['oclc_id_type'], edition['oclc_id']
         )
-        metadata.primary_identifier = oclc_number
+        metadata.primary_identifier = oclc_identifier
 
-        # Associate classifications with the OCLC number.
-        classifications = []
+        # Associate subjects with the OCLC number.
         for subject_type, subject_ids in edition['subjects'].items():
             for subject_id in subject_ids:
-                new_class = oclc_number.classify(
-                    self.output_source, subject_type, subject_id)
-                classifications.append(new_class)
+                subject = SubjectData(type=subject_type, identifier=subject_id)
+                metadata.subjects.append(subject)
 
         # Create new ISBNs associated with the OCLC
         # number. This will help us get metadata from other
         # sources that use ISBN as input.
-        new_isbns_for_this_oclc_number = []
+        new_isbns = 0
         for isbn in edition['isbns']:
             isbn_identifier, new = Identifier.for_foreign_id(
                 self._db, Identifier.ISBN, isbn)
+            metadata.identifiers.append(isbn_identifier)
             if new:
-                new_isbns_for_this_oclc_number.append(isbn_identifier)
-
-
-        # Associate all newly created ISBNs with the OCLC
-        # Number.
-        for isbn_identifier in new_isbns_for_this_oclc_number:
-            oclc_number.equivalent_to(self.output_source, isbn_identifier, 1)
+                new_isbns += 1
 
         # Return contributor information.
         for viaf in edition['creator_viafs']:
@@ -1335,17 +1327,15 @@ class LinkedDataCoverageProvider(CoverageProvider):
         # of contents or some other stuff we don't need. Unfortunately
         # I can't think of an automatic way to tell which is the good
         # description.
-        description_resources = []
         for description in edition['descriptions']:
-            uri = Hyperlink.generic_uri(
-                self.output_source, original_identifier,
-                Hyperlink.DESCRIPTION, description)
-            description_resource, new = oclc_number.add_link(
-                Hyperlink.DESCRIPTION, uri, self.output_source,
-                content=description)
-            description_resources.append(description_resource)
+            description = LinkData(
+                Hyperlink.DESCRIPTION,
+                media_type=Representation.TEXT_PLAIN,
+                content=description,
+            )
+            metadata.links.append(description)
 
-        return metadata, new_isbns_for_this_oclc_number, description_resources, classifications
+        return metadata, new_isbns
 
     def set_equivalency(self, identifier, metadata):
         """Identify the OCLC Number with the OCLC Work"""
