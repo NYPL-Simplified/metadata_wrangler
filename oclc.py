@@ -477,23 +477,9 @@ class OCLCLinkedData(object):
                 if info:
                     yield info
 
-    def info_for_book_graph(self, subgraph, book):
-        isbns = set([])
-        descriptions = []
+    def info_for_book_graph(self, subgraph, book_data):
 
-        type_objs = []
-        for type_name in ('rdf:type', '@type'):
-            these_type_objs = book.get(type_name, [])
-            if not isinstance(these_type_objs, list):
-                these_type_objs = [these_type_objs]
-            for this_type_obj in these_type_objs:
-                if isinstance(this_type_obj, dict):
-                    type_objs.append(this_type_obj)
-                elif isinstance(this_type_obj, basestring):
-                    type_objs.append({"@id": this_type_obj})
-        types = [i['@id'] for i in type_objs if
-                 i['@id'] not in self.UNUSED_TYPES]
-        if not types:
+        if not self._has_relevant_types(book_data):
             # This book is not available in any format we're
             # interested in from a metadata perspective.
             return None
@@ -506,8 +492,9 @@ class OCLCLinkedData(object):
          creator_uris,
          publisher_uris,
          publication_dates,
-         example_uris) = self.extract_useful_data(subgraph, book)
+         example_uris) = self.extract_useful_data(subgraph, book_data)
 
+        isbns = set([])
         example_graphs = self.internal_lookup(subgraph, example_uris)
         for example in example_graphs:
             for isbn_name in 'schema:isbn', 'isbn':
@@ -577,8 +564,6 @@ class OCLCLinkedData(object):
             creator_viafs=creator_viafs,
             publishers=publisher_names,
             publication_dates=publication_dates,
-            # This isn't actually being used anywhere.
-            # types=types,
             isbns=isbns,
         )
         return r
@@ -646,6 +631,21 @@ class OCLCLinkedData(object):
             metadata.links.append(description)
 
         return metadata, new_isbns
+
+    def _has_relevant_types(self, book_data):
+        type_objs = []
+        for type_name in ('rdf:type', '@type'):
+            these_type_objs = book.get(type_name, [])
+            if not isinstance(these_type_objs, list):
+                these_type_objs = [these_type_objs]
+            for this_type_obj in these_type_objs:
+                if isinstance(this_type_obj, dict):
+                    type_objs.append(this_type_obj)
+                elif isinstance(this_type_obj, basestring):
+                    type_objs.append({"@id": this_type_obj})
+        types = [i['@id'] for i in type_objs if
+                 i['@id'] not in self.UNUSED_TYPES]
+        return not not types
 
     def graphs_for(self, identifier):
         self.log.debug("BEGIN GRAPHS FOR %r", identifier)
