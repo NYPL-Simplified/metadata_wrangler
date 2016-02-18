@@ -475,11 +475,14 @@ class OCLCLinkedData(object):
             for book in self.books(subgraph):
                 info = self.info_for_book_graph(subgraph, book)
                 if info:
-                    yield info
+                    yield self.book_info_to_metadata(info)
 
-    def info_for_book_graph(self, subgraph, book_data):
+    def info_for_book_graph(self, subgraph, book_info):
+        """Filters raw book information to exclude irrelevant or unhelpful data
 
-        if not self._has_relevant_types(book_data):
+        :returns: None if information is unhelpful; dict of book info otherwise.
+        """
+        if not self._has_relevant_types(book_info):
             # This book is not available in any format we're
             # interested in from a metadata perspective.
             return None
@@ -492,7 +495,7 @@ class OCLCLinkedData(object):
          creator_uris,
          publisher_uris,
          publication_dates,
-         example_uris) = self.extract_useful_data(subgraph, book_data)
+         example_uris) = self.extract_useful_data(subgraph, book_info)
 
         isbns = set([])
         example_graphs = self.internal_lookup(subgraph, example_uris)
@@ -568,74 +571,63 @@ class OCLCLinkedData(object):
         )
         return r
 
-    def process_oclc_edition(self, edition):
+    def book_info_to_metadata(self, book_info):
+        """Transforms dictionary-style book info into a Metadata object"""
         self.log.info(
-            "Processing edition %s: %r", edition.get('oclc_id'),
-            edition.get('titles')
+            "Processing edition %s: %r", book_info.get('oclc_id'),
+            book_info.get('titles')
         )
         metadata = Metadata(self.source)
+        metadata.primary_identifier, new = Identifier.for_foreign_id(
+            self._db, book_info['oclc_id_type'], book_info['oclc_id']
+        )
 
-        if edition['publishers']:
-            metadata.publisher = edition['publishers'][0]
-        if edition['titles']:
+        if book_info['publishers']:
+            metadata.publisher = book_info['publishers'][0]
+        if book_info['titles']:
             # We should never need this title, but it's helpful
             # for documenting what's going on.
-            metadata.title = edition['titles'][0]
-        for d in edition['publication_dates']:
+            metadata.title = book_info['titles'][0]
+        for d in book_info['publication_dates']:
             # Try to find a publication year.
             try:
                 metadata.published = datetime.datetime.strptime(
                     d[:4], "%Y")
             except Exception, e:
                 pass
-
-        oclc_identifier, new = Identifier.for_foreign_id(
-            self._db, edition['oclc_id_type'], edition['oclc_id']
-        )
-        metadata.primary_identifier = oclc_identifier
-
-        # Associate subjects with the OCLC number.
-        for subject_type, subject_ids in edition['subjects'].items():
+        for subject_type, subject_ids in book_info['subjects'].items():
             for subject_id in subject_ids:
                 subject = SubjectData(type=subject_type, identifier=subject_id)
                 metadata.subjects.append(subject)
-
-        # Create new ISBNs associated with the OCLC
-        # number. This will help us get metadata from other
-        # sources that use ISBN as input.
-        new_isbns = 0
-        for isbn in edition['isbns']:
-            isbn_identifier, new = Identifier.for_foreign_id(
-                self._db, Identifier.ISBN, isbn)
+        for isbn in book_info['isbns']:
+            # Create new ISBNs associated with the OCLC
+            # number. This will help us get metadata from other
+            # sources that use ISBN as input.
+            isbn_identifier = IdentifierData(type = Identifier.ISBN, identifier = isbn)
             metadata.identifiers.append(isbn_identifier)
-            if new:
-                new_isbns += 1
-
-        # Return contributor information.
-        for viaf in edition['creator_viafs']:
+        for viaf in book_info['creator_viafs']:
+            # Return any contributor VIAFS.
             contributor = ContributorData(viaf=viaf)
             metadata.contributors.append(contributor)
-
-        # Create a description resource for every description.  When
-        # there's more than one description for a given edition, only
-        # one of them is actually a description. The others are tables
-        # of contents or some other stuff we don't need. Unfortunately
-        # I can't think of an automatic way to tell which is the good
-        # description.
-        for description in edition['descriptions']:
+        for description in book_info['descriptions']:
+            # Create a description resource for every description.  When
+            # there's more than one description for a given edition, only
+            # one of them is actually a description. The others are tables
+            # of contents or some other stuff we don't need. Unfortunately
+            # I can't think of an automatic way to tell which is the good
+            # description.
             description = LinkData(
                 Hyperlink.DESCRIPTION,
                 media_type=Representation.TEXT_PLAIN,
                 content=description,
             )
             metadata.links.append(description)
+        return metadata
 
-        return metadata, new_isbns
-
-    def _has_relevant_types(self, book_data):
+    def _has_relevant_types(self, book_info):
         type_objs = []
         for type_name in ('rdf:type', '@type'):
-            these_type_objs = book.get(type_name, [])
+            these_type_objs = book_info.get(type_name, [])
             if not isinstance(these_type_objs, list):
                 these_type_objs = [these_type_objs]
             for this_type_obj in these_type_objs:
@@ -1305,30 +1297,35 @@ class LinkedDataCoverageProvider(CoverageProvider):
             new_editions = new_isbns = new_descriptions = new_subjects = 0
             self.log.info("Processing identifier %r", identifier)
 
-            for oclc_edition in self.api.info_for(identifier):
-                metadata, num_isbns = self.api.process_oclc_edition(identifier, oclc_edition)
-                if metadata:
-                    oclc_editions = metadata.primary_identifier.primarily_identifies
-                    if oclc_editions:
-                        for edition in oclc_editions:
-                            metadata.apply(edition)
-                            new_editions += 1
-                    elif num_isbns:
-                        edition = get_one_or_create(
-                            self._db, Edition, data_source=self.output_source,
-                            primary_identifier=metadata.primary_identifier
-                        )
+            for metadata in self.api.info_for(identifier):
+                oclc_editions = metadata.primary_identifier.primarily_identifies
+                num_new_isbns = self.new_isbns(metadata)
+                if oclc_editions:
+                    for edition in oclc_editions:
                         metadata.apply(edition)
-                        new_editions += 1
 
+                        # Increment counters for logging.
+                        new_editions += 1
+                        new_isbns += num_new_isbns
+                        new_descriptions += len(metadata.links)
+                        new_subjects += len(metadata.subjects)
+                elif num_new_isbns:
+                    edition = get_one_or_create(
+                        self._db, Edition, data_source=self.output_source,
+                        primary_identifier=metadata.primary_identifier
+                    )
+                    metadata.apply(edition)
                     self.set_equivalency(identifier, metadata)
-                    new_isbns += num_isbns
+
+                    # Increment counters for logging.
+                    new_editions += 1
+                    new_isbns += num_new_isbns
                     new_descriptions += len(metadata.links)
                     new_subjects += len(metadata.subjects)
-                    self.log.info(
-                        "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
-                        new_editions, new_isbns, new_descriptions, new_subjects
-                    )
+                self.log.info(
+                    "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
+                    new_editions, new_isbns, new_descriptions, new_subjects
+                )
         except IOError as e:
             if ", but couldn't find location" in e.message:
                 exception = "OCLC doesn't know about this ISBN: %r" % e
@@ -1338,6 +1335,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
             exception = "OCLC raised an error: %r" % e
             return CoverageFailure(self, identifier, exception, transient=True)
         return identifier
+
+    def new_isbns(self, metadata):
+        """Returns the number of new isbns on a metadata object"""
+
+        new_isbns = 0
+        for identifier_data in metadata.identifiers:
+            identifier, new = identifier_data.load(self._db)
+            if new:
+                new_isbns += 1
+        return new_isbns
 
     def set_equivalency(self, identifier, metadata):
         """Identify the OCLC Number with the OCLC Work"""
