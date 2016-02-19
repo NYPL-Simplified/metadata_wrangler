@@ -10,8 +10,8 @@ from ..core.model import (
     Subject,
     Identifier,
     Edition,
-    )
-
+    Subject,
+)
 from ..core.metadata_layer import Metadata
 
 from ..oclc import (
@@ -364,27 +364,40 @@ class TestOCLCLinkedData(TestParser):
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
 
-    def test_process_oclc_edition(self):
-        # it returns a metadata object
+    def test_book_info_to_metadata(self):
         oclc_record = dict(
             oclc_id_type="OCLC Work ID", oclc_id="1401160532",
-            titles="Book Title",
+            titles=["Book Title"],
             descriptions=["Hi there! I am a book. I am \
             made of paper and have many beneficial pages."],
-            subjects={},
-            creator_viafs=["71398958"],
-            publishers=[],
-            publication_dates=[],
-            types=[],
-            isbns=[],
+            subjects={ Subject.TAG : ["Books", "Life", "Other Deep Things"] },
+            creator_viafs=["71398958", "88986700"],
+            publishers=["Chronicle Books"],
+            publication_dates=["2016"],
+            isbns=["alpha", "bravo", "charlie"],
         )
+        metadata_obj = OCLCLinkedData(self._db).book_info_to_metadata(oclc_record)
 
-        identifier = self._identifier(identifier_type = oclc_record['oclc_id_type'])
-        identifier.identifier = oclc_record['oclc_id']
-
-        oclc_edition_data = OCLCLinkedData(self._db).process_oclc_edition(oclc_record)
-
-        metadata_obj = oclc_edition_data[0]
+        # A metadata object is returned, with the proper OCLC identifier.
         eq_(True, isinstance(metadata_obj, Metadata))
-        eq_(1, len(metadata_obj.contributors))
-        eq_("71398958", metadata_obj.contributors[0].viaf)
+        eq_(Identifier.OCLC_WORK, metadata_obj.primary_identifier.type)
+        eq_("1401160532", metadata_obj.primary_identifier.identifier)
+
+        # It has publication information & ISBNs
+        eq_("Book Title", metadata_obj.title)
+        eq_("Chronicle Books", metadata_obj.publisher)
+        eq_(2016, metadata_obj.published.year)
+        eq_(1, len(metadata_obj.links))
+        assert "beneficial" in metadata_obj.links[0].content
+        eq_(3, len(metadata_obj.identifiers))
+
+        # And properly-typed subjects.
+        eq_(3, len(metadata_obj.subjects))
+        subject_types = set([s.type for s in metadata_obj.subjects])
+        eq_(1, len(subject_types))
+        assert Subject.TAG in subject_types
+
+        # It has the contributors.
+        eq_(2, len(metadata_obj.contributors))
+        viafs = [c.viaf for c in metadata_obj.contributors]
+        eq_(["71398958", "88986700"], sorted(viafs))

@@ -582,12 +582,10 @@ class OCLCLinkedData(object):
             self._db, book_info['oclc_id_type'], book_info['oclc_id']
         )
 
+        if book_info['titles']:
+            metadata.title = book_info['titles'][0]
         if book_info['publishers']:
             metadata.publisher = book_info['publishers'][0]
-        if book_info['titles']:
-            # We should never need this title, but it's helpful
-            # for documenting what's going on.
-            metadata.title = book_info['titles'][0]
         for d in book_info['publication_dates']:
             # Try to find a publication year.
             try:
