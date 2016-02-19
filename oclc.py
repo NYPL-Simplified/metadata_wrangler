@@ -1313,7 +1313,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                         primary_identifier=metadata.primary_identifier
                     )
                     metadata.apply(edition)
-                    self.set_equivalency(identifier, metadata)
+                    self.set_equivalence(identifier, metadata)
 
                     # Increment counters for logging.
                     new_editions += 1
@@ -1344,27 +1344,31 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 new_isbns += 1
         return new_isbns
 
-    def set_equivalency(self, identifier, metadata):
+    def set_equivalence(self, identifier, metadata):
         """Identify the OCLC Number with the OCLC Work"""
 
-        primary_edition = identifier.primarily_identifies
-        if primary_edition:
-            if metadata.title:
-                title_strength = MetadataSimilarity.title_similarity(
-                    metadata.title, primary_edition.title
+        primary_editions = identifier.primarily_identifies
+        if primary_editions:
+            strength = 0
+            for primary_edition in primary_editions:
+                if metadata.title:
+                    title_strength = MetadataSimilarity.title_similarity(
+                        metadata.title, primary_edition.title
+                    )
+                else:
+                    title_strength = 0
+                edition_viafs = set(
+                    [c.viaf for c in primary_edition.contributors if c.viaf]
                 )
-            else:
-                title_strength = 0
-            edition_viafs = set(
-                [c.viaf for c in primary_edition.contributors if c.viaf]
-            )
-            metadata_viafs = set(
-                [c.viaf for c in metadata.contributors if c.viaf]
-            )
-            author_strength = MetadataSimilarity._proportion(
-                edition_viafs, metadata_viafs
-            )
-            strength = (title_strength * 0.8) + (author_strength * 0.2)
+                metadata_viafs = set(
+                    [c.viaf for c in metadata.contributors if c.viaf]
+                )
+                author_strength = MetadataSimilarity._proportion(
+                    edition_viafs, metadata_viafs
+                )
+                edition_strength = (title_strength * 0.8) + (author_strength * 0.2)
+                if edition_strength > strength:
+                    strength = edition_strength
         else:
             strength = 1
 

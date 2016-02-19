@@ -12,6 +12,7 @@ from ..core.model import (
     Edition,
     Subject,
     DataSource,
+    Equivalency,
 )
 from ..core.metadata_layer import (
     Metadata,
@@ -408,6 +409,10 @@ class TestOCLCLinkedData(TestParser):
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
+    def setup(self):
+        super(TestLinkedDataCoverageProvider, self).setup()
+        self.provider = LinkedDataCoverageProvider(self._db)
+
     def test_new_isbns(self):
         existing_id = self._identifier()
         metadata = Metadata(
@@ -419,4 +424,40 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             ]
         )
 
-        eq_(2, LinkedDataCoverageProvider(self._db).new_isbns(metadata))
+        eq_(2, self.provider.new_isbns(metadata))
+
+    def test_set_equivalence(self):
+        edition = self._edition()
+        edition.title = "The House on Mango Street"
+        edition.add_contributor(Contributor(viaf="112460612"), Contributor.AUTHOR_ROLE)
+        identifier = edition.primary_identifier
+
+        good_metadata = Metadata(
+            DataSource.lookup(self._db, DataSource.GUTENBERG),
+            primary_identifier = self._identifier(),
+            title = "The House on Mango Street",
+            contributors = [Contributor(viaf="112460612")]
+        )
+        bad_metadata = Metadata(
+            DataSource.lookup(self._db, DataSource.GUTENBERG),
+            primary_identifier = self._identifier(),
+            title = "Calvin & Hobbes",
+            contributors = [Contributor(viaf="101010")]
+        )
+
+        self.provider.set_equivalence(identifier, good_metadata)
+        self.provider.set_equivalence(identifier, bad_metadata)
+        equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
+
+        # The identifier for the bad metadata isn't made equivalent
+        eq_(1, len(equivalencies))
+        eq_(good_metadata.primary_identifier, equivalencies[0].output)
+        eq_(1, equivalencies[0].strength)
+
+        # But if the existing identifier has no editions, they're made equivalent.
+        identifier = self._identifier()
+        self.provider.set_equivalence(identifier, bad_metadata)
+        equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
+        eq_(1, len(equivalencies))
+        eq_(bad_metadata.primary_identifier, equivalencies[0].output)
+        eq_(1, equivalencies[0].strength)
