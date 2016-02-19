@@ -11,8 +11,12 @@ from ..core.model import (
     Identifier,
     Edition,
     Subject,
+    DataSource,
 )
-from ..core.metadata_layer import Metadata
+from ..core.metadata_layer import (
+    Metadata,
+    IdentifierData,
+)
 
 from ..oclc import (
     OCLCXMLParser,
@@ -401,3 +405,18 @@ class TestOCLCLinkedData(TestParser):
         eq_(2, len(metadata_obj.contributors))
         viafs = [c.viaf for c in metadata_obj.contributors]
         eq_(["71398958", "88986700"], sorted(viafs))
+
+class TestLinkedDataCoverageProvider(DatabaseTest):
+
+    def test_new_isbns(self):
+        existing_id = self._identifier()
+        metadata = Metadata(
+            DataSource.lookup(self._db, DataSource.GUTENBERG),
+            identifiers=[
+                IdentifierData(type=Identifier.OCLC_WORK, identifier="abra"),
+                IdentifierData(type=existing_id.type, identifier=existing_id.identifier),
+                IdentifierData(type=Identifier.ISBN, identifier="kadabra"),
+            ]
+        )
+
+        eq_(2, LinkedDataCoverageProvider(self._db).new_isbns(metadata))
