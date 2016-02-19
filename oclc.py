@@ -46,7 +46,7 @@ class OCLC(object):
     FORMAT = "OCLC.format"
 
 class ldq(object):
-    
+
     @classmethod
     def for_type(self, g, search):
         check = [search, { "@id": search }]
@@ -635,7 +635,7 @@ class OCLCLinkedData(object):
                     type_objs.append({"@id": this_type_obj})
         types = [i['@id'] for i in type_objs if
                  i['@id'] not in self.UNUSED_TYPES]
-        return not not types
+        return len(types) > 0
 
     def graphs_for(self, identifier):
         self.log.debug("BEGIN GRAPHS FOR %r", identifier)
@@ -1125,7 +1125,7 @@ class OCLCXMLParser(XMLParser):
         # Record some extra OCLC-specific information
         editions = work_tag.get('editions')
         holdings = work_tag.get('holdings')
-        
+
         # Get an identifier for this work.
         identifier, ignore = Identifier.for_foreign_id(
             _db, Identifier.OCLC_WORK, oclc_work_id
@@ -1271,7 +1271,7 @@ class LinkedDataURLLister:
 class LinkedDataCoverageProvider(CoverageProvider):
 
     """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
-    
+
     This (maybe) associates a edition with a (potentially) large
     number of ISBNs, which can be used as input into other services.
     """
