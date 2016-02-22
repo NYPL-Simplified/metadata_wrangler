@@ -1,3 +1,4 @@
+from nose.tools import set_trace
 from core.config import Configuration
 from core.model import (
     DataSource,
@@ -30,31 +31,41 @@ class ContentServerCoverageProvider(CoverageProvider):
         self.content_server = SimplifiedOPDSLookup(content_server_url)
         self.importer = OPDSImporter(self._db, DataSource.OA_CONTENT_SERVER)
         input_identifier_types = [Identifier.GUTENBERG_ID]
-        output_source = DataSource.OA_CONTENT_SERVER
+        output_source = DataSource.lookup(
+            self._db, DataSource.OA_CONTENT_SERVER
+        )
         super(ContentServerCoverageProvider, self).__init__(
                 "OA Content Server Coverage Provider",
                 input_identifier_types, output_source, workset_size=10
         )
 
     def process_item(self, identifier):
-        response = self.content_server.lookup(identifier)
+        response = self.content_server.lookup([identifier])
         self.check_response_for_errors(response)
 
-        editions, messages = self.importer.import_from_feed(response)
+        editions, messages, next_links = self.importer.import_from_feed(
+            response.content
+        )
         for edition in editions:
             # Check that this identifier's edition was imported
             # and return it as a success if so.
             edition_identifier = edition.primary_identifier
             if edition_identifier == identifier:
                 return identifier
-        for message_identifier, (status_code, exception) in messages.items():
+        expect = identifier.urn
+        for message_identifier, status_message in messages.items():
             # Return messages as CoverageFailures.
-            if message_identifier == identifier:
-                if status_code == 200:
+            if message_identifier == expect:
+                if status_message.status_code == 200:
                     exception = "OA Content Server returned success, but \
                             nothing was imported"
-                    return CoverageFailure(self, identifier, exception)
-                return CoverageFailure(self, identifier, exception)
+                    transient = True
+                else:
+                    exception = status_message.message
+                    transient = status_message.transient
+                return CoverageFailure(
+                    self, identifier, exception, transient=transient
+                )
 
         exception = "404: Identifier %r was not found in %s" % (identifier,
                 self.service_name)
