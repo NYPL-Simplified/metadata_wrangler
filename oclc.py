@@ -172,7 +172,6 @@ class OCLCLinkedData(object):
     ])
 
     FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
-    UNUSABLE_RECORD = object()
 
     def __init__(self, _db):
         self._db = _db
@@ -564,17 +563,15 @@ class OCLCLinkedData(object):
                         ))
 
         # Consolidate subjects and apply a blacklist.
-        tags = set()
-        for tag in subjects.get(Subject.TAG, []):
-            fixed = self._fix_tag(tag)
-            if fixed == self.UNUSABLE_RECORD:
-                return None
-            if fixed:
-                tags.add(fixed)
-        for tag in tags:
-            metadata.subjects.append(SubjectData(
-                type=Subject.TAG, identifier=tag
-            ))
+        fixed = [self._fix_tag(tag) for tag in subjects.get(Subject.TAG, [])]
+        fixed_tags = [tag for tag in fixed if not None ]
+        subjects[Subject.TAG] = fixed_tags
+
+        for subject_type, subject_identifiers in subjects.items():
+            for subject_identifier in subject_identifiers:
+                metadata.subjects.append(SubjectData(
+                    type=subject_type, identifier=subject_identifier
+                ))
 
         if (not metadata.links and not metadata.identifiers and
             not metadata.subjects):

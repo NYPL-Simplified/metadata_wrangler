@@ -394,6 +394,7 @@ class TestOCLCLinkedData(TestParser):
         eq_(1, len(metadata_obj.contributors))
         [viaf] = [c.viaf for c in metadata_obj.contributors]
         eq_(u"71398958", viaf)
+        eq_(4, len(metadata_obj.subjects))
 
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
