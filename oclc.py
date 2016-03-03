@@ -140,6 +140,40 @@ class OCLCLinkedData(object):
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
 
+    URI_TO_SUBJECT_TYPE = {
+        re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
+        re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
+        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
+    }
+
+    ACCEPTABLE_TYPES = (
+        'schema:Topic', 'schema:Place', 'schema:Person',
+        'schema:Organization', 'schema:Event', 'schema:CreativeWork',
+    )
+
+    # These tags are useless for our purposes.
+    POINTLESS_TAGS = set([
+        'large type', 'large print', '(binding)', 'movable books',
+        'electronic books', 'braille books', 'board books',
+        'electronic resource', u'états-unis', 'etats-unis',
+        'ebooks',
+        ])
+
+    # These tags indicate that the record as a whole is useless
+    # for our purposes.
+    #
+    # However, they are not reliably assigned to records that are
+    # actually useless, so we treat them the same as POINTLESS_TAGS.
+    TAGS_FOR_UNUSABLE_RECORDS = set([
+        'audiobook', 'audio book', 'sound recording', 'compact disc',
+        'talking book', 'books on cd', 'audiocassettes', 'playaway',
+        'vhs',
+    ])
+
+    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
+    UNUSABLE_RECORD = object()
+
     def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
@@ -317,18 +351,6 @@ class OCLCLinkedData(object):
                 repository.extend(ldq.values(values))
         return works
 
-    URI_TO_SUBJECT_TYPE = {
-        re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
-        re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
-        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
-        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
-    }
-
-    ACCEPTABLE_TYPES = (
-        'schema:Topic', 'schema:Place', 'schema:Person',
-        'schema:Organization', 'schema:Event', 'schema:CreativeWork',
-    )
-
     @classmethod
     def extract_useful_data(cls, subgraph, book):
         titles = []
@@ -429,35 +451,26 @@ class OCLCLinkedData(object):
                 for value in ldq.values(name):
                     subjects[use_type].add(value)
 
+        publishers = cls.internal_lookup(subgraph, publisher_uris)
+        publisher_names = [i['schema:name'] for i in publishers
+                if 'schema:name' in i]
+        publisher_names = list(ldq.values(
+            ldq.restrict_to_language(publisher_names, 'en')
+        ))
+        for n in publisher_names:
+            if (n in cls.PUBLISHER_BLACKLIST
+                or 'Audio' in n or 'Video' in n or 'Tape' in n
+                or 'Comic' in n or 'Music' in n):
+                # This book is from a publisher that will probably not
+                # give us metadata we can use.
+                return no_value
+
         return (id_type, id, titles, descriptions, subjects, creator_uris,
-                publisher_uris, publication_dates, example_uris)
+                publisher_names, publication_dates, example_uris)
 
     @classmethod
     def internal_lookup(cls, graph, uris):
         return [x for x in graph if x['@id'] in uris]
-
-    # These tags are useless for our purposes.
-    POINTLESS_TAGS = set([
-        'large type', 'large print', '(binding)', 'movable books',
-        'electronic books', 'braille books', 'board books',
-        'electronic resource', u'états-unis', 'etats-unis',
-        'ebooks',
-        ])
-
-    # These tags indicate that the record as a whole is useless
-    # for our purposes.
-    #
-    # However, they are not reliably assigned to records that are
-    # actually useless, so we treat them the same as POINTLESS_TAGS.
-    TAGS_FOR_UNUSABLE_RECORDS = set([
-        'audiobook', 'audio book', 'sound recording', 'compact disc',
-        'talking book', 'books on cd', 'audiocassettes', 'playaway',
-        'vhs',
-    ])
-
-    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
-
-    UNUSABLE_RECORD = object()
 
     def _fix_tag(self, tag):
         if tag.endswith('.'):
