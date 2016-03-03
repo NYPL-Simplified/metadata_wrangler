@@ -364,48 +364,33 @@ class TestOCLCLinkedData(TestParser):
 
         names, uris = OCLCLinkedData.creator_names(graph)
         eq_([], names)
-        eq_(set(["http://id.loc.gov/authorities/names/n2013058227", 
-                 "http://viaf.org/viaf/221233754", 
+        eq_(set(["http://id.loc.gov/authorities/names/n2013058227",
+                 "http://viaf.org/viaf/221233754",
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
 
     def test_book_info_to_metadata(self):
-        oclc_record = dict(
-            oclc_id_type="OCLC Work ID", oclc_id="1401160532",
-            titles=["Book Title"],
-            descriptions=["Hi there! I am a book. I am \
-            made of paper and have many beneficial pages."],
-            subjects={ Subject.TAG : ["Books", "Life", "Other Deep Things"] },
-            creator_viafs=["71398958", "88986700"],
-            publishers=["Chronicle Books"],
-            publication_dates=["2016"],
-            isbns=["alpha", "bravo", "charlie"],
+        oclc = OCLCLinkedData(self._db)
+        subgraph = json.loads(self.sample_data("galapagos.jsonld"))['@graph']
+        [book] = [book for book in oclc.books(subgraph)]
+
+        metadata_obj = OCLCLinkedData(self._db).book_info_to_metadata(
+            subgraph, book
         )
-        metadata_obj = OCLCLinkedData(self._db).book_info_to_metadata(oclc_record)
 
         # A metadata object is returned, with the proper OCLC identifier.
         eq_(True, isinstance(metadata_obj, Metadata))
-        eq_(Identifier.OCLC_WORK, metadata_obj.primary_identifier.type)
-        eq_("1401160532", metadata_obj.primary_identifier.identifier)
+        eq_(Identifier.OCLC_NUMBER, metadata_obj.primary_identifier.type)
+        eq_(u"11866009", metadata_obj.primary_identifier.identifier)
 
         # It has publication information & ISBNs
-        eq_("Book Title", metadata_obj.title)
-        eq_("Chronicle Books", metadata_obj.publisher)
-        eq_(2016, metadata_obj.published.year)
+        eq_(u"Gal\xe1pagos : a novel", metadata_obj.title)
+        eq_(None, metadata_obj.publisher)
+        eq_(1985, metadata_obj.published.year)
         eq_(1, len(metadata_obj.links))
-        assert "beneficial" in metadata_obj.links[0].content
-        eq_(3, len(metadata_obj.identifiers))
+        assert "ghost of a shipbuilder" in metadata_obj.links[0].content
+        eq_(4, len(metadata_obj.identifiers))
 
-        # And properly-typed subjects.
-        eq_(3, len(metadata_obj.subjects))
-        subject_types = set([s.type for s in metadata_obj.subjects])
-        eq_(1, len(subject_types))
-        assert Subject.TAG in subject_types
-
-        # It has the contributors.
-        eq_(2, len(metadata_obj.contributors))
-        viafs = [c.viaf for c in metadata_obj.contributors]
-        eq_(["71398958", "88986700"], sorted(viafs))
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
