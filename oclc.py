@@ -102,7 +102,7 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
-    VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/$")
+    VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/?$")
 
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
                       Identifier.ISBN])

@@ -391,6 +391,10 @@ class TestOCLCLinkedData(TestParser):
         assert "ghost of a shipbuilder" in metadata_obj.links[0].content
         eq_(4, len(metadata_obj.identifiers))
 
+        eq_(1, len(metadata_obj.contributors))
+        [viaf] = [c.viaf for c in metadata_obj.contributors]
+        eq_(u"71398958", viaf)
+
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
