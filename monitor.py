@@ -168,7 +168,6 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
         license_pool = unresolved_identifier.identifier.licensed_through
         if license_pool:
             work, created = license_pool.calculate_work(even_if_no_author=True)
-        set_trace()
         if work:
             self.resolve_viaf(work)
             self.resolve_cover_image(work)
