@@ -369,6 +369,7 @@ class OCLCLinkedData(object):
 
         id_uri = book['@id']
         m = cls.URL_ID_RE.match(id_uri)
+
         if not m:
             return no_value
 

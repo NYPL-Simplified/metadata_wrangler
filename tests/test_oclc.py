@@ -46,7 +46,7 @@ class TestParser(DatabaseTest):
 
         eq_(25, len(swids))
         eq_(['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'], sorted(swids))
-        
+
         # For your convenience in verifying what I say in
         # test_extract_multiple_works_with_author_restriction().
         assert '13424036' in swids
@@ -87,7 +87,7 @@ class TestParser(DatabaseTest):
             self._db, xml, title="Dick Moby", title_similarity=0.00000000001)
         eq_(21, len(swids))
 
-        # Add a semicolon to the title we're looking for, and the 
+        # Add a semicolon to the title we're looking for, and the
         # work whose title contains ' ; ' is acceptable again.
         status, swids = OCLCXMLParser.parse(
             self._db, xml, title="Dick ; Moby", title_similarity=0.000000001)
@@ -115,7 +115,7 @@ class TestParser(DatabaseTest):
         [melville], ignore = Contributor.lookup(self._db, name="Melville, Herman")
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
-        
+
         # We picked up 11 of the 25 works in the dataset.
         eq_(11, len(swids))
 
@@ -133,7 +133,7 @@ class TestParser(DatabaseTest):
         eq_("Melville, Herman", melville.name)
 
         eq_(None, OCLCXMLParser.primary_author_from_author_string(
-            self._db, 
+            self._db,
             "Melville, Herman, 1819-1891 [Author] | Hayford, Harrison [Associated name; Editor]"))
 
     def test_extract_single_work(self):
@@ -165,17 +165,17 @@ class TestParser(DatabaseTest):
         eq_(set([
             'Cliffs Notes, Inc.',
             'Kent, Rockwell',
-            'Hayford, Harrison', 
+            'Hayford, Harrison',
             'Melville, Herman',
-            'Parker, Hershel', 
+            'Parker, Hershel',
             'Tanner, Tony',
              ]), set(work_contributors))
 
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            [None, None, u'n50025038', u'n50025038', u'n50050335', 
-             u'n79006936', u'n79059764', u'n79059764', u'n79059764', 
+            [None, None, u'n50025038', u'n50025038', u'n50050335',
+             u'n79006936', u'n79059764', u'n79059764', u'n79059764',
              u'n79059764'],
             sorted([x.lc for x in work.contributors]))
         eq_(
@@ -219,9 +219,9 @@ class TestParser(DatabaseTest):
             ('Ahab, Captain (Fictitious character)', '801923', 29933),
             ('Mentally ill', '1016699', 17294),
             ('Moby Dick (Melville, Herman)', '1356235', 4512),
-            ('Sea stories', '1110122', 6893), 
-            ('Ship captains', '1116147', 19086), 
-            ('Whales', '1174266', 31482), 
+            ('Sea stories', '1110122', 6893),
+            ('Ship captains', '1116147', 19086),
+            ('Whales', '1174266', 31482),
             ('Whaling', '1174284', 32058),
             ('Whaling ships', '1174307', 18913)
         ]
@@ -253,7 +253,7 @@ class TestAuthorParser(DatabaseTest):
 
     MISSING = object()
 
-    def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE, 
+    def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE,
                       birthdate=None, deathdate=None):
         contributor, roles = result
         eq_(contributor.name, name)
@@ -270,7 +270,7 @@ class TestAuthorParser(DatabaseTest):
         elif deathdate:
             eq_(deathdate, contributor.extra[Contributor.DEATH_DATE])
 
-    def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE, 
+    def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE,
                      birthdate=None, deathdate=None):
         [res] = OCLCXMLParser.parse_author_string(self._db, string)
         self.assert_author(res, name, role, birthdate, deathdate)
@@ -353,7 +353,7 @@ class TestOCLCLinkedData(TestParser):
     def test_creator_names_picks_up_contributors(self):
         graph = json.loads(
             self.sample_data("no_author_only_contributor.jsonld"))['@graph']
-        
+
         eq_(([], []), OCLCLinkedData.creator_names(graph))
         eq_((['Thug Kitchen LLC.'], []),
             OCLCLinkedData.creator_names(graph, 'contributor'))
