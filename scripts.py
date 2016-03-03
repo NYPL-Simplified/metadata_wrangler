@@ -9,12 +9,14 @@ from core.model import (
     Equivalency,
     Identifier,
     Subject,
+    UnresolvedIdentifier,
     Work,
 )
 from oclc import LinkedDataCoverageProvider
 from sqlalchemy.sql.functions import func
 from sqlalchemy.sql.expression import or_
 from overdrive import OverdriveCoverImageMirror
+from monitor import IdentifierResolutionMonitor
 from mirror import ImageScaler
 from threem import (
     ThreeMCoverImageMirror,
@@ -24,9 +26,51 @@ from core.scripts import (
     Explain,
     WorkProcessingScript,
     Script,
+    RunMonitorScript,
 )
 from viaf import VIAFClient
 from core.util.permanent_work_id import WorkIDCalculator
+
+class RunIdentifierResolutionMonitor(RunMonitorScript):
+    """Run the identifier resolution monitor.
+
+    Why not just use RunMonitorScript with the
+    IdentifierResolutionMonitor?. This monitor is unique in that it
+    makes sense to give it specific Identifiers to process, as a
+    troubleshooting measure.
+
+    So this subclass has some extra code to look for command-line
+    identifiers, create UnresolvedIdentifiers for them, and process
+    only those identifiers. If no command-line identifiers are
+    provided this works exactly like RunMonitorScript.
+    """
+
+    def __init__(self):
+        super(RunIdentifierResolutionMonitor, self).__init__(
+            IdentifierResolutionMonitor
+        )
+
+    def run(self):
+        # Explicitly create UnresolvedIdentifiers for any Identifiers
+        # mentioned on the command line.
+        identifiers = self.parse_identifier_list(self._db, sys.argv[1:])
+        for identifier in identifiers:
+            self.log.info(
+                "Registering UnresolvedIdentifier for %r", identifier
+            )
+            ui, ignore = UnresolvedIdentifier.register(
+                self._db, identifier, force=True
+            )
+            success = self.monitor.resolve_and_handle_result(ui)
+            if success:
+                self.log.info("Success: %r", identifier)
+            else:
+                self.log.info("Failure: %r", identifier)
+
+        if not identifiers:
+            # Run the IdentifierResolutionMonitor as per normal usage.
+            super(RunIdentifierResolutionMonitor, self).run()
+        
 
 class FillInVIAFAuthorNames(Script):
 

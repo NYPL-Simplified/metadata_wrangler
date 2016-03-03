@@ -40,6 +40,7 @@ from core.model import (
     DataSource,
     Edition,
     Equivalency,
+    Hyperlink,
     Identifier,
     LicensePool,
     Subject,
@@ -150,7 +151,14 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
     def finalize(self, unresolved_identifier):
         identifier = unresolved_identifier.identifier
         self.resolve_equivalent_oclc_identifiers(identifier)
-        self.process_work(unresolved_identifier)
+        if unresolved_identifier.identifier.type==Identifier.ISBN:
+            # Currently we don't try to create Works for ISBNs,
+            # we just make sure all the Resources associated with the
+            # ISBN are properly handled. At this point, that has
+            # completed successfully, so do nothing.
+            pass
+        else:
+            self.process_work(unresolved_identifier)
 
     def process_work(self, unresolved_identifier):
         """Fill in VIAF data and cover images where possible before setting
