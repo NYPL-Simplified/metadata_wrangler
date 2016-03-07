@@ -399,64 +399,69 @@ class OCLCLinkedData(object):
 
         genres = book.get('genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
-        genres = filter(None, [cls._fix_tag(tag) for tag in genres])
-        subjects[Subject.TAG] = list(set(genres))
+        genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
+        subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
-        internal_lookups = []
         for uri in book.get('about', []):
             if not isinstance(uri, basestring):
                 continue
-            for r, subject_type in cls.URI_TO_SUBJECT_TYPE.items():
+
+            # Initialize subject details
+            [subject_data] = cls.internal_lookup(subgraph, [uri])
+            subject_type = None
+            subject_id = None
+            subject_name = None
+            name_value = None
+
+            # Grab FAST, DDC, and LCSH identifiers & types from their URIs.
+            for r, canonical_subject_type in cls.URI_TO_SUBJECT_TYPE.items():
                 m = r.match(uri)
                 if m:
-                    name=None
-                    [subject_data] = cls.internal_lookup(subgraph, [uri])
-                    if subject_data.get('name'):
-                        [name] = ldq.values(ldq.restrict_to_language(subject_data['name'], 'en'))
-                    subjects[subject_type].append(dict(
-                        id=m.groups()[0],
-                        name=name
-                    ))
-                    break
-            else:
-                # Try an internal lookup.
-                internal_lookups.append(uri)
-
-        results = OCLCLinkedData.internal_lookup(subgraph, internal_lookups)
-        for result in results:
-            if 'name' in result:
-                name = result.get('name')
-            else:
-                logging.getLogger("OCLC Linked Data Client").warn(
-                    "WEIRD OCLC INTERNAL LOOKUP: %r", result)
-                continue
-            use_type = None
-            type_objs = []
-            for type_name in ('rdf:type', '@type'):
-                these_type_objs = result.get(type_name, [])
-                if not isinstance(these_type_objs, list):
-                    these_type_objs = [these_type_objs]
-                for this_type_obj in these_type_objs:
-                    if isinstance(this_type_obj, dict):
-                        type_objs.append(this_type_obj)
-                    elif isinstance(this_type_obj, basestring):
-                        type_objs.append({"@id": this_type_obj})
-
-            for rdf_type in type_objs:
-                if '@id' in rdf_type:
-                    type_id = rdf_type['@id']
-                else:
-                    type_id = rdf_type
-                if type_id in cls.ACCEPTABLE_TYPES:
-                    use_type = type_id
-                    break
-                elif type_id == 'schema:Intangible':
-                    use_type = Subject.TAG
+                    subject_id = m.groups()[0]
+                    subject_type = canonical_subject_type
                     break
 
-            if use_type:
-                for value in ldq.values(name):
-                    subjects[use_type].append(value)
+            # Subject doesn't match known classification systems. Try to
+            # identify the subject type another way.
+            if not subject_type:
+                type_objs = []
+                for type_property in ('rdf:type', '@type'):
+                    potential_types = subject_data.get(type_property, [])
+                    if not isinstance(potential_types, list):
+                        potential_types = [potential_types]
+
+                    for potential_type in potential_types:
+                        if isinstance(potential_type, dict):
+                            type_objs.append(potential_type)
+                        elif isinstance(potential_type, basestring):
+                            type_objs.append({'@id': potential_type})
+                for type_obj in type_objs:
+                    type_id = type_obj['@id']
+                    if type_id in cls.ACCEPTABLE_TYPES:
+                        subject_type = type_id
+                        break
+                    elif type_id == 'schema:Intangible':
+                        subject_type = Subject.TAG
+                        break
+
+            # Grab a human-readable name if possible.
+            if subject_type:
+                for name_property in ('name', 'schema:name'):
+                    if name_property in subject_data:
+                        name_value = [value for value in ldq.values(
+                            ldq.restrict_to_language(subject_data[name_property], 'en')
+                        )]
+                    if name_value:
+                        [subject_name] = name_value
+                        break
+
+                # Set ids or names as appropriate & add to the list.
+                if subject_id:
+                    subjects[subject_type].append(
+                        dict(id=subject_id, name=subject_name)
+                    )
+                elif subject_name:
+                    subjects[subject_type].append(dict(id=subject_name))
 
         publishers = cls.internal_lookup(subgraph, publisher_uris)
         publisher_names = [i.get('schema:name') or i.get('name')

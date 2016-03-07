@@ -7,7 +7,6 @@ from nose.tools import set_trace, eq_
 
 from ..core.model import (
     Contributor,
-    Subject,
     Identifier,
     Edition,
     Subject,
@@ -369,6 +368,36 @@ class TestOCLCLinkedData(TestParser):
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
 
+    def test_extract_useful_data(self):
+        subgraph = json.loads(
+            self.sample_data('galapagos.jsonld')
+        )['@graph']
+        [book] = [book for book in OCLCLinkedData.books(subgraph)]
+
+        (oclc_id_type,
+         oclc_id,
+         titles,
+         descriptions,
+         subjects,
+         creator_uris,
+         publishers,
+         publication_dates,
+         example_uris) = OCLCLinkedData.extract_useful_data(subgraph, book)
+
+        eq_(Identifier.OCLC_NUMBER, oclc_id_type)
+        eq_(u"11866009", oclc_id)
+        eq_([u"Galápagos : a novel"], titles)
+        eq_(1, len(descriptions))
+        eq_(1, len(subjects[Subject.DDC]))
+        eq_(1, len(subjects[Subject.FAST]))
+        eq_(4, len(subjects[Subject.TAG]))
+        eq_(1, len(subjects[Subject.PLACE]))
+        eq_(2, len(subjects[Subject.LCSH]))
+        eq_(1, len(creator_uris))
+        eq_(["Delacorte Press/Seymour Lawrence"], publishers)
+        eq_(["1985"], publication_dates)
+        eq_(2, len(example_uris))
+
     def test_book_info_to_metadata(self):
         oclc = OCLCLinkedData(self._db)
         subgraph = json.loads(self.sample_data("galapagos.jsonld"))['@graph']
@@ -384,7 +413,7 @@ class TestOCLCLinkedData(TestParser):
         eq_(u"11866009", metadata_obj.primary_identifier.identifier)
 
         # It has publication information & ISBNs
-        eq_(u"Gal\xe1pagos : a novel", metadata_obj.title)
+        eq_(u"Galápagos : a novel", metadata_obj.title)
         eq_(u'Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
         eq_(1985, metadata_obj.published.year)
         eq_(1, len(metadata_obj.links))
