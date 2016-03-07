@@ -397,7 +397,7 @@ class OCLCLinkedData(object):
                 ldq.restrict_to_language(values, 'en')
             ))
 
-        genres = book.get('schema:genre', [])
+        genres = book.get('genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
         subjects[Subject.TAG] = set(genres)
 
@@ -416,8 +416,8 @@ class OCLCLinkedData(object):
 
         results = OCLCLinkedData.internal_lookup(subgraph, internal_lookups)
         for result in results:
-            if 'schema:name' in result:
-                name = result['schema:name']
+            if 'name' in result:
+                name = result.get('name')
             else:
                 logging.getLogger("OCLC Linked Data Client").warn(
                     "WEIRD OCLC INTERNAL LOOKUP: %r", result)
@@ -451,8 +451,9 @@ class OCLCLinkedData(object):
                     subjects[use_type].add(value)
 
         publishers = cls.internal_lookup(subgraph, publisher_uris)
-        publisher_names = [i['schema:name'] for i in publishers
-                if 'schema:name' in i]
+        publisher_names = [i.get('schema:name') or i.get('name')
+            for i in publishers
+            if ('schema:name' in i or 'name' in i)]
         publisher_names = list(ldq.values(
             ldq.restrict_to_language(publisher_names, 'en')
         ))
