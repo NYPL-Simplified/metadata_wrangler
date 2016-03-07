@@ -354,7 +354,7 @@ class OCLCLinkedData(object):
     def extract_useful_data(cls, subgraph, book):
         titles = []
         descriptions = []
-        subjects = collections.defaultdict(set)
+        subjects = collections.defaultdict(list)
         publisher_uris = []
         creator_uris = []
         publication_dates = []
@@ -399,7 +399,8 @@ class OCLCLinkedData(object):
 
         genres = book.get('genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
-        subjects[Subject.TAG] = set(genres)
+        genres = filter(None, [cls._fix_tag(tag) for tag in genres])
+        subjects[Subject.TAG] = list(set(genres))
 
         internal_lookups = []
         for uri in book.get('about', []):
@@ -408,7 +409,14 @@ class OCLCLinkedData(object):
             for r, subject_type in cls.URI_TO_SUBJECT_TYPE.items():
                 m = r.match(uri)
                 if m:
-                    subjects[subject_type].add(m.groups()[0])
+                    name=None
+                    [subject_data] = cls.internal_lookup(subgraph, [uri])
+                    if subject_data.get('name'):
+                        [name] = ldq.values(ldq.restrict_to_language(subject_data['name'], 'en'))
+                    subjects[subject_type].append(dict(
+                        id=m.groups()[0],
+                        name=name
+                    ))
                     break
             else:
                 # Try an internal lookup.
@@ -448,7 +456,7 @@ class OCLCLinkedData(object):
 
             if use_type:
                 for value in ldq.values(name):
-                    subjects[use_type].add(value)
+                    subjects[use_type].append(value)
 
         publishers = cls.internal_lookup(subgraph, publisher_uris)
         publisher_names = [i.get('schema:name') or i.get('name')
@@ -472,6 +480,7 @@ class OCLCLinkedData(object):
     def internal_lookup(cls, graph, uris):
         return [x for x in graph if x['@id'] in uris]
 
+    @classmethod
     def _fix_tag(self, tag):
         if tag.endswith('.'):
             tag = tag[:-1]
@@ -563,16 +572,19 @@ class OCLCLinkedData(object):
                             type = Identifier.ISBN, identifier = isbn
                         ))
 
-        # Consolidate subjects and apply a blacklist.
-        fixed = [self._fix_tag(tag) for tag in subjects.get(Subject.TAG, [])]
-        fixed_tags = [tag for tag in fixed if not None ]
-        subjects[Subject.TAG] = fixed_tags
-
-        for subject_type, subject_identifiers in subjects.items():
-            for subject_identifier in subject_identifiers:
-                metadata.subjects.append(SubjectData(
-                    type=subject_type, identifier=subject_identifier
-                ))
+        for subject_type, subjects_details in subjects.items():
+            for subject_detail in subjects_details:
+                if isinstance(subject_detail, dict):
+                    subject_name = subject_detail.get('name')
+                    subject_identifier = subject_detail.get('id')
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_identifier,
+                        name=subject_name,
+                    ))
+                else:
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_detail
+                    ))
 
         if (not metadata.links and not metadata.identifiers and
             not metadata.subjects):

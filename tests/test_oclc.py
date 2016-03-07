@@ -385,7 +385,7 @@ class TestOCLCLinkedData(TestParser):
 
         # It has publication information & ISBNs
         eq_(u"Gal\xe1pagos : a novel", metadata_obj.title)
-        eq_(None, metadata_obj.publisher)
+        eq_(u'Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
         eq_(1985, metadata_obj.published.year)
         eq_(1, len(metadata_obj.links))
         assert "ghost of a shipbuilder" in metadata_obj.links[0].content
@@ -394,7 +394,7 @@ class TestOCLCLinkedData(TestParser):
         eq_(1, len(metadata_obj.contributors))
         [viaf] = [c.viaf for c in metadata_obj.contributors]
         eq_(u"71398958", viaf)
-        eq_(4, len(metadata_obj.subjects))
+        eq_(9, len(metadata_obj.subjects))
 
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
