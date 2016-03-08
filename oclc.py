@@ -354,7 +354,7 @@ class OCLCLinkedData(object):
     def extract_useful_data(cls, subgraph, book):
         titles = []
         descriptions = []
-        subjects = collections.defaultdict(set)
+        subjects = collections.defaultdict(list)
         publisher_uris = []
         creator_uris = []
         publication_dates = []
@@ -397,62 +397,76 @@ class OCLCLinkedData(object):
                 ldq.restrict_to_language(values, 'en')
             ))
 
-        genres = book.get('schema:genre', [])
+        genres = book.get('genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
-        subjects[Subject.TAG] = set(genres)
+        genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
+        subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
-        internal_lookups = []
         for uri in book.get('about', []):
             if not isinstance(uri, basestring):
                 continue
-            for r, subject_type in cls.URI_TO_SUBJECT_TYPE.items():
+
+            # Initialize subject details
+            [subject_data] = cls.internal_lookup(subgraph, [uri])
+            subject_type = None
+            subject_id = None
+            subject_name = None
+            name_value = None
+
+            # Grab FAST, DDC, and LCSH identifiers & types from their URIs.
+            for r, canonical_subject_type in cls.URI_TO_SUBJECT_TYPE.items():
                 m = r.match(uri)
                 if m:
-                    subjects[subject_type].add(m.groups()[0])
-                    break
-            else:
-                # Try an internal lookup.
-                internal_lookups.append(uri)
-
-        results = OCLCLinkedData.internal_lookup(subgraph, internal_lookups)
-        for result in results:
-            if 'schema:name' in result:
-                name = result['schema:name']
-            else:
-                logging.getLogger("OCLC Linked Data Client").warn(
-                    "WEIRD OCLC INTERNAL LOOKUP: %r", result)
-                continue
-            use_type = None
-            type_objs = []
-            for type_name in ('rdf:type', '@type'):
-                these_type_objs = result.get(type_name, [])
-                if not isinstance(these_type_objs, list):
-                    these_type_objs = [these_type_objs]
-                for this_type_obj in these_type_objs:
-                    if isinstance(this_type_obj, dict):
-                        type_objs.append(this_type_obj)
-                    elif isinstance(this_type_obj, basestring):
-                        type_objs.append({"@id": this_type_obj})
-
-            for rdf_type in type_objs:
-                if '@id' in rdf_type:
-                    type_id = rdf_type['@id']
-                else:
-                    type_id = rdf_type
-                if type_id in cls.ACCEPTABLE_TYPES:
-                    use_type = type_id
-                    break
-                elif type_id == 'schema:Intangible':
-                    use_type = Subject.TAG
+                    subject_id = m.groups()[0]
+                    subject_type = canonical_subject_type
                     break
 
-            if use_type:
-                for value in ldq.values(name):
-                    subjects[use_type].add(value)
+            # Subject doesn't match known classification systems. Try to
+            # identify the subject type another way.
+            if not subject_type:
+                type_objs = []
+                for type_property in ('rdf:type', '@type'):
+                    potential_types = subject_data.get(type_property, [])
+                    if not isinstance(potential_types, list):
+                        potential_types = [potential_types]
+
+                    for potential_type in potential_types:
+                        if isinstance(potential_type, dict):
+                            type_objs.append(potential_type)
+                        elif isinstance(potential_type, basestring):
+                            type_objs.append({'@id': potential_type})
+                for type_obj in type_objs:
+                    type_id = type_obj['@id']
+                    if type_id in cls.ACCEPTABLE_TYPES:
+                        subject_type = type_id
+                        break
+                    elif type_id == 'schema:Intangible':
+                        subject_type = Subject.TAG
+                        break
+
+            # Grab a human-readable name if possible.
+            if subject_type:
+                for name_property in ('name', 'schema:name'):
+                    if name_property in subject_data:
+                        name_value = [value for value in ldq.values(
+                            ldq.restrict_to_language(subject_data[name_property], 'en')
+                        )]
+                    if name_value:
+                        [subject_name] = name_value
+                        break
+
+                # Set ids or names as appropriate & add to the list.
+                if subject_id:
+                    subjects[subject_type].append(
+                        dict(id=subject_id, name=subject_name)
+                    )
+                elif subject_name:
+                    subjects[subject_type].append(dict(id=subject_name))
 
         publishers = cls.internal_lookup(subgraph, publisher_uris)
-        publisher_names = [i['schema:name'] for i in publishers
-                if 'schema:name' in i]
+        publisher_names = [i.get('schema:name') or i.get('name')
+            for i in publishers
+            if ('schema:name' in i or 'name' in i)]
         publisher_names = list(ldq.values(
             ldq.restrict_to_language(publisher_names, 'en')
         ))
@@ -471,6 +485,7 @@ class OCLCLinkedData(object):
     def internal_lookup(cls, graph, uris):
         return [x for x in graph if x['@id'] in uris]
 
+    @classmethod
     def _fix_tag(self, tag):
         if tag.endswith('.'):
             tag = tag[:-1]
@@ -561,16 +576,19 @@ class OCLCLinkedData(object):
                             type = Identifier.ISBN, identifier = isbn
                         ))
 
-        # Consolidate subjects and apply a blacklist.
-        fixed = [self._fix_tag(tag) for tag in subjects.get(Subject.TAG, [])]
-        fixed_tags = [tag for tag in fixed if not None ]
-        subjects[Subject.TAG] = fixed_tags
-
-        for subject_type, subject_identifiers in subjects.items():
-            for subject_identifier in subject_identifiers:
-                metadata.subjects.append(SubjectData(
-                    type=subject_type, identifier=subject_identifier
-                ))
+        for subject_type, subjects_details in subjects.items():
+            for subject_detail in subjects_details:
+                if isinstance(subject_detail, dict):
+                    subject_name = subject_detail.get('name')
+                    subject_identifier = subject_detail.get('id')
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_identifier,
+                        name=subject_name,
+                    ))
+                else:
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_detail
+                    ))
 
         for uri in creator_uris:
             viaf_uri = self.VIAF_ID.search(uri)
