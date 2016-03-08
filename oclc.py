@@ -563,7 +563,6 @@ class OCLCLinkedData(object):
             metadata.publisher = publisher_names[0]
 
         # Grab all the ISBNs.
-        isbns = set()
         example_graphs = self.internal_lookup(subgraph, example_uris)
         for example in example_graphs:
             for isbn_name in 'schema:isbn', 'isbn':
@@ -591,18 +590,18 @@ class OCLCLinkedData(object):
                         type=subject_type, identifier=subject_detail
                     ))
 
-        if (not metadata.links and not metadata.identifiers and
-            not metadata.subjects):
-            # Something interesting has to come out of this
-            # work--something we couldn't get from another source--or
-            # there's no point.
-            return None
-
         for uri in creator_uris:
             viaf_uri = self.VIAF_ID.search(uri)
             if viaf_uri:
                 viaf = viaf_uri.groups()[0]
                 metadata.contributors.append(ContributorData(viaf=viaf))
+
+        if (not metadata.links and not metadata.identifiers and
+            not metadata.subjects and not metadata.contributors):
+            # Something interesting has to come out of this
+            # work--something we couldn't get from another source--or
+            # there's no point.
+            return None
 
         return metadata
 
