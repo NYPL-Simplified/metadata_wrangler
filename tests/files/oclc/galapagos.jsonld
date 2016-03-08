@@ -1,0 +1,222 @@
+{
+  "@graph" : [ {
+    "@id" : "http://dewey.info/class/813.54/e19/",
+    "@type" : "schema:Intangible"
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Agent/delacorte_press_seymour_lawrence",
+    "@type" : "bgn:Agent",
+    "name" : "Delacorte Press/Seymour Lawrence"
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Place/galapagos_islands",
+    "@type" : "schema:Place",
+    "name" : "Galapagos Islands"
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Place/new_york_n_y",
+    "@type" : "schema:Place",
+    "name" : "New York, N.Y."
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/ghosts",
+    "@type" : "schema:Intangible",
+    "name" : {
+      "@language" : "en",
+      "@value" : "Ghosts"
+    },
+    "seeAlso" : "http://id.loc.gov/authorities/subjects/sj96005617"
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/islands",
+    "@type" : "schema:Intangible",
+    "name" : {
+      "@language" : "en",
+      "@value" : "Islands"
+    },
+    "seeAlso" : "http://id.loc.gov/authorities/subjects/sh2008104288"
+  }, {
+    "@id" : "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/satirical_fiction",
+    "@type" : "schema:Intangible",
+    "name" : {
+      "@language" : "en",
+      "@value" : "satirical fiction"
+    }
+  }, {
+    "@id" : "http://id.loc.gov/authorities/subjects/sh85062975",
+    "@type" : "schema:Intangible",
+    "name" : {
+      "@language" : "en",
+      "@value" : "Humorous stories"
+    }
+  }, {
+    "@id" : "http://id.loc.gov/authorities/subjects/sh85118637",
+    "@type" : "schema:Intangible",
+    "name" : {
+      "@language" : "en",
+      "@value" : "Science fiction, American"
+    }
+  }, {
+    "@id" : "http://id.loc.gov/vocabulary/countries/nyu",
+    "@type" : "schema:Place",
+    "identifier" : "nyu"
+  }, {
+    "@id" : "http://id.worldcat.org/fast/1219610",
+    "@type" : "schema:Place",
+    "name" : "Galapagos Islands."
+  }, {
+    "@id" : "http://viaf.org/viaf/71398958",
+    "@type" : "schema:Person",
+    "familyName" : "Vonnegut",
+    "givenName" : "Kurt",
+    "name" : "Kurt Vonnegut"
+  }, {
+    "@id" : "http://worldcat.org/isbn/9780385294164",
+    "@type" : "schema:ProductModel",
+    "isbn" : [ "9780385294164", "0385294166" ]
+  }, {
+    "@id" : "http://worldcat.org/isbn/9780385294201",
+    "@type" : "schema:ProductModel",
+    "isbn" : [ "9780385294201", "0385294204" ]
+  }, {
+    "@id" : "http://www.worldcat.org/oclc/11866009",
+    "@type" : [ "schema:CreativeWork", "schema:Book" ],
+    "oclcnum" : "11866009",
+    "placeOfPublication" : [ "http://experiment.worldcat.org/entity/work/data/1859790419#Place/new_york_n_y", "http://id.loc.gov/vocabulary/countries/nyu" ],
+    "about" : [ "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/islands", "http://dewey.info/class/813.54/e19/", "http://id.worldcat.org/fast/1219610", "http://id.loc.gov/authorities/subjects/sh85062975", "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/satirical_fiction", "http://experiment.worldcat.org/entity/work/data/1859790419#Place/galapagos_islands", "http://id.loc.gov/authorities/subjects/sh85118637", "http://experiment.worldcat.org/entity/work/data/1859790419#Topic/ghosts" ],
+    "audience" : "http://www.worldcat.org/title/-/oclc/11866009#Audience",
+    "bookEdition" : "1st trade ed.",
+    "bookFormat" : "bgn:PrintBook",
+    "copyrightYear" : "1985",
+    "creator" : "http://viaf.org/viaf/71398958",
+    "datePublished" : "1985",
+    "description" : {
+      "@language" : "en",
+      "@value" : "Observed by a ghost of the Vietnam War for one million years, the descendants of survivors of a cruise to the Galapagos Archipielago prove Darwin's Theory of Evolution. The ghost of a shipbuilder tells the story of an ill-fated cruise to the Galapagos Islands."
+    },
+    "exampleOfWork" : "http://worldcat.org/entity/work/id/1859790419",
+    "genre" : {
+      "@language" : "en",
+      "@value" : "Fiction"
+    },
+    "inLanguage" : "en",
+    "isSimilarTo" : "http://www.worldcat.org/oclc/559361680",
+    "name" : {
+      "@language" : "en",
+      "@value" : "Galápagos : a novel"
+    },
+    "productID" : "11866009",
+    "publication" : "http://www.worldcat.org/title/-/oclc/11866009#PublicationEvent/new_york_n_y_delacorte_press_seymour_lawrence_1985",
+    "publisher" : "http://experiment.worldcat.org/entity/work/data/1859790419#Agent/delacorte_press_seymour_lawrence",
+    "workExample" : [ "http://worldcat.org/isbn/9780385294201", "http://worldcat.org/isbn/9780385294164" ],
+    "describedby" : "http://www.worldcat.org/title/-/oclc/11866009"
+  }, {
+    "@id" : "http://www.worldcat.org/oclc/559361680",
+    "@type" : "schema:CreativeWork",
+    "description" : "Online version:",
+    "isSimilarTo" : "http://www.worldcat.org/oclc/11866009",
+    "label" : "Galápagos."
+  }, {
+    "@id" : "http://www.worldcat.org/title/-/oclc/11866009",
+    "@type" : [ "genont:ContentTypeGenericResource", "genont:InformationResource" ],
+    "inDataset" : "http://purl.oclc.org/dataset/WorldCat",
+    "about" : "http://www.worldcat.org/oclc/11866009",
+    "dateModified" : "2016-02-11"
+  }, {
+    "@id" : "http://www.worldcat.org/title/-/oclc/11866009#Audience",
+    "@type" : "schema:PeopleAudience",
+    "audienceType" : {
+      "@language" : "en",
+      "@value" : "Juvenile"
+    }
+  }, {
+    "@id" : "http://www.worldcat.org/title/-/oclc/11866009#PublicationEvent/new_york_n_y_delacorte_press_seymour_lawrence_1985",
+    "@type" : "schema:PublicationEvent",
+    "location" : "http://experiment.worldcat.org/entity/work/data/1859790419#Place/new_york_n_y",
+    "organizer" : "http://experiment.worldcat.org/entity/work/data/1859790419#Agent/delacorte_press_seymour_lawrence"
+  } ],
+  "@context" : {
+    "bookFormat" : {
+      "@id" : "http://schema.org/bookFormat",
+      "@type" : "@id"
+    },
+    "name" : "http://schema.org/name",
+    "workExample" : {
+      "@id" : "http://schema.org/workExample",
+      "@type" : "@id"
+    },
+    "isSimilarTo" : {
+      "@id" : "http://schema.org/isSimilarTo",
+      "@type" : "@id"
+    },
+    "inLanguage" : "http://schema.org/inLanguage",
+    "placeOfPublication" : {
+      "@id" : "http://purl.org/library/placeOfPublication",
+      "@type" : "@id"
+    },
+    "describedby" : {
+      "@id" : "http://www.w3.org/2007/05/powder-s#describedby",
+      "@type" : "@id"
+    },
+    "about" : {
+      "@id" : "http://schema.org/about",
+      "@type" : "@id"
+    },
+    "publisher" : {
+      "@id" : "http://schema.org/publisher",
+      "@type" : "@id"
+    },
+    "creator" : {
+      "@id" : "http://schema.org/creator",
+      "@type" : "@id"
+    },
+    "publication" : {
+      "@id" : "http://schema.org/publication",
+      "@type" : "@id"
+    },
+    "datePublished" : "http://schema.org/datePublished",
+    "copyrightYear" : "http://schema.org/copyrightYear",
+    "bookEdition" : "http://schema.org/bookEdition",
+    "audience" : {
+      "@id" : "http://schema.org/audience",
+      "@type" : "@id"
+    },
+    "description" : "http://schema.org/description",
+    "productID" : "http://schema.org/productID",
+    "exampleOfWork" : {
+      "@id" : "http://schema.org/exampleOfWork",
+      "@type" : "@id"
+    },
+    "oclcnum" : "http://purl.org/library/oclcnum",
+    "genre" : "http://schema.org/genre",
+    "label" : "http://www.w3.org/2000/01/rdf-schema#label",
+    "identifier" : "http://purl.org/dc/terms/identifier",
+    "location" : {
+      "@id" : "http://schema.org/location",
+      "@type" : "@id"
+    },
+    "organizer" : {
+      "@id" : "http://schema.org/organizer",
+      "@type" : "@id"
+    },
+    "isbn" : "http://schema.org/isbn",
+    "familyName" : "http://schema.org/familyName",
+    "givenName" : "http://schema.org/givenName",
+    "seeAlso" : {
+      "@id" : "http://www.w3.org/2000/01/rdf-schema#seeAlso",
+      "@type" : "@id"
+    },
+    "audienceType" : "http://schema.org/audienceType",
+    "dateModified" : "http://schema.org/dateModified",
+    "inDataset" : {
+      "@id" : "http://rdfs.org/ns/void#inDataset",
+      "@type" : "@id"
+    },
+    "schema" : "http://schema.org/",
+    "rdfs" : "http://www.w3.org/2000/01/rdf-schema#",
+    "genont" : "http://www.w3.org/2006/gen/ont#",
+    "wdrs" : "http://www.w3.org/2007/05/powder-s#",
+    "xsd" : "http://www.w3.org/2001/XMLSchema#",
+    "library" : "http://purl.org/library/",
+    "void" : "http://rdfs.org/ns/void#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "bgn" : "http://bibliograph.net/",
+    "pto" : "http://www.productontology.org/id/",
+    "dcterms" : "http://purl.org/dc/terms/"
+  }
+}
