@@ -206,8 +206,13 @@ class OCLCLinkedData(object):
         representation, cached = Representation.get(
             self._db, url, Representation.http_get_no_redirect)
         if not representation.location:
-            raise IOError(
-                "Expected %s to redirect, but couldn't find location." % url)
+            representation, cached = Representation.get(
+                self._db, url, Representation.http_get_no_redirect, max_age=0)
+            if not representation.location:
+                raise IOError(
+                    "Expected %s to redirect, but couldn't find location." % url
+                )
+            
         location = representation.location
         match = self.URI_WITH_OCLC_NUMBER.match(location)
         if not match:

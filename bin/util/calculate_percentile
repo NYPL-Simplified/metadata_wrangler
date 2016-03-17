@@ -1,0 +1,33 @@
+# This is a utility script for calibrating a list of 
+# measurements to a percentile scale.
+#
+# It's designed to accept the output of psql, like so:
+#
+# psql -c "select value, count(id) from measurements where data_source_id=12 and quantity_measured='http://librarysimplified.org/terms/rel/popularity' group by value;" | python calculate_percentile
+
+import sys
+from pdb import set_trace
+
+def gather(s):
+      values = []
+      for i in s:
+            if "|" not in i:
+                  continue
+            value, count = i.split("|")
+            try:
+                  value = int(value.strip())
+            except ValueError:
+                  continue
+            count = int(count)
+            for i in range(count):
+                  values.append(value)
+      values.sort()
+      size = len(values)
+      print len(values)
+      percentiles = []
+      for i in range(0, 100):
+            index = size * (i/100.0)
+            percentiles.append(values[int(index)])
+      return percentiles
+            
+print gather(sys.stdin)
