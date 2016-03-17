@@ -1,14 +1,12 @@
 # encoding: utf-8
 
 import json
-import StringIO
 import os
 from nose.tools import set_trace, eq_
 
 from ..core.model import (
     Contributor,
     Identifier,
-    Edition,
     Subject,
     DataSource,
     Equivalency,

@@ -6,15 +6,9 @@ import re
 
 from collections import Counter, defaultdict
 
-from sqlalchemy.sql.expression import (
-    or_,
-)
-
 from core.model import (
     Contributor,
-    Contribution,
     DataSource,
-    Edition,
     Representation,
 )
 

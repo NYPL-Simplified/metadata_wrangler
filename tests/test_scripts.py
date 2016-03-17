@@ -5,7 +5,6 @@ from ..core.model import (
     Identifier,
     DataSource,
     CoverageRecord,
-    Contributor,
 )
 
 class DummyCoverageProvider(object):

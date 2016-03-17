@@ -1,18 +1,11 @@
 import os
 from nose.tools import set_trace, eq_
 
-from ..core.model import (
-    Contributor,
-    )
-
 from . import (
     DatabaseTest,
 )
 
-from ..viaf import (
-    VIAFParser,
-    VIAFClient,
-)
+from ..viaf import VIAFParser
 
 class TestNameParser(DatabaseTest):
 

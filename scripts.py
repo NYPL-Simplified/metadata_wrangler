@@ -1,14 +1,12 @@
 import csv
 import sys
 from nose.tools import set_trace
-import os
 from core.model import (
     Contribution,
     DataSource,
     Edition,
     Equivalency,
     Identifier,
-    Subject,
     UnresolvedIdentifier,
     Work,
 )

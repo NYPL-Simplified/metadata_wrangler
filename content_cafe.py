@@ -1,4 +1,3 @@
-import os
 from collections import Counter
 import datetime
 import requests
@@ -7,7 +6,6 @@ from nose.tools import set_trace
 from bs4 import BeautifulSoup
 from suds.client import Client as SudsClient
 
-from sqlalchemy import and_
 from core.config import Configuration
 from core.coverage import (
     CoverageProvider,
@@ -17,7 +15,6 @@ from core.model import (
     DataSource,
     Hyperlink,
     Measurement,
-    Resource,
     Identifier,
 )
 

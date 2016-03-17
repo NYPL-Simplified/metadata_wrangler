@@ -1,15 +1,10 @@
 import isbnlib
 import csv
-import datetime
-import os
-import requests
 import sys
-import traceback
 
 from nose.tools import set_trace
 from psycopg2.extras import NumericRange
 from sqlalchemy import or_
-from sqlalchemy.sql.functions import func
 from sqlalchemy.orm import (
     aliased,
 )
@@ -19,18 +14,12 @@ from fast import (
     LCSHNames,
 )
 
-from core.threem import ThreeMAPI
 from core.config import Configuration
-from core.overdrive import (
-    OverdriveAPI,
-    OverdriveBibliographicCoverageProvider,
-)
+from core.overdrive import OverdriveBibliographicCoverageProvider
 from core.threem import ThreeMBibliographicCoverageProvider
 from core.classifier import Classifier
 from core.monitor import (
-    Monitor,
     IdentifierResolutionMonitor as CoreIdentifierResolutionMonitor,
-    PresentationReadyMonitor,
     SubjectAssignmentMonitor,
     IdentifierSweepMonitor,
     WorkSweepMonitor,
@@ -40,14 +29,12 @@ from core.model import (
     DataSource,
     Edition,
     Equivalency,
-    Hyperlink,
     Identifier,
     LicensePool,
     Subject,
     UnresolvedIdentifier,
     Work,
 )
-from core.coverage import CoverageFailure
 
 from mirror import ImageScaler
 from content_cafe import (

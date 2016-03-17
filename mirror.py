@@ -1,11 +1,6 @@
 from nose.tools import set_trace
 import datetime
-import gzip
-import os
-import random
 import logging
-import urlparse
-import requests
 import time
 
 from sqlalchemy import or_
