@@ -102,7 +102,7 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
-    VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/$")
+    VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/?$")
 
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
                       Identifier.ISBN])
@@ -139,6 +139,39 @@ class OCLCLinkedData(object):
 
     # Barnes and Noble have boring book covers, but their ISBNs are likely
     # to have reviews associated with them.
+
+    URI_TO_SUBJECT_TYPE = {
+        re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
+        re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
+        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
+        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
+    }
+
+    ACCEPTABLE_TYPES = (
+        'schema:Topic', 'schema:Place', 'schema:Person',
+        'schema:Organization', 'schema:Event', 'schema:CreativeWork',
+    )
+
+    # These tags are useless for our purposes.
+    POINTLESS_TAGS = set([
+        'large type', 'large print', '(binding)', 'movable books',
+        'electronic books', 'braille books', 'board books',
+        'electronic resource', u'états-unis', 'etats-unis',
+        'ebooks',
+        ])
+
+    # These tags indicate that the record as a whole is useless
+    # for our purposes.
+    #
+    # However, they are not reliably assigned to records that are
+    # actually useless, so we treat them the same as POINTLESS_TAGS.
+    TAGS_FOR_UNUSABLE_RECORDS = set([
+        'audiobook', 'audio book', 'sound recording', 'compact disc',
+        'talking book', 'books on cd', 'audiocassettes', 'playaway',
+        'vhs',
+    ])
+
+    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
 
     def __init__(self, _db):
         self._db = _db
@@ -322,23 +355,11 @@ class OCLCLinkedData(object):
                 repository.extend(ldq.values(values))
         return works
 
-    URI_TO_SUBJECT_TYPE = {
-        re.compile("http://dewey.info/class/([^/]+).*") : Subject.DDC,
-        re.compile("http://id.worldcat.org/fast/([^/]+)") : Subject.FAST,
-        re.compile("http://id.loc.gov/authorities/subjects/(sh[^/]+)") : Subject.LCSH,
-        re.compile("http://id.loc.gov/authorities/subjects/(jc[^/]+)") : Subject.LCSH,
-    }
-
-    ACCEPTABLE_TYPES = (
-        'schema:Topic', 'schema:Place', 'schema:Person',
-        'schema:Organization', 'schema:Event', 'schema:CreativeWork',
-    )
-
     @classmethod
     def extract_useful_data(cls, subgraph, book):
         titles = []
         descriptions = []
-        subjects = collections.defaultdict(set)
+        subjects = collections.defaultdict(list)
         publisher_uris = []
         creator_uris = []
         publication_dates = []
@@ -352,6 +373,7 @@ class OCLCLinkedData(object):
 
         id_uri = book['@id']
         m = cls.URL_ID_RE.match(id_uri)
+
         if not m:
             return no_value
 
@@ -362,7 +384,6 @@ class OCLCLinkedData(object):
             # Kind of weird, but okay.
             id_type = Identifier.OCLC_WORK
         else:
-            self.log.warn("EXPECTED OCLC ID, got %s" % id_type)
             return no_value
 
         for k, repository in (
@@ -381,89 +402,95 @@ class OCLCLinkedData(object):
                 ldq.restrict_to_language(values, 'en')
             ))
 
-        genres = book.get('schema:genre', [])
+        genres = book.get('genre', [])
         genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
-        subjects[Subject.TAG] = set(genres)
+        genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
+        subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
-        internal_lookups = []
         for uri in book.get('about', []):
             if not isinstance(uri, basestring):
                 continue
-            for r, subject_type in cls.URI_TO_SUBJECT_TYPE.items():
+
+            # Initialize subject details
+            [subject_data] = cls.internal_lookup(subgraph, [uri])
+            subject_type = None
+            subject_id = None
+            subject_name = None
+            name_value = None
+
+            # Grab FAST, DDC, and LCSH identifiers & types from their URIs.
+            for r, canonical_subject_type in cls.URI_TO_SUBJECT_TYPE.items():
                 m = r.match(uri)
                 if m:
-                    subjects[subject_type].add(m.groups()[0])
-                    break
-            else:
-                # Try an internal lookup.
-                internal_lookups.append(uri)
-
-        results = OCLCLinkedData.internal_lookup(subgraph, internal_lookups)
-        for result in results:
-            if 'schema:name' in result:
-                name = result['schema:name']
-            else:
-                logging.getLogger("OCLC Linked Data Client").warn(
-                    "WEIRD OCLC INTERNAL LOOKUP: %r", result)
-                continue
-            use_type = None
-            type_objs = []
-            for type_name in ('rdf:type', '@type'):
-                these_type_objs = result.get(type_name, [])
-                if not isinstance(these_type_objs, list):
-                    these_type_objs = [these_type_objs]
-                for this_type_obj in these_type_objs:
-                    if isinstance(this_type_obj, dict):
-                        type_objs.append(this_type_obj)
-                    elif isinstance(this_type_obj, basestring):
-                        type_objs.append({"@id": this_type_obj})
-
-            for rdf_type in type_objs:
-                if '@id' in rdf_type:
-                    type_id = rdf_type['@id']
-                else:
-                    type_id = rdf_type
-                if type_id in cls.ACCEPTABLE_TYPES:
-                    use_type = type_id
-                    break
-                elif type_id == 'schema:Intangible':
-                    use_type = Subject.TAG
+                    subject_id = m.groups()[0]
+                    subject_type = canonical_subject_type
                     break
 
-            if use_type:
-                for value in ldq.values(name):
-                    subjects[use_type].add(value)
+            # Subject doesn't match known classification systems. Try to
+            # identify the subject type another way.
+            if not subject_type:
+                type_objs = []
+                for type_property in ('rdf:type', '@type'):
+                    potential_types = subject_data.get(type_property, [])
+                    if not isinstance(potential_types, list):
+                        potential_types = [potential_types]
+
+                    for potential_type in potential_types:
+                        if isinstance(potential_type, dict):
+                            type_objs.append(potential_type)
+                        elif isinstance(potential_type, basestring):
+                            type_objs.append({'@id': potential_type})
+                for type_obj in type_objs:
+                    type_id = type_obj['@id']
+                    if type_id in cls.ACCEPTABLE_TYPES:
+                        subject_type = type_id
+                        break
+                    elif type_id == 'schema:Intangible':
+                        subject_type = Subject.TAG
+                        break
+
+            # Grab a human-readable name if possible.
+            if subject_type:
+                for name_property in ('name', 'schema:name'):
+                    if name_property in subject_data:
+                        name_value = [value for value in ldq.values(
+                            ldq.restrict_to_language(subject_data[name_property], 'en')
+                        )]
+                    if name_value:
+                        [subject_name] = name_value
+                        break
+
+                # Set ids or names as appropriate & add to the list.
+                if subject_id:
+                    subjects[subject_type].append(
+                        dict(id=subject_id, name=subject_name)
+                    )
+                elif subject_name:
+                    subjects[subject_type].append(dict(id=subject_name))
+
+        publishers = cls.internal_lookup(subgraph, publisher_uris)
+        publisher_names = [i.get('schema:name') or i.get('name')
+            for i in publishers
+            if ('schema:name' in i or 'name' in i)]
+        publisher_names = list(ldq.values(
+            ldq.restrict_to_language(publisher_names, 'en')
+        ))
+        for n in publisher_names:
+            if (n in cls.PUBLISHER_BLACKLIST
+                or 'Audio' in n or 'Video' in n or 'Tape' in n
+                or 'Comic' in n or 'Music' in n):
+                # This book is from a publisher that will probably not
+                # give us metadata we can use.
+                return no_value
 
         return (id_type, id, titles, descriptions, subjects, creator_uris,
-                publisher_uris, publication_dates, example_uris)
+                publisher_names, publication_dates, example_uris)
 
     @classmethod
     def internal_lookup(cls, graph, uris):
         return [x for x in graph if x['@id'] in uris]
 
-    # These tags are useless for our purposes.
-    POINTLESS_TAGS = set([
-        'large type', 'large print', '(binding)', 'movable books',
-        'electronic books', 'braille books', 'board books',
-        'electronic resource', u'états-unis', 'etats-unis',
-        'ebooks',
-        ])
-
-    # These tags indicate that the record as a whole is useless
-    # for our purposes.
-    #
-    # However, they are not reliably assigned to records that are
-    # actually useless, so we treat them the same as POINTLESS_TAGS.
-    TAGS_FOR_UNUSABLE_RECORDS = set([
-        'audiobook', 'audio book', 'sound recording', 'compact disc',
-        'talking book', 'books on cd', 'audiocassettes', 'playaway',
-        'vhs',
-    ])
-
-    FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
-
-    UNUSABLE_RECORD = object()
-
+    @classmethod
     def _fix_tag(self, tag):
         if tag.endswith('.'):
             tag = tag[:-1]
@@ -478,15 +505,19 @@ class OCLCLinkedData(object):
         for data in self.graphs_for(identifier):
             subgraph = self.graph(data)
             for book in self.books(subgraph):
-                info = self.info_for_book_graph(subgraph, book)
+                info = self.book_info_to_metadata(subgraph, book)
                 if info:
-                    yield self.book_info_to_metadata(info)
+                    yield info
 
-    def info_for_book_graph(self, subgraph, book_info):
-        """Filters raw book information to exclude irrelevant or unhelpful data
+    def book_info_to_metadata(self, subgraph, book_info):
+        """Filters raw book information to exclude irrelevant or unhelpful data.
 
-        :returns: None if information is unhelpful; dict of book info otherwise.
+        :returns: None if information is unhelpful; metadata object otherwise.
         """
+        self.log.info(
+            "Processing edition %s: %r", book_info.get('oclc_id'),
+            book_info.get('titles')
+        )
         if not self._has_relevant_types(book_info):
             # This book is not available in any format we're
             # interested in from a metadata perspective.
@@ -498,11 +529,45 @@ class OCLCLinkedData(object):
          descriptions,
          subjects,
          creator_uris,
-         publisher_uris,
+         publisher_names,
          publication_dates,
          example_uris) = self.extract_useful_data(subgraph, book_info)
 
-        isbns = set([])
+        if not oclc_id_type or not oclc_id:
+            return None
+
+        metadata = Metadata(self.source)
+        metadata.primary_identifier, new = Identifier.for_foreign_id(
+            self._db, oclc_id_type, oclc_id
+        )
+        metadata.title = titles[0]
+        for d in publication_dates:
+            try:
+                metadata.published = datetime.datetime.strptime(d[:4], "%Y")
+            except Exception, e:
+                pass
+
+        for description in descriptions:
+            # Create a description resource for every description.  When there's
+            # more than one description for a given edition, only one of them is
+            # actually a description. The others are tables of contents or some
+            # other stuff we don't need. Unfortunately I can't think of an
+            # automatic way to tell which is the good description.
+            metadata.links.append(LinkData(
+                Hyperlink.DESCRIPTION, media_type=Representation.TEXT_PLAIN,
+                content=description,
+            ))
+
+        if 'Project Gutenberg' in publisher_names and not metadata.links:
+            # Project Gutenberg texts don't have ISBNs, so if there's an
+            # ISBN on there, it's probably wrong. Unless someone stuck a
+            # description on there, there's no point in discussing
+            # OCLC+LD's view of a Project Gutenberg work.
+            return None
+        if publisher_names:
+            metadata.publisher = publisher_names[0]
+
+        # Grab all the ISBNs.
         example_graphs = self.internal_lookup(subgraph, example_uris)
         for example in example_graphs:
             for isbn_name in 'schema:isbn', 'isbn':
@@ -512,119 +577,37 @@ class OCLCLinkedData(object):
                     elif len(isbn) != 13:
                         continue
                     if isbn:
-                        isbns.add(isbn)
+                        metadata.identifiers.append(IdentifierData(
+                            type = Identifier.ISBN, identifier = isbn
+                        ))
 
-        # Consolidate subjects and apply a blacklist.
-        tags = set()
-        for tag in subjects.get(Subject.TAG, []):
-            fixed = self._fix_tag(tag)
-            if fixed == self.UNUSABLE_RECORD:
-                return None
-            elif fixed:
-                tags.add(fixed)
-        if tags:
-            subjects[Subject.TAG] = tags
-        elif Subject.TAG in subjects:
-            del subjects[Subject.TAG]
+        for subject_type, subjects_details in subjects.items():
+            for subject_detail in subjects_details:
+                if isinstance(subject_detail, dict):
+                    subject_name = subject_detail.get('name')
+                    subject_identifier = subject_detail.get('id')
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_identifier,
+                        name=subject_name,
+                    ))
+                else:
+                    metadata.subjects.append(SubjectData(
+                        type=subject_type, identifier=subject_detail
+                    ))
 
-        # Something interesting has to come out of this
-        # work--something we couldn't get from another source--or
-        # there's no point.
-        if not isbns and not descriptions and not subjects:
-            return None
-
-        publishers = self.internal_lookup(
-            subgraph, publisher_uris)
-        publisher_names = [
-            i['schema:name'] for i in publishers
-            if 'schema:name' in i]
-        publisher_names = list(ldq.values(
-            ldq.restrict_to_language(publisher_names, 'en')))
-
-        for n in publisher_names:
-            if (n in self.PUBLISHER_BLACKLIST
-                or 'Audio' in n or 'Video' in n or 'Tape' in n
-                or 'Comic' in n or 'Music' in n):
-                # This book is from a publisher that will probably not
-                # give us metadata we can use.
-                return None
-
-        # Project Gutenberg texts don't have ISBNs, so if there's an
-        # ISBN on there, it's probably wrong. Unless someone stuck a
-        # description on there, there's no point in discussing
-        # OCLC+LD's view of a Project Gutenberg work.
-        if 'Project Gutenberg' in publisher_names and not descriptions:
-            return None
-
-        creator_viafs = []
         for uri in creator_uris:
-            viaf_uri_match = self.VIAF_ID.search(uri)
-            if viaf_uri_match:
-                viaf = viaf_uri_match.groups()[0]
-                creator_viafs.append(viaf)
+            viaf_uri = self.VIAF_ID.search(uri)
+            if viaf_uri:
+                viaf = viaf_uri.groups()[0]
+                metadata.contributors.append(ContributorData(viaf=viaf))
 
-        r = dict(
-            oclc_id_type=oclc_id_type,
-            oclc_id=oclc_id,
-            titles=titles,
-            descriptions=descriptions,
-            subjects=subjects,
-            creator_viafs=creator_viafs,
-            publishers=publisher_names,
-            publication_dates=publication_dates,
-            isbns=isbns,
-        )
-        return r
+        if (not metadata.links and not metadata.identifiers and
+            not metadata.subjects and not metadata.contributors):
+            # Something interesting has to come out of this
+            # work--something we couldn't get from another source--or
+            # there's no point.
+            return None
 
-    def book_info_to_metadata(self, book_info):
-        """Transforms dictionary-style book info into a Metadata object"""
-        self.log.info(
-            "Processing edition %s: %r", book_info.get('oclc_id'),
-            book_info.get('titles')
-        )
-        metadata = Metadata(self.source)
-        metadata.primary_identifier, new = Identifier.for_foreign_id(
-            self._db, book_info['oclc_id_type'], book_info['oclc_id']
-        )
-
-        if book_info['titles']:
-            metadata.title = book_info['titles'][0]
-        if book_info['publishers']:
-            metadata.publisher = book_info['publishers'][0]
-        for d in book_info['publication_dates']:
-            # Try to find a publication year.
-            try:
-                metadata.published = datetime.datetime.strptime(
-                    d[:4], "%Y")
-            except Exception, e:
-                pass
-        for subject_type, subject_ids in book_info['subjects'].items():
-            for subject_id in subject_ids:
-                subject = SubjectData(type=subject_type, identifier=subject_id)
-                metadata.subjects.append(subject)
-        for isbn in book_info['isbns']:
-            # Create new ISBNs associated with the OCLC
-            # number. This will help us get metadata from other
-            # sources that use ISBN as input.
-            isbn_identifier = IdentifierData(type = Identifier.ISBN, identifier = isbn)
-            metadata.identifiers.append(isbn_identifier)
-        for viaf in book_info['creator_viafs']:
-            # Return any contributor VIAFS.
-            contributor = ContributorData(viaf=viaf)
-            metadata.contributors.append(contributor)
-        for description in book_info['descriptions']:
-            # Create a description resource for every description.  When
-            # there's more than one description for a given edition, only
-            # one of them is actually a description. The others are tables
-            # of contents or some other stuff we don't need. Unfortunately
-            # I can't think of an automatic way to tell which is the good
-            # description.
-            description = LinkData(
-                Hyperlink.DESCRIPTION,
-                media_type=Representation.TEXT_PLAIN,
-                content=description,
-            )
-            metadata.links.append(description)
         return metadata
 
     def _has_relevant_types(self, book_info):
