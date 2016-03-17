@@ -12,9 +12,4 @@ force = False
 if 'force' in args:
    force = True
    args.remove('force')
-if args:
-   restrict_to_source = args[0]
-else:
-   restrict_to_source = None
-WorkPresentationCalculationScript(
-   force=force, restrict_to_source=restrict_to_source).run()
+WorkPresentationCalculationScript(force=force).run()
