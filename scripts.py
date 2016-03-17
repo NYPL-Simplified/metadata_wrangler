@@ -70,7 +70,7 @@ class RunIdentifierResolutionMonitor(RunMonitorScript):
         if not identifiers:
             # Run the IdentifierResolutionMonitor as per normal usage.
             super(RunIdentifierResolutionMonitor, self).run()
-        
+
 
 class FillInVIAFAuthorNames(Script):
 
@@ -102,7 +102,7 @@ class CoverImageMirrorScript(Script):
     around in case the covers get screwed up, or to do intial
     bootstrapping of a large dataset.
     """
-    
+
     def __init__(self, force=False):
         self.force = force
         super(CoverImageMirrorScript, self).__init__()
@@ -198,7 +198,7 @@ class CollectionCategorizationOverviewScript(Script):
             return ''
 
     def run(self):
-        # where s.type in ('Overdrive', '3M') 
+        # where s.type in ('Overdrive', '3M')
         q = "select s.type as type, s.identifier as identifier, s.name as name, s.fiction as fiction, s.audience as audience, g.name as genre, count(i.id) as ct from subjects s left join classifications c on s.id=c.subject_id left join identifiers i on c.identifier_id=i.id left join genres g on s.genre_id=g.id group by s.type, s.identifier, s.name, s.fiction, s.audience, g.name order by ct desc;"
         q = self._db.query("type", "identifier", "name", "fiction", "audience", "genre", "ct").from_statement(q)
         for type, identifier, name, fiction, audience, genre, ct in q:
@@ -212,9 +212,9 @@ class CollectionCategorizationOverviewScript(Script):
                 fiction = ''
             o = [type, identifier, name, fiction, audience, genre, ct]
             self.writer.writerow(map(self.ready, o))
-                
+
 class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript):
-    
+
     def __init__(self, input_path):
         self.input = open(input_path)
         self.reader = csv.reader(self.input)

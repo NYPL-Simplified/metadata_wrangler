@@ -104,10 +104,10 @@ class ContentCafeAPI(object):
         self.get_reviews(isbn_identifier, args)
         self.get_author_notes(isbn_identifier, args)
         self.measure_popularity(isbn_identifier, self.soap_client.ONE_YEAR_AGO)
-        
+
 
     def get_associated_web_resources(
-            self, identifier, args, url, 
+            self, identifier, args, url,
             phrase_indicating_missing_data,
             rel, scrape_method):
         url = url % args
@@ -126,11 +126,11 @@ class ContentCafeAPI(object):
                         continue
                     already_seen.add(content)
                     hyperlink, is_new = identifier.add_link(
-                        rel, None, self.data_source, media_type="text/html", 
+                        rel, None, self.data_source, media_type="text/html",
                         content=content)
                     hyperlinks.append(hyperlink)
                     self.log.debug(
-                        "Content: %s", 
+                        "Content: %s",
                         hyperlink.resource.representation.content[:75])
         return hyperlinks
 

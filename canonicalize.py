@@ -64,7 +64,7 @@ class AuthorNameCanonicalizer(object):
         TODO: VIAF recognizes "D.H. Lawrence" and "D H Lawrence" but
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
-        """    
+        """
         if identifier and identifier.type != Identifier.ISBN:
             # The only identifier we can do a useful lookup on is
             # ISBN.
@@ -185,7 +185,7 @@ class AuthorNameCanonicalizer(object):
                     sim = MetadataSimilarity.title_similarity(
                         test_name, test_working_display_name)
                     if sim > 0.6:
-                        if (not shortest_candidate 
+                        if (not shortest_candidate
                             or len(name) < len(shortest_candidate)):
                             shortest_candidate = name
         return shortest_candidate, uris

@@ -19,7 +19,7 @@ class TestRedoOCLCForThreeM(DatabaseTest):
     def setup(self):
         super(TestRedoOCLCForThreeM, self).setup()
         self.script = RedoOCLCForThreeMScript(self._db)
-        
+
         self.edition1, lp = self._edition(
             data_source_name = DataSource.THREEM,
             identifier_type = Identifier.THREEM_ID,
