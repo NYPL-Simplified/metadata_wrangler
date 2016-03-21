@@ -386,11 +386,19 @@ class TestOCLCLinkedData(TestParser):
         eq_(u"11866009", oclc_id)
         eq_([u"Galápagos : a novel"], titles)
         eq_(1, len(descriptions))
+
+        # Even though there are 11 links in the books "about" list,
+        # "http://subject.example.wo/internal_lookup" does not get included as
+        # a subject because it doesn't have an internal lookup.
         eq_(1, len(subjects[Subject.DDC]))
         eq_(1, len(subjects[Subject.FAST]))
         eq_(4, len(subjects[Subject.TAG]))
         eq_(1, len(subjects[Subject.PLACE]))
+        # Meanwhile, the made-up LCSH subject that also doesn't have an
+        # internal lookup is included because its details can be parsed from
+        # the url: "http://id.loc.gov/authorities/subjects/sh12345678"
         eq_(3, len(subjects[Subject.LCSH]))
+
         eq_(1, len(creator_uris))
         eq_(["Delacorte Press/Seymour Lawrence"], publishers)
         eq_(["1985"], publication_dates)
