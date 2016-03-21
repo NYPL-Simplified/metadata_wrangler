@@ -400,7 +400,7 @@ class OCLCLinkedData(object):
             ))
 
         genres = book.get('genre', [])
-        genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
+        genres = list(ldq.values(ldq.restrict_to_language(genres, 'en')))
         genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
         subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
@@ -408,11 +408,7 @@ class OCLCLinkedData(object):
             if not isinstance(uri, basestring):
                 continue
 
-            # Initialize subject details
-            subject_type = None
-            subject_id = None
-            subject_name = None
-            name_value = None
+            subject_id = subject_type = subject_name = None
 
             # Grab FAST, DDC, and LCSH identifiers & types from their URIs.
             for r, canonical_subject_type in cls.URI_TO_SUBJECT_TYPE.items():
@@ -455,13 +451,14 @@ class OCLCLinkedData(object):
 
             # Grab a human-readable name if possible.
             if subject_type:
+                subject_names = None
                 for name_property in ('name', 'schema:name'):
                     if name_property in subject_data:
-                        name_value = [value for value in ldq.values(
-                            ldq.restrict_to_language(subject_data[name_property], 'en')
-                        )]
-                    if name_value:
-                        [subject_name] = name_value
+                        subject_names = list(ldq.values(ldq.restrict_to_language(
+                            subject_data[name_property], 'en'
+                        )))
+                    if subject_names:
+                        subject_name = subject_names[0]
                         break
 
                 # Set ids or names as appropriate & add to the list.
