@@ -179,6 +179,7 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
                 edition.equivalent_identifiers(type=types)
             )
         for oclc_id in oclc_ids:
+            self.log.info("Currently processing equivalent identifier: %r", oclc_id)
             self.oclc_linked_data.ensure_coverage(oclc_id)
 
     def resolve_viaf(self, work):

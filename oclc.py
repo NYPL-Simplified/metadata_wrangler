@@ -172,11 +172,11 @@ class OCLCLinkedData(object):
     ])
 
     FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
+    log = logging.getLogger("OCLC Linked Data Client")
 
     def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
-        self.log = logging.getLogger("OCLC Linked Data Client")
 
     def lookup(self, identifier_or_uri, processed_uris=set()):
         """Perform an OCLC Open Data lookup for the given identifier."""
@@ -383,6 +383,7 @@ class OCLCLinkedData(object):
         else:
             return no_value
 
+        cls.log.info("Extracting %s: %s", id_type, id)
         for k, repository in (
                 ('schema:description', descriptions),
                 ('description', descriptions),
@@ -515,10 +516,6 @@ class OCLCLinkedData(object):
 
         :returns: None if information is unhelpful; metadata object otherwise.
         """
-        self.log.info(
-            "Processing edition %s: %r", book_info.get('oclc_id'),
-            book_info.get('titles')
-        )
         if not self._has_relevant_types(book_info):
             # This book is not available in any format we're
             # interested in from a metadata perspective.
@@ -537,6 +534,7 @@ class OCLCLinkedData(object):
         if not oclc_id_type or not oclc_id:
             return None
 
+        self.log.info("Processing edition %s: %r", oclc_id, titles)
         metadata = Metadata(self.source)
         metadata.primary_identifier, new = Identifier.for_foreign_id(
             self._db, oclc_id_type, oclc_id
