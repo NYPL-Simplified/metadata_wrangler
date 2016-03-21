@@ -1,15 +1,10 @@
 import isbnlib
 import csv
-import datetime
-import os
-import requests
 import sys
-import traceback
 
 from nose.tools import set_trace
 from psycopg2.extras import NumericRange
 from sqlalchemy import or_
-from sqlalchemy.sql.functions import func
 from sqlalchemy.orm import (
     aliased,
 )
@@ -19,18 +14,12 @@ from fast import (
     LCSHNames,
 )
 
-from core.threem import ThreeMAPI
 from core.config import Configuration
-from core.overdrive import (
-    OverdriveAPI,
-    OverdriveBibliographicCoverageProvider,
-)
+from core.overdrive import OverdriveBibliographicCoverageProvider
 from core.threem import ThreeMBibliographicCoverageProvider
 from core.classifier import Classifier
 from core.monitor import (
-    Monitor,
     IdentifierResolutionMonitor as CoreIdentifierResolutionMonitor,
-    PresentationReadyMonitor,
     SubjectAssignmentMonitor,
     IdentifierSweepMonitor,
     WorkSweepMonitor,
@@ -40,14 +29,12 @@ from core.model import (
     DataSource,
     Edition,
     Equivalency,
-    Hyperlink,
     Identifier,
     LicensePool,
     Subject,
     UnresolvedIdentifier,
     Work,
 )
-from core.coverage import CoverageFailure
 
 from mirror import ImageScaler
 from content_cafe import (
@@ -105,7 +92,7 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
 
         This is a defensive measure.
         """
-        types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID, 
+        types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID,
                  Identifier.THREEM_ID, Identifier.AXIS_360_ID]
 
         # Find Identifiers that have LicensePools but no Editions and no
@@ -134,9 +121,9 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
                         Edition.work_id==None)
 
         for q, msg, force in (
-                (licensepool_but_no_edition, 
+                (licensepool_but_no_edition,
                  "Creating UnresolvedIdentifiers for %d incompletely resolved Identifiers (LicensePool but no Edition).", True),
-                (no_work_because_of_missing_metadata, 
+                (no_work_because_of_missing_metadata,
                  "Creating UnresolvedIdentifiers for %d Identifiers that have no Work because their Editions are missing title or author.", True),
                 (seemingly_resolved_but_no_licensepool,
                  "Creating UnresolvedIdentifiers for %d identifiers missing both LicensePool and UnresolvedIdentifier.", False),
@@ -237,8 +224,8 @@ class ContentCafeDemandMeasurementSweep(IdentifierSweepMonitor):
 
     def __init__(self, _db, batch_size=100, interval_seconds=3600*48):
         super(ContentCafeDemandMeasurementSweep, self).__init__(
-            _db, 
-            "Content Cafe demand measurement sweep", 
+            _db,
+            "Content Cafe demand measurement sweep",
             interval_seconds)
         self.client = ContentCafeAPI(_db, mirror=None)
         self.batch_size = batch_size
@@ -256,7 +243,7 @@ class ContentCafeDemandMeasurementSweep(IdentifierSweepMonitor):
                 input_identifier, input_join_clause
             ).filter(Identifier.type==Identifier.ISBN).filter(
                 input_identifier.type.in_(
-                    [Identifier.OVERDRIVE_ID, Identifier.THREEM_ID, 
+                    [Identifier.OVERDRIVE_ID, Identifier.THREEM_ID,
                      Identifier.AXIS_360_ID])
             ).order_by(Identifier.id)
         return qu
@@ -273,19 +260,19 @@ class ChildrensBooksWithNoAgeRangeMonitor(WorkSweepMonitor):
     def __init__(self, _db, batch_size=100, interval_seconds=600,
                  out=sys.stdout):
         super(ChildrensBooksWithNoAgeRangeMonitor, self).__init__(
-            _db, 
-            "Childrens' books with no age range", 
+            _db,
+            "Childrens' books with no age range",
             interval_seconds)
         self.batch_size = batch_size
         self.out = csv.writer(out)
 
     def work_query(self):
         or_clause = or_(
-            Work.target_age == None, 
+            Work.target_age == None,
             Work.target_age == NumericRange(None, None)
         )
         audiences = [
-            Classifier.AUDIENCE_CHILDREN, 
+            Classifier.AUDIENCE_CHILDREN,
             Classifier.AUDIENCE_YOUNG_ADULT
         ]
         qu = self._db.query(LicensePool).join(LicensePool.work).join(
@@ -323,6 +310,6 @@ class ChildrensBooksWithNoAgeRangeMonitor(WorkSweepMonitor):
             isbn = isbns[0]
         else:
             isbn = None
-        data = [work.title.encode("utf8"), work.author.encode("utf8"), 
+        data = [work.title.encode("utf8"), work.author.encode("utf8"),
                 work.audience, "", isbn, axis, overdrive, threem, gutenberg]
         self.out.writerow(data)

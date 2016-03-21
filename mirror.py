@@ -1,11 +1,6 @@
 from nose.tools import set_trace
 import datetime
-import gzip
-import os
-import random
 import logging
-import urlparse
-import requests
 import time
 
 from sqlalchemy import or_
@@ -180,7 +175,7 @@ class ImageScaler(object):
                     thumbnail.mirrored_at<now))
         else:
             q = q.filter(or_(
-                    thumbnail.id==None, 
+                    thumbnail.id==None,
                     thumbnail.mirrored_at==None))
         blacklist = set()
         resultset = q.limit(batch_size).all()

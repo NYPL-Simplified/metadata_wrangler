@@ -242,7 +242,7 @@ class OCLCLinkedData(object):
             raise IOError(
                 "Expected %s to redirect, but couldn't find location." % url
             )
-            
+
         location = representation.location
         match = self.URI_WITH_OCLC_NUMBER.match(location)
         if not match:

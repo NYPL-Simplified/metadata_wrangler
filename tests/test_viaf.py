@@ -1,18 +1,11 @@
 import os
 from nose.tools import set_trace, eq_
 
-from ..core.model import (
-    Contributor,
-    )
-
 from . import (
     DatabaseTest,
 )
 
-from ..viaf import (
-    VIAFParser,
-    VIAFClient,
-)
+from ..viaf import VIAFParser
 
 class TestNameParser(DatabaseTest):
 
@@ -83,7 +76,7 @@ class TestNameParser(DatabaseTest):
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
 
-        # The author is better known as Mark Twain, so this 
+        # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
         viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
         eq_("50566653", viaf)
@@ -100,7 +93,7 @@ class TestNameParser(DatabaseTest):
         eq_("Twain, Mark", sort)
         eq_("Twain", family)
         eq_(None, wikipedia)
-        
+
     def test_ignore_results_if_author_not_in_viaf(self):
         # This is the VIAF result for searching for "Howard,
         # J. J.". There are lots of results but none of them is the

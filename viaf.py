@@ -6,15 +6,9 @@ import re
 
 from collections import Counter, defaultdict
 
-from sqlalchemy.sql.expression import (
-    or_,
-)
-
 from core.model import (
     Contributor,
-    Contribution,
     DataSource,
-    Edition,
     Representation,
 )
 
@@ -48,7 +42,7 @@ class VIAFParser(XMLParser):
 
         if not contributor.viaf:
             contributor.viaf = viaf
-        
+
         if not display_name or not family_name:
             default_family, default_display = contributor.default_names(None)
             if not display_name:
