@@ -409,7 +409,6 @@ class OCLCLinkedData(object):
                 continue
 
             # Initialize subject details
-            [subject_data] = cls.internal_lookup(subgraph, [uri])
             subject_type = None
             subject_id = None
             subject_name = None
@@ -423,15 +422,23 @@ class OCLCLinkedData(object):
                     subject_type = canonical_subject_type
                     break
 
-            # Subject doesn't match known classification systems. Try to
-            # identify the subject type another way.
+            # Try to pull information from an internal lookup.
+            internal_lookup = cls.internal_lookup(subgraph, [uri])
+            if not internal_lookup:
+                # There's no extra data to be had. Take the subject and run.
+                if subject_id and subject_type:
+                    subjects[subject_type].append(dict(id=subject_id))
+                continue
+            [subject_data] = internal_lookup
+
+            # Subject doesn't match known classification systems. Look
+            # for an acceptable type.
             if not subject_type:
                 type_objs = []
                 for type_property in ('rdf:type', '@type'):
                     potential_types = subject_data.get(type_property, [])
                     if not isinstance(potential_types, list):
                         potential_types = [potential_types]
-
                     for potential_type in potential_types:
                         if isinstance(potential_type, dict):
                             type_objs.append(potential_type)
