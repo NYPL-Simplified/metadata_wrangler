@@ -390,7 +390,7 @@ class TestOCLCLinkedData(TestParser):
         eq_(1, len(subjects[Subject.FAST]))
         eq_(4, len(subjects[Subject.TAG]))
         eq_(1, len(subjects[Subject.PLACE]))
-        eq_(2, len(subjects[Subject.LCSH]))
+        eq_(3, len(subjects[Subject.LCSH]))
         eq_(1, len(creator_uris))
         eq_(["Delacorte Press/Seymour Lawrence"], publishers)
         eq_(["1985"], publication_dates)
@@ -421,7 +421,7 @@ class TestOCLCLinkedData(TestParser):
         eq_(1, len(metadata_obj.contributors))
         [viaf] = [c.viaf for c in metadata_obj.contributors]
         eq_(u"71398958", viaf)
-        eq_(9, len(metadata_obj.subjects))
+        eq_(10, len(metadata_obj.subjects))
 
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
