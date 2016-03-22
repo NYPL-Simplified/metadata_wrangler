@@ -1282,6 +1282,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
             for metadata in self.api.info_for(identifier):
                 oclc_editions = metadata.primary_identifier.primarily_identifies
+
+                # Keep track of the number of editions OCLC associates
+                # with this identifier.
+                metadata.primary_identifier.add_measurement(
+                    self.output_source, Measurement.PUBLISHED_EDITIONS, 
+                    len(oclc_editions)
+                )
+
                 num_new_isbns = self.new_isbns(metadata)
                 if oclc_editions:
                     for edition in oclc_editions:
