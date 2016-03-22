@@ -8,6 +8,7 @@ from core.model import (
     Edition,
     Equivalency,
     Identifier,
+    PresentationCalculationPolicy,
     Subject,
     UnresolvedIdentifier,
     Work,
@@ -82,19 +83,6 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
-
-
-class WorkPresentationCalculationScript(WorkProcessingScript):
-
-    def process_work(self, work):
-        work.calculate_presentation(
-            choose_edition=False, classify=True, choose_summary=True,
-            calculate_quality=True)
-
-    def query_hook(self, q):
-        if not self.force:
-            q = q.filter(Work.fiction==None).filter(Work.audience==None)
-        return q
 
 
 class CoverImageMirrorScript(Script):
