@@ -8,7 +8,6 @@ from core.model import (
     Edition,
     Equivalency,
     Identifier,
-    PresentationCalculationPolicy,
     Subject,
     UnresolvedIdentifier,
     Work,
