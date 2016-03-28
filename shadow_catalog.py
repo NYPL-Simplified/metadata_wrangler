@@ -94,7 +94,7 @@ class ShadowCatalogAPI(object):
         if type == Identifier.ISBN:
             endpoint = 'isbnworks'
         elif type in (
-                Identifier.THREEM_ID, 
+                Identifier.THREEM_ID,
                 Identifier.OVERDRIVE_ID,
                 Identifier.AXIS_360_ID,
         ):
@@ -166,16 +166,16 @@ class Representation(object):
     ]
 
     known_vars = set([
-        None, '000', '001', '003', '005', '006', '007', '008', 
+        None, '000', '001', '003', '005', '006', '007', '008',
         '010', '019', '020', '024', '028',
         '035', '037', '040', '041', '042', '043',
         '049', '050', '072', '082', '091', '100',
-        '240', '245', '246', '250', '260', '263', 
-        '264', '300', '306', '347', '336', '337', '338', 
-        '380', '385', '490', '500', 
+        '240', '245', '246', '250', '260', '263',
+        '264', '300', '306', '347', '336', '337', '338',
+        '380', '385', '490', '500',
         '504', '505', '511', '520', '521', '533',
         '588', '650', '651', '652', '653', '654', '655', '700',
-        '710', '730', '776', '800', '830', '856', '901', '908', 
+        '710', '730', '776', '800', '830', '856', '901', '908',
         '909', '921', '945', '946', '969', '995',
     ])
 
@@ -197,7 +197,7 @@ class Representation(object):
         self.unrecognized_tags = dict()
         self.title = None
         for f in self.product.get('varFields', []):
-            marctag = MarcTag(f) 
+            marctag = MarcTag(f)
             self.var[marctag.marcTag].append(marctag)
 
         # Find a title.
@@ -241,7 +241,7 @@ class Representation(object):
             if tag.a:
                 self.subjects.append(
                     SubjectData(type=Subject.DDC, identifier=tag.a)
-                )                
+                )
 
         for v in range(650, 656):
             for tag in self.tags(v):
@@ -256,7 +256,7 @@ class Representation(object):
                     )
 
                 identifiers = [x for x in [tag.a, tag.v] if x]
-                for identifier in identifiers: 
+                for identifier in identifiers:
                     self.subjects.append(
                         SubjectData(type=native_type, identifier=identifier)
                     )
@@ -276,7 +276,7 @@ class Representation(object):
             for r in self.isbn_res:
                 m = r.search(isbn)
                 if m:
-                    isbn = m.groups()[0] 
+                    isbn = m.groups()[0]
                     self.identifiers.append(
                         IdentifierData(type=Identifier.ISBN, identifier=isbn)
                     )
@@ -303,7 +303,7 @@ class Representation(object):
             if identifier:
                 self.identifiers.append(
                     IdentifierData(type=type, identifier=identifier)
-                )                
+                )
 
         # Keep track of items we haven't seen before.
         for key, var in self.var.items():
@@ -315,7 +315,7 @@ class Representation(object):
         return Metadata(
             data_source=DataSource.NYPL_SHADOWCAT,
             title=self.title,
-            identifiers=self.identifiers, 
+            identifiers=self.identifiers,
             subjects=self.subjects,
             links=self.links,
         )

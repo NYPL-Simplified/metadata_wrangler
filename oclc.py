@@ -172,11 +172,11 @@ class OCLCLinkedData(object):
     ])
 
     FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
+    log = logging.getLogger("OCLC Linked Data Client")
 
     def __init__(self, _db):
         self._db = _db
         self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
-        self.log = logging.getLogger("OCLC Linked Data Client")
 
     def lookup(self, identifier_or_uri, processed_uris=set()):
         """Perform an OCLC Open Data lookup for the given identifier."""
@@ -242,7 +242,7 @@ class OCLCLinkedData(object):
             raise IOError(
                 "Expected %s to redirect, but couldn't find location." % url
             )
-            
+
         location = representation.location
         match = self.URI_WITH_OCLC_NUMBER.match(location)
         if not match:
@@ -383,6 +383,7 @@ class OCLCLinkedData(object):
         else:
             return no_value
 
+        cls.log.info("Extracting %s: %s", id_type, id)
         for k, repository in (
                 ('schema:description', descriptions),
                 ('description', descriptions),
@@ -400,7 +401,7 @@ class OCLCLinkedData(object):
             ))
 
         genres = book.get('genre', [])
-        genres = [x for x in ldq.values(ldq.restrict_to_language(genres, 'en'))]
+        genres = list(ldq.values(ldq.restrict_to_language(genres, 'en')))
         genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
         subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
@@ -408,12 +409,7 @@ class OCLCLinkedData(object):
             if not isinstance(uri, basestring):
                 continue
 
-            # Initialize subject details
-            [subject_data] = cls.internal_lookup(subgraph, [uri])
-            subject_type = None
-            subject_id = None
-            subject_name = None
-            name_value = None
+            subject_id = subject_type = subject_name = None
 
             # Grab FAST, DDC, and LCSH identifiers & types from their URIs.
             for r, canonical_subject_type in cls.URI_TO_SUBJECT_TYPE.items():
@@ -423,15 +419,23 @@ class OCLCLinkedData(object):
                     subject_type = canonical_subject_type
                     break
 
-            # Subject doesn't match known classification systems. Try to
-            # identify the subject type another way.
+            # Try to pull information from an internal lookup.
+            internal_lookup = cls.internal_lookup(subgraph, [uri])
+            if not internal_lookup:
+                # There's no extra data to be had. Take the subject and run.
+                if subject_id and subject_type:
+                    subjects[subject_type].append(dict(id=subject_id))
+                continue
+            [subject_data] = internal_lookup
+
+            # Subject doesn't match known classification systems. Look
+            # for an acceptable type.
             if not subject_type:
                 type_objs = []
                 for type_property in ('rdf:type', '@type'):
                     potential_types = subject_data.get(type_property, [])
                     if not isinstance(potential_types, list):
                         potential_types = [potential_types]
-
                     for potential_type in potential_types:
                         if isinstance(potential_type, dict):
                             type_objs.append(potential_type)
@@ -448,13 +452,14 @@ class OCLCLinkedData(object):
 
             # Grab a human-readable name if possible.
             if subject_type:
+                subject_names = None
                 for name_property in ('name', 'schema:name'):
                     if name_property in subject_data:
-                        name_value = [value for value in ldq.values(
-                            ldq.restrict_to_language(subject_data[name_property], 'en')
-                        )]
-                    if name_value:
-                        [subject_name] = name_value
+                        subject_names = list(ldq.values(ldq.restrict_to_language(
+                            subject_data[name_property], 'en'
+                        )))
+                    if subject_names:
+                        subject_name = subject_names[0]
                         break
 
                 # Set ids or names as appropriate & add to the list.
@@ -511,10 +516,6 @@ class OCLCLinkedData(object):
 
         :returns: None if information is unhelpful; metadata object otherwise.
         """
-        self.log.info(
-            "Processing edition %s: %r", book_info.get('oclc_id'),
-            book_info.get('titles')
-        )
         if not self._has_relevant_types(book_info):
             # This book is not available in any format we're
             # interested in from a metadata perspective.
@@ -533,6 +534,7 @@ class OCLCLinkedData(object):
         if not oclc_id_type or not oclc_id:
             return None
 
+        self.log.info("Processing edition %s: %r", oclc_id, titles)
         metadata = Metadata(self.source)
         metadata.primary_identifier, new = Identifier.for_foreign_id(
             self._db, oclc_id_type, oclc_id
