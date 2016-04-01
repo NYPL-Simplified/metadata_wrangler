@@ -1303,7 +1303,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                         new_descriptions += len(metadata.links)
                         new_subjects += len(metadata.subjects)
                 elif num_new_isbns:
-                    edition = get_one_or_create(
+                    edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.output_source,
                         primary_identifier=metadata.primary_identifier
                     )

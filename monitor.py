@@ -18,6 +18,7 @@ from core.config import Configuration
 from core.overdrive import OverdriveBibliographicCoverageProvider
 from core.threem import ThreeMBibliographicCoverageProvider
 from core.classifier import Classifier
+from core.metadata_layer import ReplacementPolicy
 from core.monitor import (
     IdentifierResolutionMonitor as CoreIdentifierResolutionMonitor,
     SubjectAssignmentMonitor,
@@ -31,11 +32,13 @@ from core.model import (
     Equivalency,
     Identifier,
     LicensePool,
+    PresentationCalculationPolicy,
     Subject,
     UnresolvedIdentifier,
     Work,
 )
 
+from core.s3 import S3Uploader
 from mirror import ImageScaler
 from content_cafe import (
     ContentCafeCoverageProvider,
@@ -59,9 +62,27 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
     UNKNOWN_FAILURE = "Unknown failure."
 
     def __init__(self, _db):
+        # Since we are the metadata wrangler, any Overdrive and 3M
+        # resources we find, we mirror to S3.
+        mirror = S3Uploader()
 
-        overdrive = OverdriveBibliographicCoverageProvider(_db)
-        threem = ThreeMBibliographicCoverageProvider(_db)
+        # We're going to be aggressive about recalculating the presentation
+        # for this work because either the work is currently not set up
+        # at all, or something went wrong trying to set it up.
+        presentation_calculation_policy = PresentationCalculationPolicy(
+            regenerate_opds_entries=True,
+            update_search_index=True
+        )
+        policy = ReplacementPolicy.from_metadata_source(
+            mirror=mirror, even_if_not_apparently_updated=True,
+            presentation_calculation_policy=presentation_calculation_policy
+        )
+        overdrive = OverdriveBibliographicCoverageProvider(
+            _db, metadata_replacement_policy=policy
+        )
+        threem = ThreeMBibliographicCoverageProvider(
+            _db, metadata_replacement_policy=policy
+        )
         content_cafe = ContentCafeCoverageProvider(_db)
         content_server = ContentServerCoverageProvider(_db)
         oclc_classify = OCLCClassifyCoverageProvider(_db)
