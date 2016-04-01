@@ -69,10 +69,7 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.
-        presentation_calculation_policy = PresentationCalculationPolicy(
-            regenerate_opds_entries=True,
-            update_search_index=True
-        )
+        presentation_calculation_policy = PresentationCalculationPolicy.recalculate_everything()
         policy = ReplacementPolicy.from_metadata_source(
             mirror=mirror, even_if_not_apparently_updated=True,
             presentation_calculation_policy=presentation_calculation_policy
