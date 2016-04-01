@@ -51,7 +51,9 @@ class RunIdentifierResolutionMonitor(RunMonitorScript):
     def run(self):
         # Explicitly create UnresolvedIdentifiers for any Identifiers
         # mentioned on the command line.
-        identifiers = self.parse_identifier_list(self._db, sys.argv[1:])
+        identifiers = self.parse_identifier_list(
+            self._db, sys.argv[1:], autocreate=True
+        )
         for identifier in identifiers:
             self.log.info(
                 "Registering UnresolvedIdentifier for %r", identifier

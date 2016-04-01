@@ -14,6 +14,8 @@ elasticsearch
 uwsgi
 python-dateutil
 loggly-python-handler
+mock
+cairosvg
 
 # Used only by metadata
 pyld
