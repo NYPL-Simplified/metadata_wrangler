@@ -77,7 +77,7 @@ def canonical_author_name():
             # Error.
             status, title = identifier
             type = URNLookupController.COULD_NOT_PARSE_URN_TYPE
-            return problem(type, title, status)
+            return problem(type, status, title)
     else:
         identifier = None
 
