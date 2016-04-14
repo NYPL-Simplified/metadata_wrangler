@@ -4,6 +4,7 @@ import logging
 import flask
 import urlparse
 
+from functools import wraps
 from flask import Flask, make_response
 from core.util.flask_util import problem
 from core.opds import VerboseAnnotator
@@ -17,11 +18,11 @@ from core.model import (
 )
 from core.config import Configuration
 from canonicalize import AuthorNameCanonicalizer
+from controller import LibraryController
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
 app.debug = True
-
 
 class Conf:
     db = None
@@ -38,6 +39,25 @@ else:
     Conf.testing = False
     _db = production_session()
     Conf.initialize(_db)
+
+def accepts_library(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        library = LibraryController(Conf.db).authenticated_library()
+        if library:
+            return f(library=library, *args, **kwargs)
+        return f(*args, **kwargs)
+    return decorated
+
+def requires_library(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        library = LibraryController(Conf.db).authenticated_library()
+        if library:
+            return f(*args, **kwargs)
+        # No library found. Return error.
+        return LibraryController.invalid_credentials()
+    return decorated
 
 @app.route('/heartbeat')
 def hearbeat():
