@@ -7,6 +7,7 @@ import urlparse
 from functools import wraps
 from flask import Flask, make_response
 from core.util.flask_util import problem
+from core.problem_details import INVALID_CREDENTIALS
 from core.opds import VerboseAnnotator
 from core.app_server import (
     HeartbeatController,
@@ -18,7 +19,6 @@ from core.model import (
 )
 from core.config import Configuration
 from canonicalize import AuthorNameCanonicalizer
-from controller import LibraryController
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -43,20 +43,21 @@ else:
 def accepts_library(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        library = LibraryController(Conf.db).authenticated_library()
-        if library:
-            return f(library=library, *args, **kwargs)
-        return f(*args, **kwargs)
-    return decorated
+        header = flask.request.authorization
+        if header:
+            client_id, client_secret = header.username, header.password
+            library = get_one(Conf.db, Library, client_id=client_id,
+                client_secret=client_secret
+            )
+            if library:
+                return f(library=library, *args, **kwargs)
 
-def requires_library(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        library = LibraryController(Conf.db).authenticated_library()
-        if library:
-            return f(*args, **kwargs)
-        # No library found. Return error.
-        return LibraryController.invalid_credentials()
+            # If inaccurate authorization details were sent, return error.
+            type = INVALID_CREDENTIALS.uri
+            title = INVALID_CREDENTIALS.title
+            status = INVALID_CREDENTIALS.status_code
+            return problem(type, status, title)
+        return f(*args, **kwargs)
     return decorated
 
 @app.route('/heartbeat')
