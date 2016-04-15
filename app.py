@@ -56,8 +56,11 @@ def hearbeat():
     return HeartbeatController().heartbeat()
 
 @app.route('/lookup')
-def lookup():
-    return URNLookupController(Conf.db, True).work_lookup(VerboseAnnotator)
+@app.accepts_collection
+def lookup(collection=None):
+    return URNLookupController(Conf.db, True).work_lookup(
+        VerboseAnnotator, collection=collection
+    )
 
 @app.route('/canonical-author-name')
 def canonical_author_name():
