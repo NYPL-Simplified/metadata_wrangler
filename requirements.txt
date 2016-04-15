@@ -21,3 +21,4 @@ cairosvg
 pyld
 beautifulsoup4
 suds
+py-bcrypt

@@ -7,11 +7,11 @@ import urlparse
 from functools import wraps
 from flask import Flask, make_response
 from core.util.flask_util import problem
-from core.problem_details import INVALID_CREDENTIALS
 from core.opds import VerboseAnnotator
 from core.app_server import (
     HeartbeatController,
     URNLookupController,
+    CollectionController,
 )
 from core.model import (
     production_session,
@@ -40,23 +40,14 @@ else:
     _db = production_session()
     Conf.initialize(_db)
 
-def accepts_library(f):
+def accepts_collection(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        header = flask.request.authorization
-        if header:
-            client_id, client_secret = header.username, header.password
-            library = get_one(Conf.db, Library, client_id=client_id,
-                client_secret=client_secret
-            )
-            if library:
-                return f(library=library, *args, **kwargs)
-
-            # If inaccurate authorization details were sent, return error.
-            type = INVALID_CREDENTIALS.uri
-            title = INVALID_CREDENTIALS.title
-            status = INVALID_CREDENTIALS.status_code
-            return problem(type, status, title)
+        collection = CollectionController(Conf.db).authenticated_collection_from_request()
+        if isinstance(collection, Response):
+            return collection
+        elif collection:
+            return f(collection=collection, *args, **kwargs)
         return f(*args, **kwargs)
     return decorated
 
