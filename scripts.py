@@ -2,6 +2,7 @@ import csv
 import sys
 from nose.tools import set_trace
 from core.model import (
+    Collection,
     Contribution,
     DataSource,
     Edition,
@@ -113,6 +114,7 @@ class CoverImageScaleScript(Script):
         mirrors = [OverdriveCoverImageMirror, ThreeMCoverImageMirror]
         ImageScaler(self._db, mirrors).run(force=self.force)
 
+
 class PermanentWorkIDStressTestGenerationScript(Script):
     """Generate a stress test to use as the benchmark for the permanent
     work ID generation algorithm.
@@ -163,6 +165,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         self.write_row(primary_author_name, author, original_title, title,
                        "ebook")
 
+
 class CollectionCategorizationOverviewScript(Script):
 
     def __init__(self, output_path=None, cutoff=0):
@@ -199,6 +202,7 @@ class CollectionCategorizationOverviewScript(Script):
                 fiction = ''
             o = [type, identifier, name, fiction, audience, genre, ct]
             self.writer.writerow(map(self.ready, o))
+
 
 class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript):
 
@@ -348,3 +352,23 @@ class RedoOCLCForThreeMScript(Script):
         for contribution in oclc_contributions:
             for edition in identifier.primarily_identifies:
                 edition.add_contributor(contribution.contributor, contribution.role)
+
+
+class CollectionGeneratorScript(Script):
+    """Creates a new Collection object and prints client details to STDOUT"""
+
+    def run(self, name):
+        if not name:
+            self.log.error("No name provided. Could not create collection.")
+            return
+
+        name = " ".join(name)
+        print "Creating collection %s... " % name
+        collection, plaintext_client_secret = Collection.register(self._db, name)
+
+        if collection:
+            print collection
+            print "RECORD THE FOLLOWING AUTHENTICATION DETAILS."
+            print "The client secret cannot be recovered."
+            print "CLIENT ID: %s" % collection.client_id
+            print "CLIENT SECRET: %s" % plaintext_client_secret

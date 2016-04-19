@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+"""Creates a new Collection with a provided name"""
+import os
+import sys
+bin_dir = os.path.split(__file__)[0]
+package_dir = os.path.join(bin_dir, "..", "..")
+sys.path.append(os.path.abspath(package_dir))
+from scripts import CollectionGeneratorScript
+
+CollectionGeneratorScript().run(sys.argv[1:])
