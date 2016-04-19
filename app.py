@@ -52,11 +52,11 @@ def accepts_collection(f):
     return decorated
 
 @app.route('/heartbeat')
-def hearbeat():
+def heartbeat():
     return HeartbeatController().heartbeat()
 
 @app.route('/lookup')
-@app.accepts_collection
+@accepts_collection
 def lookup(collection=None):
     return URNLookupController(Conf.db, True).work_lookup(
         VerboseAnnotator, collection=collection
