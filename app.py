@@ -35,7 +35,7 @@ class Conf:
         cls.db = _db
         cls.log = logging.getLogger("Metadata web app")
 
-if os.environ.get('TESTING') == "True":
+if os.environ.get('TESTING') == "true":
     Conf.testing = True
 else:
     Conf.testing = False
@@ -101,6 +101,10 @@ def canonical_author_name():
     else:
         return make_response("", 404)
 
+@app.route('/updates')
+@requires_auth
+def updates():
+    return CollectionController(Conf.db).updates_feed()
 
 if __name__ == '__main__':
 
