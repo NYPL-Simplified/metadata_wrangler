@@ -98,3 +98,7 @@ class TestCollectionController(DatabaseTest):
             [entry] = feed['entries']
             eq_(w2.title, entry['title'])
             eq_(w2_identifier.urn, entry['id'])
+
+        # The last update timestamp has been updated.
+        eq_(True, self.collection.last_checked != previous_check)
+        eq_(True, self.collection.last_checked > previous_check)
