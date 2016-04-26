@@ -1,6 +1,7 @@
 import os
 import base64
 import feedparser
+from datetime import datetime, timedelta
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
@@ -19,6 +20,9 @@ class TestCollectionController(DatabaseTest):
         self.controller = CollectionController(self._db)
         self.collection = self._collection()
         self.valid_auth = 'Basic ' + base64.b64encode('abc:def')
+
+        self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
+        self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
 
     def test_authenticated_collection_required(self):
         # Returns collection if authentication is valid.
@@ -60,24 +64,24 @@ class TestCollectionController(DatabaseTest):
             result = self.controller.authenticated_collection_from_request(required=False)
             eq_(None, result)
 
-    def test_collection_updates(self):
-        w1 = self._work(with_license_pool=True, with_open_access_download=True)
-        identifier = w1.license_pools[0].identifier
+    def test_updates_feed(self):
+        identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(self._db, identifier)
-
         # Collection hasn't checked its updates at all
         eq_(None, self.collection.last_checked)
 
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
+            # The collection's updates feed is returned.
             eq_(200, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
             
+            # The feed has the collection's catalog.
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
-            eq_(w1.title, entry['title'])
+            eq_(self.work1.title, entry['title'])
             eq_(identifier.urn, entry['id'])
 
         # The collection's last check timestamp has be set
@@ -85,8 +89,8 @@ class TestCollectionController(DatabaseTest):
         previous_check = self.collection.last_checked
 
         # Add another work.
-        w2 = self._work(with_license_pool=True, with_open_access_download=True)
-        w2_identifier = w2.license_pools[0].identifier
+        w2_identifier = self.work2.license_pools[0].identifier
+        self.work2.coverage_records[0].timestamp = datetime.utcnow()
         self.collection.catalog_identifier(self._db, w2_identifier)
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
@@ -96,9 +100,31 @@ class TestCollectionController(DatabaseTest):
             # Only the second work is in the feed.
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
-            eq_(w2.title, entry['title'])
+            eq_(self.work2.title, entry['title'])
             eq_(w2_identifier.urn, entry['id'])
 
         # The last update timestamp has been updated.
         eq_(True, self.collection.last_checked != previous_check)
         eq_(True, self.collection.last_checked > previous_check)
+
+    def test_updates_feed_is_paginated(self):
+        for work in [self.work1, self.work2]:
+            self.collection.catalog_identifier(
+                self._db, work.license_pools[0].identifier
+            )
+        with self.app.test_request_context('/?size=1',
+                headers=dict(Authorization=self.valid_auth)):
+            response = self.controller.updates_feed()
+            links = feedparser.parse(response.get_data())['feed']['links']
+            assert any([link['rel'] == 'next' for link in links])
+            assert not any([link['rel'] == 'previous' for link in links])
+            assert not any([link['rel'] == 'first' for l in links])
+
+        self.collection.last_checked = datetime.utcnow() - timedelta(days=1)
+        with self.app.test_request_context('/?size=1&after=1',
+                headers=dict(Authorization=self.valid_auth)):
+            response = self.controller.updates_feed()
+            links = feedparser.parse(response.get_data())['feed']['links']
+            assert any([link['rel'] == 'previous' for link in links])
+            assert any([link['rel'] == 'first' for link in links])
+            assert not any([link['rel'] == 'next'for link in links])

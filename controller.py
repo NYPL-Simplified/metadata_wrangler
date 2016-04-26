@@ -5,6 +5,7 @@ from datetime import datetime
 from core.app_server import (
     cdn_url_for,
     feed_response,
+    load_pagination_from_request,
 )
 from core.model import Collection
 from core.opds import (
@@ -39,16 +40,36 @@ class CollectionController(object):
         if isinstance(collection, ProblemDetail):
             return collection
 
-        update_url = cdn_url_for('updates', _external=True)
         # Record time of update check before initiating database query.
         updated_at = datetime.utcnow()
         updated_works = collection.works_updated(self._db)
         collection.last_checked = updated_at
         self._db.commit()
 
-        feed_title = "%s Updates" % collection.name
+        pagination = load_pagination_from_request()
+        works = pagination.apply(updated_works).all()
+        title = "%s Updates" % collection.name
+        def update_url(page=None):
+            kw = dict(_external=True)
+            if page:
+                kw.update(page.items())
+            return cdn_url_for("updates", **kw)
         update_feed = AcquisitionFeed(
-            self._db, feed_title, update_url, updated_works,
-            VerboseAnnotator
+            self._db, title, update_url(), works, VerboseAnnotator
         )
+
+        if len(updated_works.all()) > pagination.size + pagination.offset:
+            update_feed.add_link(
+                rel="next", href=update_url(page=pagination.next_page)
+            )
+        if pagination.offset > 0:
+            update_feed.add_link(
+                rel="first", href=update_url(page=pagination.first_page)
+            )
+        previous_page = pagination.previous_page
+        if previous_page:
+            update_feed.add_link(
+                rel="previous", href=update_url(page=previous_page)
+            )
+
         return feed_response(update_feed)
