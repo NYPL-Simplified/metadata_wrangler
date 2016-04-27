@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
-from ..core.model import DataSource
+from ..core.model import Identifier
 from ..core.util.problem_detail import ProblemDetail
 
 from ..controller import CollectionController
@@ -129,3 +129,32 @@ class TestCollectionController(DatabaseTest):
             assert any([link['rel'] == 'previous' for link in links])
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
+
+    def test_remove_items(self):
+        invalid_urn = "FAKE AS I WANNA BE"
+        catalogued_id = self._identifier()
+        uncatalogued_id = self._identifier()
+        self.collection.catalog_identifier(self._db, catalogued_id)
+
+        with self.app.test_request_context(
+                '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
+                headers=dict(Authorization=self.valid_auth)):
+            # The uncatalogued identifier doesn't raise or return an error.
+            response = self.controller.remove_items()
+            eq_(204, response.status_code)
+            # The catalogued identifier isn't in the catalog.
+            assert catalogued_id not in self.collection.catalog
+            # But it's still in the database.
+            eq_(catalogued_id, self._db.query(Identifier).filter_by(
+                id=catalogued_id.id).one())
+
+        self.collection.catalog_identifier(self._db, catalogued_id)
+        with self.app.test_request_context(
+                '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
+                headers=dict(Authorization=self.valid_auth)):
+            response = self.controller.remove_items()
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_("Invalid URN", response.title)
+            assert response.debug_message.endswith(invalid_urn)
+            # The catalogued identifier is still removed.
+            assert catalogued_id not in self.collection.catalog

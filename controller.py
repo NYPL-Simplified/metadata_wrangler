@@ -7,13 +7,16 @@ from core.app_server import (
     feed_response,
     load_pagination_from_request,
 )
-from core.model import Collection
+from core.model import (
+    Collection,
+    Identifier,
+)
 from core.opds import (
     AcquisitionFeed,
     VerboseAnnotator,
 )
 from core.util.problem_detail import ProblemDetail
-from core.problem_details import INVALID_CREDENTIALS
+from core.problem_details import *
 
 
 class CollectionController(object):
@@ -74,3 +77,24 @@ class CollectionController(object):
             )
 
         return feed_response(update_feed)
+
+    def remove_items(self):
+        collection = self.authenticated_collection_from_request()
+        if isinstance(collection, ProblemDetail):
+            return collection
+
+        urns = request.args.getlist('urn')
+        invalid_urns = []
+        for urn in urns:
+            identifier = None
+            try:
+                identifier, ignore = Identifier.parse_urn(self._db, urn)
+            except Exception as e:
+                invalid_urns.append(urn)
+            if identifier and identifier in collection.catalog:
+                collection.catalog.remove(identifier)
+        self._db.commit()
+        if invalid_urns:
+            debug_message = "INVALID URN: " + ", ".join(invalid_urns)
+            return INVALID_URN.with_debug(debug_message)
+        return make_response("", 204, {})

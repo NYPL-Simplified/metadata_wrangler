@@ -104,6 +104,12 @@ def canonical_author_name():
 def updates():
     return CollectionController(Conf.db).updates_feed()
 
+@app.route('/remove', methods=['POST'])
+@requires_auth
+@returns_problem_detail
+def remove():
+    return CollectionController(Conf.db).remove_items()
+
 if __name__ == '__main__':
 
     debug = True
