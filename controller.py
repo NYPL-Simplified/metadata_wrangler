@@ -1,6 +1,6 @@
-import flask
 from nose.tools import set_trace
 from datetime import datetime
+from flask import request, make_response
 
 from core.app_server import (
     cdn_url_for,
@@ -23,7 +23,7 @@ class CollectionController(object):
         self._db = _db
 
     def authenticated_collection_from_request(self, required=True):
-        header = flask.request.authorization
+        header = request.authorization
         if header:
             client_id, client_secret = header.username, header.password
             collection = Collection.authenticate(self._db, client_id, client_secret)
@@ -40,7 +40,7 @@ class CollectionController(object):
         if isinstance(collection, ProblemDetail):
             return collection
 
-        last_update_time = flask.request.args.get('last_update_time', None)
+        last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
             last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
         updated_works = collection.works_updated_since(self._db, last_update_time)
