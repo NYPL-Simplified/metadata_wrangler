@@ -40,7 +40,6 @@ class CollectionController(object):
         if isinstance(collection, ProblemDetail):
             return collection
 
-        # Record time of update check before initiating database query.
         last_update_time = flask.request.args.get('last_update_time', None)
         if last_update_time:
             last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
@@ -49,8 +48,10 @@ class CollectionController(object):
         pagination = load_pagination_from_request()
         works = pagination.apply(updated_works).all()
         title = "%s Updates" % collection.name
-        def update_url(page=None):
+        def update_url(time=last_update_time, page=None):
             kw = dict(_external=True)
+            if time:
+                kw.update({'last_update_time' : last_update_time})
             if page:
                 kw.update(page.items())
             return cdn_url_for("updates", **kw)

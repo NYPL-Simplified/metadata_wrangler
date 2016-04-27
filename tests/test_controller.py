@@ -83,13 +83,17 @@ class TestCollectionController(DatabaseTest):
             eq_(identifier.urn, entry['id'])
 
         # A time can be passed.
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        time = datetime.utcnow()
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
             eq_(200, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
+            # The timestamp is included in the url.
+            linkified_timestamp = time.strftime("%Y-%m-%d+%H:%M:%S").replace(":", "%3A")
+            assert feed['feed']['id'].endswith(linkified_timestamp)
             # And only works updated since the timestamp are returned.
             eq_(0, len(feed['entries']))
 
