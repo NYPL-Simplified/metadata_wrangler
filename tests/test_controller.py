@@ -67,8 +67,6 @@ class TestCollectionController(DatabaseTest):
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(self._db, identifier)
-        # Collection hasn't checked its updates at all
-        eq_(None, self.collection.last_checked)
 
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
@@ -84,28 +82,27 @@ class TestCollectionController(DatabaseTest):
             eq_(self.work1.title, entry['title'])
             eq_(identifier.urn, entry['id'])
 
-        # The collection's last check timestamp has be set
-        assert self.collection.last_checked
-        previous_check = self.collection.last_checked
-
-        # Add another work.
-        w2_identifier = self.work2.license_pools[0].identifier
-        self.work2.coverage_records[0].timestamp = datetime.utcnow()
-        self.collection.catalog_identifier(self._db, w2_identifier)
-        with self.app.test_request_context('/',
+        # A time can be passed.
+        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
             eq_(200, response.status_code)
             feed = feedparser.parse(response.get_data())
-            # Only the second work is in the feed.
+            eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
+            # And only works updated since the timestamp are returned.
+            eq_(0, len(feed['entries']))
+
+        # Works updated since the timestamp are returned
+        self.work1.coverage_records[0].timestamp = datetime.utcnow()
+        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
+                headers=dict(Authorization=self.valid_auth)):
+            response = self.controller.updates_feed()
+            feed = feedparser.parse(response.get_data())
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
-            eq_(self.work2.title, entry['title'])
-            eq_(w2_identifier.urn, entry['id'])
-
-        # The last update timestamp has been updated.
-        eq_(True, self.collection.last_checked != previous_check)
-        eq_(True, self.collection.last_checked > previous_check)
+            eq_(self.work1.title, entry['title'])
+            eq_(identifier.urn, entry['id'])
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
@@ -120,7 +117,6 @@ class TestCollectionController(DatabaseTest):
             assert not any([link['rel'] == 'previous' for link in links])
             assert not any([link['rel'] == 'first' for l in links])
 
-        self.collection.last_checked = datetime.utcnow() - timedelta(days=1)
         with self.app.test_request_context('/?size=1&after=1',
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()

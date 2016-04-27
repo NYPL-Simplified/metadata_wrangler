@@ -41,10 +41,10 @@ class CollectionController(object):
             return collection
 
         # Record time of update check before initiating database query.
-        updated_at = datetime.utcnow()
-        updated_works = collection.works_updated(self._db)
-        collection.last_checked = updated_at
-        self._db.commit()
+        last_update_time = flask.request.args.get('last_update_time', None)
+        if last_update_time:
+            last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
+        updated_works = collection.works_updated_since(self._db, last_update_time)
 
         pagination = load_pagination_from_request()
         works = pagination.apply(updated_works).all()
