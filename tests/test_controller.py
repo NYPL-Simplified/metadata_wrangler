@@ -85,6 +85,7 @@ class TestCollectionController(DatabaseTest):
         # A time can be passed.
         time = datetime.utcnow()
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.work1.coverage_records[0].timestamp = time - timedelta(days=1)
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
