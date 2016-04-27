@@ -6,12 +6,12 @@ import urlparse
 
 from functools import wraps
 from flask import Flask, make_response
-from core.util.flask_util import problem
 from core.util.problem_detail import ProblemDetail
 from core.opds import VerboseAnnotator
 from core.app_server import (
     HeartbeatController,
     URNLookupController,
+    returns_problem_detail,
 )
 from core.model import (
     production_session,
@@ -74,16 +74,14 @@ def lookup(collection=None):
     )
 
 @app.route('/canonical-author-name')
+@returns_problem_detail
 def canonical_author_name():
     urn = flask.request.args.get('urn')
     display_name = flask.request.args.get('display_name')
     if urn:
         identifier = URNLookupController.parse_urn(Conf.db, urn, False)
         if not isinstance(identifier, Identifier):
-            # Error.
-            status, title = identifier
-            type = URNLookupController.COULD_NOT_PARSE_URN_TYPE
-            return problem(type, status, title)
+            return INVALID_URN
     else:
         identifier = None
 
