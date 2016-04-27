@@ -7,18 +7,20 @@ import urlparse
 from functools import wraps
 from flask import Flask, make_response
 from core.util.flask_util import problem
+from core.util.problem_detail import ProblemDetail
 from core.opds import VerboseAnnotator
 from core.app_server import (
     HeartbeatController,
     URNLookupController,
-    CollectionController,
 )
 from core.model import (
     production_session,
     Identifier,
 )
 from core.config import Configuration
+
 from canonicalize import AuthorNameCanonicalizer
+from controller import CollectionController
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -33,7 +35,7 @@ class Conf:
         cls.db = _db
         cls.log = logging.getLogger("Metadata web app")
 
-if os.environ.get('TESTING') == "True":
+if os.environ.get('TESTING') == "true":
     Conf.testing = True
 else:
     Conf.testing = False
@@ -43,11 +45,20 @@ else:
 def accepts_collection(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        collection = CollectionController(Conf.db).authenticated_collection_from_request(
+            required=False
+        )
+        if isinstance(collection, ProblemDetail):
+            return collection.response
+        return f(collection=collection, *args, **kwargs)
+    return decorated
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
         collection = CollectionController(Conf.db).authenticated_collection_from_request()
-        if isinstance(collection, Response):
-            return collection
-        elif collection:
-            return f(collection=collection, *args, **kwargs)
+        if isinstance(collection, ProblemDetail):
+            return collection.response
         return f(*args, **kwargs)
     return decorated
 
@@ -90,6 +101,10 @@ def canonical_author_name():
     else:
         return make_response("", 404)
 
+@app.route('/updates')
+@requires_auth
+def updates():
+    return CollectionController(Conf.db).updates_feed()
 
 if __name__ == '__main__':
 
