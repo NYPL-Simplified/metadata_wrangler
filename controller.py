@@ -16,7 +16,10 @@ from core.opds import (
     VerboseAnnotator,
 )
 from core.util.problem_detail import ProblemDetail
-from core.problem_details import *
+from core.problem_details import (
+    INVALID_CREDENTIALS,
+    INVALID_URN,
+)
 
 
 class CollectionController(object):
