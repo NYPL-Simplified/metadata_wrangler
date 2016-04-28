@@ -141,7 +141,17 @@ class TestCollectionController(DatabaseTest):
                 headers=dict(Authorization=self.valid_auth)):
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items()
-            eq_(204, response.status_code)
+            eq_(200, response.status_code)
+            entries = feedparser.parse(response.get_data())['entries']
+            eq_(2, len(entries))
+
+            catalogued = filter(lambda e: e['id']==catalogued_id.urn, entries)[0]
+            uncatalogued = filter(lambda e: e['id']==uncatalogued_id.urn, entries)[0]
+            eq_(200, int(catalogued['simplified_status_code']))
+            eq_("Successfully removed", catalogued['simplified_message'])
+            eq_(404, int(uncatalogued['simplified_status_code']))
+            eq_("Not in collection catalog", uncatalogued['simplified_message'])
+
             # The catalogued identifier isn't in the catalog.
             assert catalogued_id not in self.collection.catalog
             # But it's still in the database.
@@ -153,8 +163,12 @@ class TestCollectionController(DatabaseTest):
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.remove_items()
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_("Invalid URN", response.title)
-            assert response.debug_message.endswith(invalid_urn)
+            eq_(200, int(response.status_code))
+            entries = feedparser.parse(response.get_data())['entries']
+            eq_(2, len(entries))
+
+            invalid = filter(lambda e: e['id']==invalid_urn, entries)[0]
+            eq_(400, int(invalid['simplified_status_code']))
+            eq_("Could not parse identifier.", invalid['simplified_message'])
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog

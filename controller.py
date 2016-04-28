@@ -87,17 +87,25 @@ class CollectionController(object):
             return collection
 
         urns = request.args.getlist('urn')
-        invalid_urns = []
+        messages = {}
         for urn in urns:
             identifier = None
             try:
                 identifier, ignore = Identifier.parse_urn(self._db, urn)
             except Exception as e:
-                invalid_urns.append(urn)
-            if identifier and identifier in collection.catalog:
-                collection.catalog.remove(identifier)
-        self._db.commit()
-        if invalid_urns:
-            debug_message = "INVALID URN: " + ", ".join(invalid_urns)
-            return INVALID_URN.with_debug(debug_message)
-        return make_response("", 204, {})
+                messages[urn] = (INVALID_URN.status_code, INVALID_URN.detail)
+            if identifier:
+                if identifier in collection.catalog:
+                    collection.catalog.remove(identifier)
+                    messages[urn] = (200, "Successfully removed")
+                else:
+                    messages[urn] = (404, "Not in collection catalog")
+
+        title = "%s Catalog Item Removal" % collection.name
+        url = cdn_url_for("remove", urn=urns)
+        removal_feed = AcquisitionFeed(
+            self._db, title, url, [], VerboseAnnotator,
+            messages_by_urn=messages
+        )
+
+        return feed_response(removal_feed)

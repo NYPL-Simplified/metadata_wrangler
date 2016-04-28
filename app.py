@@ -106,7 +106,6 @@ def updates():
 
 @app.route('/remove', methods=['POST'])
 @requires_auth
-@returns_problem_detail
 def remove():
     return CollectionController(Conf.db).remove_items()
 
