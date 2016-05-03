@@ -1,22 +1,9 @@
 import sys, os
 from nose.tools import set_trace
 
-from ..core.testing import (
+from core.testing import (
     DatabaseTest,
-    _setup,
-    _teardown,
+    package_setup,
 )
 
-class MetadataDBInfo(object):
-    connection = None
-    engine = None
-    transaction = None
-
-DatabaseTest.DBInfo = MetadataDBInfo
-
-def setup():
-    _setup(MetadataDBInfo)
-
-def teardown():
-    _teardown(MetadataDBInfo)
-
+package_setup()
