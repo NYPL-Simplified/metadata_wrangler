@@ -4,19 +4,19 @@ import json
 import os
 from nose.tools import set_trace, eq_
 
-from ..core.model import (
+from core.model import (
     Contributor,
     Identifier,
     Subject,
     DataSource,
     Equivalency,
 )
-from ..core.metadata_layer import (
+from core.metadata_layer import (
     Metadata,
     IdentifierData,
 )
 
-from ..oclc import (
+from oclc import (
     OCLCXMLParser,
     OCLCLinkedData,
     LinkedDataCoverageProvider,

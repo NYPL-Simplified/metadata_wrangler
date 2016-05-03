@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
-from ..core.model import Identifier
-from ..core.util.problem_detail import ProblemDetail
+from core.model import Identifier
+from core.util.problem_detail import ProblemDetail
 
-from ..controller import CollectionController
+from controller import CollectionController
 
 class TestCollectionController(DatabaseTest):
 

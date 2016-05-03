@@ -5,7 +5,7 @@ from . import (
     DatabaseTest,
 )
 
-from ..viaf import VIAFParser
+from viaf import VIAFParser
 
 class TestNameParser(DatabaseTest):
 
