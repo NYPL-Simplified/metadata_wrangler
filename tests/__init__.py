@@ -19,4 +19,3 @@ def setup():
 
 def teardown():
     _teardown(MetadataDBInfo)
-
