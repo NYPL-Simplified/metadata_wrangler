@@ -16,6 +16,7 @@ python-dateutil
 loggly-python-handler
 mock
 cairosvg
+bcrypt
 
 # Used only by metadata
 pyld
