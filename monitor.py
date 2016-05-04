@@ -221,6 +221,7 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
                 self.image_mirrors[data_source_name].mirror_edition(edition)
                 self.image_scaler.scale_edition(edition)
 
+
 class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
 
     def __init__(self, _db):
