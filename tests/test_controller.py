@@ -14,7 +14,7 @@ class TestCollectionController(DatabaseTest):
 
     def setup(self):
         super(TestCollectionController, self).setup()
-        from ..app import app
+        from app import app
         self.app = app
 
         self.controller = CollectionController(self._db)

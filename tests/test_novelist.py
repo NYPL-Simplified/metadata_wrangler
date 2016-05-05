@@ -91,6 +91,6 @@ class TestNoveListAPI(DatabaseTest):
 
     def test_lookup_info_to_metadata_extracts_lexile(self):
         vampire = self.sample_data("vampire_kisses.json")
-        metadata = self.novelist.lookup_info_to_metadata(vampire_kisses)
+        metadata = self.novelist.lookup_info_to_metadata(vampire)
         [lexile] = filter(lambda s: s.type=='Lexile', metadata.subjects)
         eq_(u'630', lexile.identifier)
