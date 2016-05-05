@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 import json
-import os
 from nose.tools import set_trace, eq_
 
 from core.model import (
@@ -24,15 +23,13 @@ from oclc import (
 
 from . import (
     DatabaseTest,
+    sample_data
 )
 
 class TestParser(DatabaseTest):
 
     def sample_data(self, filename):
-        base_path = os.path.split(__file__)[0]
-        resource_path = os.path.join(base_path, "files", "oclc")
-        path = os.path.join(resource_path, filename)
-        return open(path).read()
+        return sample_data(filename, "oclc")
 
     def test_extract_multiple_works(self):
         """We can turn a multi-work response into a list of SWIDs."""
