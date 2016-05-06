@@ -74,9 +74,15 @@ class NoveListAPI(object):
         representation, from_cache = Representation.cacheable_post(
             self._db, unicode(url), params, max_age=self.MAX_REPRESENTATION_AGE
         )
+
+        # Confirm that the representation was successful.
         if representation.status_code == 403:
             self._db.delete(representation)
             raise Exception("Invalid NoveList credentials")
+        if representation.content.startswith('"Missing'):
+            error = representation.content
+            self._db.delete(representation)
+            raise Exception("Invalid NoveList parameters: %s" % error)
 
         return self.lookup_info_to_metadata(representation.content)
 

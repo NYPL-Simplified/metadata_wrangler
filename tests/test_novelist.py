@@ -69,6 +69,12 @@ class TestNoveListAPI(DatabaseTest):
         assert_raises(Exception, self.novelist.lookup, identifier)
 
     def test_lookup_info_to_metadata(self):
+        # Requests that return no data return none
+        invalid_identifier = self.sample_data("isbn_not_found.json")
+        metadata = self.novelist.lookup_info_to_metadata(invalid_identifier)
+        eq_(None, metadata)
+
+        # Basic book information is returned
         identifier, ignore = Identifier.for_foreign_id(
             self._db, Identifier.ISBN, "9780804171335"
         )
