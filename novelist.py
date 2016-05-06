@@ -71,7 +71,7 @@ class NoveListAPI(object):
             version=self.version, profile=self.profile, password=self.password
         )
         url = self._build_query(params)
-        representation, new = Representation.post(
+        representation, from_cache = Representation.cacheable_post(
             self._db, unicode(url), params, max_age=self.MAX_REPRESENTATION_AGE
         )
         if representation.status_code == 403:
