@@ -106,7 +106,7 @@ class TestNoveListAPI(DatabaseTest):
         null_response = self.sample_data("null_data.json")
         # Cached empty Representations are deleted based on their
         # unique URL, so this Representation needs one.
-        test_url = self.novelist._build_url({
+        test_url = self.novelist._build_query({
             'ISBN' : '4', 'version' : '2.2',
             'ClientIdentifier' : 'http%3A//www.gutenberg.org/ebooks/1001'
         })
@@ -120,8 +120,8 @@ class TestNoveListAPI(DatabaseTest):
         eq_(None, result)
         eq_([], self._db.query(Representation).all())
 
-        # This also happens when NoveList indicates it doesn't know the
-        # ISBN with an empty response, None is also returned.
+        # This also happens when NoveList indicates with an empty
+        # response that it doesn't know the ISBN.
         empty_response = self.sample_data("unknown_isbn.json")
         result = self.novelist.lookup_info_to_metadata(empty_response)
         eq_(None, result)
