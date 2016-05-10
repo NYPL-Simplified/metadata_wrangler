@@ -92,11 +92,14 @@ class TestNoveListAPI(DatabaseTest):
         eq_(2, ratings[0].value)
         eq_(3.27, ratings[1].value)
 
-    def test_lookup_info_to_metadata_extracts_lexile(self):
+        # Confirm that Lexile and series data is extracted with a
+        # different sample.
         vampire = self.sample_data("vampire_kisses.json")
         metadata = self.novelist.lookup_info_to_metadata(vampire)
         [lexile] = filter(lambda s: s.type=='Lexile', metadata.subjects)
         eq_(u'630', lexile.identifier)
+        eq_(u'Vampire kisses manga', metadata.series)
+        eq_(1, metadata.series_position)
 
     def test_lookup_info_to_metadata_ignores_empty_responses(self):
         """API requests that return no data result return None"""

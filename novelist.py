@@ -162,6 +162,15 @@ class NoveListAPI(object):
 
         if series_info:
             metadata.series = series_info['full_title']
+            series_titles = series_info.get('series_titles')
+            if series_titles:
+                [series_volume] = [volume for volume in series_titles
+                        if volume.get('full_title')==book_info.get('full_title')]
+                series_position = series_volume.get('volume')
+                if series_position:
+                    if series_position.endswith('.'):
+                        series_position = series_position[:-1]
+                    metadata.series_position = int(series_position)
 
         if appeals_info:
             extracted_genres = False
@@ -195,7 +204,7 @@ class NoveListAPI(object):
             return None
         subtitle = subtitled_title.replace(main_title, '')
         while (subtitle and
-                (subtitle[0] in string.whitespace or subtitle[0]==":")):
+                (subtitle[0] in string.whitespace+':.')):
             # Trim any leading whitespace or colons
             subtitle = subtitle[1:]
         if not subtitle:
