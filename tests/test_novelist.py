@@ -12,8 +12,10 @@ from core.config import (
 )
 from core.metadata_layer import Metadata
 from core.model import (
+    get_one_or_create,
     DataSource,
     Identifier,
+    Representation,
 )
 from novelist import NoveListAPI
 
@@ -69,11 +71,6 @@ class TestNoveListAPI(DatabaseTest):
         assert_raises(Exception, self.novelist.lookup, identifier)
 
     def test_lookup_info_to_metadata(self):
-        # Requests that return no data return none
-        invalid_identifier = self.sample_data("isbn_not_found.json")
-        metadata = self.novelist.lookup_info_to_metadata(invalid_identifier)
-        eq_(None, metadata)
-
         # Basic book information is returned
         identifier, ignore = Identifier.for_foreign_id(
             self._db, Identifier.ISBN, "9780804171335"
@@ -100,3 +97,28 @@ class TestNoveListAPI(DatabaseTest):
         metadata = self.novelist.lookup_info_to_metadata(vampire)
         [lexile] = filter(lambda s: s.type=='Lexile', metadata.subjects)
         eq_(u'630', lexile.identifier)
+
+    def test_lookup_info_to_metadata_ignores_empty_responses(self):
+        """API requests that return no data result return None"""
+        null_response = self.sample_data("null_data.json")
+        # Cached empty Representations are deleted based on their
+        # unique URL, so this Representation needs one.
+        test_url = self.novelist._build_url({
+            'ISBN' : '4', 'version' : '2.2',
+            'ClientIdentifier' : 'http%3A//www.gutenberg.org/ebooks/1001'
+        })
+        rep, ignore = get_one_or_create(
+            self._db, Representation, url=test_url, content=null_response
+        )
+
+        # When a response has no bibliographic information, None is
+        # returned and the Representation is deleted.
+        result = self.novelist.lookup_info_to_metadata(null_response)
+        eq_(None, result)
+        eq_([], self._db.query(Representation).all())
+
+        # This also happens when NoveList indicates it doesn't know the
+        # ISBN with an empty response, None is also returned.
+        empty_response = self.sample_data("unknown_isbn.json")
+        result = self.novelist.lookup_info_to_metadata(empty_response)
+        eq_(None, result)

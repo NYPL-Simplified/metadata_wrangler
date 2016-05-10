@@ -98,15 +98,26 @@ class NoveListAPI(object):
         """Turns a NoveList JSON response into a Metadata object"""
 
         lookup_info = json.loads(lookup_info)
-        
+
         urn = urllib.unquote(lookup_info['ClientIdentifier'])
         primary_identifier, ignore = Identifier.parse_urn(self._db, urn)
         metadata = Metadata(
             self._db, self.source, primary_identifier=primary_identifier
         )
 
-        # Get the equivalent ISBN identifiers.
         book_info = lookup_info['TitleInfo']
+        if not book_info or not book_info.get('ui'):
+            # NoveList didn't know the ISBN. Delete the cache and return None.
+            client_identifier = urllib.quote(urn)
+            cached = self._db.query(Representation).\
+                    filter(Representation.url.like(
+                        "%ClientIdentifier="+client_identifier+"%"
+                    ))
+            for representation in cached.all():
+                self._db.delete(representation)
+            return None
+
+        # Get the equivalent ISBN identifiers.
         synonymous_ids = book_info.get('manifestations')
         for synonymous_id in synonymous_ids:
             isbn = synonymous_id.get('ISBN')
