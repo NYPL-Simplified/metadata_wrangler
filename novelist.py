@@ -51,20 +51,35 @@ class NoveListAPI(object):
         self.password = password
         self.source = DataSource.lookup(self._db, DataSource.NOVELIST)
 
+    def lookup_equivalent_isbns(self, identifier):
+        """Finds NoveList data for all ISBNs equivalent to an identifier.
+
+        :return: a list of Metadata objects
+        """
+
+        license_source = DataSource.license_source_for(self._db, identifier)
+        # Look up strong ISBN equivalents.
+        lookup_metadata =  [self.lookup(eq.output)
+                for eq in identifier.equivalencies
+                if (eq.data_source==source and eq.strength==1
+                    and eq.output.type==Identifier.ISBN)]
+
+        if not lookup_metadata:
+            self.log.error("Identifiers without an ISBN equivalent can't \
+                    be looked up with NoveList: %r" % identifier)
+            return None
+
+        return [metadata for metadata in lookup_metadata if metadata]
+
     def lookup(self, identifier):
-        """Returns NoveList metadata for a particular identifier"""
+        """Requests NoveList metadata for a particular identifier
+
+        :return: None, a Metadata object, or a list of Metadata objects
+        """
 
         client_identifier = identifier.urn
         if identifier.type != Identifier.ISBN:
-            for equivalency in identifier.equivalencies:
-                if (equivalency.strength >= 0.7 and
-                    equivalency.output.type == Identifier.ISBN):
-                    identifier = equivalency.output
-                    break
-            else:
-                self.log.error("Identifiers without an ISBN equivalent can't \
-                    be looked up with NoveList: %r" % identifier)
-                return None
+            return self.lookup_equivalent_isbns(identifier)
 
         params = dict(
             ClientIdentifier=client_identifier, ISBN=identifier.identifier,
@@ -98,13 +113,6 @@ class NoveListAPI(object):
         """Turns a NoveList JSON response into a Metadata object"""
 
         lookup_info = json.loads(lookup_info)
-
-        urn = urllib.unquote(lookup_info['ClientIdentifier'])
-        primary_identifier, ignore = Identifier.parse_urn(self._db, urn)
-        metadata = Metadata(
-            self._db, self.source, primary_identifier=primary_identifier
-        )
-
         book_info = lookup_info['TitleInfo']
         if book_info:
             novelist_identifier = book_info.get('ui')
@@ -119,6 +127,11 @@ class NoveListAPI(object):
                 self.log.info("Deleting cache: %s" % representation.url)
                 self._db.delete(representation)
             return None
+
+        primary_identifier, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.NOVELIST_ID, novelist_identifier
+        )
+        metadata = Metadata(self.source, primary_identifier=primary_identifier)
 
         # Get the equivalent ISBN identifiers.
         synonymous_ids = book_info.get('manifestations')

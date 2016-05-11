@@ -60,7 +60,7 @@ class TestNoveListAPI(DatabaseTest):
 
     def test_lookup(self):
         source = DataSource.lookup(self._db, DataSource.NOVELIST)
-        identifier = self._identifier()
+        identifier = self._identifier(identifier_type=Identifier.OVERDRIVE_ID)
         # Without an ISBN-equivalent identifier, lookup returns None
         eq_(None, self.novelist.lookup(identifier))
 
@@ -79,13 +79,14 @@ class TestNoveListAPI(DatabaseTest):
         metadata = self.novelist.lookup_info_to_metadata(bad_character)
 
         eq_(True, isinstance(metadata, Metadata))
-        eq_(identifier, metadata.primary_identifier)
+        eq_(Identifier.NOVELIST_ID, metadata.primary_identifier.type)
+        eq_('10392078', metadata.primary_identifier.identifier)
         eq_("A bad character", metadata.title)
         eq_(None, metadata.subtitle)
         eq_(1, len(metadata.contributors))
         [contributor] = metadata.contributors
         eq_("Kapoor, Deepti", contributor.sort_name)
-        eq_(3, len(metadata.identifiers))
+        eq_(4, len(metadata.identifiers))
         eq_(4, len(metadata.subjects))
         eq_(2, len(metadata.measurements))
         ratings = sorted(metadata.measurements, key=lambda m: m.value)
