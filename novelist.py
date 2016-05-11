@@ -145,9 +145,6 @@ class NoveListAPI(object):
                 isbn_data = IdentifierData(Identifier.ISBN, isbn)
                 metadata.identifiers.append(isbn_data)
 
-        metadata.title = book_info.get('main_title')
-        metadata.subtitle = self._subtitle(metadata.title, book_info.get('full_title'))
-
         author = book_info.get('author')
         if author:
             metadata.contributors.append(ContributorData(sort_name=author))
@@ -180,17 +177,13 @@ class NoveListAPI(object):
             goodreads_info = feature_content.get('GoodReads')
             appeals_info = feature_content.get('Appeals')
 
-        if series_info:
-            metadata.series = series_info['full_title']
-            series_titles = series_info.get('series_titles')
-            if series_titles:
-                [series_volume] = [volume for volume in series_titles
-                        if volume.get('full_title')==book_info.get('full_title')]
-                series_position = series_volume.get('volume')
-                if series_position:
-                    if series_position.endswith('.'):
-                        series_position = series_position[:-1]
-                    metadata.series_position = int(series_position)
+        metadata, title_key = self.get_series_information(
+            metadata, series_info, book_info
+        )
+        metadata.title = book_info.get(title_key)
+        metadata.subtitle = self._subtitle(
+            metadata.title, book_info.get('full_title')
+        )
 
         if appeals_info:
             extracted_genres = False
@@ -222,6 +215,38 @@ class NoveListAPI(object):
             return None
 
         return metadata
+
+    def get_series_information(self, metadata, series_info, book_info):
+        """Returns metadata object with series info and optimal title key"""
+
+        title_key = 'main_title'
+        if series_info:
+            metadata.series = series_info['full_title']
+            series_titles = series_info.get('series_titles')
+            if series_titles:
+                matching_series_volume = [volume for volume in series_titles
+                        if volume.get('full_title')==book_info.get('full_title')]
+                if not matching_series_volume:
+                    # If there's no full_title match, try the main_title.
+                    matching_series_volume = [volume for volume in series_titles
+                        if volume.get('main_title')==book_info.get('main_title')]
+                if len(matching_series_volume) > 1:
+                    # This probably won't happen, but if it does, it will be
+                    # difficult to debug without an error.
+                    raise ValueError("Multiple matching volumes found.")
+                series_position = matching_series_volume[0].get('volume')
+                if series_position:
+                    if series_position.endswith('.'):
+                        series_position = series_position[:-1]
+                    metadata.series_position = int(series_position)
+
+                # Sometimes all of the volumes in a series have the same
+                # main_title so using the full_title is preferred.
+                main_titles = [volume.get(title_key) for volume in series_titles]
+                if len(main_titles) > 1 and len(set(main_titles))==1:
+                    title_key = 'full_title'
+
+        return metadata, title_key
 
     @classmethod
     def _subtitle(cls, main_title, subtitled_title):

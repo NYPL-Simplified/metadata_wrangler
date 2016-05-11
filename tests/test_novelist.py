@@ -103,6 +103,9 @@ class TestNoveListAPI(DatabaseTest):
         [lexile] = filter(lambda s: s.type=='Lexile', metadata.subjects)
         eq_(u'630', lexile.identifier)
         eq_(u'Vampire kisses manga', metadata.series)
+        # The full title should be selected, since every volume
+        # has the same main title: 'Vampire kisses'
+        eq_(u'Vampire kisses: blood relatives. Volume 1', metadata.title)
         eq_(1, metadata.series_position)
 
     def test_lookup_info_to_metadata_ignores_empty_responses(self):
