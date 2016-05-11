@@ -5,7 +5,10 @@ import string
 import urllib
 from nose.tools import set_trace
 
-from core.coverage import CoverageProvider
+from core.coverage import (
+    CoverageFailure,
+    CoverageProvider,
+)
 from core.metadata_layer import (
     ContributorData,
     IdentifierData,
@@ -86,6 +89,7 @@ class NoveListAPI(object):
             version=self.version, profile=self.profile, password=self.password
         )
         url = self._build_query(params)
+        self.log.debug("NoveList lookup: %s", url)
         representation, from_cache = Representation.cacheable_post(
             self._db, unicode(url), params, max_age=self.MAX_REPRESENTATION_AGE
         )
@@ -211,6 +215,12 @@ class NoveListAPI(object):
                 Measurement.RATING, goodreads_info['average_rating']
             ))
 
+        # If nothing interesting comes from the API, ignore it.
+        if not (metadata.measurements or metadata.series_position or
+                metadata.series or metadata.subjects or metadata.links or
+                metadata.subtitle):
+            return None
+
         return metadata
 
     @classmethod
@@ -221,9 +231,60 @@ class NoveListAPI(object):
         subtitle = subtitled_title.replace(main_title, '')
         while (subtitle and
                 (subtitle[0] in string.whitespace+':.')):
-            # Trim any leading whitespace or colons
+            # Trim any leading whitespace or punctuation
             subtitle = subtitle[1:]
         if not subtitle:
             # The main title and the full title were the same.
             return None
         return subtitle
+
+
+class NoveListCoverageProvider(CoverageProvider):
+
+    def __init__(self, _db, cutoff_time=None):
+        self._db = _db
+        self.api = NoveListAPI.from_config(self._db)
+        self.output_source = DataSource.lookup(self._db, DataSource.NOVELIST)
+
+        super(NoveListCoverageProvider, self).__init__(
+            "NoveList Coverage Provider", [Identifier.ISBN],
+            self.output_source, workset_size=25
+        )
+
+    def process_item(self, identifier):
+
+        novelist_metadata = self.api.lookup(identifier)
+        if not novelist_metadata:
+            # Either NoveList didn't recognize the identifier or
+            # no interesting data came of this. Consider it covered.
+            return identifier
+
+        # The metadata returned may be a single object or a list.
+        # If it's a list, all of the metadata objects should have the same
+        # NoveList identifier.
+        if isinstance(novelist_metadata, list):
+            if not self._confirm_same_identifier(novelist_metadata):
+                return CoverageFailure(
+                    self, identifier,
+                    "Equivalents returned different NoveList records",
+                    transient=True
+                )
+            # Metadata with the same NoveList id will be identical. Take one.
+            novelist_metadata = novelist_metadata[0]
+
+        # Set identifier equivalent to its NoveList ID.
+        identifier.equivalent_to(
+            self.output_source, novelist_metadata.primary_identifier,
+            strength=1
+        )
+
+        edition, ignore = novelist_metadata.edition(self._db)
+        novelist_metadata.apply(edition)
+        return identifier
+
+    def _confirm_same_identifier(self, metadata_objects):
+        """Ensures that all metadata objects have the same NoveList ID"""
+
+        novelist_ids = set([metadata.primary_identifier.identifier
+                for metadata in metadata_objects])
+        return len(novelist_ids)==1

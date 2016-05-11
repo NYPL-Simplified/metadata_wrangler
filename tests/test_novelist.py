@@ -17,7 +17,10 @@ from core.model import (
     Identifier,
     Representation,
 )
-from novelist import NoveListAPI
+from novelist import (
+    NoveListAPI,
+    NoveListCoverageProvider,
+)
 
 
 class TestNoveListAPI(DatabaseTest):
@@ -126,3 +129,30 @@ class TestNoveListAPI(DatabaseTest):
         empty_response = self.sample_data("unknown_isbn.json")
         result = self.novelist.lookup_info_to_metadata(empty_response)
         eq_(None, result)
+
+
+class TestNoveListCoverageProvider(DatabaseTest):
+
+    def setup(self):
+        super(TestNoveListCoverageProvider, self).setup()
+        with temp_config() as config:
+            config['integrations'][Configuration.NOVELIST_INTEGRATION] = {
+                Configuration.NOVELIST_PROFILE : "library",
+                Configuration.NOVELIST_PASSWORD : "yep"
+            }
+            self.novelist = NoveListCoverageProvider(self._db)
+
+    def test_confirm_same_identifier(self):
+        source = DataSource.lookup(self._db, DataSource.NOVELIST)
+        identifier, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.NOVELIST_ID, '84752928'
+        )
+        unmatched_identifier, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.NOVELIST_ID, '23781947'
+        )
+        metadata = Metadata(source, primary_identifier=identifier)
+        match = Metadata(source, primary_identifier=identifier)
+        mistake = Metadata(source, primary_identifier=unmatched_identifier)
+
+        eq_(False, self.novelist._confirm_same_identifier([metadata, mistake]))
+        eq_(True, self.novelist._confirm_same_identifier([metadata, match]))
