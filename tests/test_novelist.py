@@ -133,6 +133,15 @@ class TestNoveListAPI(DatabaseTest):
         result = self.novelist.lookup_info_to_metadata(empty_response)
         eq_(None, result)
 
+    def test_scrub_subtitle(self):
+        """Unnecessary title segments are removed from subtitles"""
+
+        scrub = self.novelist._scrub_subtitle
+        eq_(None, scrub(None))
+        eq_(None, scrub('[electronic resource]'))
+        eq_(None, scrub('[electronic resource] :  '))
+        eq_('A Biomythography', scrub('[electronic resource] :  A Biomythography'))
+
 
 class TestNoveListCoverageProvider(DatabaseTest):
 

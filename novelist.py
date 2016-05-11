@@ -1,10 +1,9 @@
 import json
 import logging
-import requests
-import string
 import urllib
 from nose.tools import set_trace
 
+from core.config import Configuration
 from core.coverage import (
     CoverageFailure,
     CoverageProvider,
@@ -25,7 +24,7 @@ from core.model import (
     Representation,
     Subject,
 )
-from core.config import Configuration
+from core.util import TitleProcessor
 
 class NoveListAPI(object):
 
@@ -106,6 +105,15 @@ class NoveListAPI(object):
         return self.lookup_info_to_metadata(representation.content)
 
     @classmethod
+    def _scrub_subtitle(self, subtitle):
+        """Removes common NoveList subtitle annoyances"""
+        if subtitle:
+            subtitle = subtitle.replace('[electronic resource]', '')
+            # Then get rid of any leading whitespace or punctuation.
+            subtitle = TitleProcessor.extract_subtitle('', subtitle)
+        return subtitle
+
+    @classmethod
     def _build_query(cls, params):
         """Builds a unique and url-encoded query endpoint"""
 
@@ -181,9 +189,10 @@ class NoveListAPI(object):
             metadata, series_info, book_info
         )
         metadata.title = book_info.get(title_key)
-        metadata.subtitle = self._subtitle(
+        subtitle = TitleProcessor.extract_subtitle(
             metadata.title, book_info.get('full_title')
         )
+        metadata.subtitle = self._scrub_subtitle(subtitle)
 
         if appeals_info:
             extracted_genres = False
@@ -247,21 +256,6 @@ class NoveListAPI(object):
                     title_key = 'full_title'
 
         return metadata, title_key
-
-    @classmethod
-    def _subtitle(cls, main_title, subtitled_title):
-        """Determines whether a subtitle is present and returns it or None"""
-        if not subtitled_title:
-            return None
-        subtitle = subtitled_title.replace(main_title, '')
-        while (subtitle and
-                (subtitle[0] in string.whitespace+':.')):
-            # Trim any leading whitespace or punctuation
-            subtitle = subtitle[1:]
-        if not subtitle:
-            # The main title and the full title were the same.
-            return None
-        return subtitle
 
 
 class NoveListCoverageProvider(CoverageProvider):
