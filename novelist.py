@@ -106,14 +106,17 @@ class NoveListAPI(object):
         )
 
         book_info = lookup_info['TitleInfo']
-        if not book_info or not book_info.get('ui'):
+        if book_info:
+            novelist_identifier = book_info.get('ui')
+        if not book_info or not novelist_identifier:
             # NoveList didn't know the ISBN. Delete the cache and return None.
-            client_identifier = urllib.quote(urn)
+            client_identifier = lookup_info['ClientIdentifier']
             cached = self._db.query(Representation).\
                     filter(Representation.url.like(
                         "%ClientIdentifier="+client_identifier+"%"
                     ))
             for representation in cached.all():
+                self.log.info("Deleting cache: %s" % representation.url)
                 self._db.delete(representation)
             return None
 
