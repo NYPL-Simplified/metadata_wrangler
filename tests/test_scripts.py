@@ -60,13 +60,17 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         assert self.edition3.primary_identifier not in identifiers
 
     def test_delete_coverage_records(self):
-        coverage_records_before = self._db.query(CoverageRecord).all()
+        oclc = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+        q = self._db.query(CoverageRecord).filter(
+            CoverageRecord.data_source==oclc
+        )
+        coverage_records_before = q.all()
         eq_(1, len(coverage_records_before))
         eq_(self.edition2.primary_identifier, coverage_records_before[0].identifier)
 
         identifiers = [self.edition1.primary_identifier, self.edition2.primary_identifier]
         self.script.delete_coverage_records(identifiers)
-        coverage_records_after = self._db.query(CoverageRecord).all()
+        coverage_records_after = q.all()
         eq_(0, len(coverage_records_after))
 
     def test_ensure_isbn_identifier(self):
