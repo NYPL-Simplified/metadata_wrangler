@@ -62,6 +62,15 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.teardown_request
+def shutdown_session(exception):
+    if (hasattr(Conf, 'db')
+        and Conf.db):
+        if exception:
+            Conf.db.rollback()
+        else:
+            Conf.db.commit()
+
 @app.route('/heartbeat')
 def heartbeat():
     return HeartbeatController().heartbeat()
