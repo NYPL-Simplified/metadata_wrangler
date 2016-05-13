@@ -121,22 +121,10 @@ class TestNoveListAPI(DatabaseTest):
 
     def test_lookup_info_to_metadata_ignores_empty_responses(self):
         """API requests that return no data result return None"""
-        null_response = self.sample_data("null_data.json")
-        # Cached empty Representations are deleted based on their
-        # unique URL, so this Representation needs one.
-        test_url = self.novelist._build_query({
-            'ISBN' : '4', 'version' : '2.2',
-            'ClientIdentifier' : 'http%3A//www.gutenberg.org/ebooks/1001'
-        })
-        rep, ignore = get_one_or_create(
-            self._db, Representation, url=test_url, content=null_response
-        )
 
-        # When a response has no bibliographic information, None is
-        # returned and the Representation is deleted.
+        null_response = self.sample_data("null_data.json")
         result = self.novelist.lookup_info_to_metadata(null_response)
         eq_(None, result)
-        eq_([], self._db.query(Representation).all())
 
         # This also happens when NoveList indicates with an empty
         # response that it doesn't know the ISBN.
