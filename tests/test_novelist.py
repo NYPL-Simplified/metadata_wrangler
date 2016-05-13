@@ -22,6 +22,19 @@ from novelist import (
     NoveListCoverageProvider,
 )
 
+class DummyNoveListAPI(object):
+
+    def __init__(self):
+        self.responses = []
+
+    def setup(self, *args):
+        self.responses = self.responses + list(args)
+
+    def lookup(self, identifier):
+        response = self.responses[0]
+        self.responses = self.responses[1:]
+        return response
+
 
 class TestNoveListAPI(DatabaseTest):
     """Tests the NoveList API service object"""
@@ -142,18 +155,6 @@ class TestNoveListAPI(DatabaseTest):
         eq_(None, scrub('[electronic resource] :  '))
         eq_('A Biomythography', scrub('[electronic resource] :  A Biomythography'))
 
-
-class TestNoveListCoverageProvider(DatabaseTest):
-
-    def setup(self):
-        super(TestNoveListCoverageProvider, self).setup()
-        with temp_config() as config:
-            config['integrations'][Configuration.NOVELIST_INTEGRATION] = {
-                Configuration.NOVELIST_PROFILE : "library",
-                Configuration.NOVELIST_PASSWORD : "yep"
-            }
-            self.novelist = NoveListCoverageProvider(self._db)
-
     def test_confirm_same_identifier(self):
         source = DataSource.lookup(self._db, DataSource.NOVELIST)
         identifier, ignore = Identifier.for_foreign_id(
@@ -168,3 +169,38 @@ class TestNoveListCoverageProvider(DatabaseTest):
 
         eq_(False, self.novelist._confirm_same_identifier([metadata, mistake]))
         eq_(True, self.novelist._confirm_same_identifier([metadata, match]))
+
+
+class TestNoveListCoverageProvider(DatabaseTest):
+
+    def setup(self):
+        super(TestNoveListCoverageProvider, self).setup()
+        with temp_config() as config:
+            config['integrations'][Configuration.NOVELIST_INTEGRATION] = {
+                Configuration.NOVELIST_PROFILE : "library",
+                Configuration.NOVELIST_PASSWORD : "yep"
+            }
+            self.novelist = NoveListCoverageProvider(self._db)
+        self.novelist.api = DummyNoveListAPI()
+
+    def test_process_item(self):
+        identifier = self._identifier()
+        metadata = Metadata(
+            data_source = self.novelist.source,
+            primary_identifier=self._identifier(
+                identifier_type=Identifier.NOVELIST_ID
+            ),
+            title=u"The Great American Novel"
+        )
+        self.novelist.api.setup(None, metadata)
+
+        # When the response is None, the identifier is returned.
+        eq_(identifier, self.novelist.process_item(identifier))
+
+        # When the response is a Metadata object, the identifiers are set
+        # as equivalent and the metadata identifier's edition is updated.
+        eq_(identifier, self.novelist.process_item(identifier))
+        [edition] = metadata.primary_identifier.primarily_identifies
+        eq_(u"The Great American Novel", edition.title)
+        equivalents = [eq.output for eq in identifier.equivalencies]
+        eq_(True, metadata.primary_identifier in equivalents)

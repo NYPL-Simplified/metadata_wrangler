@@ -59,7 +59,7 @@ class NoveListAPI(object):
     def lookup_equivalent_isbns(self, identifier):
         """Finds NoveList data for all ISBNs equivalent to an identifier.
 
-        :return: a list of Metadata objects
+        :return: Metadata object or None
         """
 
         license_source = DataSource.license_source_for(self._db, identifier)
@@ -70,16 +70,34 @@ class NoveListAPI(object):
                     and eq.output.type==Identifier.ISBN)]
 
         if not lookup_metadata:
-            self.log.error("Identifiers without an ISBN equivalent can't \
-                    be looked up with NoveList: %r" % identifier)
+            self.log.error(
+                "Identifiers without an ISBN equivalent can't \
+                be looked up with NoveList: %r", identifier
+            )
             return None
 
-        return [metadata for metadata in lookup_metadata if metadata]
+        # Remove None values.
+        lookup_metadata = [metadata for metadata in lookup_metadata if metadata]
+        # All of the metadata objects should have the same NoveList ID.
+        if not self._confirm_same_identifier(lookup_metadata):
+            raise ValueError("Equivalents returned different NoveList records")
+        # Metadata with the same NoveList ID will be identical. Take one.
+        return metadata[0]
+
+    @classmethod
+    def _confirm_same_identifier(self, metadata_objects):
+        """Ensures that all metadata objects have the same NoveList ID"""
+
+        novelist_ids = set([
+            metadata.primary_identifier.identifier
+            for metadata in metadata_objects
+        ])
+        return len(novelist_ids)==1
 
     def lookup(self, identifier):
         """Requests NoveList metadata for a particular identifier
 
-        :return: None, a Metadata object, or a list of Metadata objects
+        :return: Metadata object or None
         """
 
         client_identifier = identifier.urn
@@ -284,32 +302,11 @@ class NoveListCoverageProvider(CoverageProvider):
             # no interesting data came of this. Consider it covered.
             return identifier
 
-        # The metadata returned may be a single object or a list.
-        # If it's a list, all of the metadata objects should have the same
-        # NoveList identifier.
-        if isinstance(novelist_metadata, list):
-            if not self._confirm_same_identifier(novelist_metadata):
-                return CoverageFailure(
-                    self, identifier,
-                    "Equivalents returned different NoveList records",
-                    transient=True
-                )
-            # Metadata with the same NoveList id will be identical. Take one.
-            novelist_metadata = novelist_metadata[0]
-
         # Set identifier equivalent to its NoveList ID.
         identifier.equivalent_to(
             self.output_source, novelist_metadata.primary_identifier,
             strength=1
         )
-
         edition, ignore = novelist_metadata.edition(self._db)
         novelist_metadata.apply(edition)
         return identifier
-
-    def _confirm_same_identifier(self, metadata_objects):
-        """Ensures that all metadata objects have the same NoveList ID"""
-
-        novelist_ids = set([metadata.primary_identifier.identifier
-                for metadata in metadata_objects])
-        return len(novelist_ids)==1
