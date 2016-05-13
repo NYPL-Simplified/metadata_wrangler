@@ -1,3 +1,4 @@
+import json
 from nose.tools import (
     set_trace,
     eq_,
@@ -118,6 +119,64 @@ class TestNoveListAPI(DatabaseTest):
         # has the same main title: 'Vampire kisses'
         eq_(u'Vampire kisses: blood relatives. Volume 1', metadata.title)
         eq_(1, metadata.series_position)
+
+    def test_get_series_information(self):
+
+        metadata = Metadata(data_source=DataSource.NOVELIST)
+        vampire = json.loads(self.sample_data("vampire_kisses.json"))
+        book_info = vampire['TitleInfo']
+        series_info = vampire['FeatureContent']['SeriesInfo']
+
+        (metadata, ideal_title_key) = self.novelist.get_series_information(
+            metadata, series_info, book_info
+        )
+        # Relevant series information is extracted
+        eq_('Vampire kisses manga', metadata.series)
+        eq_(1, metadata.series_position)
+        # The 'full_title' key should be returned as ideal because
+        # all the volumes have the same 'main_title'
+        eq_('full_title', ideal_title_key)
+
+
+        watchman = json.loads(self.sample_data("alternate_series_example.json"))
+        book_info = watchman['TitleInfo']
+        series_info = watchman['FeatureContent']['SeriesInfo']
+        # Confirms that the new example doesn't match any volume's full title
+        eq_([], [v for v in series_info['series_titles']
+                if v.get('full_title')==book_info.get('full_title')])
+
+        # But it still finds its matching volume
+        (metadata, ideal_title_key) = self.novelist.get_series_information(
+            metadata, series_info, book_info
+        )
+        eq_('Elvis Cole/Joe Pike novels', metadata.series)
+        eq_(11, metadata.series_position)
+        # And recommends using the main_title
+        eq_('main_title', ideal_title_key)
+
+        # If the volume is found in the series more than once...
+        book_info = dict(
+            main_title='The Baby-Sitters Club',
+            full_title='The Baby-Sitters Club: Claudia and Mean Janine'
+        )
+        series_info = dict(
+            full_title='The Baby-Sitters Club series',
+            series_titles=[
+                # The volume is here twice!
+                book_info,
+                book_info,
+                dict(
+                    full_title='The Baby-Sitters Club',
+                    main_title='The Baby-Sitters Club: Claudia and Mean Janine',
+                    series_position='3.'
+                )
+            ]
+        )
+        # An error is raised.
+        assert_raises(
+            ValueError, self.novelist.get_series_information,
+            metadata, series_info, book_info
+        )
 
     def test_lookup_info_to_metadata_ignores_empty_responses(self):
         """API requests that return no data result return None"""
