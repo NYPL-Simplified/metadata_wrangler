@@ -215,6 +215,26 @@ class TestNoveListAPI(DatabaseTest):
         eq_(False, self.novelist._confirm_same_identifier([metadata, mistake]))
         eq_(True, self.novelist._confirm_same_identifier([metadata, match]))
 
+    def test_choose_best_metadata(self):
+        more_identifier = self._identifier(identifier_type=Identifier.NOVELIST_ID)
+        less_identifier = self._identifier(identifier_type=Identifier.NOVELIST_ID)
+        metadatas = [Metadata(DataSource.NOVELIST, primary_identifier=more_identifier)]
+
+        # When only one Metadata object is given, that object is returned.
+        result = self.novelist.choose_best_metadata(metadatas, self._identifier())
+        eq_(True, isinstance(result, Metadata))
+        eq_(metadatas[0], self.novelist.choose_best_metadata(metadatas, self._identifier()))
+
+        # When top identifiers have equal representation, the method returns none.
+        metadatas.append(Metadata(DataSource.NOVELIST, primary_identifier=less_identifier))
+        eq_(None, self.novelist.choose_best_metadata(metadatas, self._identifier()))
+
+        # But when one pulls ahead, we get the metadata object again.
+        metadatas.append(Metadata(DataSource.NOVELIST, primary_identifier=more_identifier))
+        result = self.novelist.choose_best_metadata(metadatas, self._identifier())
+        eq_(True, isinstance(result, Metadata))
+        eq_(more_identifier, result.primary_identifier)
+
 
 class TestNoveListCoverageProvider(DatabaseTest):
 

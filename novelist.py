@@ -1,6 +1,7 @@
 import json
 import logging
 import urllib
+from collections import Counter
 from nose.tools import set_trace
 
 from core.config import Configuration
@@ -78,11 +79,9 @@ class NoveListAPI(object):
 
         # Remove None values.
         lookup_metadata = [metadata for metadata in lookup_metadata if metadata]
-        # All of the metadata objects should have the same NoveList ID.
-        if not self._confirm_same_identifier(lookup_metadata):
-            raise ValueError("Equivalents returned different NoveList records")
-        # Metadata with the same NoveList ID will be identical. Take one.
-        return metadata[0]
+        if not lookup_metadata:
+            return None
+        return self.choose_best_metadata(lookup_metadata, identifier)
 
     @classmethod
     def _confirm_same_identifier(self, metadata_objects):
@@ -93,6 +92,34 @@ class NoveListAPI(object):
             for metadata in metadata_objects
         ])
         return len(novelist_ids)==1
+
+    def choose_best_metadata(self, metadata_objects, identifier):
+        """Chooses the most likely book metadata from a list of Metadata objects
+
+        Given several Metadata objects with different NoveList IDs, this
+        method returns the metadata of the ID with the highest representation.
+        """
+        if self._confirm_same_identifier(metadata_objects):
+            # Metadata with the same NoveList ID will be identical. Take one.
+            return metadata_objects[0]
+
+        # One or more of the equivalents did not return the same NoveList work
+        self.log.warn("%r has inaccurate ISBN equivalents", identifier)
+        counter = Counter()
+        for metadata in metadata_objects:
+            counter[metadata.primary_identifier] += 1
+
+        [(target_identifier, most_amount),
+        (ignore, secondmost)] = counter.most_common(2)
+        if most_amount==secondmost:
+            # The counts are the same, and neither can be trusted.
+            self.log.warn("%r doesn't have clear ISBN equivalency", identifier)
+            return None
+
+        target_metadata = filter(
+            lambda m: m.primary_identifier==target_identifier, metadata_objects
+        )
+        return target_metadata[0]
 
     def lookup(self, identifier):
         """Requests NoveList metadata for a particular identifier
