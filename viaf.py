@@ -378,9 +378,12 @@ class VIAFClient(object):
 
     def __init__(self, _db):
         self._db = _db
-        self.data_source = DataSource.lookup(self._db, DataSource.VIAF)
         self.parser = VIAFParser()
         self.log = logging.getLogger("VIAF Client")
+
+    @property
+    def data_source(self):
+        return DataSource.lookup(self._db, DataSource.VIAF)
 
     def process_contributor(self, contributor):
 

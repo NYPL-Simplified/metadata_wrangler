@@ -51,7 +51,10 @@ class NoveListAPI(object):
         self._db = _db
         self.profile = profile
         self.password = password
-        self.source = DataSource.lookup(self._db, DataSource.NOVELIST)
+
+    @property
+    def source(self):
+        return DataSource.lookup(self._db, DataSource.NOVELIST)
 
     def lookup_equivalent_isbns(self, identifier):
         """Finds NoveList data for all ISBNs equivalent to an identifier.
@@ -263,12 +266,15 @@ class NoveListCoverageProvider(CoverageProvider):
     def __init__(self, _db, cutoff_time=None):
         self._db = _db
         self.api = NoveListAPI.from_config(self._db)
-        self.output_source = DataSource.lookup(self._db, DataSource.NOVELIST)
 
         super(NoveListCoverageProvider, self).__init__(
             "NoveList Coverage Provider", [Identifier.ISBN],
-            self.output_source, workset_size=25
+            self.source, workset_size=25
         )
+
+    @property
+    def source(self):
+        return DataSource.lookup(self._db, DataSource.NOVELIST)
 
     def process_item(self, identifier):
 
