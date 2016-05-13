@@ -111,22 +111,27 @@ class NoveListAPI(object):
         url = self._build_query(params)
         self.log.debug("NoveList lookup: %s", url)
         representation, from_cache = Representation.cacheable_post(
-            self._db, unicode(url), params, max_age=self.MAX_REPRESENTATION_AGE
+            self._db, unicode(url), params,
+            max_age=self.MAX_REPRESENTATION_AGE,
+            response_reviewer=self.review_response
         )
 
-        # Confirm that the representation was successful.
-        if representation.status_code == 403:
-            self._db.delete(representation)
-            raise Exception("Invalid NoveList credentials")
-        if representation.content.startswith('"Missing'):
-            error = representation.content
-            self._db.delete(representation)
-            raise Exception("Invalid NoveList parameters: %s" % error)
-
+        if not representation.content:
+            return None
         return self.lookup_info_to_metadata(representation.content)
 
     @classmethod
-    def _scrub_subtitle(self, subtitle):
+    def review_response(cls, response):
+        """Performs NoveList-specific error review of the request response"""
+        status_code, headers, content = response
+        if status_code == 403:
+            raise Exception("Invalid NoveList credentials")
+        if content.startswith('"Missing'):
+            raise Exception("Invalid NoveList parameters: %s" % content)
+        return response
+
+    @classmethod
+    def _scrub_subtitle(cls, subtitle):
         """Removes common NoveList subtitle annoyances"""
         if subtitle:
             subtitle = subtitle.replace('[electronic resource]', '')

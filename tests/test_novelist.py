@@ -74,17 +74,15 @@ class TestNoveListAPI(DatabaseTest):
             }
             assert_raises(ValueError, NoveListAPI.from_config, self._db)
 
-    def test_lookup(self):
-        source = DataSource.lookup(self._db, DataSource.NOVELIST)
-        identifier = self._identifier(identifier_type=Identifier.OVERDRIVE_ID)
-        # Without an ISBN-equivalent identifier, lookup returns None
-        eq_(None, self.novelist.lookup(identifier))
+    def test_review_response(self):
+        invalid_credential_response = (403, {}, 'HTML Access Denied page')
+        assert_raises(Exception, self.novelist.review_response, invalid_credential_response)
 
-        # With invalid credentials, lookup raises an error
-        isbn = self._identifier(identifier_type=Identifier.ISBN)
-        identifier.equivalent_to(source, isbn, 1)
-        self._db.commit()
-        assert_raises(Exception, self.novelist.lookup, identifier)
+        missing_argument_response = (200, {}, '"Missing ISBN, UPC, or Client Identifier!"')
+        assert_raises(Exception, self.novelist.review_response, missing_argument_response)
+
+        response = (200, {}, "Here's the goods!")
+        eq_(response, self.novelist.review_response(response))
 
     def test_lookup_info_to_metadata(self):
         # Basic book information is returned
