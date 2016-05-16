@@ -232,8 +232,11 @@ class TestNoveListAPI(DatabaseTest):
         # But when one pulls ahead, we get the metadata object again.
         metadatas.append(Metadata(DataSource.NOVELIST, primary_identifier=more_identifier))
         result = self.novelist.choose_best_metadata(metadatas, self._identifier())
-        eq_(True, isinstance(result, Metadata))
-        eq_(more_identifier, result.primary_identifier)
+        eq_(True, isinstance(result, tuple))
+        metadata, confidence = result
+        eq_(True, isinstance(metadata, Metadata))
+        eq_(0.67, round(confidence, 2))
+        eq_(more_identifier, metadata.primary_identifier)
 
 
 class TestNoveListCoverageProvider(DatabaseTest):
