@@ -227,8 +227,11 @@ class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript)
 class RedoOCLC(Explain):
 
     def __init__(self):
-        self.oclcld = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         self.coverage = LinkedDataCoverageProvider(self._db)
+
+    @property
+    def oclcld(self):
+        return DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
     def run(self):
         id_type, identifier = sys.argv[1:]
@@ -283,10 +286,13 @@ class RedoOCLCForThreeMScript(Script):
         # Allows tests to run without db session overlap.
         if test_session:
             self._session = test_session
-        self.input_data_source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
         self.coverage = LinkedDataCoverageProvider(self._db)
         self.oclc_classify = OCLCClassifyCoverageProvider(self._db)
         self.viaf = VIAFClient(self._db)
+
+    @property
+    def input_data_source(self):
+        return DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
     def do_run(self):
         """Re-runs OCLC Linked Data coverage provider to get viafs. Fetches
