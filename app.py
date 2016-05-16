@@ -70,7 +70,8 @@ def heartbeat():
 @accepts_collection
 def lookup(collection=None):
     return URNLookupController(Conf.db, True).work_lookup(
-        VerboseAnnotator, collection=collection
+        VerboseAnnotator, require_active_licensepool=False,
+        collection=collection
     )
 
 @app.route('/canonical-author-name')
