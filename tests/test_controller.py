@@ -5,16 +5,16 @@ from datetime import datetime, timedelta
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
-from ..core.model import Identifier
-from ..core.util.problem_detail import ProblemDetail
+from core.model import Identifier
+from core.util.problem_detail import ProblemDetail
 
-from ..controller import CollectionController
+from controller import CollectionController
 
 class TestCollectionController(DatabaseTest):
 
     def setup(self):
         super(TestCollectionController, self).setup()
-        from ..app import app
+        from app import app
         self.app = app
 
         self.controller = CollectionController(self._db)
@@ -85,7 +85,9 @@ class TestCollectionController(DatabaseTest):
         # A time can be passed.
         time = datetime.utcnow()
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.work1.coverage_records[0].timestamp = time - timedelta(days=1)
+        for record in self.work1.coverage_records:
+            # Set back the clock on all of work1's time records
+            record.timestamp = time - timedelta(days=1)
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()

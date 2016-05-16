@@ -176,7 +176,10 @@ class OCLCLinkedData(object):
 
     def __init__(self, _db):
         self._db = _db
-        self.source = DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
+
+    @property
+    def source(self):
+        return DataSource.lookup(self._db, DataSource.OCLC_LINKED_DATA)
 
     def lookup(self, identifier_or_uri, processed_uris=set()):
         """Perform an OCLC Open Data lookup for the given identifier."""
@@ -679,7 +682,10 @@ class OCLCClassifyAPI(object):
 
     def __init__(self, _db):
         self._db = _db
-        self.source = DataSource.lookup(self._db, DataSource.OCLC)
+
+    @property
+    def source(self):
+        return DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
         args = dict()

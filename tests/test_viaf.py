@@ -1,11 +1,11 @@
-import os
 from nose.tools import set_trace, eq_
 
 from . import (
     DatabaseTest,
+    sample_data,
 )
 
-from ..viaf import VIAFParser
+from viaf import VIAFParser
 
 class TestNameParser(DatabaseTest):
 
@@ -14,10 +14,7 @@ class TestNameParser(DatabaseTest):
         self.parser = VIAFParser()
 
     def sample_data(self, filename):
-        base_path = os.path.split(__file__)[0]
-        resource_path = os.path.join(base_path, "files", "viaf")
-        path = os.path.join(resource_path, filename)
-        return open(path).read()
+        return sample_data(filename, "viaf")
 
     def test_entry_with_wikipedia_name(self):
 
