@@ -1272,14 +1272,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
     def __init__(self, _db):
         self._db = _db
         self.api = OCLCLinkedData(self._db)
-        self.output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
+        output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
         input_identifier_types = [
             Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
             Identifier.OVERDRIVE_ID, Identifier.THREEM_ID
         ]
         super(LinkedDataCoverageProvider, self).__init__(
             "OCLC Linked Data Coverage Provider", input_identifier_types,
-            self.output_source, workset_size=10
+            output_source, workset_size=10
         )
 
     def process_item(self, identifier):

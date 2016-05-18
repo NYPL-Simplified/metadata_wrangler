@@ -25,16 +25,18 @@ from mirror import (
 from core.util.summary import SummaryEvaluator
 
 class ContentCafeCoverageProvider(CoverageProvider):
-    def __init__(self, _db):
+    def __init__(self, _db, api=None, uploader=None):
         self._db = _db
         self.input_identifier_types = [Identifier.ISBN]
-        self.output_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
-        self.mirror = ContentCafeCoverImageMirror(self._db)
-        self.content_cafe = ContentCafeAPI(self._db, self.mirror)
+        output_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
+        self.mirror = ContentCafeCoverImageMirror(self._db, uploader=uploader)
+        self.content_cafe = api or ContentCafeAPI(
+            self._db, self.mirror, uploader=uploader
+        )
 
         super(ContentCafeCoverageProvider, self).__init__(
             "Content Cafe Coverage Provider",
-            self.input_identifier_types, self.output_source,
+            self.input_identifier_types, output_source,
             workset_size=25)
 
     def process_item(self, identifier):
@@ -63,18 +65,21 @@ class ContentCafeAPI(object):
     excerpt_url = BASE_URL + "ContentCafeClient/Excerpt.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     author_notes_url = BASE_URL + "ContentCafeClient/AuthorNotes.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
-    def __init__(self, db, mirror, user_id=None, password=None):
+    def __init__(self, db, mirror, user_id=None, password=None, uploader=None,
+                 soap_client=None):
         self._db = db
         self.mirror = mirror
         if self.mirror:
-            self.scaler = ImageScaler(db, [self.mirror])
+            self.scaler = ImageScaler(db, [self.mirror], uploader=uploader)
         else:
             self.scaler = None
         integration = Configuration.integration("Content Cafe")
         self.user_id = user_id or integration['username']
         self.password = password or integration['password']
         self.log = logging.getLogger("Content Cafe API")
-        self.soap_client = ContentCafeSOAPClient(self.user_id, self.password)
+        self.soap_client = (
+            soap_client or ContentCafeSOAPClient(self.user_id, self.password)
+        )
 
     @property
     def data_source(self):
