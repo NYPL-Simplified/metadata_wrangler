@@ -62,6 +62,15 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.teardown_request
+def shutdown_session(exception):
+    if (hasattr(Conf, 'db')
+        and Conf.db):
+        if exception:
+            Conf.db.rollback()
+        else:
+            Conf.db.commit()
+
 @app.route('/heartbeat')
 def heartbeat():
     return HeartbeatController().heartbeat()
@@ -70,7 +79,8 @@ def heartbeat():
 @accepts_collection
 def lookup(collection=None):
     return URNLookupController(Conf.db, True).work_lookup(
-        VerboseAnnotator, collection=collection
+        VerboseAnnotator, require_active_licensepool=False,
+        collection=collection
     )
 
 @app.route('/canonical-author-name')

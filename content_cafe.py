@@ -70,12 +70,15 @@ class ContentCafeAPI(object):
             self.scaler = ImageScaler(db, [self.mirror])
         else:
             self.scaler = None
-        self.data_source = DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
         integration = Configuration.integration("Content Cafe")
         self.user_id = user_id or integration['username']
         self.password = password or integration['password']
         self.log = logging.getLogger("Content Cafe API")
         self.soap_client = ContentCafeSOAPClient(self.user_id, self.password)
+
+    @property
+    def data_source(self):
+        return DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
 
     def mirror_resources(self, isbn_identifier):
         """Associate a number of resources with the given ISBN.
@@ -101,7 +104,6 @@ class ContentCafeAPI(object):
         self.get_reviews(isbn_identifier, args)
         self.get_author_notes(isbn_identifier, args)
         self.measure_popularity(isbn_identifier, self.soap_client.ONE_YEAR_AGO)
-
 
     def get_associated_web_resources(
             self, identifier, args, url,

@@ -1,7 +1,7 @@
 from nose.tools import set_trace, eq_
 from . import DatabaseTest
-from ..scripts import RedoOCLCForThreeMScript
-from ..core.model import (
+from scripts import RedoOCLCForThreeMScript
+from core.model import (
     Identifier,
     DataSource,
     CoverageRecord,
