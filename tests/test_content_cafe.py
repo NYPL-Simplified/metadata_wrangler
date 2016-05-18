@@ -11,13 +11,17 @@ from . import (
 class DummyContentCafeAPI(object):
     pass
 
+class DummyContentCafeSOAPClient(object):
+    pass
+
 class TestContentCafeCoverageProvider(DatabaseTest):
 
     def test_constructor(self):
         """Just test that we can create the object."""
         uploader=DummyS3Uploader()
+        soap_client = DummyContentCafeSOAPClient()
         api = ContentCafeAPI(self._db, None, "user_id", "password", 
-                             uploader, testing=True)
+                             uploader, soap_client=soap_client)
         provider = ContentCafeCoverageProvider(
             self._db, api=api, uploader=uploader
         )

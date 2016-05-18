@@ -66,7 +66,7 @@ class ContentCafeAPI(object):
     author_notes_url = BASE_URL + "ContentCafeClient/AuthorNotes.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
     def __init__(self, db, mirror, user_id=None, password=None, uploader=None,
-                 testing=False):
+                 soap_client=None):
         self._db = db
         self.mirror = mirror
         if self.mirror:
@@ -77,10 +77,9 @@ class ContentCafeAPI(object):
         self.user_id = user_id or integration['username']
         self.password = password or integration['password']
         self.log = logging.getLogger("Content Cafe API")
-        if testing:
-            self.soap_client = DummyContentCafeSOAPClient()
-        else:
-            self.soap_client = ContentCafeSOAPClient(self.user_id, self.password)
+        self.soap_client = (
+            soap_client or ContentCafeSOAPClient(self.user_id, self.password)
+        )
 
     @property
     def data_source(self):
@@ -219,9 +218,6 @@ class ContentCafeAPI(object):
             return []
 
 class ContentCafeSOAPError(IOError):
-    pass
-
-class DummyContentCafeSOAPClient(object):
     pass
 
 class ContentCafeSOAPClient(object):
