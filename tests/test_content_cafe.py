@@ -1,8 +1,8 @@
-from ..content_cafe import (
+from content_cafe import (
     ContentCafeAPI,
     ContentCafeCoverageProvider,
 )
-from ..core.s3 import DummyS3Uploader
+from core.s3 import DummyS3Uploader
 
 from . import (
     DatabaseTest,
