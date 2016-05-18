@@ -1,11 +1,23 @@
-from ..content_cafe import ContentCafeCoverageProvider
+from ..content_cafe import (
+    ContentCafeAPI,
+    ContentCafeCoverageProvider,
+)
+from ..core.s3 import DummyS3Uploader
 
 from . import (
     DatabaseTest,
 )
 
+class DummyContentCafeAPI(object):
+    pass
+
 class TestContentCafeCoverageProvider(DatabaseTest):
 
     def test_constructor(self):
         """Just test that we can create the object."""
-        provider = ContentCafeCoverageProvider(self._db)
+        uploader=DummyS3Uploader()
+        api = ContentCafeAPI(self._db, None, "user_id", "password", 
+                             uploader, testing=True)
+        provider = ContentCafeCoverageProvider(
+            self._db, api=api, uploader=uploader
+        )

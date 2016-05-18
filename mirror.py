@@ -26,10 +26,10 @@ class CoverImageMirror(object):
     DATA_SOURCE = None
     ONE_YEAR = datetime.timedelta(days=365)
 
-    def __init__(self, db):
+    def __init__(self, db, uploader=None):
         self._db = db
         self.data_source = DataSource.lookup(self._db, self.DATA_SOURCE)
-        self.uploader = S3Uploader()
+        self.uploader = uploader or S3Uploader()
         self.log = logging.getLogger("Cover Image Mirror")
 
     def run(self):
@@ -118,10 +118,10 @@ class ImageScaler(object):
     DEFAULT_WIDTH = 200
     DEFAULT_HEIGHT = 300
 
-    def __init__(self, db, mirrors):
+    def __init__(self, db, mirrors, uploader=None):
         self._db = db
         self.data_source_ids = []
-        self.uploader = S3Uploader()
+        self.uploader = uploader or S3Uploader()
         self.log = logging.getLogger("Cover Image Scaler")
 
         for mirror in mirrors:
