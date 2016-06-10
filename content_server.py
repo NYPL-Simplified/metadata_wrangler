@@ -36,7 +36,7 @@ class ContentServerCoverageProvider(CoverageProvider):
         )
         super(ContentServerCoverageProvider, self).__init__(
                 "OA Content Server Coverage Provider",
-                input_identifier_types, output_source, workset_size=10
+                input_identifier_types, output_source, batch_size=10
         )
 
     def process_item(self, identifier):
