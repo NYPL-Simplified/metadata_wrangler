@@ -23,6 +23,7 @@ from threem import (
 from gutenberg import OCLCClassifyCoverageProvider
 from core.scripts import (
     Explain,
+    IdentifierInputScript,
     WorkProcessingScript,
     Script,
     RunMonitorScript,
@@ -30,7 +31,7 @@ from core.scripts import (
 from viaf import VIAFClient
 from core.util.permanent_work_id import WorkIDCalculator
 
-class RunIdentifierResolutionMonitor(RunMonitorScript):
+class RunIdentifierResolutionMonitor(RunMonitorScript, IdentifierInputScript):
     """Run the identifier resolution monitor.
 
     Why not just use RunMonitorScript with the
@@ -52,10 +53,8 @@ class RunIdentifierResolutionMonitor(RunMonitorScript):
     def run(self):
         # Explicitly create UnresolvedIdentifiers for any Identifiers
         # mentioned on the command line.
-        identifiers = self.parse_identifier_list(
-            self._db, sys.argv[1:], autocreate=True
-        )
-        for identifier in identifiers:
+        args = self.parse_command_line(self._db, autocreate=True)
+        for identifier in args.identifiers:
             self.log.info(
                 "Registering UnresolvedIdentifier for %r", identifier
             )
