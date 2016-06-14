@@ -1279,7 +1279,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
         ]
         super(LinkedDataCoverageProvider, self).__init__(
             "OCLC Linked Data Coverage Provider", input_identifier_types,
-            output_source, workset_size=10
+            output_source, batch_size=10
         )
 
     def process_item(self, identifier):

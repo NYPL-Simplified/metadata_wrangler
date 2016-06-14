@@ -37,7 +37,7 @@ class ContentCafeCoverageProvider(CoverageProvider):
         super(ContentCafeCoverageProvider, self).__init__(
             "Content Cafe Coverage Provider",
             self.input_identifier_types, output_source,
-            workset_size=25)
+            batch_size=25)
 
     def process_item(self, identifier):
         try:
