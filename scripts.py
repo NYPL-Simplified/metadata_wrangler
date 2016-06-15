@@ -8,6 +8,7 @@ from core.model import (
     Edition,
     Equivalency,
     Identifier,
+    LicensePool,
     UnresolvedIdentifier,
     Work,
 )
@@ -54,20 +55,21 @@ class RunIdentifierResolutionMonitor(RunMonitorScript, IdentifierInputScript):
         # Explicitly create UnresolvedIdentifiers for any Identifiers
         # mentioned on the command line.
         args = self.parse_command_line(self._db, autocreate=True)
-        for identifier in args.identifiers:
-            self.log.info(
-                "Registering UnresolvedIdentifier for %r", identifier
-            )
-            ui, ignore = UnresolvedIdentifier.register(
-                self._db, identifier, force=True
-            )
-            success = self.monitor.resolve_and_handle_result(ui)
-            if success:
-                self.log.info("Success: %r", identifier)
-            else:
-                self.log.info("Failure: %r", identifier)
-
-        if not identifiers:
+        if args.identifiers:
+            # Register specific UnresolvedIdentifiers, then resolve them.
+            for identifier in args.identifiers:
+                self.log.info(
+                    "Registering UnresolvedIdentifier for %r", identifier
+                )
+                ui, ignore = UnresolvedIdentifier.register(
+                    self._db, identifier, force=True
+                )
+                success = self.monitor.resolve_and_handle_result(ui)
+                if success:
+                    self.log.info("Success: %r", identifier)
+                else:
+                    self.log.info("Failure: %r", identifier)
+        else:
             # Run the IdentifierResolutionMonitor as per normal usage.
             super(RunIdentifierResolutionMonitor, self).run()
 
@@ -376,3 +378,68 @@ class CollectionGeneratorScript(Script):
         print "-" * 40
         print "CLIENT ID: %s" % collection.client_id
         print "CLIENT SECRET: %s" % plaintext_client_secret
+
+
+class AddMissingUnresolvedIdentifiersScript(Script):
+
+    """Find any Identifiers that should have LicensePools but don't,
+    and also don't have an UnresolvedIdentifier record.
+
+    Give each one an UnresolvedIdentifier record.
+    
+    This is a defensive measure.
+    """
+
+    def run(self):
+        types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID,
+                 Identifier.THREEM_ID, Identifier.AXIS_360_ID]
+
+        # Find Identifiers that have LicensePools but no Editions and no
+        # UnresolvedIdentifier.
+        licensepool_but_no_edition = self._db.query(Identifier).join(Identifier.licensed_through).outerjoin(
+            Identifier.primarily_identifies).outerjoin(
+                Identifier.unresolved_identifier).filter(
+                    Identifier.type.in_(types)).filter(
+                        Edition.id==None).filter(UnresolvedIdentifier.id==None)
+
+        # Identifiers that have no LicensePools and no UnresolvedIdentifier.
+        seemingly_resolved_but_no_licensepool = self._db.query(Identifier).outerjoin(
+            Identifier.licensed_through).outerjoin(
+                Identifier.unresolved_identifier).filter(
+                    Identifier.type.in_(types)).filter(
+                        LicensePool.id==None).filter(UnresolvedIdentifier.id==None)
+
+        # Identifiers whose Editions have no Work because they are
+        # missing title, author or sort_author.
+        no_title_or_author = or_(
+            Edition.title==None, Edition.sort_author==None)
+        no_work_because_of_missing_metadata = self._db.query(Identifier).join(
+            Identifier.primarily_identifies).join(
+                Identifier.licensed_through).filter(
+                    no_title_or_author).filter(
+                        LicensePool.work_id==None)
+
+        for q, msg, force in (
+                (licensepool_but_no_edition,
+                 "Creating UnresolvedIdentifiers for %d incompletely resolved Identifiers (LicensePool but no Edition).", True),
+                (no_work_because_of_missing_metadata,
+                 "Creating UnresolvedIdentifiers for %d Identifiers that have no Work because their Editions are missing title or author.", True),
+                (seemingly_resolved_but_no_licensepool,
+                 "Creating UnresolvedIdentifiers for %d identifiers missing both LicensePool and UnresolvedIdentifier.", False),
+        ):
+            self.register_unresolved_identifiers(q, msg, force)
+
+    def register_unresolved_identifiers(self, query, msg, force):
+        """Register an UnresolvedIdentifier for every Identifier
+        in `query`.
+
+        :param qu: A query against `Identifier`
+        :param msg: A message to log if any `Identifier`s match the query.
+        :param force: Register an UnresolvedIdentifier even if the 
+          identifier already has an associated LicensePool.
+        """
+        count = query.count()
+        if count:
+            self.log.info(msg, count)
+            for i in query:
+                UnresolvedIdentifier.register(self._db, i, force=force)

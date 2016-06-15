@@ -110,3 +110,4 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_("Content Server served unhandleable media type: text/plain",
             failure.exception)
         eq_(True, failure.transient)
+        eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)

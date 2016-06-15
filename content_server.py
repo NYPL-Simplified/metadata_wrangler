@@ -19,7 +19,9 @@ class ContentServerException(Exception):
     pass
 
 class ContentServerCoverageProvider(CoverageProvider):
-    """Checks the OA Content Server for Records"""
+    """Checks the OA Content Server for metadata about Gutenberg books
+    and books identified by URI.
+    """
 
     CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served unhandleable media type: %s"
 
@@ -57,7 +59,8 @@ class ContentServerCoverageProvider(CoverageProvider):
             return CoverageFailure(
                 identifier,
                 self.CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
-                    content_type)
+                    content_type),
+                data_source
             )
         
         editions, licensepools, works, messages = self.importer.import_from_feed(
