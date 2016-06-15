@@ -12,25 +12,28 @@ from core.coverage import (
     CoverageProvider,
     CoverageFailure,
 )
+from core.util.http import BadResponseException
 
 class ContentServerException(Exception):
     # Raised when the ContentServer can't connect or returns bad data
     pass
 
 class ContentServerCoverageProvider(CoverageProvider):
-    """Checks the OA Content Server for Records"""
+    """Checks the OA Content Server for metadata about Gutenberg books
+    and books identified by URI.
+    """
 
-    CONTENT_SERVER_RETURNED_ERROR = "OA Content Server returned error"
-    CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served \
-            unhandleable media type"
+    CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served unhandleable media type: %s"
 
-    def __init__(self, _db):
+    def __init__(self, _db, content_server=None):
         self._db = _db
-        content_server_url = Configuration.integration_url(
-            Configuration.CONTENT_SERVER_INTEGRATION, required=True)
-        self.content_server = SimplifiedOPDSLookup(content_server_url)
+        if not content_server:
+            content_server_url = Configuration.integration_url(
+                Configuration.CONTENT_SERVER_INTEGRATION, required=True)
+            content_server = SimplifiedOPDSLookup(content_server_url)
+        self.content_server = content_server
         self.importer = OPDSImporter(self._db, DataSource.OA_CONTENT_SERVER)
-        input_identifier_types = [Identifier.GUTENBERG_ID]
+        input_identifier_types = [Identifier.GUTENBERG_ID, Identifier.URI]
         output_source = DataSource.lookup(
             self._db, DataSource.OA_CONTENT_SERVER
         )
@@ -40,10 +43,27 @@ class ContentServerCoverageProvider(CoverageProvider):
         )
 
     def process_item(self, identifier):
-        response = self.content_server.lookup([identifier])
-        self.check_response_for_errors(response)
-
-        editions, messages, next_links = self.importer.import_from_feed(
+        data_source = DataSource.lookup(
+            self._db, self.importer.data_source_name
+        )
+        try:
+            response = self.content_server.lookup([identifier])
+        except BadResponseException, e:
+            return CoverageFailure(
+                identifier,
+                e.message,
+                data_source
+            )
+        content_type = response.headers['content-type']
+        if not content_type.startswith("application/atom+xml"):
+            return CoverageFailure(
+                identifier,
+                self.CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
+                    content_type),
+                data_source
+            )
+        
+        editions, licensepools, works, messages = self.importer.import_from_feed(
             response.content
         )
         for edition in editions:
@@ -53,35 +73,11 @@ class ContentServerCoverageProvider(CoverageProvider):
             if edition_identifier == identifier:
                 return identifier
         expect = identifier.urn
-        for message_identifier, status_message in messages.items():
-            # Return messages as CoverageFailures.
-            if message_identifier == expect:
-                if status_message.status_code == 200:
-                    exception = "OA Content Server returned success, but \
-                            nothing was imported"
-                    transient = True
-                else:
-                    exception = status_message.message
-                    transient = status_message.transient
-                return CoverageFailure(
-                    self, identifier, exception, transient=transient
-                )
-
-        exception = "404: Identifier %r was not found in %s" % (identifier,
-                self.service_name)
-        return CoverageFailure(self, identifier, exception)
-
-    def check_response_for_errors(self, response):
-        """Raises a server error if a response is not a success.
-
-        TODO: This probably doesn't go here.
-        """
-        if response.status_code != 200:
-            raise ContentServerException(self.CONTENT_SERVER_RETURNED_ERROR)
-
-        content_type = response.headers['content-type']
-        if not content_type.startswith("application/atom+xml"):
-            raise ContentServerException(
-                self.CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
-                content_type)
-            )
+        messages = messages.values()
+        if messages:
+            return messages[0]
+        return CoverageFailure(
+            identifier,
+            "Identifier was not mentioned in lookup response",
+            data_source
+        )

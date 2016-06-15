@@ -1,0 +1,30 @@
+<feed xmlns:bibframe="http://bibframe.org/vocab/" xmlns:simplified="http://librarysimplified.org/terms/" xmlns:app="http://www.w3.org/2007/app" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:schema="http://schema.org/" xmlns="http://www.w3.org/2005/Atom">
+  <id>http://oacontent.alpha.librarysimplified.org/lookup?urn=http%3A%2F%2Fwww.gutenberg.org%2Febooks%2F20201</id>
+  <title>Lookup results</title>
+  <updated>2016-06-14T19:24:27Z</updated>
+  <link href="http://oacontent.alpha.librarysimplified.org/lookup?urn=http%3A%2F%2Fwww.gutenberg.org%2Febooks%2F20201" rel="self"/>
+  <entry schema:additionalType="http://schema.org/Book">
+    <id>http://www.gutenberg.org/ebooks/20201</id>
+    <title>Mary Gray</title>
+    <bibframe:distribution bibframe:ProviderName="Gutenberg"/>
+    <author>
+      <name/>
+      <simplified:sort_name>Tynan, Katharine</simplified:sort_name>
+    </author>
+    <updated>2016-01-25T15:17:46Z</updated>
+    <simplified:pwid>e05f1380-5e6b-82f6-70ee-539507f82520</simplified:pwid>
+    <link href="http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png" type="image/png" rel="http://opds-spec.org/image"/>
+    <link href="http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png" type="image/png" rel="http://opds-spec.org/image/thumbnail"/>
+    <category term="Adult" scheme="http://schema.org/audience" label="Adult"/>
+    <category schema:ratingValue="1" term="Poor families -- Fiction" scheme="http://purl.org/dc/terms/LCSH"/>
+    <category schema:ratingValue="1" term="Fathers and daughters -- Fiction" scheme="http://purl.org/dc/terms/LCSH"/>
+    <category schema:ratingValue="1" term="England -- Social life and customs -- Fiction" scheme="http://purl.org/dc/terms/LCSH"/>
+    <category schema:ratingValue="1" term="Rich people -- Fiction" scheme="http://purl.org/dc/terms/LCSH"/>
+    <category schema:ratingValue="1" term="PR" scheme="http://purl.org/dc/terms/LCC"/>
+    <dcterms:language>en</dcterms:language>
+    <dcterms:publisher>Project Gutenberg</dcterms:publisher>
+    <published>2015-02-11T15:53:31Z</published>
+    <dcterms:created>2006-12-27</dcterms:created>
+    <link href="http://s3.amazonaws.com/oabooks.nypl.org/Gutenberg%20ID/20201.epub" type="application/epub+zip" rel="http://opds-spec.org/acquisition/open-access"/>
+  </entry>
+</feed>

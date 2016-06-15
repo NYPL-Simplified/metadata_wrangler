@@ -104,58 +104,6 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
         self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
 
-
-    def pre_fetch_hook(self):
-        """Find any Identifiers that should have LicensePools but don't,
-        and also don't have an UnresolvedIdentifier record.
-
-        Give each one an UnresolvedIdentifier record.
-
-        This is a defensive measure.
-        """
-        types = [Identifier.GUTENBERG_ID, Identifier.OVERDRIVE_ID,
-                 Identifier.THREEM_ID, Identifier.AXIS_360_ID]
-
-        # Find Identifiers that have LicensePools but no Editions and no
-        # UnresolvedIdentifier.
-        licensepool_but_no_edition = self._db.query(Identifier).join(Identifier.licensed_through).outerjoin(
-            Identifier.primarily_identifies).outerjoin(
-                Identifier.unresolved_identifier).filter(
-                    Identifier.type.in_(types)).filter(
-                        Edition.id==None).filter(UnresolvedIdentifier.id==None)
-
-        # Identifiers that have no LicensePools and no UnresolvedIdentifier.
-        seemingly_resolved_but_no_licensepool = self._db.query(Identifier).outerjoin(
-            Identifier.licensed_through).outerjoin(
-                Identifier.unresolved_identifier).filter(
-                    Identifier.type.in_(types)).filter(
-                        LicensePool.id==None).filter(UnresolvedIdentifier.id==None)
-
-        # Identifiers whose Editions have no Work because they are
-        # missing title, author or sort_author.
-        no_title_or_author = or_(
-            Edition.title==None, Edition.sort_author==None)
-        no_work_because_of_missing_metadata = self._db.query(Identifier).join(
-            Identifier.primarily_identifies).join(
-                Identifier.licensed_through).filter(
-                    no_title_or_author).filter(
-                        Edition.work_id==None)
-
-        for q, msg, force in (
-                (licensepool_but_no_edition,
-                 "Creating UnresolvedIdentifiers for %d incompletely resolved Identifiers (LicensePool but no Edition).", True),
-                (no_work_because_of_missing_metadata,
-                 "Creating UnresolvedIdentifiers for %d Identifiers that have no Work because their Editions are missing title or author.", True),
-                (seemingly_resolved_but_no_licensepool,
-                 "Creating UnresolvedIdentifiers for %d identifiers missing both LicensePool and UnresolvedIdentifier.", False),
-        ):
-
-            count = q.count()
-            if count:
-                self.log.info(msg, count)
-                for i in q:
-                    UnresolvedIdentifier.register(self._db, i, force=force)
-
     def finalize(self, unresolved_identifier):
         identifier = unresolved_identifier.identifier
         self.resolve_equivalent_oclc_identifiers(identifier)
@@ -206,7 +154,8 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""
         viaf = VIAFClient(self._db)
-        for edition in work.editions:
+        for pool in work.license_pools:
+            edition = pool.presentation_edition
             for contributor in edition.contributors:
                 viaf.process_contributor(contributor)
                 if not contributor.display_name:
@@ -215,7 +164,8 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
 
     def resolve_cover_image(self, work):
         """Make sure we have the cover for all editions."""
-        for edition in work.editions:
+        for pool in work.license_pools:
+            edition = pool.presentation_edition
             data_source_name = edition.data_source.name
             if data_source_name in self.image_mirrors:
                 self.image_mirrors[data_source_name].mirror_edition(edition)
