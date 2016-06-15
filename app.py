@@ -6,6 +6,7 @@ import urlparse
 
 from functools import wraps
 from flask import Flask, make_response
+from flask.ext.babel import Babel
 from core.util.problem_detail import ProblemDetail
 from core.opds import VerboseAnnotator
 from core.app_server import (
@@ -25,6 +26,7 @@ from controller import CollectionController
 app = Flask(__name__)
 app.config['DEBUG'] = True
 app.debug = True
+babel = Babel(app)
 
 class Conf:
     db = None

@@ -16,6 +16,7 @@ python-dateutil
 loggly-python-handler
 mock
 cairosvg
+Flask-Babel
 
 # Used only by metadata
 pyld
