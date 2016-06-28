@@ -6,6 +6,10 @@ import re
 
 from collections import Counter, defaultdict
 
+from core.metadata_layer import (
+    ContributorData,
+)
+
 from core.model import (
     Contributor,
     DataSource,
@@ -22,10 +26,15 @@ class VIAFParser(XMLParser):
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
     log = logging.getLogger("VIAF Parser")
+    wikidata_id = re.compile("^Q[0-9]")
+
 
     @classmethod
     def name_matches(cls, n1, n2):
+        """ Returns true if n1 and n2 are identical strings.  Ignores case 
+        and periods.""" 
         return n1.replace(".", "").lower() == n2.replace(".", "").lower()
+
 
     def info(self, contributor, viaf, display_name, family_name, wikipedia_name):
         """For the given Contributor, find:
@@ -118,35 +127,46 @@ class VIAFParser(XMLParser):
     def parse_multiple(
             self, xml, working_sort_name=None, working_display_name=None,
             strict=True):
-        """Parse a VIAF response containing multiple clusters into a
-        VIAF ID + name 5-tuple.
+        """ Parse a VIAF response containing multiple clusters into a
+        list of contributors.
+
+        :return: a list of ContributorData objects, each filled with VIAF id, display, 
+        sort, family, and wikipedia names, or None on error.
         """
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         viaf_id = None
         for cluster in self._xpath(tree, '//*[local-name()="VIAFCluster"]'):
-            viaf, display, family, sort, wikipedia = self.extract_viaf_info(
+            #viaf, display, family, sort, wikipedia = self.extract_viaf_info(
+            #    cluster, working_sort_name, working_display_name, strict)
+            contributor_data = self.extract_viaf_info(
                 cluster, working_sort_name, working_display_name, strict)
-            if display:
-                return viaf, display, family, sort, wikipedia
+            
+            #if display:
+            #    return viaf, display, family, sort, wikipedia
+            
             # We couldn't find a display name, but can we at least
             # determine that this is an acceptable VIAF ID for this
             # name?
-            if viaf:
-                viaf_id = viaf
+            #if viaf:
+            #    viaf_id = viaf
 
         # We could not find any names for this author, but hopefully
         # we at least found a VIAF ID.
-        return viaf_id, None, None, None, None
+        #return viaf_id, None, None, None, None
+        return contributor_data
+
 
     def parse(self, xml, working_sort_name=None, working_display_name=None,
               strict=False):
-        """Parse a VIAF response containing a single cluster into a name
-        3-tuple."""
+        """ Parse a VIAF response containing a single cluster.
+
+        :return: a ContributorData object filled with display, sort, family, 
+        and wikipedia names, or None on error.
+        """
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         return self.extract_viaf_info(
             tree, working_sort_name, working_display_name, strict=strict)
 
-    wikidata_id = re.compile("^Q[0-9]")
 
     def extract_wikipedia_name(self, cluster):
         """Extract Wiki name from a single VIAF cluster."""
@@ -158,6 +178,7 @@ class VIAFParser(XMLParser):
                 if not self.wikidata_id.search(potential_wikipedia):
                     return potential_wikipedia
 
+
     def sort_names_by_popularity(self, cluster):
         sort_name_popularity = Counter()
         for possible_sort_name in self.sort_names_for_cluster(cluster):
@@ -166,13 +187,21 @@ class VIAFParser(XMLParser):
             sort_name_popularity[possible_sort_name] += 1
         return sort_name_popularity
 
+
     def extract_viaf_info(self, cluster, working_sort_name=None,
                           working_display_name=False, strict=False):
-        """Extract name info from a single VIAF cluster."""
-        display_name = None
-        sort_name = working_sort_name
-        family_name = None
-        wikipedia_name = None
+        """ Extract name info from a single VIAF cluster.
+
+        :return: a ContributorData object filled with display, sort, family, 
+        and wikipedia names, or None on error.
+        """
+
+        contributor_data = ContributorData()
+
+        #display_name = None
+        contributor_data.sort_name = working_sort_name
+        #family_name = None
+        #wikipedia_name = None
 
         # If we're not sure that this is even the right cluster for
         # the given author, make sure that one of the working names
@@ -180,24 +209,24 @@ class VIAFParser(XMLParser):
         if strict:
             if not self.cluster_has_record_for_named_author(
                 cluster, working_sort_name, working_display_name):
-                return None, None, None, None, None
+                return None
 
         # Get the VIAF ID for this cluster, just in case we don't have one yet.
         viaf_tag = self._xpath1(cluster, './/*[local-name()="viafID"]')
         if viaf_tag is None:
-            viaf_id = None
+            contributor_data.viaf = None
         else:
-            viaf_id = viaf_tag.text
+            contributor_data.viaf = viaf_tag.text
 
         # If we don't have a working sort name, find the most popular
         # sort name in this cluster and use it as the sort name.
         sort_name_popularity = self.sort_names_by_popularity(cluster)
 
         # Does this cluster have a Wikipedia page?
-        wikipedia_name = self.extract_wikipedia_name(cluster)
-        if wikipedia_name:
-            display_name = self.wikipedia_name_to_display_name(wikipedia_name)
-            working_display_name = display_name
+        contributor_data.wikipedia_name = self.extract_wikipedia_name(cluster)
+        if contributor_data.wikipedia_name:
+            contributor_data.display_name = self.wikipedia_name_to_display_name(contributor_data.wikipedia_name)
+            working_display_name = contributor_data.display_name
             # TODO: There's a problem here when someone's record has a
             # Wikipedia page other than their personal page (e.g. for
             # a band they're in.)
@@ -220,7 +249,7 @@ class VIAFParser(XMLParser):
                     candidates.append((possible_given, possible_family,
                                        possible_extra))
                     if possible_sort_name and possible_sort_name.endswith(","):
-                        possible_sort_name = sort_name[:-1]
+                        possible_sort_name = contributor_data.sort_name[:-1]
                         sort_name_popularity[possible_sort_name] += 1
                     break
             else:
@@ -231,11 +260,11 @@ class VIAFParser(XMLParser):
                 )
                 pass
 
-        if sort_name_popularity and not sort_name:
-            sort_name, ignore = sort_name_popularity.most_common(1)[0]
+        if sort_name_popularity and not contributor_data.sort_name:
+            contributor_data.sort_name, ignore = sort_name_popularity.most_common(1)[0]
 
-        if display_name:
-            parts = display_name.split(" ")
+        if contributor_data.display_name:
+            parts = contributor_data.display_name.split(" ")
             if len(parts) == 2:
                 # Pretty clearly given name+family name.
                 # If it gets more complicated than this we can't
@@ -244,22 +273,20 @@ class VIAFParser(XMLParser):
 
         display_nameparts = self.best_choice(candidates)
         if display_nameparts[1]: # Family name
-            family_name = display_nameparts[1]
+            contributor_data.family_name = display_nameparts[1]
 
-        v = (
-            viaf_id,
-            display_name or self.combine_nameparts(*display_nameparts) or working_display_name,
-            family_name,
-            sort_name or working_sort_name,
-            wikipedia_name)
-        return v
+        contributor_data.display_name = contributor_data.display_name or self.combine_nameparts(*display_nameparts) or working_display_name
+
+        return contributor_data
+
 
     def wikipedia_name_to_display_name(self, wikipedia_name):
-        "Convert 'Bob_Jones_(Author)' to 'Bob Jones'"
+        """ Convert 'Bob_Jones_(Author)' to 'Bob Jones'. """
         display_name = wikipedia_name.replace("_", " ")
         if ' (' in display_name:
             display_name = display_name[:display_name.rindex(' (')]
         return display_name
+
 
     def best_choice(self, possibilities):
         """Return the best (~most popular) choice among the given names.
@@ -365,10 +392,8 @@ class VIAFParser(XMLParser):
         return display_name
 
 
-class VIAFClient(object):
 
-    MAX_AGE = 3600 * 24 * 180
-    MAX_AGE = 0
+class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
     SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
