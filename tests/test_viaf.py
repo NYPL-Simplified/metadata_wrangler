@@ -22,11 +22,8 @@ class TestNameParser(DatabaseTest):
 
         xml = self.sample_data("will_eisner.xml")
 
-        #contributor, new = self._contributor(None)
-
-        viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
         contributor_data = self.parser.parse(xml, None)
-        eq_("10455", viaf)
+        eq_("10455", contributor_data.viaf)
         eq_("Will Eisner", contributor_data.display_name)
         eq_("Eisner", contributor_data.family_name)
         eq_("Will_Eisner", contributor_data.wikipedia_name)
@@ -107,15 +104,10 @@ class TestNameParser(DatabaseTest):
         # incorrect results.
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
-        #contributor, new = self._contributor(name)
-        #viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(
-        #    xml, working_sort_name=name)
+
         contributor_data = self.parser.parse_multiple(xml, working_sort_name=name)
 
-        eq_(None, contributor_data.viaf)
-        eq_(None, contributor_data.display_name)
-        eq_(None, contributor_data.family_name)
-        eq_(None, contributor_data.wikipedia_name)
+        eq_(None, contributor_data)
 
 
     def test_multiple_results_with_success(self):

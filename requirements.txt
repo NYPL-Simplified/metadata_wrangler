@@ -23,3 +23,6 @@ pyld
 beautifulsoup4
 suds
 py-bcrypt
+nameparser
+fuzzywuzzy
+
