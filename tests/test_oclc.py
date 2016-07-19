@@ -14,6 +14,7 @@ from core.metadata_layer import (
     Metadata,
     IdentifierData,
 )
+from core.coverage import CoverageFailure
 
 from oclc import (
     OCLCXMLParser,
@@ -428,6 +429,17 @@ class TestOCLCLinkedData(TestParser):
         eq_(u"71398958", viaf)
         eq_(10, len(metadata_obj.subjects))
 
+        # Make sure a book with no English title doesn't break anything.
+        subgraph[14]['name']['@language'] = 'fr'
+        [book] = [book for book in oclc.books(subgraph)]
+
+        metadata_obj = OCLCLinkedData(self._db).book_info_to_metadata(
+            subgraph, book
+        )
+
+        # The metadata has no title.
+        eq_(None, metadata_obj.title)
+
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
@@ -483,3 +495,17 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         eq_(1, len(equivalencies))
         eq_(bad_metadata.primary_identifier, equivalencies[0].output)
         eq_(1, equivalencies[0].strength)
+
+    def test_process_item_exception(self):
+        class DoomedOCLCLinkedData(OCLCLinkedData):
+            def info_for(self, identifier):
+                raise IOError("Exception!")
+
+        provider = LinkedDataCoverageProvider(self._db, api=DoomedOCLCLinkedData(self._db))
+        
+        edition = self._edition()
+        identifier = edition.primary_identifier
+
+        result = provider.process_item(identifier)
+        assert isinstance(result, CoverageFailure)
+        assert "Exception!" in result.exception
