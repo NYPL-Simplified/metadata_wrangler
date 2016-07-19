@@ -97,6 +97,7 @@ class TestRedoOCLCForThreeM(DatabaseTest):
     def test_merge_contributors(self):
         oclc_work = self._identifier(identifier_type=Identifier.OCLC_WORK)
         oclc_number = self._identifier(identifier_type=Identifier.OCLC_NUMBER)
+        denzel, ignore = self._contributor("Denzel Washington")
         for oclc_id in [oclc_work, oclc_number]:
             # Create editions for each OCLC Identifier, give them a contributor,
             # and set them equivalent.
@@ -106,16 +107,16 @@ class TestRedoOCLCForThreeM(DatabaseTest):
                 identifier_id = oclc_id.identifier,
                 title = "King Kong Ain't Got Nothin On Me"
             )
-            [contributor] = list(edition.contributors)
-            contributor.name = "Denzel Washington"
+            [contribution] = edition.contributions
+            contribution.contributor = denzel
             self.edition1.primary_identifier.equivalent_to(
                 self.script.input_data_source, oclc_id, 1
             )
             self._db.commit()
         eq_(0, len(self.edition1.contributors))
         self.script.merge_contributors(self.edition1.primary_identifier)
-        eq_(2, len(self.edition1.contributors))
+        eq_(1, len(self.edition1.contributors))
         eq_(
-            ["Denzel Washington"] * 2, 
+            ["Denzel Washington"], 
             [x.name for x in self.edition1.contributors]
         )
