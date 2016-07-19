@@ -45,8 +45,8 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         self._db.commit()
 
         # Remove contributors for the first two editions.
-        contributions = self.edition1.contributions + self.edition2.contributions
-        contributors = self.edition1.contributors + self.edition2.contributors
+        contributions = list(self.edition1.contributions) + list(self.edition2.contributions)
+        contributors = list(self.edition1.contributors) + list(self.edition2.contributors)
         for c in contributions + contributions:
             self._db.delete(c)
         self._db.commit()
@@ -106,7 +106,8 @@ class TestRedoOCLCForThreeM(DatabaseTest):
                 identifier_id = oclc_id.identifier,
                 title = "King Kong Ain't Got Nothin On Me"
             )
-            edition.contributors[0].name = "Denzel Washington"
+            [contributor] = list(edition.contributors)
+            contributor.name = "Denzel Washington"
             self.edition1.primary_identifier.equivalent_to(
                 self.script.input_data_source, oclc_id, 1
             )
@@ -114,4 +115,7 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         eq_(0, len(self.edition1.contributors))
         self.script.merge_contributors(self.edition1.primary_identifier)
         eq_(2, len(self.edition1.contributors))
-        eq_("Denzel Washington", self.edition1.contributors[0].name)
+        eq_(
+            ["Denzel Washington"] * 2, 
+            [x.name for x in self.edition1.contributors]
+        )
