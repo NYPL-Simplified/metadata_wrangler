@@ -542,7 +542,8 @@ class OCLCLinkedData(object):
         metadata.primary_identifier, new = Identifier.for_foreign_id(
             self._db, oclc_id_type, oclc_id
         )
-        metadata.title = titles[0]
+        if titles:
+            metadata.title = titles[0]
         for d in publication_dates:
             try:
                 metadata.published = datetime.datetime.strptime(d[:4], "%Y")
@@ -1269,9 +1270,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
     number of ISBNs, which can be used as input into other services.
     """
 
-    def __init__(self, _db):
+    def __init__(self, _db, api=None):
         self._db = _db
-        self.api = OCLCLinkedData(self._db)
+        self.api = api or OCLCLinkedData(self._db)
         output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
         input_identifier_types = [
             Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
@@ -1332,7 +1333,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     self, identifier, exception, transient=False
                 )
             exception = "OCLC raised an error: %r" % e
-            return CoverageFailure(self, identifier, exception, transient=True)
+            return CoverageFailure(identifier, exception, transient=True)
         return identifier
 
     def new_isbns(self, metadata):
