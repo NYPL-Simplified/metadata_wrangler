@@ -66,17 +66,20 @@ class CollectionController(object):
         )
 
         if len(updated_works.all()) > pagination.size + pagination.offset:
-            update_feed.add_link(
-                rel="next", href=update_url(page=pagination.next_page)
+            update_feed.add_link_to_feed(
+                update_feed.feed, rel="next", 
+                href=update_url(page=pagination.next_page)
             )
         if pagination.offset > 0:
-            update_feed.add_link(
-                rel="first", href=update_url(page=pagination.first_page)
+            update_feed.add_link_to_feed(
+                update_feed.feed, rel="first", 
+                href=update_url(page=pagination.first_page)
             )
         previous_page = pagination.previous_page
         if previous_page:
-            update_feed.add_link(
-                rel="previous", href=update_url(page=previous_page)
+            update_feed.add_link_to_feed(
+                update_feed.feed, rel="previous", 
+                href=update_url(page=previous_page)
             )
 
         return feed_response(update_feed)

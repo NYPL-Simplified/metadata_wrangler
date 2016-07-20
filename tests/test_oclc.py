@@ -169,13 +169,12 @@ class TestParser(DatabaseTest):
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            [None, None, u'n50025038', u'n50025038', u'n50050335',
-             u'n79006936', u'n79059764', u'n79059764', u'n79059764',
+            [None, None, u'n50025038', u'n50050335', u'n79006936', 
              u'n79059764'],
-            sorted([x.lc for x in work.contributors]))
+            sorted([x.lc for x in work.contributors])
+        )
         eq_(
-            [None, None, u'27068555', u'34482742', u'34482742', u'4947338',
-             u'51716047', u'51716047', u'51716047', u'51716047'],
+            [None, None, u'27068555', u'34482742', u'4947338', u'51716047'],
             sorted([x.viaf for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
@@ -241,7 +240,7 @@ class TestParser(DatabaseTest):
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
         # We parsed the work, but it had no contributors listed.
-        eq_([[]], [r.contributors for r in records])
+        eq_([set()], [r.contributors for r in records])
 
 
 class TestAuthorParser(DatabaseTest):
