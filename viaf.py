@@ -18,7 +18,10 @@ from core.model import (
     Representation,
 )
 
-from core.util.personal_names import normalize_contributor_name_for_matching;
+from core.util.personal_names import (
+    normalize_contributor_name_for_matching, 
+    normalize_title_for_matching, 
+)
 
 from core.util.xmlparser import (
     XMLParser,
@@ -37,13 +40,24 @@ class VIAFParser(XMLParser):
 
 
     @classmethod
-    def prepare_contributor_name_for_matching(cls, name):
+    def combine_nameparts(self, given, family, extra):
+        """Turn a (given name, family name, extra) 3-tuple into a
+        display name.
         """
-        Normalize the special characters and inappropriate spacings away.
-        Put the name into title, first, middle, last, suffix, nickname order, 
-        and lowercase.
-        """
-        return normalize_contributor_name_for_matching(name)
+        if not given and not family:
+            return None
+        if family and not given:
+            display_name = family
+        elif given and not family:
+            display_name = given
+        else:
+            display_name = given + ' ' + family
+        if extra and not extra.startswith('pseud'):
+            if family and given:
+                display_name += ', ' + extra
+            else:
+                display_name += ' ' + extra
+        return display_name
 
 
     @classmethod
@@ -56,8 +70,8 @@ class VIAFParser(XMLParser):
         name1 = cls.prepare_contributor_name_for_matching(name1)
         name2 = cls.prepare_contributor_name_for_matching(name2)
         match_ratio = fuzz.ratio(name1, name2)
-        print "name1=%s, name2=%s" % (name1, name2)
-        print "match_ratio=%s" % match_ratio
+        #print "name1=%s, name2=%s" % (name1, name2)
+        #print "match_ratio=%s" % match_ratio
         return match_ratio
 
 
@@ -67,6 +81,169 @@ class VIAFParser(XMLParser):
         Ignores case, periods, commas, spaces after single-letter initials.
         """ 
         return n1.replace(".", "").lower() == n2.replace(".", "").lower()
+
+
+    @classmethod
+    def title_match_ratio(cls, title1, title2):
+        """
+        Returns a number between 0 and 100, representing the percent 
+        match (Levenshtein Distance) between book title1 and book title2, 
+        after each has been normalized.
+        """
+        name1 = normalize_title_for_matching(title1)
+        name2 = normalize_title_for_matching(title2)
+        match_ratio = fuzz.ratio(title1, title2)
+        #print "name1=%s, name2=%s" % (name1, name2)
+        #print "match_ratio=%s" % match_ratio
+        return match_ratio
+
+
+    @classmethod
+    def prepare_contributor_name_for_matching(cls, name):
+        """
+        Normalize the special characters and inappropriate spacings away.
+        Put the name into title, first, middle, last, suffix, nickname order, 
+        and lowercase.
+        """
+        return normalize_contributor_name_for_matching(name)
+
+
+    @classmethod
+    def weigh_contributor(cls, candidate, working_sort_name, known_titles=None, strict=False):
+        """ Find the author who corresponds the best to the working_sort_name.
+            Consider as evidence of suitability: 
+            - top-most in viaf-returned xml (most popular in libraries) 
+            - various name/pseudonym fields within xml match 
+            - has written titles that match ones passed in.
+
+            Actual weight numbers do not matter, only their weights relative to each other.
+            So, if the total match confidence is 110%, that's acceptable, and may not even 
+            be the best match if there's a 120% out there.  But having an exact title match 
+            does matter more than a fuzzy unimarc tag match.  
+        """
+        report_string = "no_viaf"
+        (contributor, match_confidences, contributor_titles) = candidate
+
+        if contributor.viaf:
+            report_string = "viaf=%s" % contributor.viaf
+            #if contributor.viaf == '71473697':
+            #    set_trace()
+
+        if not match_confidences:
+            # we didn't get it from the xml, but we'll add to it now
+            match_confidences = {}
+
+        # If we're not sure that this is even the right cluster for
+        # the given author, make sure that one of the working names
+        # shows up in a name record.
+        #set_trace()
+        if strict:
+            if len(match_confidences) == 0:
+                return 0
+
+        # Assign weights to fields matched in the xml.  
+        # The fuzzy matching returned a number between 0 and 100, 
+        # now tell the system that we find sort_name to be a more reliable indicator 
+        # than unimarc flags.  
+        # Weights are cumulative -- if both the sort and display name match, that helps us 
+        # be extra special sure.  But what to do if unimarc tags match and sort_name doesn't? 
+        # Here's where the strict tag comes in.  With strict, a failed sort_name match says "no" 
+        # to any other suggestions of a possible fit.
+        match_confidences["total"] = 0
+
+        if "library_popularity" in match_confidences:
+            match_confidences["total"] += -10 * match_confidences["library_popularity"]
+            report_string += ", pop=10 * %s" % match_confidences["library_popularity"]
+
+        if "sort_name" in match_confidences:
+            # fuzzy match filter may not always give a 100% match, so cap arbitrarily at 90% as a "sure match"
+            if strict and match_confidences["sort_name"] < 90:
+                report_string += ", strict and no sort_name match, return 0 (%s)" % match_confidences["sort_name"]
+                return 0
+
+            if match_confidences["sort_name"] == 100 and not known_titles:
+                # the sort name matches perfectly and the title isn't there to contradict
+                # return with highest score to assert this contributor as The correct candidate.
+                report_string += ", sort_name match and no title, return 9999 (%s)" % match_confidences["sort_name"]
+                report_string += ", mc[total]= %s" % match_confidences["total"]
+                cls.log.debug(
+                    "weigh_contributor found: " + report_string
+                )
+                return 9999
+
+            match_confidences["total"] += 0.8 * match_confidences["sort_name"]
+
+        if "display_name" in match_confidences:
+            match_confidences["total"] += 0.5 * match_confidences["display_name"]
+            report_string += ", mc[display_name]=%s" % match_confidences["display_name"]
+
+        if "unimarc" in match_confidences:
+            match_confidences["total"] += 0.2 * match_confidences["unimarc"]
+            report_string += ", mc[unimarc]=%s" % match_confidences["unimarc"]
+
+        if "guessed_sort_name" in match_confidences:
+            match_confidences["total"] += 0.2 * match_confidences["guessed_sort_name"]
+            report_string += ", mc[guessed_sort_name]=%s" % match_confidences["guessed_sort_name"]
+
+        if "alternate_name" in match_confidences:
+            match_confidences["total"] += 0.2 * match_confidences["alternate_name"]
+            report_string += ", mc[alternate_name]=%s" % match_confidences["alternate_name"]
+
+        # Add in some data quality evidence.  We want the contributor to have recognizable 
+        # data to work with.
+        if contributor.display_name:
+            match_confidences["total"] += 0.2
+            report_string += ", have contributor.display_name=%s" % contributor.display_name
+
+        if contributor.viaf:
+            match_confidences["total"] += 0.2
+
+        if known_titles:
+            for known_title in known_titles:
+                if strict: 
+                    if known_title in contributor_titles:
+                        match_confidences["title"] = 100
+                        match_confidences["total"] += 0.6 * match_confidences["title"]
+                        report_string += ", mc[title]=%s" % match_confidences["title"]
+                        # once we find one matching title, no need to keep looking
+                        continue
+                else:
+                    '''
+                    Fixes issue where 
+                    <ns1:title>Britain, detente and changing east-west relations</ns1:title> (with accented e in detente)
+                    doesn't match "Britain, Detente and Changing East-West Relations" in our DB.
+                    '''
+                    for contributor_title in contributor_titles:
+                        match_confidence = cls.title_match_ratio(known_title, contributor_title)
+                        print "known_title=%s, contributor_title=%s, match_confidence=%s" % (known_title, contributor_title, match_confidence)
+                        match_confidences["title"] = match_confidence
+                        if match_confidence > 80:
+                            match_confidences["total"] += 0.5 * match_confidence
+                            report_string += ", mc[title]=%s" % match_confidences["title"]
+                            # match is good enough, we can stop
+                            continue
+
+
+            """
+            # TODO: In future, consider doing:
+            else:
+                for contributor_title in contributor_titles:
+                    # We want to accept "Pride and Prejudice (Unabridged)" as equivalent to 
+                    # "Pride and Prejudice", but reject "Pride and Prejudice and Zombies" 
+                    # as probably not written by Jane Austen.  
+                    # "Pride and Prejudice (Spanish)" should connect to two authors -- 
+                    # Jane Austen and the translator.  
+                    # Remove contents of parentheses and perform fuzzy match.
+            """
+
+        report_string += ", mc[total]= %s" % match_confidences["total"]
+        cls.log.debug(
+            "weigh_contributor found: " + report_string
+        )
+
+        # TODO:  in the calling code, create a cloud of interrelated contributors
+        # around the primary picked on, with relevancy weights given by this.
+        return match_confidences["total"]
 
 
     def alternate_name_forms_for_cluster(self, cluster):
@@ -179,6 +356,7 @@ class VIAFParser(XMLParser):
         - a list of work titles ascribed to this Contributor.
         """
 
+        # TODO: handle timeouts gracefully here
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
         # each contributor_candidate entry contains 3 objects:
@@ -206,6 +384,8 @@ class VIAFParser(XMLParser):
                 set_trace()
                 continue
 
+            # assume we asked for viaf feed, sorted with sortKeys=holdingscount
+            match_confidences["library_popularity"] = len(contributor_candidates)+1
             if contributor_data.display_name or contributor_data.viaf:
                 contributor_candidate = (contributor_data, match_confidences, contributor_titles)
                 contributor_candidates.append(contributor_candidate)
@@ -272,6 +452,9 @@ class VIAFParser(XMLParser):
             contributor_data.viaf = None
         else:
             contributor_data.viaf = viaf_tag.text
+        print "contributor_data.viaf=%s" % contributor_data.viaf
+        if contributor_data.viaf == "122099855":
+            set_trace()
 
         # If we don't have a working sort name, find the most popular
         # sort name in this cluster and use it as the sort name.
@@ -301,8 +484,7 @@ class VIAFParser(XMLParser):
                     self.log.debug(
                         "FOUND %s in %s", v, working_sort_name
                     )
-                    candidates.append((possible_given, possible_family,
-                                       possible_extra))
+                    candidates.append((possible_given, possible_family, possible_extra))
                     if possible_sort_name and possible_sort_name.endswith(","):
                         possible_sort_name = contributor_data.sort_name[:-1]
                         sort_name_popularity[possible_sort_name] += 1
@@ -337,7 +519,7 @@ class VIAFParser(XMLParser):
         titles = self._xpath(cluster, './/*[local-name()="titles"]/*[local-name()="work"]/*[local-name()="title"]')
         for title in titles:
             #set_trace()
-            print u"title={}".format(title.text)
+            #print u"title={}".format(title.text)
             contributor_titles.append(title.text)
 
         return contributor_data, match_confidences, contributor_titles
@@ -437,81 +619,8 @@ class VIAFParser(XMLParser):
                 data.get('extra', None), ", ".join(sort_name_in_progress))
 
 
-    @classmethod
-    def combine_nameparts(self, given, family, extra):
-        """Turn a (given name, family name, extra) 3-tuple into a
-        display name.
-        """
-        if not given and not family:
-            return None
-        if family and not given:
-            display_name = family
-        elif given and not family:
-            display_name = given
-        else:
-            display_name = given + ' ' + family
-        if extra and not extra.startswith('pseud'):
-            if family and given:
-                display_name += ', ' + extra
-            else:
-                display_name += ' ' + extra
-        return display_name
-
-
-    @classmethod
-    def weigh_contributor(cls, candidate, working_sort_name, known_title=None, strict=False):
-        """ TODO: doc
-
-        Find the top-most (most popular in libraries) author who corresponds the 
-        best to the working_sort_name.
-
-        """
-        (contributor, match_confidences, titles) = candidate
-        if not match_confidences:
-            # we didn't get it from the xml, but we'll add to it now
-            match_confidences = {}
-
-        # If we're not sure that this is even the right cluster for
-        # the given author, make sure that one of the working names
-        # shows up in a name record.
-        if strict:
-            if len(match_confidences) == 0:
-                return 0
-
-        # Assign weights to fields matched in the xml.  
-        # The fuzzy matching returned a number between 0 and 100, 
-        # now tell the system that we find sort_name to be a more reliable indicator 
-        # than unimarc flags.  
-        # Weights are cumulative -- if both the sort and display name match, that helps us 
-        # be extra special sure.  But what to do if unimarc tags match and sort_name doesn't? 
-        # Here's where the strict tag comes in.  With strict, a failed sort_name match says "no" 
-        # to any other suggestions of a possible fit.
-        match_confidences["total"] = 0
-        if match_confidences["sort_name"]:
-            if strict and match_confidences["sort_name"] < 90:
-                return 0
-            match_confidences["total"] += 0.8 * match_confidences["sort_name"]
-        if match_confidences["display_name"]:
-            match_confidences["total"] += 0.7 * match_confidences["display_name"]
-        if match_confidences["unimarc"]:
-            match_confidences["total"] += 0.6 * match_confidences["unimarc"]
-        if match_confidences["guessed_sort_name"]:
-            match_confidences["total"] += 0.5 * match_confidences["guessed_sort_name"]
-        if match_confidences["alternate_name"]:
-            match_confidences["total"] += 0.4 * match_confidences["alternate_name"]
-
-        # Add in some data quality evidence.  We want the contributor to have recognizable 
-        # data to work with.
-        if contributor_data.display_name:
-            return 100
-
-        if contributor_data.viaf:
-            return 100
-
-
-
     def order_candidates(self, contributor_candidates, working_sort_name, 
-                        known_title=None, strict=False):
+                        known_titles=None, strict=False):
         """
         Accepts a list of tuples, each tuple containing: 
         - a ContributorData object filled with VIAF id, display, sort, family, 
@@ -533,7 +642,7 @@ class VIAFParser(XMLParser):
         
         # higher score for better match, so to have best match first, do desc order.
         contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
-            known_title=known_title, strict=strict), reverse=True)
+            known_titles=known_titles, strict=strict), reverse=True)
         return contributor_candidates
 
 
@@ -541,7 +650,9 @@ class VIAFParser(XMLParser):
 class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
-    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
+    #SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
+    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.personalNames+all+%22{sort_name}%22&sortKeys=holdingscount&httpAccept=text/xml'
+
     SUBDIR = "viaf"
 
     MEDIA_TYPE = Representation.TEXT_XML_MEDIA_TYPE
@@ -594,6 +705,7 @@ class VIAFClient(object):
                     # don't merge the records.
                     pass
 
+
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
@@ -602,15 +714,18 @@ class VIAFClient(object):
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
-    def lookup_by_name(self, sort_name, display_name=None, strict=True):
+
+    def lookup_by_name(self, sort_name, display_name=None):
         name = sort_name or display_name
         url = self.SEARCH_URL.format(sort_name=name.encode("utf8"))
-        r, cached = Representation.get(self._db, url)
-        xml = r.content
-        v = self.parser.parse_multiple(
-            xml, sort_name, display_name, strict)
-        if not any(v):
+        representation, cached = Representation.get(self._db, url)
+        xml = representation.content
+        contributor_candidates = self.parser.parse_multiple(
+            xml, sort_name, display_name)
+
+        if not any(contributor_candidates):
             # Delete the representation so it's not cached.
-            self._db.query(Representation).filter(Representation.id==r.id).delete()
-        return v
+            self._db.query(Representation).filter(Representation.id==representation.id).delete()
+        return contributor_candidates
+
 
