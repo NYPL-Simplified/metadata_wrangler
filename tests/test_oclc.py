@@ -508,3 +508,19 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         result = provider.process_item(identifier)
         assert isinstance(result, CoverageFailure)
         assert "Exception!" in result.exception
+
+    def test_process_item_exception_missing_isbn(self):
+        class DoomedOCLCLinkedData(OCLCLinkedData):
+            def info_for(self, identifier):
+                raise IOError("Tried, but couldn't find location")
+
+        provider = LinkedDataCoverageProvider(
+            self._db, api=DoomedOCLCLinkedData(self._db)
+        )
+        
+        edition = self._edition()
+        identifier = edition.primary_identifier
+
+        result = provider.process_item(identifier)
+        assert isinstance(result, CoverageFailure)
+        assert "OCLC doesn't know about this ISBN" in result.exception

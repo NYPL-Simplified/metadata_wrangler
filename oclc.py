@@ -1329,11 +1329,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
         except IOError as e:
             if ", but couldn't find location" in e.message:
                 exception = "OCLC doesn't know about this ISBN: %r" % e
-                return CoverageFailure(
-                    self, identifier, exception, transient=False
-                )
-            exception = "OCLC raised an error: %r" % e
-            return CoverageFailure(identifier, exception, transient=True)
+                transient = False
+            else:
+                exception = "OCLC raised an error: %r" % e
+                transient = True
+            return CoverageFailure(identifier, exception, transient=transient)
         return identifier
 
     def new_isbns(self, metadata):
