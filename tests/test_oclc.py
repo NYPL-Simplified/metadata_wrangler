@@ -11,8 +11,9 @@ from core.model import (
     Equivalency,
 )
 from core.metadata_layer import (
-    Metadata,
+    ContributorData,
     IdentifierData,
+    Metadata,
 )
 from core.coverage import CoverageFailure
 
@@ -22,10 +23,16 @@ from oclc import (
     LinkedDataCoverageProvider,
 )
 
+from testing import (
+    MockOCLCLinkedDataAPI,
+    MockVIAFClient,
+)
+
 from . import (
     DatabaseTest,
     sample_data
 )
+
 
 class TestParser(DatabaseTest):
 
@@ -524,3 +531,60 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         result = provider.process_item(identifier)
         assert isinstance(result, CoverageFailure)
         assert "OCLC doesn't know about this ISBN" in result.exception
+
+
+    def test_author_known_only_by_viaf_gets_viaf_lookup(self):
+        # TODO: The code this calls could be refactored quite a bit --
+        # we don't really need to test all of process_item() here.
+        # But ATM it does seem to be our only test of process_item().
+
+        oclc = MockOCLCLinkedDataAPI()
+        viaf = MockVIAFClient()
+        provider = LinkedDataCoverageProvider(
+            self._db, api=oclc, viaf_api=viaf
+        )
+
+        # Here's a placeholder that will be filled in with information from
+        # OCLC Linked Data.
+        edition = self._edition()
+        for i in edition.contributions:
+            self._db.delete(i)
+        self._db.commit()
+        identifier = edition.primary_identifier
+
+        # OCLC Linked Data is going to mention two authors -- one with
+        # a sort name + VIAF, and one with a VIAF but no sort name.
+        contributor1 = ContributorData(viaf="1")
+        contributor2 = ContributorData(viaf="2", sort_name="Jordan, Robert")
+        idata = IdentifierData(type=identifier.type, 
+                               identifier=identifier.identifier)
+        metadata = Metadata(
+            DataSource.OCLC_LINKED_DATA,
+            contributors=[contributor1, contributor2],
+            primary_identifier=idata,
+            title=u"foo"
+        )
+        oclc.queue_info_for(metadata)
+
+        # Our OCLC Linked Data client is going to try to fill in the
+        # data, asking VIAF about the contributor with VIAF ID 1 to
+        # try to find a sort name. It won't bother with the
+        # contributor with VIAF ID 2, since we already have a sort
+        # name for that author.
+        viaf.queue_lookup("1", "Display Name", "Family", "Name, Sort", 
+                          "Wikipedia_Name")
+        
+        provider.process_item(identifier)
+        filled_in = sorted(
+            [(x.name, x.display_name, x.viaf) for x in edition.contributors]
+        )
+
+        # The author previously known only by VIAF has had their
+        # information filled in by the VIAF lookup. The other author
+        # has been left alone.
+        eq_([(u'Jordan, Robert', None, u'2'), 
+             (u'Name, Sort', u'Display Name', u'1')],
+            filled_in
+        )
+
+
