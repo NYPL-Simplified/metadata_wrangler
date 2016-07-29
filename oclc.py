@@ -540,7 +540,7 @@ class OCLCLinkedData(object):
 
         self.log.info("Processing edition %s: %r", oclc_id, titles)
         metadata = Metadata(self.source)
-        metadata.primary_identifier, new = IdentifierData(
+        metadata.primary_identifier = IdentifierData(
             type=oclc_id_type, identifier=oclc_id
         )
         if titles:
