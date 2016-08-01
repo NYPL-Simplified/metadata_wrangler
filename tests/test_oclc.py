@@ -472,15 +472,20 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         edition.add_contributor(Contributor(viaf="112460612"), Contributor.AUTHOR_ROLE)
         identifier = edition.primary_identifier
 
+        i1 = self._identifier()
+        identifierdata1 = IdentifierData(type=i1.type, identifier=i1.identifier)
         good_metadata = Metadata(
             DataSource.lookup(self._db, DataSource.GUTENBERG),
-            primary_identifier = self._identifier(),
+            primary_identifier = identifierdata1,
             title = "The House on Mango Street",
             contributors = [Contributor(viaf="112460612")]
         )
+
+        i2 = self._identifier()
+        identifierdata2 = IdentifierData(type=i2.type, identifier=i2.identifier)
         bad_metadata = Metadata(
             DataSource.lookup(self._db, DataSource.GUTENBERG),
-            primary_identifier = self._identifier(),
+            primary_identifier = identifierdata2,
             title = "Calvin & Hobbes",
             contributors = [Contributor(viaf="101010")]
         )
@@ -490,17 +495,15 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
 
         # The identifier for the bad metadata isn't made equivalent
-        eq_(1, len(equivalencies))
-        eq_(good_metadata.primary_identifier, equivalencies[0].output)
-        eq_(1, equivalencies[0].strength)
+        eq_([i1], [x.output for x in equivalencies])
+        eq_([1], [x.strength for x in equivalencies])
 
         # But if the existing identifier has no editions, they're made equivalent.
         identifier = self._identifier()
         self.provider.set_equivalence(identifier, bad_metadata)
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
-        eq_(1, len(equivalencies))
-        eq_(bad_metadata.primary_identifier, equivalencies[0].output)
-        eq_(1, equivalencies[0].strength)
+        eq_([i2], [x.output for x in equivalencies])
+        eq_([1], [x.strength for x in equivalencies])
 
     def test_process_item_exception(self):
         class DoomedOCLCLinkedData(OCLCLinkedData):
