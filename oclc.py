@@ -1392,6 +1392,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
             strength = 1
 
         if strength > 0:
+            primary_identifier, ignore = metadata.primary_identifier.load(
+                self._db
+            )
             identifier.equivalent_to(
-                self.output_source, metadata.primary_identifier, strength
+                self.output_source, primary_identifier, strength
             )
