@@ -19,14 +19,20 @@ from core.model import (
 )
 
 from core.util.personal_names import (
+    display_name_to_sort_name, 
+    is_corporate_name, 
     normalize_contributor_name_for_matching, 
+)
+
+from core.util.titles import (
     normalize_title_for_matching, 
+    unfluff_title, 
 )
 
 from core.util.xmlparser import (
     XMLParser,
 )
-from core.util.personal_names import display_name_to_sort_name
+
 
 
 
@@ -35,6 +41,7 @@ class VIAFParser(XMLParser):
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
     log = logging.getLogger("VIAF Parser")
+    log.setLevel(logging.INFO)  # TODO: remove
     wikidata_id = re.compile("^Q[0-9]")
 
 
@@ -70,8 +77,6 @@ class VIAFParser(XMLParser):
         name1 = cls.prepare_contributor_name_for_matching(name1)
         name2 = cls.prepare_contributor_name_for_matching(name2)
         match_ratio = fuzz.ratio(name1, name2)
-        #print "name1=%s, name2=%s" % (name1, name2)
-        #print "match_ratio=%s" % match_ratio
         return match_ratio
 
 
@@ -90,11 +95,10 @@ class VIAFParser(XMLParser):
         match (Levenshtein Distance) between book title1 and book title2, 
         after each has been normalized.
         """
-        name1 = normalize_title_for_matching(title1)
-        name2 = normalize_title_for_matching(title2)
+        title1 = normalize_title_for_matching(title1)
+        title2 = normalize_title_for_matching(title2)
         match_ratio = fuzz.ratio(title1, title2)
-        #print "name1=%s, name2=%s" % (name1, name2)
-        #print "match_ratio=%s" % match_ratio
+        #print "title_match_ratio: title1=%s, title2=%s, match_ratio=%s" % (title1, title2, match_ratio)
         return match_ratio
 
 
@@ -109,7 +113,7 @@ class VIAFParser(XMLParser):
 
 
     @classmethod
-    def weigh_contributor(cls, candidate, working_sort_name, known_titles=None, strict=False):
+    def weigh_contributor(cls, candidate, working_sort_name, known_titles=None, strict=False, ignore_popularity=False):
         """ Find the author who corresponds the best to the working_sort_name.
             Consider as evidence of suitability: 
             - top-most in viaf-returned xml (most popular in libraries) 
@@ -121,13 +125,12 @@ class VIAFParser(XMLParser):
             be the best match if there's a 120% out there.  But having an exact title match 
             does matter more than a fuzzy unimarc tag match.  
         """
+        #print "\n"
         report_string = "no_viaf"
         (contributor, match_confidences, contributor_titles) = candidate
 
         if contributor.viaf:
             report_string = "viaf=%s" % contributor.viaf
-            #if contributor.viaf == '71473697':
-            #    set_trace()
 
         if not match_confidences:
             # we didn't get it from the xml, but we'll add to it now
@@ -136,7 +139,6 @@ class VIAFParser(XMLParser):
         # If we're not sure that this is even the right cluster for
         # the given author, make sure that one of the working names
         # shows up in a name record.
-        #set_trace()
         if strict:
             if len(match_confidences) == 0:
                 return 0
@@ -151,27 +153,32 @@ class VIAFParser(XMLParser):
         # to any other suggestions of a possible fit.
         match_confidences["total"] = 0
 
-        if "library_popularity" in match_confidences:
+        if "library_popularity" in match_confidences and not ignore_popularity:
             match_confidences["total"] += -10 * match_confidences["library_popularity"]
             report_string += ", pop=10 * %s" % match_confidences["library_popularity"]
 
         if "sort_name" in match_confidences:
             # fuzzy match filter may not always give a 100% match, so cap arbitrarily at 90% as a "sure match"
             if strict and match_confidences["sort_name"] < 90:
+                match_confidences["total"] = 0
                 report_string += ", strict and no sort_name match, return 0 (%s)" % match_confidences["sort_name"]
                 return 0
 
+            '''
             if match_confidences["sort_name"] == 100 and not known_titles:
                 # the sort name matches perfectly and the title isn't there to contradict
                 # return with highest score to assert this contributor as The correct candidate.
+                match_confidences["total"] += match_confidences["sort_name"]
                 report_string += ", sort_name match and no title, return 9999 (%s)" % match_confidences["sort_name"]
                 report_string += ", mc[total]= %s" % match_confidences["total"]
                 cls.log.debug(
-                    "weigh_contributor found: " + report_string
+                    "weigh_contributor: " + report_string
                 )
-                return 9999
+                return match_confidences["total"]
+            '''
 
-            match_confidences["total"] += 0.8 * match_confidences["sort_name"]
+            match_confidences["total"] += 2 * match_confidences["sort_name"]
+            report_string += ", mc[sort_name]= %s" % match_confidences["sort_name"]
 
         if "display_name" in match_confidences:
             match_confidences["total"] += 0.5 * match_confidences["display_name"]
@@ -198,52 +205,87 @@ class VIAFParser(XMLParser):
         if contributor.viaf:
             match_confidences["total"] += 0.2
 
+        if contributor.viaf in ('167044989', '2707870'):
+            set_trace()
+        '''
+        ['Awful providences, calls to repentance. A sermon preached at Stamford, in the county of Lincoln, on the 6th of February, 1756, being the publick fast day 
+        appointed by authority. By J. Williams. Published by request', 
+        'A critical dissertation on Isaiah, VII. 13,14,15,16 In which the sentiments advanced by Dr. Kennicott, in a sermon lately published, and by several other 
+        writers, are candidly and impartially examined.', 
+        'An enquiry into the truth of the tradition, concerning the discovery of America, by Prince Madog ab Owen Gwynedd, about the year, 1170. By John Williams, L.L.D', 
+        'Farther observations, on the discovery of America, 1792:', 
+        "A free enquiry into the authenticity of the first and second chapters of St. Matthew's gospel with a new preface, containing an account of some MSS. 
+        in the British Museum; ... By John Williams, ...", 
+        u'Herrn J. Williams, Esq. Ursprung, Wachsthum und gegenw\xe4rtiger Zustand der Nordischen Reiche [...] / Herausgegeben und berichtiget von Johann Christoph 
+        Adelung [...]. - Leipzig, 1779.', 
+        'His A concordance to the Greek Testament. -', 
+        'Natural history of the mineral kingdom in three parts. ... by john williams, ... in two volumes', 
+        "The nature and necessity of faith in the Lord Jesus and love unto all the saints. A sermon preached at St. Thomas's, on January 1, 1771. for the benefit of 
+        the charity-school, in Gravel-Lane, Southwark. By John Williams, ...", 'Rise, progress and present state of the northern governments', 
+        'A serious and earnest address to gentlemen of all denominations who opposed the late application of the Protestant dissenting minsters to Parliament, 
+        for relief in the matter of subscription. By John Williams, LL.D.', 
+        'Thoughts on languages, 1783', u'Ursprung, Wachsthum und gegenw\xe4rtiger Zustand der Nordischen Reiche, n\xe4mlich der vereinigten Niederlande, D\xe4nnemarks, 
+        Schwedens, Russlands und Pohlens [...].', 'What Americans believe and how they worship']
+        '''
+
+        cls.weigh_titles(known_titles, contributor_titles, match_confidences, strict)
+        if "title" in match_confidences:
+            report_string += ", mc[title]=%s" % match_confidences["title"]
+
+        report_string += ", mc[total]= %s" % match_confidences["total"]
+        cls.log.debug("weigh_contributor found: " + report_string)
+
+        # TODO:  in the calling code, create a cloud of interrelated contributors
+        # around the primary picked on, with relevancy weights given by this.
+        return match_confidences["total"]
+
+
+    @classmethod
+    def weigh_titles(cls, known_titles=None, contributor_titles=None, match_confidences=None, strict=False):
         if known_titles:
             for known_title in known_titles:
                 if strict: 
                     if known_title in contributor_titles:
                         match_confidences["title"] = 100
-                        match_confidences["total"] += 0.6 * match_confidences["title"]
-                        report_string += ", mc[title]=%s" % match_confidences["title"]
+                        match_confidences["total"] += 0.8 * match_confidences["title"]
                         # once we find one matching title, no need to keep looking
-                        continue
+                        break
                 else:
-                    '''
-                    Fixes issue where 
-                    <ns1:title>Britain, detente and changing east-west relations</ns1:title> (with accented e in detente)
-                    doesn't match "Britain, Detente and Changing East-West Relations" in our DB.
-                    '''
                     for contributor_title in contributor_titles:
+                        # when the second half of the title has something like:
+                        # "Edited by", a colon or semicolon, a bracket or parentheses, a hyphen, 
+                        # one of the institutional authors, like Disney Book Group, elibrary, Inc, 
+                        # Harvard University, Harper & Brothers, 
+                        # then see if can get an exact substring match on the title.
+                        # We want to accept "Pride and Prejudice (Unabridged)" as equivalent to 
+                        # "Pride and Prejudice", but reject "Pride and Prejudice and Zombies" 
+                        # as probably not written by Jane Austen. 
+                        # TODO: In future, consider doing:
+                        # "Pride and Prejudice (Spanish)" should connect to two authors -- 
+                        # Jane Austen and the translator.
+                        if contributor_title == "Next time, she'll be dead : battering & how to stop it":
+                            set_trace()
+
+                        if cls.name_matches(unfluff_title(contributor_title), unfluff_title(known_title)):
+                            match_confidences["title"] = 90
+                            match_confidences["total"] += 0.8 * match_confidences["title"]
+                            #print "known_title=%s, contributor_title=%s, match_confidence set to 90" % (known_title, contributor_title)
+                            # match is good enough, we can stop
+                            break
+
+                        '''
+                        Fixes issue where 
+                        <ns1:title>Britain, detente and changing east-west relations</ns1:title> (with accented e in detente)
+                        doesn't match "Britain, Detente and Changing East-West Relations" in our DB.
+                        '''
                         match_confidence = cls.title_match_ratio(known_title, contributor_title)
-                        print "known_title=%s, contributor_title=%s, match_confidence=%s" % (known_title, contributor_title, match_confidence)
+                        #print "known_title=%s, contributor_title=%s, match_confidence=%s" % (known_title, contributor_title, match_confidence)
                         match_confidences["title"] = match_confidence
                         if match_confidence > 80:
-                            match_confidences["total"] += 0.5 * match_confidence
-                            report_string += ", mc[title]=%s" % match_confidences["title"]
+                            match_confidences["total"] += 0.6 * match_confidence
                             # match is good enough, we can stop
-                            continue
+                            break
 
-
-            """
-            # TODO: In future, consider doing:
-            else:
-                for contributor_title in contributor_titles:
-                    # We want to accept "Pride and Prejudice (Unabridged)" as equivalent to 
-                    # "Pride and Prejudice", but reject "Pride and Prejudice and Zombies" 
-                    # as probably not written by Jane Austen.  
-                    # "Pride and Prejudice (Spanish)" should connect to two authors -- 
-                    # Jane Austen and the translator.  
-                    # Remove contents of parentheses and perform fuzzy match.
-            """
-
-        report_string += ", mc[total]= %s" % match_confidences["total"]
-        cls.log.debug(
-            "weigh_contributor found: " + report_string
-        )
-
-        # TODO:  in the calling code, create a cloud of interrelated contributors
-        # around the primary picked on, with relevancy weights given by this.
-        return match_confidences["total"]
 
 
     def alternate_name_forms_for_cluster(self, cluster):
@@ -342,11 +384,61 @@ class VIAFParser(XMLParser):
         return match_confidences
 
 
+    def order_candidates(self, contributor_candidates, working_sort_name, 
+                        known_titles=None, strict=False):
+        """
+        Accepts a list of tuples, each tuple containing: 
+        - a ContributorData object filled with VIAF id, display, sort, family, 
+        and wikipedia names, or None on error.
+        - a list of work titles ascribed to this Contributor.
+
+        For each contributor, determines how likely that contributor is to 
+        be the one being searched for (how well they correspond to the 
+        working_sort_name and known_title.
+
+        Assumes the contributor_candidates list was generated off an xml 
+        that was is in popularity order.  I.e., the author id that 
+        appears in most libraries when searching for working_sort_name is on top.
+        Assumes the xml's order is preserved in the contributor_candidates list.
+
+        :return: the list of tuples, ordered by percent match, in descending order 
+        (top match first).
+        """
+
+        if len(contributor_candidates) == 0:
+            return contributor_candidates
+
+        # if the top library popularity candidate is a really bad name match, 
+        # then don't penalize the bottom popularity candidates for being on the bottom.
+        ignore_popularity = False
+        (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
+
+        # double-check that the candidate list is ordered by library popularity, as it came from viaf
+        if match_confidences["library_popularity"] == 1:
+            # baaad match
+            if (("sort_name" in match_confidences) and (match_confidences["sort_name"] < 50)) or ("sort_name" not in match_confidences):
+                ignore_popularity = True
+
+            if "sort_name" not in match_confidences:
+                set_trace()
+
+        # higher score for better match, so to have best match first, do desc order.
+        contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
+            known_titles=known_titles, strict=strict, ignore_popularity=ignore_popularity), reverse=True)
+        return contributor_candidates
+
 
     def parse_multiple(
-            self, xml, working_sort_name=None, working_display_name=None):
+            self, xml, working_sort_name=None, working_display_name=None, page=1):
         """ Parse a VIAF response containing multiple clusters into 
         contributors and titles.
+
+        working_sort_name and working_display_name pertain to the author name string that 
+        we're trying to match in the xml list of clusters.
+
+        page refers to pagination -- we can get 10 clusters at a time from VIAF, 
+        so an author's name that matches 15 contributors in VIAF search, will need 
+        2 pages (2 queries going out to VIAF).
 
         NOTE:  No longer performs quality judgements on whether the contributor found is good enough.
 
@@ -359,23 +451,15 @@ class VIAFParser(XMLParser):
         # TODO: handle timeouts gracefully here
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
+        # NOTE:  we can get the total number of clusters that a viaf search could return with: 
+        # numberOfRecords_tag = self._xpath1(tree, './/*[local-name()="numberOfRecords"]')
+        # but it's cleaner to call parse 50 times and quit when it's done than pass around record limits.
+
         # each contributor_candidate entry contains 3 objects:
         # a contributor_data, a dictionary of search match confidence weights, 
         # and a list of metadata objects representing authored titles.
         contributor_candidates = []
         for cluster in self._xpath(tree, '//*[local-name()="VIAFCluster"]'):
-            '''
-            dir(cluster)=['__class__', '__contains__', '__copy__', '__deepcopy__', '__delattr__', '__delitem__', '__doc__', 
-            '__format__', '__getattribute__', '__getitem__', '__hash__', '__init__', '__iter__', '__len__', '__new__', 
-            '__nonzero__', '__reduce__', '__reduce_ex__', '__repr__', '__reversed__', '__setattr__', '__setitem__', 
-            '__sizeof__', '__str__', '__subclasshook__', '_init', 
-            'addnext', 'addprevious', 'append', 'attrib', 'base', 'clear', 'cssselect', 'extend', 'find', 'findall', 
-            'findtext', 'get', 'getchildren', 'getiterator', 'getnext', 'getparent', 'getprevious', 'getroottree', 
-            'index', 'insert', 'items', 'iter', 'iterancestors', 'iterchildren', 'iterdescendants', 'iterfind', 
-            'itersiblings', 'itertext', 'keys', 'makeelement', 'nsmap', 'prefix', 'remove', 'replace', 'set', 'sourceline', 
-            'tag', 'tail', 'text', 'values', 'xpath']
-            print "dir(cluster)={}".format(dir(cluster))
-            '''
             contributor_data, match_confidences, contributor_titles = self.extract_viaf_info(
                 cluster, working_sort_name, working_display_name)
             
@@ -385,7 +469,7 @@ class VIAFParser(XMLParser):
                 continue
 
             # assume we asked for viaf feed, sorted with sortKeys=holdingscount
-            match_confidences["library_popularity"] = len(contributor_candidates)+1
+            match_confidences["library_popularity"] = (len(contributor_candidates)+1) + 10 * (page-1)
             if contributor_data.display_name or contributor_data.viaf:
                 contributor_candidate = (contributor_data, match_confidences, contributor_titles)
                 contributor_candidates.append(contributor_candidate)
@@ -452,9 +536,7 @@ class VIAFParser(XMLParser):
             contributor_data.viaf = None
         else:
             contributor_data.viaf = viaf_tag.text
-        print "contributor_data.viaf=%s" % contributor_data.viaf
-        if contributor_data.viaf == "122099855":
-            set_trace()
+        #print "extract_viaf_info: contributor_data.viaf=%s" % contributor_data.viaf
 
         # If we don't have a working sort name, find the most popular
         # sort name in this cluster and use it as the sort name.
@@ -619,39 +701,12 @@ class VIAFParser(XMLParser):
                 data.get('extra', None), ", ".join(sort_name_in_progress))
 
 
-    def order_candidates(self, contributor_candidates, working_sort_name, 
-                        known_titles=None, strict=False):
-        """
-        Accepts a list of tuples, each tuple containing: 
-        - a ContributorData object filled with VIAF id, display, sort, family, 
-        and wikipedia names, or None on error.
-        - a list of work titles ascribed to this Contributor.
-
-        For each contributor, determines how likely that contributor is to 
-        be the one being searched for (how well they correspond to the 
-        working_sort_name and known_title.
-
-        Assumes the contributor_candidates list was generated off an xml 
-        that was is in popularity order.  I.e., the author id that 
-        appears in most libraries when searching for working_sort_name is on top.
-        Assumes the xml's order is preserved in the contributor_candidates list.
-
-        :return: the list of tuples, ordered by percent match, in descending order 
-        (top match first).
-        """
-        
-        # higher score for better match, so to have best match first, do desc order.
-        contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
-            known_titles=known_titles, strict=strict), reverse=True)
-        return contributor_candidates
-
-
 
 class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
     #SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
-    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.personalNames+all+%22{sort_name}%22&sortKeys=holdingscount&httpAccept=text/xml'
+    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.personalNames+all+%22{sort_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
 
     SUBDIR = "viaf"
 
@@ -717,15 +772,38 @@ class VIAFClient(object):
 
     def lookup_by_name(self, sort_name, display_name=None):
         name = sort_name or display_name
-        url = self.SEARCH_URL.format(sort_name=name.encode("utf8"))
-        representation, cached = Representation.get(self._db, url)
-        xml = representation.content
-        contributor_candidates = self.parser.parse_multiple(
-            xml, sort_name, display_name)
+        # from OCLC tech support:  
+        # VIAF's SRU endpoint can only return a maximum number of 10 records when the recordSchema is http://viaf.org/VIAFCluster
+        maximum_records = 10 # viaf maximum that's not ignored
+        page = 1
+        contributor_candidates = []
 
-        if not any(contributor_candidates):
-            # Delete the representation so it's not cached.
-            self._db.query(Representation).filter(Representation.id==representation.id).delete()
+        # limit ourselves to reading the first 500 viaf clusters, on the assumption that 
+        # search match quality is unlikely to be usable after that.
+        #for page in range (20, 22):
+        for page in range (1, 51):
+            start_record = 1 + maximum_records * (page-1)
+            url = self.SEARCH_URL.format(sort_name=name.encode("utf8"), maximum_records=maximum_records, start_record=start_record)
+            representation, cached = Representation.get(self._db, url)
+            xml = representation.content
+
+            # TODO: remove debug writing to file
+            #with open("try_stuff/john_williams_paginated_3.xml", "a") as output:
+            #    output.write(xml)
+            #    output.write("\n\n\n\n\n")
+
+
+            candidates = self.parser.parse_multiple(xml, sort_name, display_name, page)
+            contributor_candidates.extend(candidates)
+            page += 1
+
+            if not any(candidates):
+                # Delete the representation so it's not cached.
+                self._db.query(Representation).filter(Representation.id==representation.id).delete()
+                # we ran out of clusters, so we can relax and move on to ordering the returned results
+                break
+
         return contributor_candidates
+
 
 
