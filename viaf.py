@@ -706,7 +706,7 @@ class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
     #SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
-    SEARCH_URL = 'http://viaf.org/viaf/search?query=local.personalNames+all+%22{sort_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
+    SEARCH_URL = 'http://viaf.org/viaf/search?query={scope}+all+%22{sort_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
 
     SUBDIR = "viaf"
 
@@ -783,7 +783,11 @@ class VIAFClient(object):
         #for page in range (20, 22):
         for page in range (1, 51):
             start_record = 1 + maximum_records * (page-1)
-            url = self.SEARCH_URL.format(sort_name=name.encode("utf8"), maximum_records=maximum_records, start_record=start_record)
+            scope = 'local.personalNames'
+            if is_corporate_name(sort_name):
+                scope = 'local.corporateNames'
+
+            url = self.SEARCH_URL.format(scope=scope, sort_name=name.encode("utf8"), maximum_records=maximum_records, start_record=start_record)
             representation, cached = Representation.get(self._db, url)
             xml = representation.content
 
