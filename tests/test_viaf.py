@@ -7,7 +7,16 @@ from . import (
     sample_data,
 )
 
-from viaf import VIAFParser, VIAFClient
+from core.model import (
+    Contributor,
+)
+
+from viaf import (
+    VIAFParser, 
+    VIAFClient
+)
+
+
 
 class TestNameParser(DatabaseTest):
 
@@ -140,17 +149,29 @@ class TestNameParser(DatabaseTest):
 
 
 class TestVIAFClient(DatabaseTest):
-    def __init__(self):
-        self.parser = VIAFClient(self.connection)
+    def setup(self):
+        super(TestVIAFClient, self).setup()
+        self.client = VIAFClient(self._db)
         self.log = logging.getLogger("VIAF Client Test")
 
 
     def test_lookup_by_viaf(self):
-        pass
+        # there can be one and only one Mindy
+        contributor_candidates = self.client.lookup_by_name(sort_name="Mindy Kaling")
+        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates[0]
+        set_trace()
+        eq_(selected_candidate.viaf, "9581122")
+        eq_(selected_candidate.sort_name, "Mindy Kaling")
 
 
     def test_lookup_by_name(self):
-        pass
+        # there can be one and only one Mindy
+        contributor_candidates = self.client.lookup_by_name(sort_name="Mindy Kaling")
+        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates[0]
+        set_trace()
+        eq_(selected_candidate.viaf, "9581122")
+        eq_(selected_candidate.sort_name, "Mindy Kaling")
+
 
 
 
