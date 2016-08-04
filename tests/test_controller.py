@@ -5,10 +5,16 @@ from datetime import datetime, timedelta
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
-from core.model import Identifier
+from core.model import (
+    Identifier,
+    UnresolvedIdentifier,
+)
 from core.util.problem_detail import ProblemDetail
 
-from controller import CollectionController
+from controller import (
+    CollectionController,
+    URNLookupController,
+)
 
 class TestCollectionController(DatabaseTest):
 
@@ -174,3 +180,78 @@ class TestCollectionController(DatabaseTest):
             eq_("Could not parse identifier.", invalid['simplified_message'])
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
+
+
+class TestURNLookupController(DatabaseTest):
+
+    def setup(self):
+        super(TestURNLookupController, self).setup()
+        self.controller = URNLookupController(self._db)
+
+    def assert_one_message(self, urn, code, message):
+        """Assert that the given message is the only one in
+        messages_by_urn.
+        """
+        [(u, (c, m))] = self.controller.messages_by_urn.items()
+        eq_(u, urn)
+        eq_(c, code)
+        eq_(m, message)
+        eq_([], self.controller.works)
+        eq_([], self.controller.precomposed_entries)
+
+    def test_process_urn_initial_registration(self):
+        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive ID/nosuchidentifier"
+        self.controller.process_urn(urn)
+        self.assert_one_message(
+            urn, 201, URNLookupController.IDENTIFIER_REGISTERED
+        )
+
+        # The Identifier has been created and an UnresolvedIdentifier
+        # associated with it.
+        [identifier] = self._db.query(Identifier).filter(
+            Identifier.type==Identifier.OVERDRIVE_ID
+        ).all()
+        eq_("nosuchidentifier", identifier.identifier)
+        unresolved = identifier.unresolved_identifier
+        eq_(202, unresolved.status)
+
+    def test_process_urn_pending_resolve_attempt(self):
+        identifier = self._identifier(Identifier.GUTENBERG_ID)
+        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
+        self.controller.process_urn(identifier.urn)
+        eq_(1, len(self.controller.messages_by_urn.keys()))
+        self.assert_one_message(
+            identifier.urn, 202,
+            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+        )
+
+    def test_process_urn_exception_during_resolve_attempt(self):
+        identifier = self._identifier(Identifier.GUTENBERG_ID)
+        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
+        unresolved.status = 500
+        unresolved.exception = "foo"
+        self.controller.process_urn(identifier.urn)
+        eq_(1, len(self.controller.messages_by_urn.keys()))
+        self.assert_one_message(
+            identifier.urn, 500, "foo"
+        )
+
+    def test_process_urn_with_collection(self):
+        collection = self._collection()
+        i1 = self._identifier()
+        i2 = self._identifier()
+
+        eq_([], collection.catalog)
+        self.controller.process_urn(i1.urn, collection=collection)
+        eq_(1, len(collection.catalog))
+        eq_([i1], collection.catalog)
+
+        # Adds new identifiers to an existing catalog
+        self.controller.process_urn(i2.urn, collection=collection)
+        eq_(2, len(collection.catalog))
+        eq_([i1, i2], collection.catalog)
+
+        # Does not duplicate identifiers in the catalog
+        self.controller.process_urn(i1.urn, collection=collection)
+        eq_(2, len(collection.catalog))
+        eq_([i1, i2], collection.catalog)
