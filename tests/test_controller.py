@@ -279,3 +279,15 @@ class TestURNLookupController(DatabaseTest):
         self.controller.process_urn(i1.urn, collection=collection)
         eq_(2, len(collection.catalog))
         eq_([i1, i2], collection.catalog)
+
+    def test_process_urn_isbn_not_ready(self):
+        isbn, ignore = Identifier.for_foreign_id(
+            self._db, Identifier.ISBN, self._isbn
+        )
+        self.controller.process_urn(isbn.urn)
+        self.assert_one_message(
+            isbn.urn, 201, self.controller.IDENTIFIER_REGISTERED
+        )
+        unresolved, is_new = UnresolvedIdentifier.register(self._db, isbn)
+        eq_(False, is_new)
+

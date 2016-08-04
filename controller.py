@@ -1,6 +1,7 @@
 from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
+import logging
 
 from core.app_server import (
     cdn_url_for,
@@ -10,6 +11,8 @@ from core.app_server import (
 )
 from core.model import (
     Collection,
+    CoverageRecord,
+    DataSource,
     Identifier,
     UnresolvedIdentifier,
 )
@@ -122,6 +125,8 @@ class URNLookupController(CoreURNLookupController):
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
 
+    log = logging.getLogger("URN lookup controller")
+    
     def presentation_ready_work_for(self, identifier):
         """Either return a presentation-ready work associated with the 
         given `identifier`, or return None.
@@ -217,7 +222,7 @@ class URNLookupController(CoreURNLookupController):
                 urn, unresolved_identifier.status, message
             )
 
-    def make_opds_entry_from_metadata_lookups(self, urn, identifier):
+    def make_opds_entry_from_metadata_lookups(self, identifier):
         """This identifier cannot be turned into a presentation-ready Work,
         but maybe we can make an OPDS entry based on metadata lookups.
         """
@@ -245,7 +250,7 @@ class URNLookupController(CoreURNLookupController):
             # At least one metadata lookup has not successfully
             # completed.
             names = [x.name for x in unaccounted_for]
-            logging.info(
+            self.log.info(
                 "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
                 identifier,
                 ", ".join(names)
@@ -256,13 +261,15 @@ class URNLookupController(CoreURNLookupController):
                 # We just found out about this identifier, or rather,
                 # we just found out that someone expects it to be associated
                 # with a LicensePool.
-                return self.add_message(urn, 201, self.IDENTIFIER_REGISTERED)
+                return self.add_message(
+                    identifier.urn, 201, self.IDENTIFIER_REGISTERED
+                )
             else:
                 # There is a pending attempt to resolve this identifier.
                 message = (unresolved_identifier.exception 
                            or self.WORKING_TO_RESOLVE_IDENTIFIER)
                 return self.add_message(
-                    urn, unresolved_identifier.status, message
+                    identifier.urn, unresolved_identifier.status, message
                 )
         else:
             # All metadata lookups have completed. Create that OPDS
@@ -273,7 +280,9 @@ class URNLookupController(CoreURNLookupController):
             # We can't do lookups on an identifier of this type, so
             # the best thing to do is to treat this identifier as a
             # 404 error.
-            return self.add_message(urn, 404, self.UNRECOGNIZED_IDENTIFIER)
+            return self.add_message(
+                identifier.urn, 404, self.UNRECOGNIZED_IDENTIFIER
+            )
 
         # We made it!
         return self.add_entry(entry)
