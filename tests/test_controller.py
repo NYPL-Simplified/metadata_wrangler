@@ -236,6 +236,30 @@ class TestURNLookupController(DatabaseTest):
             identifier.urn, 500, "foo"
         )
 
+    def test_process_urn_unresolvable_type(self):
+        # We can't resolve a 3M identifier because we don't have the
+        # appropriate access to the bibliographic API.
+        identifier = self._identifier(Identifier.THREEM_ID)
+        self.controller.process_urn(identifier.urn)
+        eq_(1, len(self.controller.messages_by_urn.keys()))
+        self.assert_one_message(
+            identifier.urn, 404, self.controller.UNRESOLVABLE_IDENTIFIER
+        )
+
+    def test_presentation_ready_work_overrides_unresolveable_type(self):
+        # If there is a presentation-ready Work associated
+        # with the identifier, turns out we can resolve it even if the
+        # type would otherwise not be resolvable.
+        edition, pool = self._edition(
+            identifier_type=Identifier.THREEM_ID, with_license_pool=True
+        )
+        pool.open_access = False
+        work, is_new = pool.calculate_work()
+        work.presentation_ready = True
+        identifier = edition.primary_identifier
+        self.controller.process_urn(identifier.urn)
+        eq_([(identifier, work)], self.controller.works)
+        
     def test_process_urn_with_collection(self):
         collection = self._collection()
         i1 = self._identifier()

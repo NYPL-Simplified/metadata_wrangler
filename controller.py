@@ -158,7 +158,7 @@ class URNLookupController(CoreURNLookupController):
             return False
         return True
   
-    def process_urn(self, urn):
+    def process_urn(self, urn, collection=None):
         """Turn a URN into a Work suitable for use in an OPDS feed.
         """
         try:
@@ -173,9 +173,15 @@ class URNLookupController(CoreURNLookupController):
         if not self.can_resolve_identifier(self, identifier):
             return self.add_message(urn, 404, self.UNRESOLVABLE_IDENTIFIER)
 
+        # We are at least willing to try to resolve this Identifier.
+        # If a Collection was provided, this also means we consider
+        # this Identifier part of the given collection.
+        if collection:
+            collection.catalog_identifier(self._db, identifier)
+        
         if identifier.type == Identifier.ISBN:
             # ISBNs are handled specially.
-            self.make_opds_entry_from_metadata_lookups(identifier)
+            return self.make_opds_entry_from_metadata_lookups(identifier)
 
         # All other identifiers need to be associated with a
         # presentation-ready Work for the lookup to succeed. If there
