@@ -4,6 +4,7 @@ from nose.tools import set_trace, eq_
 
 from . import (
     DatabaseTest,
+    DummyHTTPClient,
     sample_data,
 )
 
@@ -31,7 +32,7 @@ class TestNameParser(DatabaseTest):
 
         xml = self.sample_data("will_eisner.xml")
 
-        contributor_data = self.parser.parse(xml, None)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
         eq_("10455", contributor_data.viaf)
         eq_("Will Eisner", contributor_data.display_name)
         eq_("Eisner", contributor_data.family_name)
@@ -41,10 +42,7 @@ class TestNameParser(DatabaseTest):
 
         xml = self.sample_data("michelle_belanger.xml")
 
-        #contributor, new = self._contributor(None)
-
-        #viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
-        contributor_data = self.parser.parse(xml, None)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
         eq_('38770861', contributor_data.viaf)
         eq_("Michelle A. Belanger", contributor_data.display_name)
         eq_("Belanger", contributor_data.family_name)
@@ -53,8 +51,7 @@ class TestNameParser(DatabaseTest):
     def test_entry_without_wikipedia_name(self):
         xml = self.sample_data("palmer.xml")
 
-        #viaf, display, family, sort, wikipedia = self.parser.parse(xml)
-        contributor_data = self.parser.parse(xml)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml)
         eq_("2506349", contributor_data.viaf)
         eq_("Roy Ernest Palmer", contributor_data.display_name)
         eq_("Palmer", contributor_data.family_name)
@@ -62,8 +59,7 @@ class TestNameParser(DatabaseTest):
 
     def test_simple_corporate_entry(self):
         xml = self.sample_data("aquarius.xml")
-        #viaf, display, family, sort, wikipedia = self.parser.parse(xml)
-        contributor_data = self.parser.parse(xml)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml)
         eq_("159591140", contributor_data.viaf)
         eq_("Aquarius Paris", contributor_data.display_name)
         eq_("Aquarius", contributor_data.family_name)
@@ -75,9 +71,7 @@ class TestNameParser(DatabaseTest):
         # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
 
-        #viaf, display, family, sort, wikipedia = self.parser.parse(
-        #    xml, working_display_name="Sam Clemens")
-        contributor_data = self.parser.parse(xml, working_display_name="Sam Clemens")
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Sam Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Mark_Twain", contributor_data.wikipedia_name)
@@ -89,7 +83,7 @@ class TestNameParser(DatabaseTest):
         # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
         #viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
-        contributor_data = self.parser.parse(xml, None)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Twain", contributor_data.family_name)
@@ -99,7 +93,7 @@ class TestNameParser(DatabaseTest):
         # we get the consensus result.
         #viaf, display, family, sort, wikipedia = self.parser.parse(
         #    xml, working_display_name="Samuel Langhorne Clemens")
-        contributor_data = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Twain, Mark", contributor_data.sort_name)
@@ -114,9 +108,10 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("howard_j_j.xml")
         name = "Howard, J. J."
 
-        contributor_data = self.parser.parse_multiple(xml, working_sort_name=name)
-
-        eq_(None, contributor_data)
+        contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
+        for contributor in contributor_candidates:
+            match_quality = self.parser.weigh_contributor(candidate=contributor, working_sort_name=name, strict=True)
+            eq_(match_quality, 0)
 
 
     def test_multiple_results_with_success(self):
@@ -124,7 +119,9 @@ class TestNameParser(DatabaseTest):
         name = "Green, Roger Lancelyn"
         #contributor, new = self._contributor(name)
         #viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml, working_sort_name=name)
-        contributor_data = self.parser.parse_multiple(xml, working_sort_name=name)
+        contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name, contributor_candidates=contributor_candidates)
+        (contributor_data, match_confidences, contributor_titles)  = contributor_candidates[0]
 
         eq_("29620265", contributor_data.viaf)
         eq_("Roger Lancelyn Green", contributor_data.display_name)
@@ -139,7 +136,7 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("kate_lister.xml")
         name = "Lister, Kate"
         #viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(xml)
-        contributor_data = self.parser.parse(xml)
+        (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml)
         eq_("68169992", contributor_data.viaf)
         eq_(None, contributor_data.display_name)
         eq_(None, contributor_data.family_name)
@@ -155,22 +152,31 @@ class TestVIAFClient(DatabaseTest):
         self.log = logging.getLogger("VIAF Client Test")
 
 
+    def sample_data(self, filename):
+        return sample_data(filename, "viaf")
+
+
     def test_lookup_by_viaf(self):
         # there can be one and only one Mindy
-        contributor_candidates = self.client.lookup_by_name(sort_name="Mindy Kaling")
-        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates[0]
-        set_trace()
+        h = DummyHTTPClient()
+        xml = self.sample_data("mindy_kaling.xml")
+        h.queue_response(200, media_type='text/xml', content=xml)
+
+        contributor_candidates = self.client.lookup_by_viaf(viaf="9581122", do_get=h.do_get)
+        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates
         eq_(selected_candidate.viaf, "9581122")
-        eq_(selected_candidate.sort_name, "Mindy Kaling")
+        eq_(selected_candidate.sort_name, "Kaling, Mindy")
 
 
     def test_lookup_by_name(self):
         # there can be one and only one Mindy
-        contributor_candidates = self.client.lookup_by_name(sort_name="Mindy Kaling")
-        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates[0]
-        set_trace()
+        h = DummyHTTPClient()
+        xml = self.sample_data("mindy_kaling.xml")
+        h.queue_response(200, media_type='text/xml', content=xml)
+
+        [(selected_candidate, match_confidences, contributor_titles)] = self.client.lookup_by_name(sort_name="Mindy Kaling", do_get=h.do_get)
         eq_(selected_candidate.viaf, "9581122")
-        eq_(selected_candidate.sort_name, "Mindy Kaling")
+        eq_(selected_candidate.sort_name, "Kaling, Mindy")
 
 
 

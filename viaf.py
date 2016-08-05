@@ -205,29 +205,6 @@ class VIAFParser(XMLParser):
         if contributor.viaf:
             match_confidences["total"] += 0.2
 
-        if contributor.viaf in ('167044989', '2707870'):
-            set_trace()
-        '''
-        ['Awful providences, calls to repentance. A sermon preached at Stamford, in the county of Lincoln, on the 6th of February, 1756, being the publick fast day 
-        appointed by authority. By J. Williams. Published by request', 
-        'A critical dissertation on Isaiah, VII. 13,14,15,16 In which the sentiments advanced by Dr. Kennicott, in a sermon lately published, and by several other 
-        writers, are candidly and impartially examined.', 
-        'An enquiry into the truth of the tradition, concerning the discovery of America, by Prince Madog ab Owen Gwynedd, about the year, 1170. By John Williams, L.L.D', 
-        'Farther observations, on the discovery of America, 1792:', 
-        "A free enquiry into the authenticity of the first and second chapters of St. Matthew's gospel with a new preface, containing an account of some MSS. 
-        in the British Museum; ... By John Williams, ...", 
-        u'Herrn J. Williams, Esq. Ursprung, Wachsthum und gegenw\xe4rtiger Zustand der Nordischen Reiche [...] / Herausgegeben und berichtiget von Johann Christoph 
-        Adelung [...]. - Leipzig, 1779.', 
-        'His A concordance to the Greek Testament. -', 
-        'Natural history of the mineral kingdom in three parts. ... by john williams, ... in two volumes', 
-        "The nature and necessity of faith in the Lord Jesus and love unto all the saints. A sermon preached at St. Thomas's, on January 1, 1771. for the benefit of 
-        the charity-school, in Gravel-Lane, Southwark. By John Williams, ...", 'Rise, progress and present state of the northern governments', 
-        'A serious and earnest address to gentlemen of all denominations who opposed the late application of the Protestant dissenting minsters to Parliament, 
-        for relief in the matter of subscription. By John Williams, LL.D.', 
-        'Thoughts on languages, 1783', u'Ursprung, Wachsthum und gegenw\xe4rtiger Zustand der Nordischen Reiche, n\xe4mlich der vereinigten Niederlande, D\xe4nnemarks, 
-        Schwedens, Russlands und Pohlens [...].', 'What Americans believe and how they worship']
-        '''
-
         cls.weigh_titles(known_titles, contributor_titles, match_confidences, strict)
         if "title" in match_confidences:
             report_string += ", mc[title]=%s" % match_confidences["title"]
@@ -309,16 +286,19 @@ class VIAFParser(XMLParser):
 
 
     def cluster_has_record_for_named_author(
-            self, cluster, working_sort_name, working_display_name):
-        """  TODO: fill in
+            self, cluster, working_sort_name, working_display_name, contributor_data=None):
+        """  Looks through the xml cluster for all fields that could indicate the 
+        author's name.
 
-        Short-circuit the xml parsing process -- if found an author name 
-        match, stop parsing and return the match.
+        Don't short-circuit the xml parsing process -- if found an author name 
+        match, keep parsing and see what else can find.
 
         :return: a dictionary containing description of xml field 
         that matched author name searched for.
         """
         match_confidences = {}
+        if not contributor_data:
+            contributor_data = ContributorData()
 
         # If we have a sort name to look for, and it's in this cluster's
         # sort names, great.
@@ -328,6 +308,7 @@ class VIAFParser(XMLParser):
                 match_confidences["sort_name"] = match_confidence
                 # fuzzy match filter may not always give a 100% match, so cap arbitrarily at 90% as a "sure match"
                 if match_confidence > 90:
+                    contributor_data.sort_name=potential_match
                     return match_confidences
 
         # If we have a display name to look for, and this cluster's
@@ -335,10 +316,12 @@ class VIAFParser(XMLParser):
         if working_display_name:
             wikipedia_name = self.extract_wikipedia_name(cluster)
             if wikipedia_name:
+                contributor_data.wikipedia_name=wikipedia_name
                 display_name = self.wikipedia_name_to_display_name(wikipedia_name)
                 match_confidence = self.contributor_name_match_ratio(display_name, working_display_name)
                 match_confidences["display_name"] = match_confidence
                 if match_confidence > 90:
+                    contributor_data.display_name=display_name
                     return match_confidences
 
         # If there are UNIMARC records, and every part of the UNIMARC
@@ -352,6 +335,7 @@ class VIAFParser(XMLParser):
                 match_confidence = self.contributor_name_match_ratio(possible_sort_name, working_sort_name)
                 match_confidences["unimarc"] = match_confidence
                 if match_confidence > 90:
+                    contributor_data.family_name=possible_sort_name
                     return match_confidences
 
             for name in (working_sort_name, working_display_name):
@@ -361,6 +345,7 @@ class VIAFParser(XMLParser):
                     and possible_family and possible_family in name and (
                         not possible_extra or possible_extra in name)):
                     match_confidences["unimarc"] = 90
+                    contributor_data.family_name=possible_family
                     return match_confidences
 
         # Last-ditch effort. Guess at the sort name and see if *that's* one
@@ -371,6 +356,7 @@ class VIAFParser(XMLParser):
                 match_confidence = self.contributor_name_match_ratio(potential_match, test_sort_name)
                 match_confidences["guessed_sort_name"] = match_confidence
                 if match_confidence > 90:
+                    contributor_data.sort_name=potential_match
                     return match_confidences
 
         # OK, last last-ditch effort.  See if the alternate name forms (pseudonyms) are it.
@@ -379,6 +365,7 @@ class VIAFParser(XMLParser):
                 match_confidence = self.contributor_name_match_ratio(potential_match, working_sort_name)
                 match_confidences["alternate_name"] = match_confidence
                 if match_confidence > 90:
+                    contributor_data.family_name=potential_match
                     return match_confidences
         
         return match_confidences
@@ -445,10 +432,15 @@ class VIAFParser(XMLParser):
         :return: a list of tuples, each tuple containing: 
         - a ContributorData object filled with VIAF id, display, sort, family, 
         and wikipedia names, or None on error.
+        - a dictionary of viaf cluster properties, with weights assigned to each based on how 
+        well the item in the viaf cluster matches the search parameters passed.
         - a list of work titles ascribed to this Contributor.
         """
+        set_trace()
+        # TODO: decide: handle timeouts gracefully here, or keep throwing exception?
+        if not xml:
+            return []
 
-        # TODO: handle timeouts gracefully here
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
         # NOTE:  we can get the total number of clusters that a viaf search could return with: 
@@ -487,9 +479,10 @@ class VIAFParser(XMLParser):
         and wikipedia names, and a list of titles this author has written.
         Return None on error.
         """
+        set_trace()
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         return self.extract_viaf_info(
-            tree, working_sort_name, working_display_name, data_source)
+            tree, working_sort_name, working_display_name)
 
 
     def extract_wikipedia_name(self, cluster):
@@ -522,13 +515,13 @@ class VIAFParser(XMLParser):
         - list of titles attributed to the contributor in the cluster.
         or Nones on error.
         """
-        contributor_data = ContributorData(sort_name=working_sort_name)
+        contributor_data = ContributorData()
         contributor_titles = []
         match_confidences = {}
 
         # Find out if one of the working names shows up in a name record.
         match_confidences = self.cluster_has_record_for_named_author(
-                cluster, working_sort_name, working_display_name)        
+                cluster, working_sort_name, working_display_name, contributor_data)        
 
         # Get the VIAF ID for this cluster, just in case we don't have one yet.
         viaf_tag = self._xpath1(cluster, './/*[local-name()="viafID"]')
@@ -721,31 +714,46 @@ class VIAFClient(object):
     def data_source(self):
         return DataSource.lookup(self._db, DataSource.VIAF)
 
-    def process_contributor(self, contributor):
 
+    def process_contributor(self, contributor):
+        """ Accepts a Contributor object, and asks VIAF for information on the contributor's name.
+        Finds the VIAF cluster that's most likely to correspond to the passed-in contributor.
+
+        Finds any possible duplicate Contributor objects in our database, and 
+        updates them with the information gleaned from VIAF.
+
+        :return: a ContributorData object filled with display, sort, family, and wikipedia names
+        from VIAF or None on error.
+        """
+        set_trace()
         if contributor.viaf:
             # We can look them up by VIAF.
-            v = self.lookup_by_viaf(
+            contributor_candidates = self.lookup_by_viaf(
                 contributor.viaf, contributor.name, contributor.display_name)
         else:
-            v = self.lookup_by_name(contributor.name, contributor.display_name)
+            contributor_candidates = self.lookup_by_name(contributor.name, contributor.display_name)
 
-        viaf, display_name, family_name, sort_name, wikipedia_name = v
-        contributor.viaf = viaf
-        contributor.display_name = display_name
-        contributor.family_name = family_name
-        contributor.wikipedia_name = wikipedia_name
+        # we have the viaf results for all clusters corresponding to 
+        # this contributor.  now sort them to get the best match.
+        if contributor_candidates:
+            contributor_candidates = self.parser.order_candidates(working_sort_name=contributor.name, contributor_candidates=contributor_candidates)
+            (selected_candidate, match_confidences, contributor_titles)  = contributor_candidates[0]
+
+        # having a cluster of authors doesn't mean we found a match.  
+        if not selected_candidate or "total" not in match_confidences or match_confidences["total"] < 70:
+            # no match or bad match.  give up.
+            return None
 
         # Is there already another contributor with this VIAF?
-        if contributor.viaf is not None:
+        if selected_candidate.viaf is not None:
             duplicates = self._db.query(Contributor).filter(
-                Contributor.viaf==contributor.viaf).filter(
-                    Contributor.id != contributor.id).all()
+                Contributor.viaf==selected_candidate.viaf).filter(
+                    Contributor.id != selected_candidate.id).all()
             if duplicates:
-                if duplicates[0].display_name == contributor.display_name:
-                    contributor.merge_into(duplicates[0])
+                if duplicates[0].display_name == selected_candidate.display_name:
+                    selected_candidate.apply(duplicates[0])
                 else:
-                    d1 = contributor.display_name
+                    d1 = selected_candidate.display_name
                     if isinstance(d1, unicode):
                         d1 = d1.encode("utf8")
                     d2 = duplicates[0].display_name
@@ -760,17 +768,21 @@ class VIAFClient(object):
                     # don't merge the records.
                     pass
 
+        return selected_candidate
+
 
     def lookup_by_viaf(self, viaf, working_sort_name=None,
-                       working_display_name=None):
+                       working_display_name=None, do_get=None):
+        set_trace()
         url = self.LOOKUP_URL % dict(viaf=viaf)
-        r, cached = Representation.get(self._db, url)
+        r, cached = Representation.get(self._db, url, do_get=do_get)
 
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
 
-    def lookup_by_name(self, sort_name, display_name=None):
+    def lookup_by_name(self, sort_name, display_name=None, do_get=None):
+        set_trace()
         name = sort_name or display_name
         # from OCLC tech support:  
         # VIAF's SRU endpoint can only return a maximum number of 10 records when the recordSchema is http://viaf.org/VIAFCluster
@@ -788,24 +800,18 @@ class VIAFClient(object):
                 scope = 'local.corporateNames'
 
             url = self.SEARCH_URL.format(scope=scope, sort_name=name.encode("utf8"), maximum_records=maximum_records, start_record=start_record)
-            representation, cached = Representation.get(self._db, url)
+            representation, cached = Representation.get(self._db, url, do_get=do_get)
             xml = representation.content
 
-            # TODO: remove debug writing to file
-            #with open("try_stuff/john_williams_paginated_3.xml", "a") as output:
-            #    output.write(xml)
-            #    output.write("\n\n\n\n\n")
-
-
             candidates = self.parser.parse_multiple(xml, sort_name, display_name, page)
-            contributor_candidates.extend(candidates)
-            page += 1
-
             if not any(candidates):
                 # Delete the representation so it's not cached.
                 self._db.query(Representation).filter(Representation.id==representation.id).delete()
                 # we ran out of clusters, so we can relax and move on to ordering the returned results
                 break
+
+            contributor_candidates.extend(candidates)
+            page += 1
 
         return contributor_candidates
 
