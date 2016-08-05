@@ -18,9 +18,6 @@ from sqlalchemy.sql.expression import or_
 from overdrive import OverdriveCoverImageMirror
 from monitor import IdentifierResolutionMonitor
 from mirror import ImageScaler
-from threem import (
-    ThreeMCoverImageMirror,
-)
 from gutenberg import OCLCClassifyCoverageProvider
 from core.scripts import (
     Explain,
@@ -97,7 +94,6 @@ class CoverImageMirrorScript(Script):
         super(CoverImageMirrorScript, self).__init__()
 
     def run(self):
-        ThreeMCoverImageMirror(self._db).run()
         OverdriveCoverImageMirror(self._db).run()
 
 
@@ -112,7 +108,7 @@ class CoverImageScaleScript(Script):
         super(CoverImageScaleScript, self).__init__()
 
     def run(self):
-        mirrors = [OverdriveCoverImageMirror, ThreeMCoverImageMirror]
+        mirrors = [OverdriveCoverImageMirror]
         ImageScaler(self._db, mirrors).run(force=self.force)
 
 

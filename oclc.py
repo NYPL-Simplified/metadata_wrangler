@@ -38,6 +38,7 @@ from core.metadata_layer import (
 )
 from core.util import MetadataSimilarity
 
+from viaf import VIAFClient
 
 class OCLC(object):
     """Repository for OCLC-related constants."""
@@ -539,10 +540,11 @@ class OCLCLinkedData(object):
 
         self.log.info("Processing edition %s: %r", oclc_id, titles)
         metadata = Metadata(self.source)
-        metadata.primary_identifier, new = Identifier.for_foreign_id(
-            self._db, oclc_id_type, oclc_id
+        metadata.primary_identifier = IdentifierData(
+            type=oclc_id_type, identifier=oclc_id
         )
-        metadata.title = titles[0]
+        if titles:
+            metadata.title = titles[0]
         for d in publication_dates:
             try:
                 metadata.published = datetime.datetime.strptime(d[:4], "%Y")
@@ -1269,9 +1271,10 @@ class LinkedDataCoverageProvider(CoverageProvider):
     number of ISBNs, which can be used as input into other services.
     """
 
-    def __init__(self, _db):
+    def __init__(self, _db, api=None, viaf_api=None):
         self._db = _db
-        self.api = OCLCLinkedData(self._db)
+        self.api = api or OCLCLinkedData(self._db)
+        self.viaf = viaf_api or VIAFClient(self._db)
         output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
         input_identifier_types = [
             Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
@@ -1289,14 +1292,26 @@ class LinkedDataCoverageProvider(CoverageProvider):
             self.log.info("Processing identifier %r", identifier)
 
             for metadata in self.api.info_for(identifier):
-                oclc_editions = metadata.primary_identifier.primarily_identifies
+                other_identifier, ignore = metadata.primary_identifier.load(self._db)
+                oclc_editions = other_identifier.primarily_identifies
 
                 # Keep track of the number of editions OCLC associates
                 # with this identifier.
-                metadata.primary_identifier.add_measurement(
+                other_identifier.add_measurement(
                     self.output_source, Measurement.PUBLISHED_EDITIONS, 
                     len(oclc_editions)
                 )
+                
+                # If any contributors are identified solely by their
+                # VIAF IDs, look up those IDs and fill those in
+                # now. This will avoid problems later when it's time
+                # to turn these contributors into Contributor objects.
+                for i in metadata.contributors:
+                    if i.viaf and not i.sort_name:
+                        r = self.viaf.lookup_by_viaf(
+                            i.viaf, i.sort_name, i.display_name
+                        )
+                        i.viaf, i.display_name, i.family_name, i.sort_name, i.wikipedia_name = r
 
                 num_new_isbns = self.new_isbns(metadata)
                 if oclc_editions:
@@ -1311,7 +1326,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 elif num_new_isbns:
                     edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.output_source,
-                        primary_identifier=metadata.primary_identifier
+                        primary_identifier=other_identifier
                     )
                     metadata.apply(edition)
                     self.set_equivalence(identifier, metadata)
@@ -1328,11 +1343,14 @@ class LinkedDataCoverageProvider(CoverageProvider):
         except IOError as e:
             if ", but couldn't find location" in e.message:
                 exception = "OCLC doesn't know about this ISBN: %r" % e
-                return CoverageFailure(
-                    self, identifier, exception, transient=False
-                )
-            exception = "OCLC raised an error: %r" % e
-            return CoverageFailure(self, identifier, exception, transient=True)
+                transient = False
+            else:
+                exception = "OCLC raised an error: %r" % e
+                transient = True
+            return CoverageFailure(
+                identifier, exception, data_source=self.output_source,
+                transient=transient
+            )
         return identifier
 
     def new_isbns(self, metadata):
@@ -1374,6 +1392,9 @@ class LinkedDataCoverageProvider(CoverageProvider):
             strength = 1
 
         if strength > 0:
+            primary_identifier, ignore = metadata.primary_identifier.load(
+                self._db
+            )
             identifier.equivalent_to(
-                self.output_source, metadata.primary_identifier, strength
+                self.output_source, primary_identifier, strength
             )

@@ -11,9 +11,11 @@ from core.model import (
     Equivalency,
 )
 from core.metadata_layer import (
-    Metadata,
+    ContributorData,
     IdentifierData,
+    Metadata,
 )
+from core.coverage import CoverageFailure
 
 from oclc import (
     OCLCXMLParser,
@@ -21,10 +23,16 @@ from oclc import (
     LinkedDataCoverageProvider,
 )
 
+from testing import (
+    MockOCLCLinkedDataAPI,
+    MockVIAFClient,
+)
+
 from . import (
     DatabaseTest,
     sample_data
 )
+
 
 class TestParser(DatabaseTest):
 
@@ -168,13 +176,12 @@ class TestParser(DatabaseTest):
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            [None, None, u'n50025038', u'n50025038', u'n50050335',
-             u'n79006936', u'n79059764', u'n79059764', u'n79059764',
+            [None, None, u'n50025038', u'n50050335', u'n79006936', 
              u'n79059764'],
-            sorted([x.lc for x in work.contributors]))
+            sorted([x.lc for x in work.contributors])
+        )
         eq_(
-            [None, None, u'27068555', u'34482742', u'34482742', u'4947338',
-             u'51716047', u'51716047', u'51716047', u'51716047'],
+            [None, None, u'27068555', u'34482742', u'4947338', u'51716047'],
             sorted([x.viaf for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
@@ -240,7 +247,7 @@ class TestParser(DatabaseTest):
             self._db, xml, languages=["eng"])
         eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
         # We parsed the work, but it had no contributors listed.
-        eq_([[]], [r.contributors for r in records])
+        eq_([set()], [r.contributors for r in records])
 
 
 class TestAuthorParser(DatabaseTest):
@@ -428,6 +435,17 @@ class TestOCLCLinkedData(TestParser):
         eq_(u"71398958", viaf)
         eq_(10, len(metadata_obj.subjects))
 
+        # Make sure a book with no English title doesn't break anything.
+        subgraph[14]['name']['@language'] = 'fr'
+        [book] = [book for book in oclc.books(subgraph)]
+
+        metadata_obj = OCLCLinkedData(self._db).book_info_to_metadata(
+            subgraph, book
+        )
+
+        # The metadata has no title.
+        eq_(None, metadata_obj.title)
+
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
@@ -454,15 +472,20 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         edition.add_contributor(Contributor(viaf="112460612"), Contributor.AUTHOR_ROLE)
         identifier = edition.primary_identifier
 
+        i1 = self._identifier()
+        identifierdata1 = IdentifierData(type=i1.type, identifier=i1.identifier)
         good_metadata = Metadata(
             DataSource.lookup(self._db, DataSource.GUTENBERG),
-            primary_identifier = self._identifier(),
+            primary_identifier = identifierdata1,
             title = "The House on Mango Street",
             contributors = [Contributor(viaf="112460612")]
         )
+
+        i2 = self._identifier()
+        identifierdata2 = IdentifierData(type=i2.type, identifier=i2.identifier)
         bad_metadata = Metadata(
             DataSource.lookup(self._db, DataSource.GUTENBERG),
-            primary_identifier = self._identifier(),
+            primary_identifier = identifierdata2,
             title = "Calvin & Hobbes",
             contributors = [Contributor(viaf="101010")]
         )
@@ -472,14 +495,99 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
 
         # The identifier for the bad metadata isn't made equivalent
-        eq_(1, len(equivalencies))
-        eq_(good_metadata.primary_identifier, equivalencies[0].output)
-        eq_(1, equivalencies[0].strength)
+        eq_([i1], [x.output for x in equivalencies])
+        eq_([1], [x.strength for x in equivalencies])
 
         # But if the existing identifier has no editions, they're made equivalent.
         identifier = self._identifier()
         self.provider.set_equivalence(identifier, bad_metadata)
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
-        eq_(1, len(equivalencies))
-        eq_(bad_metadata.primary_identifier, equivalencies[0].output)
-        eq_(1, equivalencies[0].strength)
+        eq_([i2], [x.output for x in equivalencies])
+        eq_([1], [x.strength for x in equivalencies])
+
+    def test_process_item_exception(self):
+        class DoomedOCLCLinkedData(OCLCLinkedData):
+            def info_for(self, identifier):
+                raise IOError("Exception!")
+
+        provider = LinkedDataCoverageProvider(self._db, api=DoomedOCLCLinkedData(self._db))
+        
+        edition = self._edition()
+        identifier = edition.primary_identifier
+
+        result = provider.process_item(identifier)
+        assert isinstance(result, CoverageFailure)
+        assert "Exception!" in result.exception
+
+    def test_process_item_exception_missing_isbn(self):
+        class DoomedOCLCLinkedData(OCLCLinkedData):
+            def info_for(self, identifier):
+                raise IOError("Tried, but couldn't find location")
+
+        provider = LinkedDataCoverageProvider(
+            self._db, api=DoomedOCLCLinkedData(self._db)
+        )
+        
+        edition = self._edition()
+        identifier = edition.primary_identifier
+
+        result = provider.process_item(identifier)
+        assert isinstance(result, CoverageFailure)
+        assert "OCLC doesn't know about this ISBN" in result.exception
+
+
+    def test_author_known_only_by_viaf_gets_viaf_lookup(self):
+        # TODO: The code this calls could be refactored quite a bit --
+        # we don't really need to test all of process_item() here.
+        # But ATM it does seem to be our only test of process_item().
+
+        oclc = MockOCLCLinkedDataAPI()
+        viaf = MockVIAFClient()
+        provider = LinkedDataCoverageProvider(
+            self._db, api=oclc, viaf_api=viaf
+        )
+
+        # Here's a placeholder that will be filled in with information from
+        # OCLC Linked Data.
+        edition = self._edition()
+        for i in edition.contributions:
+            self._db.delete(i)
+        self._db.commit()
+        identifier = edition.primary_identifier
+
+        # OCLC Linked Data is going to mention two authors -- one with
+        # a sort name + VIAF, and one with a VIAF but no sort name.
+        contributor1 = ContributorData(viaf="1")
+        contributor2 = ContributorData(viaf="2", sort_name="Jordan, Robert")
+        idata = IdentifierData(type=identifier.type, 
+                               identifier=identifier.identifier)
+        metadata = Metadata(
+            DataSource.OCLC_LINKED_DATA,
+            contributors=[contributor1, contributor2],
+            primary_identifier=idata,
+            title=u"foo"
+        )
+        oclc.queue_info_for(metadata)
+
+        # Our OCLC Linked Data client is going to try to fill in the
+        # data, asking VIAF about the contributor with VIAF ID 1 to
+        # try to find a sort name. It won't bother with the
+        # contributor with VIAF ID 2, since we already have a sort
+        # name for that author.
+        viaf.queue_lookup("1", "Display Name", "Family", "Name, Sort", 
+                          "Wikipedia_Name")
+        
+        provider.process_item(identifier)
+        filled_in = sorted(
+            [(x.name, x.display_name, x.viaf) for x in edition.contributors]
+        )
+
+        # The author previously known only by VIAF has had their
+        # information filled in by the VIAF lookup. The other author
+        # has been left alone.
+        eq_([(u'Jordan, Robert', None, u'2'), 
+             (u'Name, Sort', u'Display Name', u'1')],
+            filled_in
+        )
+
+
