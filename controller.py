@@ -139,7 +139,7 @@ class URNLookupController(CoreURNLookupController):
             return None
         return work
     
-    def can_resolve_identifier(self, urn, identifier):
+    def can_resolve_identifier(self, identifier):
         """A chance to determine whether resolution should proceed."""
         # We can resolve any ISBN and any Overdrive ID.
         #
