@@ -175,7 +175,7 @@ class URNLookupController(CoreURNLookupController):
             # Not a well-formed URN.
             return self.add_message(urn, 400, INVALID_URN.detail)
 
-        if not self.can_resolve_identifier(self, identifier):
+        if not self.can_resolve_identifier(identifier):
             return self.add_message(urn, 404, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
