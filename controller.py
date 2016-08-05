@@ -163,7 +163,7 @@ class URNLookupController(CoreURNLookupController):
             return False
         return True
   
-    def process_urn(self, urn, collection=None):
+    def process_urn(self, urn, collection=None, **kwargs):
         """Turn a URN into a Work suitable for use in an OPDS feed.
         """
         try:
