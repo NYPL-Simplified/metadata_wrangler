@@ -436,7 +436,7 @@ class VIAFParser(XMLParser):
         well the item in the viaf cluster matches the search parameters passed.
         - a list of work titles ascribed to this Contributor.
         """
-        set_trace()
+
         # TODO: decide: handle timeouts gracefully here, or keep throwing exception?
         if not xml:
             return []
@@ -479,7 +479,7 @@ class VIAFParser(XMLParser):
         and wikipedia names, and a list of titles this author has written.
         Return None on error.
         """
-        set_trace()
+
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         return self.extract_viaf_info(
             tree, working_sort_name, working_display_name)
@@ -725,7 +725,6 @@ class VIAFClient(object):
         :return: a ContributorData object filled with display, sort, family, and wikipedia names
         from VIAF or None on error.
         """
-        set_trace()
         if contributor.viaf:
             # We can look them up by VIAF.
             contributor_candidates = self.lookup_by_viaf(
@@ -773,7 +772,6 @@ class VIAFClient(object):
 
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
-        set_trace()
         url = self.LOOKUP_URL % dict(viaf=viaf)
         r, cached = Representation.get(self._db, url, do_get=do_get)
 
@@ -782,7 +780,6 @@ class VIAFClient(object):
 
 
     def lookup_by_name(self, sort_name, display_name=None, do_get=None):
-        set_trace()
         name = sort_name or display_name
         # from OCLC tech support:  
         # VIAF's SRU endpoint can only return a maximum number of 10 records when the recordSchema is http://viaf.org/VIAFCluster
