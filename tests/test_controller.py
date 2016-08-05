@@ -2,10 +2,13 @@ import os
 import base64
 import feedparser
 from datetime import datetime, timedelta
+from lxml import etree
 from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
 from core.model import (
+    CoverageRecord,
+    DataSource,
     Identifier,
     UnresolvedIdentifier,
 )
@@ -280,10 +283,13 @@ class TestURNLookupController(DatabaseTest):
         eq_(2, len(collection.catalog))
         eq_([i1, i2], collection.catalog)
 
-    def test_process_urn_isbn_not_ready(self):
+    def test_process_urn_isbn(self):
         isbn, ignore = Identifier.for_foreign_id(
             self._db, Identifier.ISBN, self._isbn
         )
+
+        # The first time we look up an ISBN it's registered as an
+        # UnresolvedIdentifier.
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
             isbn.urn, 201, self.controller.IDENTIFIER_REGISTERED
@@ -291,3 +297,23 @@ class TestURNLookupController(DatabaseTest):
         unresolved, is_new = UnresolvedIdentifier.register(self._db, isbn)
         eq_(False, is_new)
 
+
+        # So long as the necessary coverage is not provided,
+        # future lookups will not provide useful information
+        self.controller.process_urn(isbn.urn)
+        self.assert_one_message(
+            isbn.urn, 202, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
+        )
+
+        # Let's provide the coverage.
+        metadata_sources = DataSource.metadata_sources_for(
+            self._db, isbn
+        )
+        for source in metadata_sources:
+            CoverageRecord.add_for(isbn, source)
+
+        # Process the ISBN again, and we get a precomposed entry
+        self.controller.process_urn(isbn.urn)
+        expect = isbn.opds_entry()
+        [actual] = self.controller.precomposed_entries
+        eq_(etree.tostring(expect), etree.tostring(actual))
