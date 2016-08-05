@@ -16,7 +16,6 @@ from fast import (
 
 from core.config import Configuration
 from core.overdrive import OverdriveBibliographicCoverageProvider
-from core.threem import ThreeMBibliographicCoverageProvider
 from core.classifier import Classifier
 from core.metadata_layer import ReplacementPolicy
 from core.monitor import (
@@ -48,7 +47,6 @@ from content_server import ContentServerCoverageProvider
 from gutenberg import OCLCClassifyCoverageProvider
 from oclc import LinkedDataCoverageProvider
 from overdrive import OverdriveCoverImageMirror
-from threem import ThreeMCoverImageMirror
 from viaf import VIAFClient
 
 class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
@@ -62,8 +60,8 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
     UNKNOWN_FAILURE = "Unknown failure."
 
     def __init__(self, _db):
-        # Since we are the metadata wrangler, any Overdrive and 3M
-        # resources we find, we mirror to S3.
+        # Since we are the metadata wrangler, any resources we find,
+        # we mirror to S3.
         mirror = S3Uploader()
 
         # We're going to be aggressive about recalculating the presentation
@@ -80,15 +78,12 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
         overdrive = OverdriveBibliographicCoverageProvider(
             _db, metadata_replacement_policy=policy
         )
-        threem = ThreeMBibliographicCoverageProvider(
-            _db, metadata_replacement_policy=policy
-        )
         content_cafe = ContentCafeCoverageProvider(_db)
         content_server = ContentServerCoverageProvider(_db)
         oclc_classify = OCLCClassifyCoverageProvider(_db)
 
         optional = []
-        required = [overdrive, threem, content_cafe, content_server, oclc_classify]
+        required = [overdrive, content_cafe, content_server, oclc_classify]
 
         super(IdentifierResolutionMonitor, self).__init__(
             _db, "Identifier Resolution Manager", interval_seconds=5,
@@ -98,7 +93,6 @@ class IdentifierResolutionMonitor(CoreIdentifierResolutionMonitor):
 
         self.viaf = VIAFClient(self._db)
         self.image_mirrors = {
-            DataSource.THREEM : ThreeMCoverImageMirror(self._db),
             DataSource.OVERDRIVE : OverdriveCoverImageMirror(self._db)
         }
         self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
@@ -193,6 +187,9 @@ class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
 class ContentCafeDemandMeasurementSweep(IdentifierSweepMonitor):
     """Ensure that every ISBN directly associated with a commercial
     identifier has a recent demand measurement.
+
+    :TODO: This misses a lot of ISBNs, since 3M and Axis ISBNs aren't
+    directly associated with a commercial identifier.
     """
 
     def __init__(self, _db, batch_size=100, interval_seconds=3600*48):
