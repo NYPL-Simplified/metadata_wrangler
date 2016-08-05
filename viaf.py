@@ -98,7 +98,6 @@ class VIAFParser(XMLParser):
         title1 = normalize_title_for_matching(title1)
         title2 = normalize_title_for_matching(title2)
         match_ratio = fuzz.ratio(title1, title2)
-        #print "title_match_ratio: title1=%s, title2=%s, match_ratio=%s" % (title1, title2, match_ratio)
         return match_ratio
 
 
@@ -125,7 +124,6 @@ class VIAFParser(XMLParser):
             be the best match if there's a 120% out there.  But having an exact title match 
             does matter more than a fuzzy unimarc tag match.  
         """
-        #print "\n"
         report_string = "no_viaf"
         (contributor, match_confidences, contributor_titles) = candidate
 
@@ -240,13 +238,9 @@ class VIAFParser(XMLParser):
                         # TODO: In future, consider doing:
                         # "Pride and Prejudice (Spanish)" should connect to two authors -- 
                         # Jane Austen and the translator.
-                        if contributor_title == "Next time, she'll be dead : battering & how to stop it":
-                            set_trace()
-
                         if cls.name_matches(unfluff_title(contributor_title), unfluff_title(known_title)):
                             match_confidences["title"] = 90
                             match_confidences["total"] += 0.8 * match_confidences["title"]
-                            #print "known_title=%s, contributor_title=%s, match_confidence set to 90" % (known_title, contributor_title)
                             # match is good enough, we can stop
                             break
 
@@ -256,7 +250,6 @@ class VIAFParser(XMLParser):
                         doesn't match "Britain, Detente and Changing East-West Relations" in our DB.
                         '''
                         match_confidence = cls.title_match_ratio(known_title, contributor_title)
-                        #print "known_title=%s, contributor_title=%s, match_confidence=%s" % (known_title, contributor_title, match_confidence)
                         match_confidences["title"] = match_confidence
                         if match_confidence > 80:
                             match_confidences["total"] += 0.6 * match_confidence
@@ -407,7 +400,8 @@ class VIAFParser(XMLParser):
                 ignore_popularity = True
 
             if "sort_name" not in match_confidences:
-                set_trace()
+                # this happened once or twice, but the algorithm still worked.
+                pass
 
         # higher score for better match, so to have best match first, do desc order.
         contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
@@ -456,8 +450,6 @@ class VIAFParser(XMLParser):
                 cluster, working_sort_name, working_display_name)
             
             if not contributor_data:
-                print "why don't I have contributor_data for this cluster?: {}".format(cluster)
-                set_trace()
                 continue
 
             # assume we asked for viaf feed, sorted with sortKeys=holdingscount
@@ -529,7 +521,6 @@ class VIAFParser(XMLParser):
             contributor_data.viaf = None
         else:
             contributor_data.viaf = viaf_tag.text
-        #print "extract_viaf_info: contributor_data.viaf=%s" % contributor_data.viaf
 
         # If we don't have a working sort name, find the most popular
         # sort name in this cluster and use it as the sort name.
@@ -593,8 +584,6 @@ class VIAFParser(XMLParser):
         # Now go through the title elements, and make a list.
         titles = self._xpath(cluster, './/*[local-name()="titles"]/*[local-name()="work"]/*[local-name()="title"]')
         for title in titles:
-            #set_trace()
-            #print u"title={}".format(title.text)
             contributor_titles.append(title.text)
 
         return contributor_data, match_confidences, contributor_titles
