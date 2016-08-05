@@ -1,0 +1,866 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<searchRetrieveResponse xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/zing/srw/ http://www.loc.gov/standards/sru/sru1-1archive/xml-files/srw-types.xsd" xmlns="http://www.loc.gov/zing/srw/">
+    <version xsi:type="xsd:string">1.1</version>
+    <numberOfRecords xsi:type="xsd:nonNegativeInteger">1</numberOfRecords>
+    <resultSetIdleTime xsi:type="xsd:positiveInteger">1</resultSetIdleTime>
+    <records xsi:type="ns1:recordsType" xmlns:ns1="http://www.loc.gov/zing/srw/">
+        <record xsi:type="ns1:recordType">
+            <recordSchema xsi:type="xsd:string">http://viaf.org/VIAFCluster</recordSchema>
+            <recordPacking xsi:type="xsd:string">xml</recordPacking>
+            <recordData xsi:type="ns1:stringOrXmlFragment">
+            
+            
+                <ns2:VIAFCluster xmlns="http://viaf.org/viaf/terms#" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:owl="http://www.w3.org/2002/07/owl#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:void="http://rdfs.org/ns/void#" xmlns:ns2="http://viaf.org/viaf/terms#">
+                    <ns2:viafID>9581122</ns2:viafID>
+                    <ns2:Document about="http://viaf.org/viaf/9581122/">
+                        <ns2:inDataset resource="http://viaf.org/viaf/data"/>
+                        <ns2:primaryTopic resource="http://viaf.org/viaf/9581122"/>
+                    </ns2:Document>
+                    <ns2:nameType>Personal</ns2:nameType>
+                    <ns2:sources>
+                        <ns2:source nsid="no2005074444">LC|no2005074444</ns2:source>
+                        <ns2:source nsid="870979.69542425">DBC|87097969542425</ns2:source>
+                        <ns2:source nsid="http://catalogue.bnf.fr/ark:/12148/cb169606969">BNF|16960696</ns2:source>
+                        <ns2:source nsid="Q539917">WKP|Q539917</ns2:source>
+                        <ns2:source nsid="0000000047988491">ISNI|0000000047988491</ns2:source>
+                        <ns2:source nsid="vtls025332759">RERO|vtls025332759</ns2:source>
+                    </ns2:sources>
+                    <ns2:length>232</ns2:length>
+                    <ns2:mainHeadings>
+                        <ns2:data>
+                            <ns2:text>Kaling, Mindy</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data>
+                            <ns2:text>Mindy Kaling actress, writer, comedian</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data>
+                            <ns2:text>Kaling, Mindy, 1979-</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="UNIMARC" ind1=" " ind2="|" tag="200">
+                                <ns2:subfield code="7">ba0yba0y</ns2:subfield>
+                                <ns2:subfield code="8">fre</ns2:subfield>
+                                <ns2:subfield code="9">0</ns2:subfield>
+                                <ns2:subfield code="a">Kaling</ns2:subfield>
+                                <ns2:subfield code="b">Mindy</ns2:subfield>
+                                <ns2:subfield code="f">1979-....</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>BNF|16960696</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>WKP|Q539917</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="forced single date"/>LC|no2005074444</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>RERO|vtls025332759</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>DBC|87097969542425</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                                <ns2:subfield code="a">Kaling, Mindy</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>DBC|87097969542425</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>WKP|Q539917</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>BNF|16960696</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>RERO|vtls025332759</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                                <ns2:subfield code="a">Kaling, Mindy</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>ISNI|0000000047988491</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>WKP|Q539917</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>LC|no2005074444</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>RERO|vtls025332759</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>DBC|87097969542425</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>BNF|16960696</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                                <ns2:subfield code="a">Kaling, Mindy</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>LC|no2005074444</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>WKP|Q539917</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="forced single date"/>BNF|16960696</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="forced single date"/>RERO|vtls025332759</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="100">
+                                <ns2:subfield code="a">Kaling, Mindy,</ns2:subfield>
+                                <ns2:subfield code="d">1979-</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>RERO|vtls025332759</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>WKP|Q539917</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="forced single date"/>LC|no2005074444</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>BNF|16960696</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="partial date and publisher"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="title"/>DBC|87097969542425</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                        <ns2:mainHeadingEl>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="100">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">actress, writer, comedian</ns2:subfield>
+                                <ns2:subfield code="9">en</ns2:subfield>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:id>WKP|Q539917</ns2:id>
+                            <ns2:links>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>LC|no2005074444</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="viafid"/>DBC|87097969542425</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="forced single date"/>RERO|vtls025332759</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>ISNI|0000000047988491</ns2:link>
+                                <ns2:link>
+                                    <ns2:match type="suggested"/>BNF|16960696</ns2:link>
+                            </ns2:links>
+                        </ns2:mainHeadingEl>
+                    </ns2:mainHeadings>
+                    <ns2:fixed>
+                        <ns2:gender>u</ns2:gender>
+                    </ns2:fixed>
+                    <ns2:x400s>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                                <ns2:subfield code="a">Chokalingam, Vera Mindy</ns2:subfield>
+                                <ns2:normalized>chokalingam vera mindy</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                                <ns2:subfield code="a">Chokalingam, Vera,</ns2:subfield>
+                                <ns2:subfield code="d">1979-</ns2:subfield>
+                                <ns2:normalized>chokalingam vera 1979</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                                <ns2:subfield code="a">Chokalingam, Vera</ns2:subfield>
+                                <ns2:subfield code="d">1979-</ns2:subfield>
+                                <ns2:normalized>chokalingam vera 1979</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="1" ind2=" " tag="400">
+                                <ns2:subfield code="a">Chokalingam, Vera</ns2:subfield>
+                                <ns2:subfield code="d">1979-...</ns2:subfield>
+                                <ns2:normalized>chokalingam vera 1979</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1=" " ind2="|" tag="400">
+                                <ns2:subfield code="a">Chokalingam</ns2:subfield>
+                                <ns2:subfield code="b">Vera</ns2:subfield>
+                                <ns2:subfield code="f">1979-....</ns2:subfield>
+                                <ns2:normalized>chokalingam vera 1979</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">Amerikaans acteur</ns2:subfield>
+                                <ns2:normalized>mindy kaling amerikaans acteur</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">Amerikaans actrice</ns2:subfield>
+                                <ns2:normalized>mindy kaling amerikaans actrice</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">US-amerikanische Autorin, Kom&#xF6;diantin und Schauspielerin</ns2:subfield>
+                                <ns2:normalized>mindy kaling us amerikanische autorin komodiantin und schauspielerin</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">actrice am&#xE9;ricaine</ns2:subfield>
+                                <ns2:normalized>mindy kaling actrice americaine</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">amerikansk skodespelar</ns2:subfield>
+                                <ns2:normalized>mindy kaling amerikansk skodespelar</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">amerikansk skuespiller</ns2:subfield>
+                                <ns2:normalized>mindy kaling amerikansk skuespiller</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">amerikansk sk&#xE5;despelare</ns2:subfield>
+                                <ns2:normalized>mindy kaling amerikansk skadespelare</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">Mindy Kaling</ns2:subfield>
+                                <ns2:subfield code="c">comica e scrittrice statunitense</ns2:subfield>
+                                <ns2:normalized>mindy kaling comica e scrittrice statunitense</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#x41C;&#x438;&#x43D;&#x434;&#x438; &#x41A;&#x430;&#x43B;&#x438;&#x43D;&#x433;</ns2:subfield>
+                                <ns2:normalized>&#x43C;&#x438;&#x43D;&#x434;&#x438; &#x43A;&#x430;&#x43B;&#x438;&#x43D;&#x433;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#x5DE;&#x5D9;&#x5E0;&#x5D3;&#x5D9; &#x5E7;&#x5DC;&#x5D9;&#x5E0;&#x5D2;</ns2:subfield>
+                                <ns2:normalized>&#x5DE;&#x5D9;&#x5E0;&#x5D3;&#x5D9; &#x5E7;&#x5DC;&#x5D9;&#x5E0;&#x5D2;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#x645;&#x6CC;&#x646;&#x62F;&#x6CC; &#x6A9;&#x627;&#x644;&#x6CC;&#x646;&#x6AF;</ns2:subfield>
+                                <ns2:subfield code="c">&#x628;&#x627;&#x632;&#x6CC;&#x6AF;&#x631; &#x622;&#x645;&#x631;&#x6CC;&#x6A9;&#x627;&#x6CC;&#x6CC;</ns2:subfield>
+                                <ns2:normalized>&#x645;&#x6CC;&#x646;&#x62F;&#x6CC; &#x6A9;&#x627;&#x644;&#x6CC;&#x646;&#x6AF; &#x628;&#x627;&#x632;&#x6CC;&#x6AF;&#x631; &#x627;&#x645;&#x631;&#x6CC;&#x6A9;&#x627;&#x6CC;&#x6CC;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#xBAE;&#xBBF;&#xBA3;&#xBCD;&#xB9F;&#xBBF; &#xB95;&#xBBE;&#xBB2;&#xBBF;&#xB99;&#xBCD;</ns2:subfield>
+                                <ns2:normalized>&#xBAE;&#xBA3;&#xB9F; &#xB95;&#xBB2;&#xB99;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#x30DF;&#x30F3;&#x30C7;&#x30A3;&#x30FB;&#x30AB;&#x30EA;&#x30F3;&#x30B0;</ns2:subfield>
+                                <ns2:normalized>&#x30DF;&#x30F3;&#x30C6;&#x30A3; &#x30AB;&#x30EA;&#x30F3;&#x30AF;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#x660E;&#x8FEA;&#xB7;&#x51F1;&#x723E;&#x73B2;</ns2:subfield>
+                                <ns2:normalized>&#x660E;&#x5EF8; &#x51EF;&#x723E;&#x73B2;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                        <ns2:x400>
+                            <ns2:datafield dtype="MARC21" ind1="0" ind2=" " tag="400">
+                                <ns2:subfield code="a">&#xBBFC;&#xB514; &#xCE98;&#xB9C1;</ns2:subfield>
+                                <ns2:normalized>&#x1106;&#x1175;&#x11AB;&#x1103;&#x1175; &#x110F;&#x1162;&#x11AF;&#x1105;&#x1175;&#x11BC;</ns2:normalized>
+                            </ns2:datafield>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:x400>
+                    </ns2:x400s>
+                    <ns2:coauthors>
+                        <ns2:data count="3" tag="950">
+                            <ns2:text>Withers, Brenda.</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1" tag="950">
+                            <ns2:text>Williams, Allison 1988-....</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1" tag="950">
+                            <ns2:text>Rogen, Seth 1982-....</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:coauthors>
+                    <ns2:publishers>
+                        <ns2:data count="3">
+                            <ns2:text>Universal Pictures Vid&#xE9;o (France)</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="3">
+                            <ns2:text>Crown Archetype</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="2">
+                            <ns2:text>Universal Sony Pictures Home Entertainment Nordic</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="2">
+                            <ns2:text>Samuel French</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="2">
+                            <ns2:text>Overlook Press</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                                <ns2:s>ISNI</ns2:s>
+                                <ns2:sid>ISNI|0000000047988491</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>Universal pictures video [e&#x301;d.] Universal StudioCanal vide&#x301;o [distrib.]</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:publishers>
+                    <ns2:birthDate>1979-06-24</ns2:birthDate>
+                    <ns2:deathDate>0</ns2:deathDate>
+                    <ns2:dateType>lived</ns2:dateType>
+                    <ns2:dates max="201" min="200">
+                        <ns2:date count="7" scaled="2.81">200</ns2:date>
+                        <ns2:date count="5" scaled="2.32">201</ns2:date>
+                    </ns2:dates>
+                    <ns2:RecFormats>
+                        <ns2:data count="1">
+                            <ns2:text>a</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="3">
+                            <ns2:text>am</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>dm</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="3">
+                            <ns2:text>gm</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:RecFormats>
+                    <ns2:RelatorCodes>
+                        <ns2:data count="1">
+                            <ns2:text>005</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:RelatorCodes>
+                    <ns2:ISBNs unique="4">
+                        <ns2:data count="1">
+                            <ns2:text>9781585675715</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>9780804138147</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>9780573632754</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>9780307886262</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:ISBNs>
+                    <ns2:covers>
+                        <ns2:data count="1">
+                            <ns2:text>1585675717</ns2:text>
+                            <ns2:xtext>+-+2620210306</ns2:xtext>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1">
+                            <ns2:text>0307886263</ns2:text>
+                            <ns2:xtext>+-+8171332585</ns2:xtext>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:covers>
+                    <ns2:countries>
+                        <ns2:data count="4" scaled="2">
+                            <ns2:text>US</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="3" scaled="2">
+                            <ns2:text>FR</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                        <ns2:data count="1" scaled="1">
+                            <ns2:text>SE</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:countries>
+                    <ns2:languageOfEntity>
+                        <ns2:data>
+                            <ns2:text>eng</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:languageOfEntity>
+                    <ns2:nationalityOfEntity>
+                        <ns2:data>
+                            <ns2:text>US</ns2:text>
+                            <ns2:sources>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:s>ISNI</ns2:s>
+                            </ns2:sources>
+                        </ns2:data>
+                    </ns2:nationalityOfEntity>
+                    <ns2:xLinks>
+                        <ns2:xLink type="Wikipedia">https://ast.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://da.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://de.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://en.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://es.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://fa.wikipedia.org/wiki/&#x645;&#x6CC;&#x646;&#x62F;&#x6CC;_&#x6A9;&#x627;&#x644;&#x6CC;&#x646;&#x6AF;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://fi.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://fr.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://he.wikipedia.org/wiki/&#x5DE;&#x5D9;&#x5E0;&#x5D3;&#x5D9;_&#x5E7;&#x5DC;&#x5D9;&#x5E0;&#x5D2;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://it.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://ja.wikipedia.org/wiki/&#x30DF;&#x30F3;&#x30C7;&#x30A3;&#x30FB;&#x30AB;&#x30EA;&#x30F3;&#x30B0;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://ko.wikipedia.org/wiki/&#xBBFC;&#xB514;_&#xCE98;&#xB9C1;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://nl.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://pt.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://ru.wikipedia.org/wiki/&#x41A;&#x430;&#x43B;&#x438;&#x43D;&#x433;,_&#x41C;&#x438;&#x43D;&#x434;&#x438;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://simple.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://sv.wikipedia.org/wiki/Mindy_Kaling<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                        <ns2:xLink type="Wikipedia">https://ta.wikipedia.org/wiki/&#xBAE;&#xBBF;&#xBA3;&#xBCD;&#xB9F;&#xBBF;_&#xB95;&#xBBE;&#xBB2;&#xBBF;&#xB99;&#xBCD;<ns2:sources><ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                        </ns2:xLink>
+                    </ns2:xLinks>
+                    <ns2:titles>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>Is everyone hanging out without me? (and other concerns), c2011:</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>Matt &amp; Ben : a new play</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                                <ns2:s>BNF</ns2:s>
+                                <ns2:sid>BNF|16960696</ns2:sid>
+                                <ns2:s>DBC</ns2:s>
+                                <ns2:sid>DBC|87097969542425</ns2:sid>
+                                <ns2:s>RERO</ns2:s>
+                                <ns2:sid>RERO|vtls025332759</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>Mindy project</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>LC</ns2:s>
+                                <ns2:sid>LC|no2005074444</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>Why not me?</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>&#x41F;&#x440;&#x43E;&#x435;&#x43A;&#x442; &#x41C;&#x438;&#x43D;&#x434;&#x438;</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>&#x5DE;&#x5D9;&#x5E0;&#x5D3;&#x5D9;</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>&#x630;&#x627; &#x645;&#x64A;&#x646;&#x62F;&#x64A; &#x628;&#x631;&#x648;&#x62C;&#x64A;&#x643;&#x62A;</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>&#xBBFC;&#xB514; &#xD504;&#xB85C;&#xC81D;&#xD2B8;</ns2:title>
+                        </ns2:work>
+                        <ns2:work>
+                            <ns2:sources>
+                                <ns2:s>WKP</ns2:s>
+                                <ns2:sid>WKP|Q539917</ns2:sid>
+                            </ns2:sources>
+                            <ns2:title>&#x660E;&#x8FEA;&#x70E6;&#x4E8B;&#x591A;</ns2:title>
+                        </ns2:work>
+                    </ns2:titles>
+                    <ns2:history>
+                        <ns2:ht recid="LC|no2005074444" time="2009-03-03T12:03:41+00:00" type="add"/>
+                        <ns2:ht recid="ISNI|0000000047988491" time="2013-09-16T16:15:07+00:00" type="add"/>
+                        <ns2:ht recid="WKP|Mindy_Kaling" time="2015-04-14T18:56:54+00:00" type="delete"/>
+                        <ns2:ht recid="WKP|Q539917" time="2015-04-14T18:56:54+00:00" type="add"/>
+                        <ns2:ht recid="DBC|87097969542425" time="2015-05-12T00:14:00+00:00" type="add"/>
+                        <ns2:ht recid="BNF|16960696" time="2015-05-12T00:14:00+00:00" type="add"/>
+                        <ns2:ht recid="RERO|vtls025332759" time="2015-05-12T00:14:00+00:00" type="add"/>
+                    </ns2:history>
+                    <ns2:creationtime>2016-06-19T08:24:03.848631+00:00</ns2:creationtime>
+                </ns2:VIAFCluster>
+                
+                
+            </recordData>
+            <recordPosition xsi:type="xsd:positiveInteger">1</recordPosition>
+        </record>
+    </records>
+    <echoedSearchRetrieveRequest xsi:type="ns3:echoedSearchRetrieveRequestType" xmlns:ns3="http://www.loc.gov/zing/srw/">
+        <version xsi:type="xsd:string">1.1</version>
+        <query xsi:type="xsd:string">local.personalNames all &quot;mindy kaling&quot;</query>
+        <xQuery>
+            <ns4:searchClause xsi:type="ns4:searchClauseType" xmlns:ns4="http://www.loc.gov/zing/cql/xcql/">
+                <ns4:index xsi:type="xsd:string">local.personalNames</ns4:index>
+                <ns4:relation xsi:type="ns4:relationType">
+                    <ns4:value xsi:type="xsd:string">all</ns4:value>
+                </ns4:relation>
+                <ns4:term xsi:type="xsd:string">mindy kaling</ns4:term>
+            </ns4:searchClause>
+        </xQuery>
+        <recordSchema xsi:type="xsd:string">default</recordSchema>
+    </echoedSearchRetrieveRequest>
+    <extraResponseData xsi:type="ns5:extraDataType" xmlns:ns5="http://www.loc.gov/zing/srw/">
+        <ns6:extraData xmlns="http://oclc.org/srw/extraData" xmlns:ns6="http://oclc.org/srw/extraData">
+            <ns6:databaseTitle>VIAF: The Virtual International Authority File</ns6:databaseTitle>
+        </ns6:extraData>
+    </extraResponseData>
+</searchRetrieveResponse>
