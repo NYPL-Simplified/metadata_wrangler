@@ -209,14 +209,14 @@ class TestURNLookupController(DatabaseTest):
             urn, 201, URNLookupController.IDENTIFIER_REGISTERED
         )
 
-        # The Identifier has been created and an UnresolvedIdentifier
-        # associated with it.
+        # The Identifier has been created and given a CoverageRecord
+        # with a transient failure.
         [identifier] = self._db.query(Identifier).filter(
             Identifier.type==Identifier.OVERDRIVE_ID
         ).all()
         eq_("nosuchidentifier", identifier.identifier)
-        unresolved = identifier.unresolved_identifier
-        eq_(202, unresolved.status)
+        [coverage] = identifier.coverage_records
+        eq_(CoverageRecord.TRANSIENT_FAILURE, coverage.status)
 
     def test_process_urn_pending_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
@@ -230,9 +230,11 @@ class TestURNLookupController(DatabaseTest):
 
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
-        unresolved.status = 500
-        unresolved.exception = "foo"
+        record, is_new = CoverageRecord.add_for(
+            identifier, None, self.controller.OPERATION,
+            status=CoverageRecord.PERSISTENT_FAILURE
+        )
+        record.exception = "foo"
         self.controller.process_urn(identifier.urn)
         eq_(1, len(self.controller.messages_by_urn.keys()))
         self.assert_one_message(
@@ -288,12 +290,15 @@ class TestURNLookupController(DatabaseTest):
             self._db, Identifier.ISBN, self._isbn
         )
 
-        # The first time we look up an ISBN it's registered as an
-        # UnresolvedIdentifier.
+        # The first time we look up an ISBN a CoverageRecord is created
+        # representing the work to be done.
+        set_trace()
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
             isbn.urn, 201, self.controller.IDENTIFIER_REGISTERED
         )
+        [record] = isbn.coverage_records
+        set_trace()
         unresolved, is_new = UnresolvedIdentifier.register(self._db, isbn)
         eq_(False, is_new)
 

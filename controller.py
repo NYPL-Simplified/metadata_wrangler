@@ -125,6 +125,8 @@ class URNLookupController(CoreURNLookupController):
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
 
+    OPERATION = 'Resolve identifier'
+
     log = logging.getLogger("URN lookup controller")
     
     def presentation_ready_work_for(self, identifier):
@@ -190,7 +192,7 @@ class URNLookupController(CoreURNLookupController):
 
         # All other identifiers need to be associated with a
         # presentation-ready Work for the lookup to succeed. If there
-        # isn't one, we need to create an UnresolvedIdentifier object.
+        # isn't one, we need to register it as unresolved.
         work = self.presentation_ready_work_for(identifier)
         if work:
             # The work has been done.
@@ -201,26 +203,49 @@ class URNLookupController(CoreURNLookupController):
 
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
-        # associated with it, but it doesn't. Make sure an
-        # UnresolvedIdentifier is registered for it so the work can
-        # begin.
-        unresolved_identifier, is_new = UnresolvedIdentifier.register(
-            self._db, identifier
-        )
+        # associated with it, but it doesn't. We need to make sure the
+        # work gets done eventually by creating a CoverageRecord
+        # representing the work that needs to be done.
+        no_work_done_yet = 'No work done yet.'
+        internal = None
+        #DataSource.lookup(self._db, DataSource.PRESENTATION_EDITION)
+        
+        record = CoverageRecord.lookup(identifier, internal, self.OPERATION)
+        is_new = False
+        if not record:
+            # There is no existing CoverageRecord for this Identifier.
+            # Create one, but put it in a state of transient failure
+            # to represent the fact that work needs to be done.
+            record, is_new = CoverageRecord.add_for(
+                identifier, internal, self.OPERATION,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            record.exception = no_work_done_yet
+
         if is_new:
-            # The identifier is newly registered. Tell the client
-            # to come back later.
+            # The CoverageRecord was just created. Tell the client to
+            # come back later.
             return self.add_message(urn, 201, self.IDENTIFIER_REGISTERED)
         else:
             # There is a pending attempt to resolve this identifier.
             # Tell the client we're working on it, or if the
             # pending attempt resulted in an exception,
             # tell the client about the exception.
-            message = (unresolved_identifier.exception 
-                       or self.WORKING_TO_RESOLVE_IDENTIFIER)
-            return self.add_message(
-                urn, unresolved_identifier.status, message
-            )
+            message = record.exception
+            if not message or message == no_work_done_yet:
+                message = self.WORKING_TO_RESOLVE_IDENTIFIER
+            status = 202
+            if record.status == record.PERSISTENT_FAILURE:
+                # Apparently we just can't provide coverage of this
+                # identifier.
+                status = 500
+            elif record.status == record.SUCCESS:
+                # This shouldn't happen, since success in providing
+                # this sort of coverage means creating a presentation
+                # ready work. Something weird is going on.
+                status = 500
+                message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
+            return self.add_message(urn, status, message)
 
     def make_opds_entry_from_metadata_lookups(self, identifier):
         """This identifier cannot be turned into a presentation-ready Work,
@@ -255,22 +280,9 @@ class URNLookupController(CoreURNLookupController):
                 identifier,
                 ", ".join(names)
             )
-            unresolved_identifier, is_new = UnresolvedIdentifier.register(
-                self._db, identifier)
-            if is_new:
-                # We just found out about this identifier, or rather,
-                # we just found out that someone expects it to be associated
-                # with a LicensePool.
-                return self.add_message(
-                    identifier.urn, 201, self.IDENTIFIER_REGISTERED
-                )
-            else:
-                # There is a pending attempt to resolve this identifier.
-                message = (unresolved_identifier.exception 
-                           or self.WORKING_TO_RESOLVE_IDENTIFIER)
-                return self.add_message(
-                    identifier.urn, unresolved_identifier.status, message
-                )
+            return self.register_identifier_as_unresolved(
+                identifier.urn, identifier
+            )
         else:
             # All metadata lookups have completed. Create that OPDS
             # entry!
