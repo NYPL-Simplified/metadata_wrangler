@@ -41,7 +41,6 @@ class VIAFParser(XMLParser):
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
     log = logging.getLogger("VIAF Parser")
-    log.setLevel(logging.INFO)  # TODO: remove
     wikidata_id = re.compile("^Q[0-9]")
 
 
@@ -82,8 +81,7 @@ class VIAFParser(XMLParser):
 
     @classmethod
     def name_matches(cls, n1, n2):
-        """ Returns true if n1 and n2 are identical strings.  
-        Ignores case, periods, commas, spaces after single-letter initials.
+        """ Returns true if n1 and n2 are identical strings, bar periods.  
         """ 
         return n1.replace(".", "").lower() == n2.replace(".", "").lower()
 
@@ -161,19 +159,6 @@ class VIAFParser(XMLParser):
                 match_confidences["total"] = 0
                 report_string += ", strict and no sort_name match, return 0 (%s)" % match_confidences["sort_name"]
                 return 0
-
-            '''
-            if match_confidences["sort_name"] == 100 and not known_titles:
-                # the sort name matches perfectly and the title isn't there to contradict
-                # return with highest score to assert this contributor as The correct candidate.
-                match_confidences["total"] += match_confidences["sort_name"]
-                report_string += ", sort_name match and no title, return 9999 (%s)" % match_confidences["sort_name"]
-                report_string += ", mc[total]= %s" % match_confidences["total"]
-                cls.log.debug(
-                    "weigh_contributor: " + report_string
-                )
-                return match_confidences["total"]
-            '''
 
             match_confidences["total"] += 2 * match_confidences["sort_name"]
             report_string += ", mc[sort_name]= %s" % match_confidences["sort_name"]
@@ -687,7 +672,6 @@ class VIAFParser(XMLParser):
 class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
-    #SEARCH_URL = 'http://viaf.org/viaf/search?query=local.names+%3D+%22{sort_name}%22&maximumRecords=5&startRecord=1&sortKeys=holdingscount&local.sources=lc&httpAccept=text/xml'
     SEARCH_URL = 'http://viaf.org/viaf/search?query={scope}+all+%22{sort_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
 
     SUBDIR = "viaf"

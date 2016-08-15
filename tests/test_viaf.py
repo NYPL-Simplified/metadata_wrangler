@@ -82,7 +82,6 @@ class TestNameParser(DatabaseTest):
 
         # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
-        #viaf, display, family, sort, wikipedia = self.parser.parse(xml, None)
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
@@ -91,8 +90,6 @@ class TestNameParser(DatabaseTest):
 
         # Even if we go in expecting something like "Sam Clemens",
         # we get the consensus result.
-        #viaf, display, family, sort, wikipedia = self.parser.parse(
-        #    xml, working_display_name="Samuel Langhorne Clemens")
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
@@ -117,8 +114,6 @@ class TestNameParser(DatabaseTest):
     def test_multiple_results_with_success(self):
         xml = self.sample_data("lancelyn_green.xml")
         name = "Green, Roger Lancelyn"
-        #contributor, new = self._contributor(name)
-        #viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse_multiple(xml, working_sort_name=name)
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
         contributor_candidates = self.parser.order_candidates(working_sort_name=name, contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles)  = contributor_candidates[0]
@@ -135,7 +130,6 @@ class TestNameParser(DatabaseTest):
         # pick that up.
         xml = self.sample_data("kate_lister.xml")
         name = "Lister, Kate"
-        #viaf, display_name, family_name, sort_name, wikipedia_name = self.parser.parse(xml)
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml)
         eq_("68169992", contributor_data.viaf)
         eq_(None, contributor_data.display_name)
