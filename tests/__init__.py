@@ -3,6 +3,7 @@ from nose.tools import set_trace
 
 from core.testing import (
     DatabaseTest,
+    DummyHTTPClient,
     package_setup,
 )
 
