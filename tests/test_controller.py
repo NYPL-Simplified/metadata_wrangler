@@ -220,13 +220,29 @@ class TestURNLookupController(DatabaseTest):
 
     def test_process_urn_pending_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
+
+        OPERATION = 'Resolve identifier'
+        internal = None
+        no_work_done_yet = 'No work done yet.'
+        record = CoverageRecord.lookup(identifier, internal, OPERATION)
+        is_new = False
+        if not record:
+            # There is no existing CoverageRecord for this Identifier.
+            # Create one, but put it in a state of transient failure
+            # to represent the fact that work needs to be done.
+            record, is_new = CoverageRecord.add_for(
+                identifier, internal, OPERATION,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            record.exception = no_work_done_yet
+
         self.controller.process_urn(identifier.urn)
         eq_(1, len(self.controller.messages_by_urn.keys()))
         self.assert_one_message(
             identifier.urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
+
 
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
@@ -292,16 +308,27 @@ class TestURNLookupController(DatabaseTest):
 
         # The first time we look up an ISBN a CoverageRecord is created
         # representing the work to be done.
-        set_trace()
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
             isbn.urn, 201, self.controller.IDENTIFIER_REGISTERED
         )
         [record] = isbn.coverage_records
-        set_trace()
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, isbn)
-        eq_(False, is_new)
 
+        OPERATION = 'Resolve identifier'
+        internal = None
+        no_work_done_yet = 'No work done yet.'
+        record = CoverageRecord.lookup(isbn, internal, OPERATION)
+        is_new = False
+        if not record:
+            # There is no existing CoverageRecord for this Identifier.
+            # Create one, but put it in a state of transient failure
+            # to represent the fact that work needs to be done.
+            record, is_new = CoverageRecord.add_for(
+                identifier, internal, OPERATION,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            record.exception = no_work_done_yet
+        eq_(False, is_new)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
