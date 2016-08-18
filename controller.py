@@ -26,6 +26,13 @@ from core.problem_details import (
     INVALID_URN,
 )
 
+HTTP_OK = 200
+HTTP_CREATED = 201
+HTTP_ACCEPTED = 202
+HTTP_UNAUTHORIZED = 401
+HTTP_NOT_FOUND = 404
+HTTP_INTERNAL_SERVER_ERROR = 500
+
 
 class CollectionController(object):
     """A controller to manage collections and their assets"""
@@ -105,9 +112,9 @@ class CollectionController(object):
             if identifier:
                 if identifier in collection.catalog:
                     collection.catalog.remove(identifier)
-                    messages[urn] = (200, "Successfully removed")
+                    messages[urn] = (HTTP_OK, "Successfully removed")
                 else:
-                    messages[urn] = (404, "Not in collection catalog")
+                    messages[urn] = (HTTP_NOT_FOUND, "Not in collection catalog")
 
         title = "%s Catalog Item Removal" % collection.name
         url = cdn_url_for("remove", urn=urns)
@@ -125,7 +132,9 @@ class URNLookupController(CoreURNLookupController):
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
 
-    OPERATION = 'Resolve identifier'
+    OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
+    NO_WORK_DONE_EXCEPTION = 'No work done yet'
+
 
     log = logging.getLogger("URN lookup controller")
     
@@ -178,7 +187,7 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, 400, INVALID_URN.detail)
 
         if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, 404, self.UNRESOLVABLE_IDENTIFIER)
+            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided, this also means we consider
@@ -206,44 +215,42 @@ class URNLookupController(CoreURNLookupController):
         # associated with it, but it doesn't. We need to make sure the
         # work gets done eventually by creating a CoverageRecord
         # representing the work that needs to be done.
-        no_work_done_yet = 'No work done yet.'
-        internal = None
-        #DataSource.lookup(self._db, DataSource.PRESENTATION_EDITION)
+        ignored_data_source = None
         
-        record = CoverageRecord.lookup(identifier, internal, self.OPERATION)
+        record = CoverageRecord.lookup(identifier, ignored_data_source, self.OPERATION)
         is_new = False
         if not record:
             # There is no existing CoverageRecord for this Identifier.
             # Create one, but put it in a state of transient failure
             # to represent the fact that work needs to be done.
             record, is_new = CoverageRecord.add_for(
-                identifier, internal, self.OPERATION,
+                identifier, ignored_data_source, self.OPERATION,
                 status=CoverageRecord.TRANSIENT_FAILURE
             )
-            record.exception = no_work_done_yet
+            record.exception = self.NO_WORK_DONE_EXCEPTION
 
         if is_new:
             # The CoverageRecord was just created. Tell the client to
             # come back later.
-            return self.add_message(urn, 201, self.IDENTIFIER_REGISTERED)
+            return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
         else:
             # There is a pending attempt to resolve this identifier.
             # Tell the client we're working on it, or if the
             # pending attempt resulted in an exception,
             # tell the client about the exception.
             message = record.exception
-            if not message or message == no_work_done_yet:
+            if not message or message == self.NO_WORK_DONE_EXCEPTION:
                 message = self.WORKING_TO_RESOLVE_IDENTIFIER
-            status = 202
+            status = HTTP_ACCEPTED
             if record.status == record.PERSISTENT_FAILURE:
                 # Apparently we just can't provide coverage of this
                 # identifier.
-                status = 500
+                status = HTTP_INTERNAL_SERVER_ERROR
             elif record.status == record.SUCCESS:
                 # This shouldn't happen, since success in providing
                 # this sort of coverage means creating a presentation
                 # ready work. Something weird is going on.
-                status = 500
+                status = HTTP_INTERNAL_SERVER_ERROR
                 message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
             return self.add_message(urn, status, message)
 
@@ -293,7 +300,7 @@ class URNLookupController(CoreURNLookupController):
             # the best thing to do is to treat this identifier as a
             # 404 error.
             return self.add_message(
-                identifier.urn, 404, self.UNRECOGNIZED_IDENTIFIER
+                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
             )
 
         # We made it!
