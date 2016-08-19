@@ -20,6 +20,7 @@ from core.opds import (
     AcquisitionFeed,
     VerboseAnnotator,
 )
+from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.problem_details import (
     INVALID_CREDENTIALS,
@@ -95,25 +96,36 @@ class CollectionController(object):
             return collection
 
         urns = request.args.getlist('urn')
-        messages = {}
+        messages = []
         for urn in urns:
+            message = None
             identifier = None
             try:
                 identifier, ignore = Identifier.parse_urn(self._db, urn)
             except Exception as e:
-                messages[urn] = (INVALID_URN.status_code, INVALID_URN.detail)
-            if identifier:
+                identifier = None
+            if not identifier:
+                message = OPDSMessage(
+                    urn, INVALID_URN.status_code, INVALID_URN.detail
+                )
+            else:
                 if identifier in collection.catalog:
                     collection.catalog.remove(identifier)
-                    messages[urn] = (200, "Successfully removed")
+                    message = OPDSMessage(
+                        urn, 200, "Successfully removed"
+                    )
                 else:
-                    messages[urn] = (404, "Not in collection catalog")
+                    message = OPDSMessage(
+                        urn, 404, "Not in collection catalog"
+                    )
+            if message:
+                messages.append(message)
 
         title = "%s Catalog Item Removal" % collection.name
         url = cdn_url_for("remove", urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
-            messages_by_urn=messages
+            precomposed_entries=messages
         )
 
         return feed_response(removal_feed)
