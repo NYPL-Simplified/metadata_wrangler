@@ -26,3 +26,8 @@ pyld
 beautifulsoup4
 suds
 py-bcrypt
+
+# for author name matching
+nameparser
+fuzzywuzzy
+
