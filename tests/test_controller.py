@@ -1,6 +1,7 @@
 import os
 import base64
 import feedparser
+from StringIO import StringIO
 from datetime import datetime, timedelta
 from lxml import etree
 from nose.tools import set_trace, eq_
@@ -13,6 +14,8 @@ from core.model import (
     UnresolvedIdentifier,
 )
 from core.util.problem_detail import ProblemDetail
+from core.util.opds_writer import OPDSMessage
+from core.opds_import import OPDSXMLParser
 
 from controller import (
     CollectionController,
@@ -147,21 +150,35 @@ class TestCollectionController(DatabaseTest):
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(self._db, catalogued_id)
 
+        parser = OPDSXMLParser()
+        message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
                 headers=dict(Authorization=self.valid_auth)):
+
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items()
-            eq_(200, response.status_code)
-            entries = feedparser.parse(response.get_data())['entries']
-            eq_(2, len(entries))
+            eq_(200, response.status_code)            
 
-            catalogued = filter(lambda e: e['id']==catalogued_id.urn, entries)[0]
-            uncatalogued = filter(lambda e: e['id']==uncatalogued_id.urn, entries)[0]
-            eq_(200, int(catalogued['simplified_status_code']))
-            eq_("Successfully removed", catalogued['simplified_message'])
-            eq_(404, int(uncatalogued['simplified_status_code']))
-            eq_("Not in collection catalog", uncatalogued['simplified_message'])
+            # It sends two <simplified:message> tags.
+            root = etree.parse(StringIO(response.data))
+            catalogued, uncatalogued = parser._xpath(root, message_path)
+            eq_("http://www.gutenberg.org/ebooks/2013",
+                parser._xpath(catalogued, 'atom:id')[0].text)
+            eq_("200",
+                parser._xpath(catalogued, 'simplified:status_code')[0].text)
+            eq_("Successfully removed",
+                parser._xpath(catalogued, 'schema:description')[0].text)
+
+            eq_("http://www.gutenberg.org/ebooks/2014",
+                parser._xpath(uncatalogued, 'atom:id')[0].text)
+            eq_("404",
+                parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
+            eq_("Not in collection catalog",
+                parser._xpath(uncatalogued, 'schema:description')[0].text)
+
+            # It sends no <entry> tags.
+            eq_([], parser._xpath(root, "//atom:entry"))
 
             # The catalogued identifier isn't in the catalog.
             assert catalogued_id not in self.collection.catalog
@@ -169,18 +186,34 @@ class TestCollectionController(DatabaseTest):
             eq_(catalogued_id, self._db.query(Identifier).filter_by(
                 id=catalogued_id.id).one())
 
+        # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(self._db, catalogued_id)
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.remove_items()
             eq_(200, int(response.status_code))
-            entries = feedparser.parse(response.get_data())['entries']
-            eq_(2, len(entries))
 
-            invalid = filter(lambda e: e['id']==invalid_urn, entries)[0]
-            eq_(400, int(invalid['simplified_status_code']))
-            eq_("Could not parse identifier.", invalid['simplified_message'])
+            # Once again we get two <simplified:message> tags.
+            root = etree.parse(StringIO(response.data))
+            catalogued, uncatalogued = parser._xpath(root, message_path)
+            eq_(invalid_urn,
+                parser._xpath(catalogued, 'atom:id')[0].text)
+            eq_("400",
+                parser._xpath(catalogued, 'simplified:status_code')[0].text)
+            eq_("Could not parse identifier.",
+                parser._xpath(catalogued, 'schema:description')[0].text)
+
+            eq_("http://www.gutenberg.org/ebooks/2013",
+                parser._xpath(uncatalogued, 'atom:id')[0].text)
+            eq_("200",
+                parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
+            eq_("Successfully removed",
+                parser._xpath(uncatalogued, 'schema:description')[0].text)
+
+            # We have no <entry> tags.
+            eq_([], parser._xpath(root, "//atom:entry"))
+            
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
 
@@ -190,18 +223,19 @@ class TestURNLookupController(DatabaseTest):
     def setup(self):
         super(TestURNLookupController, self).setup()
         self.controller = URNLookupController(self._db)
-
+        
     def assert_one_message(self, urn, code, message):
-        """Assert that the given message is the only one in
-        messages_by_urn.
+        """Assert that the given message is the only thing
+        in the feed.
         """
-        [(u, (c, m))] = self.controller.messages_by_urn.items()
-        eq_(u, urn)
-        eq_(c, code)
-        eq_(m, message)
+        [obj] = self.controller.precomposed_entries
+        expect = OPDSMessage(urn, code, message)
+        assert isinstance(obj, OPDSMessage)
+        eq_(urn, obj.urn)
+        eq_(code, obj.status_code)
+        eq_(message, obj.message)
         eq_([], self.controller.works)
-        eq_([], self.controller.precomposed_entries)
-
+        
     def test_process_urn_initial_registration(self):
         urn = Identifier.URN_SCHEME_PREFIX + "Overdrive ID/nosuchidentifier"
         self.controller.process_urn(urn)
@@ -222,7 +256,6 @@ class TestURNLookupController(DatabaseTest):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
         self.controller.process_urn(identifier.urn)
-        eq_(1, len(self.controller.messages_by_urn.keys()))
         self.assert_one_message(
             identifier.urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -234,7 +267,6 @@ class TestURNLookupController(DatabaseTest):
         unresolved.status = 500
         unresolved.exception = "foo"
         self.controller.process_urn(identifier.urn)
-        eq_(1, len(self.controller.messages_by_urn.keys()))
         self.assert_one_message(
             identifier.urn, 500, "foo"
         )
@@ -244,7 +276,6 @@ class TestURNLookupController(DatabaseTest):
         # appropriate access to the bibliographic API.
         identifier = self._identifier(Identifier.THREEM_ID)
         self.controller.process_urn(identifier.urn)
-        eq_(1, len(self.controller.messages_by_urn.keys()))
         self.assert_one_message(
             identifier.urn, 404, self.controller.UNRESOLVABLE_IDENTIFIER
         )
@@ -300,6 +331,7 @@ class TestURNLookupController(DatabaseTest):
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
+        self.controller.precomposed_entries = []
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
             isbn.urn, 202, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
@@ -312,7 +344,9 @@ class TestURNLookupController(DatabaseTest):
         for source in metadata_sources:
             CoverageRecord.add_for(isbn, source)
 
-        # Process the ISBN again, and we get a precomposed entry
+        # Process the ISBN again, and we get an <entry> tag with the
+        # information.
+        self.controller.precomposed_entries = []
         self.controller.process_urn(isbn.urn)
         expect = isbn.opds_entry()
         [actual] = self.controller.precomposed_entries
