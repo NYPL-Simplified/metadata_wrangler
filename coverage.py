@@ -50,18 +50,6 @@ from viaf import (
 )
 
 
-'''
-class ResolutionFailed(Exception):
-    """Indicates a failure in identifier resolution."""
-    def __init__(self, status_code, message):
-        self.status_code = status_code
-        self.message = message
-
-    def __str__(self):
-        return "%s: %s" % (self.status_code, self.message)
-'''
-
-
 class IdentifierResolutionCoverageProvider(CoverageProvider):
     """ Resolve all of the Identifiers with CoverageProviders in transient 
     failure states, turning them into Editions with LicensePools.
@@ -107,7 +95,9 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         oclc_classify = OCLCClassifyCoverageProvider(_db)
 
         self.optional_coverage_providers = []
-        self.required_coverage_providers = [overdrive, content_cafe, content_server, oclc_classify]
+        self.required_coverage_providers = [
+            overdrive, content_cafe, content_server, oclc_classify
+        ]
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
             service_name="Identifier Resolution Coverage Provider", 
@@ -126,15 +116,16 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
 
     def process_item(self, identifier):
-        """ For this identifier, checks that it has all of the 
-        available 3rd party metadata, and if not, obtains it.
-        If metadata failed to be obtained, and the coverage was deemed required, 
-        then returns a CoverageFailure.
+        """For this identifier, checks that it has all of the available
+        3rd party metadata, and if not, obtains it.
+
+        If metadata failed to be obtained, and the coverage was deemed
+        required, then returns a CoverageFailure.
         """
         self.log.info("Ensuring coverage for %r", identifier)
 
         # Go through all relevant providers and tries to ensure coverage.
-        # If there's a failure or an exception, raise ResolutionFailed.
+        # If there's a failure or an exception, create a CoverageFailure.
         for provider in self.required_coverage_providers:
             if not identifier.type in provider.input_identifier_types:
                 continue
@@ -144,7 +135,10 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
                 transiency = True
                 if record.status == CoverageRecord.PERSISTENT_FAILURE:
                     transiency = False
-                return CoverageFailure(identifier, error_msg, data_source=self.output_source, transient=transiency)
+                return CoverageFailure(
+                    identifier, error_msg,
+                    data_source=self.output_source, transient=transiency
+                )
 
         # Now go through the optional providers. It's the same deal,
         # but a CoverageFailure doesn't cause the entire identifier
@@ -170,11 +164,10 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
         return identifier
 
-
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
-        a previously-unresolved identifier's work as presentation ready."""
-
+        a previously-unresolved identifier's work as presentation ready.
+        """
         work = None
         license_pool = identifier.licensed_through
         if license_pool:
@@ -185,16 +178,12 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             work.calculate_presentation()
             work.set_presentation_ready()
         else:
-            '''
-            raise ResolutionFailed(
-                500,
-                "Work could not be calculated for %r" % unresolved_identifier.identifier,
-            )
-            '''
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
             transiency = True
-            return CoverageFailure(identifier, error_msg, data_source=self.output_source, transient=transiency)
-
+            return CoverageFailure(
+                identifier, error_msg,
+                data_source=self.output_source, transient=transiency
+            )
 
     def resolve_equivalent_oclc_identifiers(self, identifier):
         """Ensures OCLC coverage for an identifier.
@@ -214,6 +203,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""
+
         viaf = VIAFClient(self._db)
         for pool in work.license_pools:
             edition = pool.presentation_edition
@@ -225,6 +215,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
     def resolve_cover_image(self, work):
         """Make sure we have the cover for all editions."""
+
         for pool in work.license_pools:
             edition = pool.presentation_edition
             data_source_name = edition.data_source.name

@@ -128,7 +128,6 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
 
 
-
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
     def setup(self):
@@ -213,7 +212,3 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # no exception was raised and resolve() returned True to indicate
         # success.
         eq_(success, True)
-
-
-
-
