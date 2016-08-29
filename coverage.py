@@ -63,8 +63,8 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, _db, batch_size=10, cutoff_time=None, operation=None,
-                 providers=None):
+    def __init__(self, _db, batch_size=10, cutoff_time=None,
+                 uploader=None, providers=None):
         output_source, made_new = get_one_or_create(
             _db, DataSource,
             name=DataSource.INTERNAL_PROCESSING, offers_licenses=False,
@@ -81,7 +81,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
-        mirror = S3Uploader()
+        mirror = uploader or S3Uploader()
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -114,9 +114,13 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
         self.viaf = VIAFClient(self._db)
         self.image_mirrors = {
-            DataSource.OVERDRIVE : OverdriveCoverImageMirror(self._db)
+            DataSource.OVERDRIVE : OverdriveCoverImageMirror(
+                self._db, uploader=uploader
+            )
         }
-        self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
+        self.image_scaler = ImageScaler(
+            self._db, self.image_mirrors.values(), uploader=uploader
+        )
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
 
     def process_item(self, identifier):

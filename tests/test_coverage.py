@@ -25,6 +25,7 @@ from core.testing import (
     BrokenCoverageProvider,
 )
 
+from core.s3 import DummyS3Uploader
 
 
 class TestContentServerCoverageProvider(DatabaseTest):
@@ -134,8 +135,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
         self.source = DataSource.license_source_for(self._db, self.identifier)
+        uploader = DummyS3Uploader()
         self.coverage_provider = IdentifierResolutionCoverageProvider(
-            self._db, providers=([], [])
+            self._db, uploader=uploader, providers=([], [])
         )
 
         self.always_successful = AlwaysSuccessfulCoverageProvider(
@@ -187,7 +189,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             def finalize(self, unresolved_identifier):
                 raise Exception("Oh no!")
 
-        provider = FinalizeAlwaysFails(self._db, providers=([], []))
+        provider = FinalizeAlwaysFails(
+            self._db, uploader=DummyS3Uploader(), providers=([], [])
+        )
         result = provider.process_item(self.identifier)
 
         eq_(True, isinstance(result, CoverageFailure))
