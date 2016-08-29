@@ -134,7 +134,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
         self.source = DataSource.license_source_for(self._db, self.identifier)
-        self.coverage_provider = IdentifierResolutionCoverageProvider(self._db)
+        self.coverage_provider = IdentifierResolutionCoverageProvider(
+            self._db, providers=([], [])
+        )
 
         self.always_successful = AlwaysSuccessfulCoverageProvider(
             "Always", [self.identifier.type], self.source
@@ -144,8 +146,10 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         )
         self.broken = BrokenCoverageProvider("Broken", [self.identifier.type], self.source)
 
-    def test_process_item_is_successful_if_required_coverage_providers_are_successful(self):
-        self.coverage_provider.required_coverage_providers = [self.always_successful]
+    def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful, self.always_successful
+        ]
 
         # The coverage provider succeeded and returned an identifier.
         result = self.coverage_provider.process_item(self.identifier)
@@ -159,23 +163,18 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         result = self.coverage_provider.process_item(self.identifier)
 
         eq_(True, isinstance(result, CoverageFailure))
-        eq_("500; What did you expect?", result.exception)
+        eq_("500: What did you expect?", result.exception)
+        eq_(False, result.transient)
 
-        # The failure type of the IdentifierResolutionCoverageProvider coverage
-        # record matches the failure type of the required provider's coverage
-        # record.
-        pass
+        # The failure type of the IdentifierResolutionCoverageProvider
+        # coverage record matches the failure type of the required provider's
+        # coverage record.
+        self.never_successful.transient = True
+        result = self.coverage_provider.process_item(self.identifier)
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_(True, result.transient)
 
-    def test_run_once_fails_when_required_provider_raises_exception(self):
-        m = IdentifierResolutionMonitor(
-            self._db, "Will raise exception",
-            required_coverage_providers=[self.broken]
-        )
 
-        m.run_once()
-
-        # The exception was recorded in the UnresolvedIdentifier object.
-        assert "I'm too broken to even return a CoverageFailure." in self.ui.exception
 
 
     def test_run_once_fails_when_finalize_raises_exception(self):

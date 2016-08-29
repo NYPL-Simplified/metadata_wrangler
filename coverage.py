@@ -63,18 +63,25 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, _db, batch_size=10, cutoff_time=None, operation=None):
+    def __init__(self, _db, batch_size=10, cutoff_time=None, operation=None,
+                 providers=None):
+        output_source, made_new = get_one_or_create(
+            _db, DataSource,
+            name=DataSource.INTERNAL_PROCESSING, offers_licenses=False,
+        )
+        input_identifier_types = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
+
+        super(IdentifierResolutionCoverageProvider, self).__init__(
+            service_name="Identifier Resolution Coverage Provider",
+            input_identifier_types=input_identifier_types,
+            output_source = output_source,
+            batch_size=batch_size,
+            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+        )
+
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
         mirror = S3Uploader()
-
-        output_source, made_new = get_one_or_create(
-            _db, DataSource,
-            name=DataSource.INTERNAL_PROCESSING,
-            offers_licenses=False,
-        )
-
-        input_identifier_types = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -87,25 +94,23 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             mirror=mirror, even_if_not_apparently_updated=True,
             presentation_calculation_policy=presentation_calculation_policy
         )
-        overdrive = OverdriveBibliographicCoverageProvider(
-            _db, metadata_replacement_policy=policy
-        )
-        content_cafe = ContentCafeCoverageProvider(_db)
-        content_server = ContentServerCoverageProvider(_db)
-        oclc_classify = OCLCClassifyCoverageProvider(_db)
+        if providers:
+            # For testing purposes. Initializing the real coverage providers
+            # during tests can cause requests to third-parties.
+            (self.required_coverage_providers,
+            self.optional_coverage_providers) = providers
+        else:
+            overdrive = OverdriveBibliographicCoverageProvider(
+                _db, metadata_replacement_policy=policy
+            )
+            content_cafe = ContentCafeCoverageProvider(self._db)
+            content_server = ContentServerCoverageProvider(self._db)
+            oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
-        self.optional_coverage_providers = []
-        self.required_coverage_providers = [
-            overdrive, content_cafe, content_server, oclc_classify
-        ]
-
-        super(IdentifierResolutionCoverageProvider, self).__init__(
-            service_name="Identifier Resolution Coverage Provider", 
-            input_identifier_types=input_identifier_types,
-            output_source = output_source,
-            batch_size=batch_size,
-            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION, 
-        )
+            self.required_coverage_providers = [
+                overdrive, content_cafe, content_server, oclc_classify
+            ]
+            self.optional_coverage_providers = []
 
         self.viaf = VIAFClient(self._db)
         self.image_mirrors = {
@@ -113,7 +118,6 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         }
         self.image_scaler = ImageScaler(self._db, self.image_mirrors.values())
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
-
 
     def process_item(self, identifier):
         """For this identifier, checks that it has all of the available
