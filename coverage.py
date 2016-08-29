@@ -133,9 +133,13 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         for provider in self.required_coverage_providers:
             if not identifier.type in provider.input_identifier_types:
                 continue
-            record = provider.ensure_coverage(identifier, force=True)
+            try:
+                record = provider.ensure_coverage(identifier, force=True)
+            except Exception as e:
+                return self.transform_exception_into_failure(e, identifier)
+
             if record.exception:
-                error_msg = "500; " + record.exception
+                error_msg = "500: " + record.exception
                 transiency = True
                 if record.status == CoverageRecord.PERSISTENT_FAILURE:
                     transiency = False
@@ -150,12 +154,34 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         for provider in self.optional_coverage_providers:
             if not identifier.type in provider.input_identifier_types:
                 continue
-            record = provider.ensure_coverage(identifier, force=True)
+            try:
+                record = provider.ensure_coverage(identifier, force=True)
+            except Exception as e:
+                return self.transform_exception_into_failure(e, identifier)
 
-        # TODO: what if process_work raises an exception?
-        #  If finalize() raises an
-        # exception the process could still fail and need to be
-        # retried.
+        try:
+            self.finalize(identifier)
+        except Exception as e:
+            return self.transform_exception_into_failure(e, identifier)
+
+        return identifier
+
+    def transform_exception_into_failure(self, error, identifier):
+        """Ensures coverage of a given identifier by a given provider with
+        appropriate error handling for broken providers.
+        """
+        self.log.warn(
+            "Error completing coverage for %r: %r", identifier, error,
+            exc_info=error
+        )
+        return CoverageFailure(
+            identifier, repr(error),
+            data_source=self.output_source, transient=True
+        )
+
+    def finalize(self, identifier):
+        """Sets equivalent identifiers from OCLC and processes the work."""
+
         self.resolve_equivalent_oclc_identifiers(identifier)
         if identifier.type==Identifier.ISBN:
             # Currently we don't try to create Works for ISBNs,
@@ -165,8 +191,6 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             pass
         else:
             self.process_work(identifier)
-
-        return identifier
 
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
@@ -226,8 +250,3 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             if data_source_name in self.image_mirrors:
                 self.image_mirrors[data_source_name].mirror_edition(edition)
                 self.image_scaler.scale_edition(edition)
-
-
-
-
-

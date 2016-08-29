@@ -175,35 +175,25 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, result.transient)
 
 
+    def test_process_item_fails_when_required_provider_raises_exception(self):
+        self.coverage_provider.required_coverage_providers = [self.broken]
+        result = self.coverage_provider.process_item(self.identifier)
 
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_(True, result.transient)
 
-    def test_run_once_fails_when_finalize_raises_exception(self):
-        class FinalizeAlwaysFails(IdentifierResolutionMonitor):
+    def test_process_item_fails_when_finalize_raises_exception(self):
+        class FinalizeAlwaysFails(IdentifierResolutionCoverageProvider):
             def finalize(self, unresolved_identifier):
                 raise Exception("Oh no!")
 
-        m = FinalizeAlwaysFails(self._db, "Always fails")
-        ui, ignore = self._unresolved_identifier()
-        m.run_once(ui)
-        eq_(500, ui.status)
-        assert "Oh no!" in ui.exception
+        provider = FinalizeAlwaysFails(self._db, providers=([], []))
+        result = provider.process_item(self.identifier)
 
-    def test_resolve_succeeds_when_optional_provider_fails(self):
-        ui, ignore = self._unresolved_identifier()
-        identifier = self.ui.identifier
-        source = DataSource.lookup(self._db, DataSource.GUTENBERG)
-        p = NeverSuccessfulCoverageProvider(
-            "Never", [identifier.type], source
-        )
-        m = IdentifierResolutionMonitor(
-            self._db, "Will fail but it's OK",
-            optional_coverage_providers=[p]
-        )
+        eq_(True, isinstance(result, CoverageFailure))
+        assert "Oh no!" in result.exception
+        eq_(True, result.transient)
 
-        success = m.resolve(self.ui)
-
-        # The coverage provider failed and an appropriate coverage record
-        # was created to mark the failure.
         r = get_one(self._db, CoverageRecord, identifier=self.identifier)
         eq_("What did you expect?", r.exception)
 
