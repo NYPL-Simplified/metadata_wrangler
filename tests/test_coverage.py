@@ -194,10 +194,21 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert "Oh no!" in result.exception
         eq_(True, result.transient)
 
+    def test_process_item_succeeds_when_optional_provider_fails(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful, self.always_successful
+        ]
+
+        self.coverage_provider.optional_coverage_providers = [
+            self.always_successful, self.never_successful
+        ]
+
+        result = self.coverage_provider.process_item(self.identifier)
+
+        # A successful result is achieved.
+        eq_(result, self.identifier)
+        # Even though the coverage provider failed and an appropriate
+        # coverage record was created to mark the failure.
         r = get_one(self._db, CoverageRecord, identifier=self.identifier)
         eq_("What did you expect?", r.exception)
 
-        # But because it was an optional CoverageProvider that failed,
-        # no exception was raised and resolve() returned True to indicate
-        # success.
-        eq_(success, True)
