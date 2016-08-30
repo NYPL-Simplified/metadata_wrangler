@@ -11,7 +11,6 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Identifier,
-    UnresolvedIdentifier,
 )
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
@@ -229,6 +228,7 @@ class TestURNLookupController(DatabaseTest):
     def setup(self):
         super(TestURNLookupController, self).setup()
         self.controller = URNLookupController(self._db)
+        self.source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
         
     def assert_one_message(self, urn, code, message):
         """Assert that the given message is the only thing
@@ -263,9 +263,8 @@ class TestURNLookupController(DatabaseTest):
         # second call results in an "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
-        ignored_data_source = None
         record, is_new = CoverageRecord.add_for(
-            identifier, ignored_data_source, self.controller.OPERATION,
+            identifier, self.source, self.controller.OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
         record.exception = self.controller.NO_WORK_DONE_EXCEPTION
@@ -279,7 +278,7 @@ class TestURNLookupController(DatabaseTest):
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
-            identifier, None, self.controller.OPERATION,
+            identifier, self.source, self.controller.OPERATION,
             status=CoverageRecord.PERSISTENT_FAILURE
         )
         record.exception = "foo"

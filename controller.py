@@ -14,7 +14,6 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Identifier,
-    UnresolvedIdentifier,
 )
 from core.opds import (
     AcquisitionFeed,
@@ -321,8 +320,8 @@ class URNLookupController(CoreURNLookupController):
     def post_lookup_hook(self):
         """Run after looking up a number of Identifiers.
 
-        We commit the database session because new Identifier or
-        UnresolvedIdentifier objects may have been created during the
+        We commit the database session because new Identifier and/or
+        CoverageRecord objects may have been created during the
         lookup process.
         """
         self._db.commit()

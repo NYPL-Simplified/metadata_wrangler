@@ -27,27 +27,14 @@ from core.monitor import (
 )
 from core.model import (
     DataSource,
-    Edition,
     Equivalency,
     Identifier,
     LicensePool,
-    PresentationCalculationPolicy,
     Subject,
-    UnresolvedIdentifier,
     Work,
 )
 
-from core.s3 import S3Uploader
-from mirror import ImageScaler
-from content_cafe import (
-    ContentCafeCoverageProvider,
-    ContentCafeAPI,
-)
-from content_server import ContentServerCoverageProvider
-from gutenberg import OCLCClassifyCoverageProvider
-from oclc import LinkedDataCoverageProvider
-from overdrive import OverdriveCoverImageMirror
-from viaf import VIAFClient
+from content_cafe import ContentCafeAPI
 
 
 class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
