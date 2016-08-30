@@ -144,7 +144,7 @@ class URNLookupController(CoreURNLookupController):
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
 
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
-    NO_WORK_DONE_EXCEPTION = 'No work done yet'
+    NO_WORK_DONE_EXCEPTION = u'No work done yet'
 
 
     log = logging.getLogger("URN lookup controller")
