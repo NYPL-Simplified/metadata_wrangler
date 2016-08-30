@@ -227,16 +227,16 @@ class URNLookupController(CoreURNLookupController):
         # associated with it, but it doesn't. We need to make sure the
         # work gets done eventually by creating a CoverageRecord
         # representing the work that needs to be done.
-        ignored_data_source = None
+        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
         
-        record = CoverageRecord.lookup(identifier, ignored_data_source, self.OPERATION)
+        record = CoverageRecord.lookup(identifier, source, self.OPERATION)
         is_new = False
         if not record:
             # There is no existing CoverageRecord for this Identifier.
             # Create one, but put it in a state of transient failure
             # to represent the fact that work needs to be done.
             record, is_new = CoverageRecord.add_for(
-                identifier, ignored_data_source, self.OPERATION,
+                identifier, source, self.OPERATION,
                 status=CoverageRecord.TRANSIENT_FAILURE
             )
             record.exception = self.NO_WORK_DONE_EXCEPTION
