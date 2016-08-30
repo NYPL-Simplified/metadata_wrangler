@@ -80,7 +80,7 @@ def heartbeat():
 @app.route('/lookup')
 @accepts_collection
 def lookup(collection=None):
-    return URNLookupController(Conf.db, True).work_lookup(
+    return URNLookupController(Conf.db).work_lookup(
         VerboseAnnotator, require_active_licensepool=False,
         collection=collection
     )
