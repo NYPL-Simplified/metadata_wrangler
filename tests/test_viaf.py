@@ -185,7 +185,6 @@ class TestNameParser(DatabaseTest):
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_("176145857856923020062", contributor_data.viaf)
         eq_(match_confidences['library_popularity'], 4)
-        print match_confidences
 
 
     def test_birthdates(self):

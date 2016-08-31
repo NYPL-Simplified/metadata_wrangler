@@ -14,7 +14,6 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Identifier,
-    UnresolvedIdentifier,
 )
 from core.opds import (
     AcquisitionFeed,
@@ -26,6 +25,13 @@ from core.problem_details import (
     INVALID_CREDENTIALS,
     INVALID_URN,
 )
+
+HTTP_OK = 200
+HTTP_CREATED = 201
+HTTP_ACCEPTED = 202
+HTTP_UNAUTHORIZED = 401
+HTTP_NOT_FOUND = 404
+HTTP_INTERNAL_SERVER_ERROR = 500
 
 
 class CollectionController(object):
@@ -112,11 +118,11 @@ class CollectionController(object):
                 if identifier in collection.catalog:
                     collection.catalog.remove(identifier)
                     message = OPDSMessage(
-                        urn, 200, "Successfully removed"
+                        urn, HTTP_OK, "Successfully removed"
                     )
                 else:
                     message = OPDSMessage(
-                        urn, 404, "Not in collection catalog"
+                        urn, HTTP_NOT_FOUND, "Not in collection catalog"
                     )
             if message:
                 messages.append(message)
@@ -136,6 +142,10 @@ class URNLookupController(CoreURNLookupController):
     UNRESOLVABLE_IDENTIFIER = "I can't gather information about an identifier of this type."
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
+
+    OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
+    NO_WORK_DONE_EXCEPTION = u'No work done yet'
+
 
     log = logging.getLogger("URN lookup controller")
     
@@ -188,7 +198,7 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, 400, INVALID_URN.detail)
 
         if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, 404, self.UNRESOLVABLE_IDENTIFIER)
+            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided, this also means we consider
@@ -202,7 +212,7 @@ class URNLookupController(CoreURNLookupController):
 
         # All other identifiers need to be associated with a
         # presentation-ready Work for the lookup to succeed. If there
-        # isn't one, we need to create an UnresolvedIdentifier object.
+        # isn't one, we need to register it as unresolved.
         work = self.presentation_ready_work_for(identifier)
         if work:
             # The work has been done.
@@ -213,26 +223,47 @@ class URNLookupController(CoreURNLookupController):
 
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
-        # associated with it, but it doesn't. Make sure an
-        # UnresolvedIdentifier is registered for it so the work can
-        # begin.
-        unresolved_identifier, is_new = UnresolvedIdentifier.register(
-            self._db, identifier
-        )
+        # associated with it, but it doesn't. We need to make sure the
+        # work gets done eventually by creating a CoverageRecord
+        # representing the work that needs to be done.
+        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+        
+        record = CoverageRecord.lookup(identifier, source, self.OPERATION)
+        is_new = False
+        if not record:
+            # There is no existing CoverageRecord for this Identifier.
+            # Create one, but put it in a state of transient failure
+            # to represent the fact that work needs to be done.
+            record, is_new = CoverageRecord.add_for(
+                identifier, source, self.OPERATION,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            record.exception = self.NO_WORK_DONE_EXCEPTION
+
         if is_new:
-            # The identifier is newly registered. Tell the client
-            # to come back later.
-            return self.add_message(urn, 201, self.IDENTIFIER_REGISTERED)
+            # The CoverageRecord was just created. Tell the client to
+            # come back later.
+            return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
         else:
             # There is a pending attempt to resolve this identifier.
             # Tell the client we're working on it, or if the
             # pending attempt resulted in an exception,
             # tell the client about the exception.
-            message = (unresolved_identifier.exception 
-                       or self.WORKING_TO_RESOLVE_IDENTIFIER)
-            return self.add_message(
-                urn, unresolved_identifier.status, message
-            )
+            message = record.exception
+            if not message or message == self.NO_WORK_DONE_EXCEPTION:
+                message = self.WORKING_TO_RESOLVE_IDENTIFIER
+            status = HTTP_ACCEPTED
+            if record.status == record.PERSISTENT_FAILURE:
+                # Apparently we just can't provide coverage of this
+                # identifier.
+                status = HTTP_INTERNAL_SERVER_ERROR
+            elif record.status == record.SUCCESS:
+                # This shouldn't happen, since success in providing
+                # this sort of coverage means creating a presentation
+                # ready work. Something weird is going on.
+                status = HTTP_INTERNAL_SERVER_ERROR
+                message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
+            return self.add_message(urn, status, message)
 
     def make_opds_entry_from_metadata_lookups(self, identifier):
         """This identifier cannot be turned into a presentation-ready Work,
@@ -267,22 +298,9 @@ class URNLookupController(CoreURNLookupController):
                 identifier,
                 ", ".join(names)
             )
-            unresolved_identifier, is_new = UnresolvedIdentifier.register(
-                self._db, identifier)
-            if is_new:
-                # We just found out about this identifier, or rather,
-                # we just found out that someone expects it to be associated
-                # with a LicensePool.
-                return self.add_message(
-                    identifier.urn, 201, self.IDENTIFIER_REGISTERED
-                )
-            else:
-                # There is a pending attempt to resolve this identifier.
-                message = (unresolved_identifier.exception 
-                           or self.WORKING_TO_RESOLVE_IDENTIFIER)
-                return self.add_message(
-                    identifier.urn, unresolved_identifier.status, message
-                )
+            return self.register_identifier_as_unresolved(
+                identifier.urn, identifier
+            )
         else:
             # All metadata lookups have completed. Create that OPDS
             # entry!
@@ -293,7 +311,7 @@ class URNLookupController(CoreURNLookupController):
             # the best thing to do is to treat this identifier as a
             # 404 error.
             return self.add_message(
-                identifier.urn, 404, self.UNRECOGNIZED_IDENTIFIER
+                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
             )
 
         # We made it!
@@ -302,8 +320,8 @@ class URNLookupController(CoreURNLookupController):
     def post_lookup_hook(self):
         """Run after looking up a number of Identifiers.
 
-        We commit the database session because new Identifier or
-        UnresolvedIdentifier objects may have been created during the
+        We commit the database session because new Identifier and/or
+        CoverageRecord objects may have been created during the
         lookup process.
         """
         self._db.commit()

@@ -11,7 +11,6 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Identifier,
-    UnresolvedIdentifier,
 )
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
@@ -20,6 +19,12 @@ from core.opds_import import OPDSXMLParser
 from controller import (
     CollectionController,
     URNLookupController,
+    HTTP_OK, 
+    HTTP_CREATED, 
+    HTTP_ACCEPTED, 
+    HTTP_UNAUTHORIZED, 
+    HTTP_NOT_FOUND, 
+    HTTP_INTERNAL_SERVER_ERROR, 
 )
 
 class TestCollectionController(DatabaseTest):
@@ -49,7 +54,7 @@ class TestCollectionController(DatabaseTest):
                 headers=dict(Authorization=invalid_auth)):
             result = self.controller.authenticated_collection_from_request()
             eq_(True, isinstance(result, ProblemDetail))
-            eq_(401, result.status_code)
+            eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns errors without authentication.
         with self.app.test_request_context('/'):
@@ -69,7 +74,7 @@ class TestCollectionController(DatabaseTest):
                 headers=dict(Authorization=invalid_auth)):
             result = self.controller.authenticated_collection_from_request(required=False)
             eq_(True, isinstance(result, ProblemDetail))
-            eq_(401, result.status_code)
+            eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns none if no authentication.
         with self.app.test_request_context('/'):
@@ -84,7 +89,7 @@ class TestCollectionController(DatabaseTest):
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
             # The collection's updates feed is returned.
-            eq_(200, response.status_code)
+            eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
             
@@ -103,7 +108,7 @@ class TestCollectionController(DatabaseTest):
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
-            eq_(200, response.status_code)
+            eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
             # The timestamp is included in the url.
@@ -158,21 +163,21 @@ class TestCollectionController(DatabaseTest):
 
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items()
-            eq_(200, response.status_code)            
+            eq_(HTTP_OK, response.status_code)            
 
             # It sends two <simplified:message> tags.
             root = etree.parse(StringIO(response.data))
             catalogued, uncatalogued = parser._xpath(root, message_path)
             eq_("http://www.gutenberg.org/ebooks/2013",
                 parser._xpath(catalogued, 'atom:id')[0].text)
-            eq_("200",
+            eq_(str(HTTP_OK),
                 parser._xpath(catalogued, 'simplified:status_code')[0].text)
             eq_("Successfully removed",
                 parser._xpath(catalogued, 'schema:description')[0].text)
 
             eq_("http://www.gutenberg.org/ebooks/2014",
                 parser._xpath(uncatalogued, 'atom:id')[0].text)
-            eq_("404",
+            eq_(str(HTTP_NOT_FOUND),
                 parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
             eq_("Not in collection catalog",
                 parser._xpath(uncatalogued, 'schema:description')[0].text)
@@ -192,7 +197,7 @@ class TestCollectionController(DatabaseTest):
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.remove_items()
-            eq_(200, int(response.status_code))
+            eq_(HTTP_OK, int(response.status_code))
 
             # Once again we get two <simplified:message> tags.
             root = etree.parse(StringIO(response.data))
@@ -223,6 +228,7 @@ class TestURNLookupController(DatabaseTest):
     def setup(self):
         super(TestURNLookupController, self).setup()
         self.controller = URNLookupController(self._db)
+        self.source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
         
     def assert_one_message(self, urn, code, message):
         """Assert that the given message is the only thing
@@ -243,32 +249,42 @@ class TestURNLookupController(DatabaseTest):
             urn, 201, URNLookupController.IDENTIFIER_REGISTERED
         )
 
-        # The Identifier has been created and an UnresolvedIdentifier
-        # associated with it.
+        # The Identifier has been created and given a CoverageRecord
+        # with a transient failure.
         [identifier] = self._db.query(Identifier).filter(
             Identifier.type==Identifier.OVERDRIVE_ID
         ).all()
         eq_("nosuchidentifier", identifier.identifier)
-        unresolved = identifier.unresolved_identifier
-        eq_(202, unresolved.status)
+        [coverage] = identifier.coverage_records
+        eq_(CoverageRecord.TRANSIENT_FAILURE, coverage.status)
 
     def test_process_urn_pending_resolve_attempt(self):
+        # Simulate calling process_urn twice, and make sure the 
+        # second call results in an "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
+
+        record, is_new = CoverageRecord.add_for(
+            identifier, self.source, self.controller.OPERATION,
+            status=CoverageRecord.TRANSIENT_FAILURE
+        )
+        record.exception = self.controller.NO_WORK_DONE_EXCEPTION
+
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
-            identifier.urn, 202,
+            identifier.urn, HTTP_ACCEPTED,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, identifier)
-        unresolved.status = 500
-        unresolved.exception = "foo"
+        record, is_new = CoverageRecord.add_for(
+            identifier, self.source, self.controller.OPERATION,
+            status=CoverageRecord.PERSISTENT_FAILURE
+        )
+        record.exception = "foo"
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
-            identifier.urn, 500, "foo"
+            identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"
         )
 
     def test_process_urn_unresolvable_type(self):
@@ -277,7 +293,7 @@ class TestURNLookupController(DatabaseTest):
         identifier = self._identifier(Identifier.THREEM_ID)
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
-            identifier.urn, 404, self.controller.UNRESOLVABLE_IDENTIFIER
+            identifier.urn, HTTP_NOT_FOUND, self.controller.UNRESOLVABLE_IDENTIFIER
         )
 
     def test_presentation_ready_work_overrides_unresolveable_type(self):
@@ -315,26 +331,32 @@ class TestURNLookupController(DatabaseTest):
         eq_([i1, i2], collection.catalog)
 
     def test_process_urn_isbn(self):
+        # Create a new ISBN identifier.
+        # Ask online providers for metadata to turn into an opds feed about this identifier.
+        # Make sure a coverage record was created, and a 201 status obtained from provider.
+        # Ask online provider again, and make sure we're now getting a 202 "working on it" status.
+        # Ask again, this time getting a result.  Make sure know that got a result.
+
         isbn, ignore = Identifier.for_foreign_id(
             self._db, Identifier.ISBN, self._isbn
         )
 
-        # The first time we look up an ISBN it's registered as an
-        # UnresolvedIdentifier.
+        # The first time we look up an ISBN a CoverageRecord is created
+        # representing the work to be done.
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
-            isbn.urn, 201, self.controller.IDENTIFIER_REGISTERED
+            isbn.urn, HTTP_CREATED, self.controller.IDENTIFIER_REGISTERED
         )
-        unresolved, is_new = UnresolvedIdentifier.register(self._db, isbn)
-        eq_(False, is_new)
-
+        [record] = isbn.coverage_records
+        eq_(record.exception, self.controller.NO_WORK_DONE_EXCEPTION)
+        eq_(record.status, CoverageRecord.TRANSIENT_FAILURE)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
         self.controller.precomposed_entries = []
         self.controller.process_urn(isbn.urn)
         self.assert_one_message(
-            isbn.urn, 202, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
+            isbn.urn, HTTP_ACCEPTED, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
         # Let's provide the coverage.
@@ -351,3 +373,6 @@ class TestURNLookupController(DatabaseTest):
         expect = isbn.opds_entry()
         [actual] = self.controller.precomposed_entries
         eq_(etree.tostring(expect), etree.tostring(actual))
+
+
+

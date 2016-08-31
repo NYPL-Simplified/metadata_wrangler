@@ -5,12 +5,28 @@ from nose.tools import (
 import os
 
 from . import DatabaseTest
+
 from core.model import (
+    CoverageRecord, 
     DataSource,
+    get_one, 
     Identifier,
 )
+from core.coverage import CoverageFailure
 from core.opds_import import MockSimplifiedOPDSLookup
+
 from content_server import ContentServerCoverageProvider
+
+from coverage import IdentifierResolutionCoverageProvider
+
+from core.testing import (
+    AlwaysSuccessfulCoverageProvider,
+    NeverSuccessfulCoverageProvider,
+    BrokenCoverageProvider,
+)
+
+from core.s3 import DummyS3Uploader
+
 
 class TestContentServerCoverageProvider(DatabaseTest):
 
@@ -111,3 +127,92 @@ class TestContentServerCoverageProvider(DatabaseTest):
             failure.exception)
         eq_(True, failure.transient)
         eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
+
+
+class TestIdentifierResolutionCoverageProvider(DatabaseTest):
+
+    def setup(self):
+        super(TestIdentifierResolutionCoverageProvider, self).setup()
+        self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
+        self.source = DataSource.license_source_for(self._db, self.identifier)
+        uploader = DummyS3Uploader()
+        self.coverage_provider = IdentifierResolutionCoverageProvider(
+            self._db, uploader=uploader, providers=([], [])
+        )
+
+        self.always_successful = AlwaysSuccessfulCoverageProvider(
+            "Always", [self.identifier.type], self.source
+        )
+        self.never_successful = NeverSuccessfulCoverageProvider(
+            "Never", [self.identifier.type], self.source
+        )
+        self.broken = BrokenCoverageProvider("Broken", [self.identifier.type], self.source)
+
+    def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful, self.always_successful
+        ]
+
+        # The coverage provider succeeded and returned an identifier.
+        result = self.coverage_provider.process_item(self.identifier)
+        eq_(result, self.identifier)
+
+    def test_process_item_fails_if_any_required_coverage_providers_fail(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful, self.never_successful
+        ]
+
+        result = self.coverage_provider.process_item(self.identifier)
+
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_("500: What did you expect?", result.exception)
+        eq_(False, result.transient)
+
+        # The failure type of the IdentifierResolutionCoverageProvider
+        # coverage record matches the failure type of the required provider's
+        # coverage record.
+        self.never_successful.transient = True
+        result = self.coverage_provider.process_item(self.identifier)
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_(True, result.transient)
+
+
+    def test_process_item_fails_when_required_provider_raises_exception(self):
+        self.coverage_provider.required_coverage_providers = [self.broken]
+        result = self.coverage_provider.process_item(self.identifier)
+
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_(True, result.transient)
+
+    def test_process_item_fails_when_finalize_raises_exception(self):
+        class FinalizeAlwaysFails(IdentifierResolutionCoverageProvider):
+            def finalize(self, unresolved_identifier):
+                raise Exception("Oh no!")
+
+        provider = FinalizeAlwaysFails(
+            self._db, uploader=DummyS3Uploader(), providers=([], [])
+        )
+        result = provider.process_item(self.identifier)
+
+        eq_(True, isinstance(result, CoverageFailure))
+        assert "Oh no!" in result.exception
+        eq_(True, result.transient)
+
+    def test_process_item_succeeds_when_optional_provider_fails(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful, self.always_successful
+        ]
+
+        self.coverage_provider.optional_coverage_providers = [
+            self.always_successful, self.never_successful
+        ]
+
+        result = self.coverage_provider.process_item(self.identifier)
+
+        # A successful result is achieved.
+        eq_(result, self.identifier)
+        # Even though the coverage provider failed and an appropriate
+        # coverage record was created to mark the failure.
+        r = get_one(self._db, CoverageRecord, identifier=self.identifier)
+        eq_("What did you expect?", r.exception)
+
