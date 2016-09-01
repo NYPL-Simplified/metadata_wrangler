@@ -1301,17 +1301,8 @@ class LinkedDataCoverageProvider(CoverageProvider):
                     self.output_source, Measurement.PUBLISHED_EDITIONS, 
                     len(oclc_editions)
                 )
-                
-                # If any contributors are identified solely by their
-                # VIAF IDs, look up those IDs and fill those in
-                # now. This will avoid problems later when it's time
-                # to turn these contributors into Contributor objects.
-                for i in metadata.contributors:
-                    if i.viaf and not i.sort_name:
-                        r = self.viaf.lookup_by_viaf(
-                            i.viaf, i.sort_name, i.display_name
-                        )
-                        i.viaf, i.display_name, i.family_name, i.sort_name, i.wikipedia_name = r
+
+                self.apply_viaf_to_contributor_data(metadata)
 
                 num_new_isbns = self.new_isbns(metadata)
                 if oclc_editions:
@@ -1352,6 +1343,22 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 transient=transient
             )
         return identifier
+
+    def apply_viaf_to_contributor_data(self, metadata):
+        """Looks up VIAF information for contributors identified by OCLC
+
+        This is particularly crucial for contributors identified solely
+        by VIAF IDs (and no sort_name), as it raises errors later in the
+        process.
+        """
+        for contributor_data in metadata.contributors:
+            viaf_contributor_data = self.viaf.lookup_by_viaf(
+                contributor_data.viaf,
+                working_sort_name=contributor_data.sort_name,
+                working_display_name=contributor_data.display_name
+            )[0]
+            if viaf_contributor_data:
+                viaf_contributor_data.apply(contributor_data)
 
     def new_isbns(self, metadata):
         """Returns the number of new isbns on a metadata object"""

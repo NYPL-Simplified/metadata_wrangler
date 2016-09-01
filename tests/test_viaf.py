@@ -238,11 +238,8 @@ class TestVIAFClient(DatabaseTest):
         xml = self.sample_data("mindy_kaling.xml")
         h.queue_response(200, media_type='text/xml', content=xml)
 
-        [(selected_candidate, match_confidences, contributor_titles)] = self.client.lookup_by_name(sort_name="Mindy Kaling", do_get=h.do_get)
+        (selected_candidate,
+         match_confidences,
+         contributor_titles) = self.client.lookup_by_name(sort_name="Mindy Kaling", do_get=h.do_get)
         eq_(selected_candidate.viaf, "9581122")
         eq_(selected_candidate.sort_name, "Kaling, Mindy")
-
-
-
-
-

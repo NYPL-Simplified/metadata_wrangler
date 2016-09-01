@@ -125,10 +125,10 @@ class AuthorNameCanonicalizer(object):
                 m = self.VIAF_ID.search(uri)
                 if m:
                     viaf_id = m.groups()[0]
-                    viaf_id, display_name, family_name, sort_name, wikipedia_name = (
-                        self.viaf.lookup_by_viaf(
-                            viaf_id, working_display_name=display_name))
-                    if sort_name:
+                    contributor_data = self.viaf.lookup_by_viaf(
+                        viaf_id, working_display_name=display_name
+                    )[0]
+                    if contributor_data.sort_name:
                         return sort_name
 
         # Nope. If we were given a display name, let's ask VIAF about it
@@ -191,9 +191,16 @@ class AuthorNameCanonicalizer(object):
         return shortest_candidate, uris
 
     def sort_name_from_viaf(self, display_name):
-        viaf, display_name, family_name, sort_name, wikipedia_name = (
-                self.viaf.lookup_by_name(None, display_name))
-        self.log.debug("Asked VIAF for sort name for %s. Response: %s",
-                       display_name, sort_name)
-        return sort_name
+        sort_name = None
 
+        viaf_contributor = self.viaf.lookup_by_name(
+            None, display_name, best_match=True
+        )
+        if viaf_contributor:
+            contributor_data = viaf_contributor[0]
+            sort_name = contributor_data.sort_name
+            self.log.debug(
+                "Asked VIAF for sort name for %s. Response: %s",
+                display_name, sort_name
+            )
+        return sort_name
