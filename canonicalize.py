@@ -1,18 +1,21 @@
 """Use external services to canonicalize names."""
-from nose.tools import set_trace
 import logging
-from oclc import OCLCLinkedData
+import re
+from nose.tools import set_trace
+
+from core.model import (
+    Contributor,
+    Identifier,
+)
 from core.util import MetadataSimilarity
 from core.util.personal_names import (
     display_name_to_sort_name,
     is_corporate_name,
 )
+
+from oclc import OCLCLinkedData
 from viaf import VIAFClient
-from core.model import (
-    Contributor,
-    Identifier,
-)
-import re
+
 
 class CanonicalizationError(Exception):
     pass
@@ -53,7 +56,7 @@ class AuthorNameCanonicalizer(object):
 
         return author_name
 
-    def canonicalize(self, identifier, display_name):
+    def canonicalize_author_name(self, identifier, display_name):
         """Canonicalize a book's primary author given an identifier and a
         display name.
 
@@ -71,7 +74,8 @@ class AuthorNameCanonicalizer(object):
             identifier = None
         if not identifier and not display_name:
             raise CanonicalizationError(
-                "Neither useful identifier nor display name was provided.")
+                "Neither useful identifier nor display name was provided."
+            )
 
         # From an author name that potentially names multiple people,
         # extract only the first name.
@@ -84,8 +88,9 @@ class AuthorNameCanonicalizer(object):
             if v:
                 return v
 
-        # All our techniques have failed. Woe!
-        return None
+        # All our techniques have failed. Woe! Let's just try to finagle
+        # this provided display name into a sort name.
+        return self.default_name(display_name)
 
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)

@@ -7,6 +7,7 @@ import re
 import urllib
 
 import isbnlib
+from collections import Counter
 from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
@@ -1287,8 +1288,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def process_item(self, identifier):
         try:
-            # Create counters.
-            new_editions = new_isbns = new_descriptions = new_subjects = 0
+            new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
 
             for metadata in self.api.info_for(identifier):
@@ -1298,38 +1298,45 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 # Keep track of the number of editions OCLC associates
                 # with this identifier.
                 other_identifier.add_measurement(
-                    self.output_source, Measurement.PUBLISHED_EDITIONS, 
+                    self.output_source, Measurement.PUBLISHED_EDITIONS,
                     len(oclc_editions)
                 )
 
                 self.apply_viaf_to_contributor_data(metadata)
 
-                num_new_isbns = self.new_isbns(metadata)
-                if oclc_editions:
-                    for edition in oclc_editions:
-                        metadata.apply(edition)
+                # When metadata is applied, it must be given a client that can
+                # response to 'canonicalize_author_name'. Usually this is an
+                # OPDSImporter that reaches out to the Metadata Wrangler, but
+                # in the case of being _on_ the Metadata Wrangler...:
+                from canonicalize import AuthorNameCanonicalizer
+                metadata_client = AuthorNameCanonicalizer(
+                    self._db, oclcld=self.api, viaf=self.viaf
+                )
 
-                        # Increment counters for logging.
-                        new_editions += 1
-                        new_isbns += num_new_isbns
-                        new_descriptions += len(metadata.links)
-                        new_subjects += len(metadata.subjects)
+                num_new_isbns = self.new_isbns(metadata)
+                new_info_counter['isbns'] += num_new_isbns
+                if oclc_editions:
+                    # There are existing OCLC editions. Apply any new information to them.
+                    for edition in oclc_editions:
+                        metadata, new_info_counter = self.apply_metadata_to_edition(
+                            edition, metadata, metadata_client, new_info_counter
+                        )
                 elif num_new_isbns:
+                    # Create a new OCLC edition to hold the information.
                     edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.output_source,
                         primary_identifier=other_identifier
                     )
-                    metadata.apply(edition)
+                    metadata, new_info_counter = self.apply_metadata_to_edition(
+                        edition, metadata, metadata_client, new_info_counter
+                    )
+                    # Set the new OCLC edition's identifier equivalent to this
+                    # identifier so we know they're related.
                     self.set_equivalence(identifier, metadata)
-
-                    # Increment counters for logging.
-                    new_editions += 1
-                    new_isbns += num_new_isbns
-                    new_descriptions += len(metadata.links)
-                    new_subjects += len(metadata.subjects)
                 self.log.info(
-                    "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
-                    new_editions, new_isbns, new_descriptions, new_subjects
+                    "Total: %(editions)d editions, %(isbns)d ISBNs, "\
+                    "%(descriptions)d descriptions, %(subjects)d classifications.",
+                    dict(new_info_counter)
                 )
         except IOError as e:
             if ", but couldn't find location" in e.message:
@@ -1359,6 +1366,16 @@ class LinkedDataCoverageProvider(CoverageProvider):
             )[0]
             if viaf_contributor_data:
                 viaf_contributor_data.apply(contributor_data)
+
+    def apply_metadata_to_edition(self, edition, metadata, metadata_client, counter):
+        """Applies metadata and increments counters"""
+
+        metadata.apply(edition, metadata_client=metadata_client)
+        counter['editions'] += 1
+        counter['descriptions'] += len(metadata.links)
+        counter['subjects'] += len(metadata.subjects)
+
+        return metadata, counter
 
     def new_isbns(self, metadata):
         """Returns the number of new isbns on a metadata object"""
