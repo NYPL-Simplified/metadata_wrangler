@@ -372,14 +372,20 @@ class VIAFParser(XMLParser):
         if not contributor_candidates:
             return contributor_candidates
 
-        # if the top library popularity candidate is a really bad name match, 
-        # then don't penalize the bottom popularity candidates for being on the bottom.
-        ignore_popularity = False
+        # Double-check that the candidate list is ordered by library
+        # popularity, as it came from viaf
+        contributor_candidates.sort(key=lambda c: c[1].get('library_popularity'))
+        # Grab the most popular candidate.
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
 
-        # double-check that the candidate list is ordered by library popularity, as it came from viaf
-        if match_confidences["library_popularity"] == 1:
-            if (("sort_name" in match_confidences) and (match_confidences["sort_name"] < 50)) or ("sort_name" not in match_confidences):
+        # If the top library popularity candidate is a really bad name
+        # match, then don't penalize the bottom popularity candidates
+        # for being on the bottom.
+        ignore_popularity = False
+        if match_confidences.get("library_popularity") == 1:
+            if (("sort_name" in match_confidences and
+                match_confidences["sort_name"] < 50)
+                or "sort_name" not in match_confidences):
                 # baaad match
                 ignore_popularity = True
 
@@ -388,8 +394,14 @@ class VIAFParser(XMLParser):
                 pass
 
         # higher score for better match, so to have best match first, do desc order.
-        contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
-            known_titles=known_titles, strict=strict, ignore_popularity=ignore_popularity), reverse=True)
+        contributor_candidates.sort(
+            key=lambda x: self.weigh_contributor(
+                x, working_sort_name=working_sort_name,
+                known_titles=known_titles, strict=strict,
+                ignore_popularity=ignore_popularity
+            ),
+            reverse=True
+        )
         return contributor_candidates
 
 
