@@ -832,7 +832,7 @@ class OCLCXMLParser(XMLParser):
     @classmethod
     def _contributor_match(cls, contributor, name, lc, viaf):
         return (
-            contributor.name == name
+            contributor.sort_name == name
             and (lc is None or contributor.lc == lc)
             and (viaf is None or contributor.viaf == viaf)
         )
@@ -880,7 +880,7 @@ class OCLCXMLParser(XMLParser):
             # No name was given for the author.
             return None, roles, default_role_used
 
-        if primary_author and author == primary_author.name:
+        if primary_author and author == primary_author.sort_name:
             if Contributor.AUTHOR_ROLE in roles:
                 roles.remove(Contributor.AUTHOR_ROLE)
             if Contributor.UNKNOWN_ROLE in roles:
@@ -1032,7 +1032,7 @@ class OCLCXMLParser(XMLParser):
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
             if restrict_to_authors and isinstance(restrict_to_authors[0], Contributor):
-                restrict_to_authors = [x.name for x in restrict_to_authors]
+                restrict_to_authors = [x.sort_name for x in restrict_to_authors]
             primary_author = None
 
             for a, roles in authors_and_roles:
@@ -1041,7 +1041,7 @@ class OCLCXMLParser(XMLParser):
                     break
             if (not primary_author
                 or (primary_author not in restrict_to_authors
-                    and primary_author.name not in restrict_to_authors)):
+                    and primary_author.sort_name not in restrict_to_authors)):
                     # None of the given authors showed up as the
                     # primary author of this book. They may have had
                     # some other role in it, or the book may be about
@@ -1049,7 +1049,7 @@ class OCLCXMLParser(XMLParser):
                     # is not *by* them.
                 return None
 
-        author_names = ", ".join([x.name for x, y in authors_and_roles])
+        author_names = ", ".join([x.sort_name for x, y in authors_and_roles])
 
         return title, authors_and_roles, language
 

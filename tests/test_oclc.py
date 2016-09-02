@@ -107,14 +107,14 @@ class TestParser(DatabaseTest):
         """We can choose to only accept works by a given author."""
         xml = self.sample_data("multi_work_response.xml")
 
-        [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
+        [wrong_author], ignore = Contributor.lookup(self._db, sort_name="Wrong Author")
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
-        [melville], ignore = Contributor.lookup(self._db, name="Melville, Herman")
+        [melville], ignore = Contributor.lookup(self._db, sort_name="Melville, Herman")
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
 
@@ -132,7 +132,7 @@ class TestParser(DatabaseTest):
 
     def test_primary_author_name(self):
         melville = OCLCXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
-        eq_("Melville, Herman", melville.name)
+        eq_("Melville, Herman", melville.sort_name)
 
         eq_(None, OCLCXMLParser.primary_author_from_author_string(
             self._db,
@@ -160,7 +160,7 @@ class TestParser(DatabaseTest):
 
         eq_("Moby Dick", work.title)
 
-        work_contributors = [x.name for x in work.contributors]
+        work_contributors = [x.sort_name for x in work.contributors]
 
         # The work has a ton of contributors, collated from all the
         # editions.
@@ -188,10 +188,10 @@ class TestParser(DatabaseTest):
         # OCLC. Herman Melville is the primary author, and Tony Tanner is
         # also credited as an author.
         primary_author = sorted(
-            [x.contributor.name for x in work.contributions
+            [x.contributor.sort_name for x in work.contributions
              if x.role==Contributor.PRIMARY_AUTHOR_ROLE])[0]
         other_author = sorted(
-            [x.contributor.name for x in work.contributions
+            [x.contributor.sort_name for x in work.contributions
              if x.role==Contributor.AUTHOR_ROLE])[0]
 
         eq_("Melville, Herman", primary_author)
@@ -257,7 +257,7 @@ class TestAuthorParser(DatabaseTest):
     def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE,
                       birthdate=None, deathdate=None):
         contributor, roles = result
-        eq_(contributor.name, name)
+        eq_(contributor.sort_name, name)
         if role:
             if not isinstance(role, list) and not isinstance(role, tuple):
                 role = [role]
@@ -584,7 +584,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         # Both authors have had their information updated with the
         # VIAF results.
         filled_in = sorted(
-            [(x.name, x.display_name, x.viaf, x.wikipedia_name, x.biography)
+            [(x.sort_name, x.display_name, x.viaf, x.wikipedia_name, x.biography)
              for x in edition.contributors]
         )
         eq_(

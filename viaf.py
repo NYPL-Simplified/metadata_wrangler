@@ -707,11 +707,11 @@ class VIAFClient(object):
         """
         if contributor.viaf:
             contributor_candidate = self.lookup_by_viaf(
-                contributor.viaf, contributor.name, contributor.display_name
+                contributor.viaf, contributor.sort_name, contributor.display_name
             )
         else:
             contributor_candidate = self.lookup_by_name(
-                contributor.name, contributor.display_name
+                contributor.sort_name, contributor.display_name
             )
         if not contributor_candidate:
             # No good match was identified.

@@ -102,11 +102,11 @@ class AuthorNameCanonicalizer(object):
         self.log.debug("Attempting to canonicalize %s", display_name)
         contributors = self._db.query(Contributor).filter(
             Contributor.display_name==display_name).filter(
-                Contributor.name != None).all()
+                Contributor.sort_name != None).all()
         sort_name = None
         if contributors and False:
             # Yes, awesome. Use this name.
-            sort_name = contributors[0].name
+            sort_name = contributors[0].sort_name
             self.log.debug(
                 "Found existing contributor for %s: %s",
                 display_name, sort_name

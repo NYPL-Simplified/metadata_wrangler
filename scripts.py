@@ -105,7 +105,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         contributors = edition.author_contributors
         if contributors:
             primary_author = contributors[0]
-            primary_author_name = primary_author.name
+            primary_author_name = primary_author.sort_name
         else:
             primary_author_name = None
         author = WorkIDCalculator.normalize_author(primary_author_name)

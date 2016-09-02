@@ -8,10 +8,6 @@ from . import (
     sample_data,
 )
 
-from core.model import (
-    Contributor,
-)
-
 from viaf import (
     VIAFParser, 
     VIAFClient
