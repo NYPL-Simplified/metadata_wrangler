@@ -1,9 +1,10 @@
+import logging
 import os
+import re
+
 from nose.tools import set_trace
 from lxml import etree
-import logging
 from fuzzywuzzy import fuzz
-import re
 
 from collections import Counter, defaultdict
 
@@ -34,16 +35,12 @@ from core.util.xmlparser import (
 )
 
 
-
-
 class VIAFParser(XMLParser):
 
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
     log = logging.getLogger("VIAF Parser")
     wikidata_id = re.compile("^Q[0-9]")
-
-
 
     @classmethod
     def combine_nameparts(self, given, family, extra):
@@ -660,11 +657,6 @@ class VIAFParser(XMLParser):
         """Turn a UNIMARC tag into a 4-tuple:
          (given name, family name, extra, sort name)
         """
-        # Only process author names and corporate names.
-        #if unimarc.get('tag') not in ('100', '110'):
-        #    return None, None, None, None
-        #if unimarc.get('tag') == '110':
-        #    set_trace()
         data = dict()
         sort_name_in_progress = []
         for (code, key) in (
@@ -691,6 +683,7 @@ class VIAFClient(object):
     SUBDIR = "viaf"
 
     MEDIA_TYPE = Representation.TEXT_XML_MEDIA_TYPE
+    REPRESENTATION_MAX_AGE = 60*60*24*30*6    # 6 months
 
     def __init__(self, _db):
         self._db = _db
@@ -778,7 +771,9 @@ class VIAFClient(object):
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
-        r, cached = Representation.get(self._db, url, do_get=do_get)
+        r, cached = Representation.get(
+            self._db, url, do_get=do_get, max_age=self.REPRESENTATION_MAX_AGE
+        )
 
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
@@ -805,7 +800,9 @@ class VIAFClient(object):
                 scope=scope, sort_name=sort_name.encode("utf8"),
                 maximum_records=maximum_records, start_record=start_record
             )
-            representation, cached = Representation.get(self._db, url, do_get=do_get)
+            representation, cached = Representation.get(
+                self._db, url, do_get=do_get, max_age=self.REPRESENTATION_MAX_AGE
+            )
             xml = representation.content
 
             candidates = self.parser.parse_multiple(xml, sort_name, display_name, page)

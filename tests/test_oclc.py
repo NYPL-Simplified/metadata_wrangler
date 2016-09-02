@@ -577,10 +577,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         lookup2 = (ContributorData(
                    viaf="2", wikipedia_name="Robert_Jordan_(Author)",
                    biography="That guy."), None, None)
-        # Metadata.apply also looks up the contributor in VIAF, in an attempt
-        # to find the sort name. So we'll have to queue these up twice
-        # or our data will be overwritten later, thereby ruining the test.
-        viaf.queue_lookup(lookup1, lookup2, lookup1, lookup2)
+        viaf.queue_lookup(lookup1, lookup2)
 
         provider.process_item(identifier)
 
