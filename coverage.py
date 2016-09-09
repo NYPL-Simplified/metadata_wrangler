@@ -64,7 +64,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
     UNKNOWN_FAILURE = "Unknown failure."
 
     def __init__(self, _db, batch_size=10, cutoff_time=None,
-                 uploader=None, providers=None):
+                 uploader=None, providers=None, **kwargs):
         output_source, made_new = get_one_or_create(
             _db, DataSource,
             name=DataSource.INTERNAL_PROCESSING, offers_licenses=False,
