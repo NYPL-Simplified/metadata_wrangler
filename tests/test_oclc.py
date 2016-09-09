@@ -107,14 +107,14 @@ class TestParser(DatabaseTest):
         """We can choose to only accept works by a given author."""
         xml = self.sample_data("multi_work_response.xml")
 
-        [wrong_author], ignore = Contributor.lookup(self._db, name="Wrong Author")
+        [wrong_author], ignore = Contributor.lookup(self._db, sort_name="Wrong Author")
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
-        [melville], ignore = Contributor.lookup(self._db, name="Melville, Herman")
+        [melville], ignore = Contributor.lookup(self._db, sort_name="Melville, Herman")
         status, swids = OCLCXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
 
@@ -132,7 +132,7 @@ class TestParser(DatabaseTest):
 
     def test_primary_author_name(self):
         melville = OCLCXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
-        eq_("Melville, Herman", melville.name)
+        eq_("Melville, Herman", melville.sort_name)
 
         eq_(None, OCLCXMLParser.primary_author_from_author_string(
             self._db,
@@ -160,7 +160,7 @@ class TestParser(DatabaseTest):
 
         eq_("Moby Dick", work.title)
 
-        work_contributors = [x.name for x in work.contributors]
+        work_contributors = [x.sort_name for x in work.contributors]
 
         # The work has a ton of contributors, collated from all the
         # editions.
@@ -188,10 +188,10 @@ class TestParser(DatabaseTest):
         # OCLC. Herman Melville is the primary author, and Tony Tanner is
         # also credited as an author.
         primary_author = sorted(
-            [x.contributor.name for x in work.contributions
+            [x.contributor.sort_name for x in work.contributions
              if x.role==Contributor.PRIMARY_AUTHOR_ROLE])[0]
         other_author = sorted(
-            [x.contributor.name for x in work.contributions
+            [x.contributor.sort_name for x in work.contributions
              if x.role==Contributor.AUTHOR_ROLE])[0]
 
         eq_("Melville, Herman", primary_author)
@@ -257,7 +257,7 @@ class TestAuthorParser(DatabaseTest):
     def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE,
                       birthdate=None, deathdate=None):
         contributor, roles = result
-        eq_(contributor.name, name)
+        eq_(contributor.sort_name, name)
         if role:
             if not isinstance(role, list) and not isinstance(role, tuple):
                 role = [role]
@@ -535,8 +535,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         assert isinstance(result, CoverageFailure)
         assert "OCLC doesn't know about this ISBN" in result.exception
 
-
-    def test_author_known_only_by_viaf_gets_viaf_lookup(self):
+    def test_all_authors_get_viaf_lookup(self):
         # TODO: The code this calls could be refactored quite a bit --
         # we don't really need to test all of process_item() here.
         # But ATM it does seem to be our only test of process_item().
@@ -570,24 +569,26 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         oclc.queue_info_for(metadata)
 
         # Our OCLC Linked Data client is going to try to fill in the
-        # data, asking VIAF about the contributor with VIAF ID 1 to
-        # try to find a sort name. It won't bother with the
-        # contributor with VIAF ID 2, since we already have a sort
-        # name for that author.
-        viaf.queue_lookup("1", "Display Name", "Family", "Name, Sort", 
-                          "Wikipedia_Name")
-        
-        provider.process_item(identifier)
-        filled_in = sorted(
-            [(x.name, x.display_name, x.viaf) for x in edition.contributors]
-        )
+        # data, asking VIAF about the contributors.
+        lookup1 = (ContributorData(
+                  viaf="1", display_name="Display Name",
+                  family_name="Family", sort_name="Name, Sort",
+                  wikipedia_name="Wikipedia_Name"), None, None)
+        lookup2 = (ContributorData(
+                   viaf="2", wikipedia_name="Robert_Jordan_(Author)",
+                   biography="That guy."), None, None)
+        viaf.queue_lookup(lookup1, lookup2)
 
-        # The author previously known only by VIAF has had their
-        # information filled in by the VIAF lookup. The other author
-        # has been left alone.
-        eq_([(u'Jordan, Robert', None, u'2'), 
-             (u'Name, Sort', u'Display Name', u'1')],
+        provider.process_item(identifier)
+
+        # Both authors have had their information updated with the
+        # VIAF results.
+        filled_in = sorted(
+            [(x.sort_name, x.display_name, x.viaf, x.wikipedia_name, x.biography)
+             for x in edition.contributors]
+        )
+        eq_(
+            [(u'Jordan, Robert', None, u'2', u'Robert_Jordan_(Author)', u'That guy.'),
+            (u'Name, Sort', u'Display Name', u'1', u'Wikipedia_Name', None)],
             filled_in
         )
-
-

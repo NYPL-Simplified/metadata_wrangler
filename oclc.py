@@ -7,6 +7,7 @@ import re
 import urllib
 
 import isbnlib
+from collections import Counter
 from pyld import jsonld
 from lxml import etree
 from nose.tools import set_trace
@@ -831,7 +832,7 @@ class OCLCXMLParser(XMLParser):
     @classmethod
     def _contributor_match(cls, contributor, name, lc, viaf):
         return (
-            contributor.name == name
+            contributor.sort_name == name
             and (lc is None or contributor.lc == lc)
             and (viaf is None or contributor.viaf == viaf)
         )
@@ -879,7 +880,7 @@ class OCLCXMLParser(XMLParser):
             # No name was given for the author.
             return None, roles, default_role_used
 
-        if primary_author and author == primary_author.name:
+        if primary_author and author == primary_author.sort_name:
             if Contributor.AUTHOR_ROLE in roles:
                 roles.remove(Contributor.AUTHOR_ROLE)
             if Contributor.UNKNOWN_ROLE in roles:
@@ -1031,7 +1032,7 @@ class OCLCXMLParser(XMLParser):
         if 'authors' in restrictions:
             restrict_to_authors = restrictions['authors']
             if restrict_to_authors and isinstance(restrict_to_authors[0], Contributor):
-                restrict_to_authors = [x.name for x in restrict_to_authors]
+                restrict_to_authors = [x.sort_name for x in restrict_to_authors]
             primary_author = None
 
             for a, roles in authors_and_roles:
@@ -1040,7 +1041,7 @@ class OCLCXMLParser(XMLParser):
                     break
             if (not primary_author
                 or (primary_author not in restrict_to_authors
-                    and primary_author.name not in restrict_to_authors)):
+                    and primary_author.sort_name not in restrict_to_authors)):
                     # None of the given authors showed up as the
                     # primary author of this book. They may have had
                     # some other role in it, or the book may be about
@@ -1048,7 +1049,7 @@ class OCLCXMLParser(XMLParser):
                     # is not *by* them.
                 return None
 
-        author_names = ", ".join([x.name for x, y in authors_and_roles])
+        author_names = ", ".join([x.sort_name for x, y in authors_and_roles])
 
         return title, authors_and_roles, language
 
@@ -1287,8 +1288,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
 
     def process_item(self, identifier):
         try:
-            # Create counters.
-            new_editions = new_isbns = new_descriptions = new_subjects = 0
+            new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
 
             for metadata in self.api.info_for(identifier):
@@ -1298,47 +1298,45 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 # Keep track of the number of editions OCLC associates
                 # with this identifier.
                 other_identifier.add_measurement(
-                    self.output_source, Measurement.PUBLISHED_EDITIONS, 
+                    self.output_source, Measurement.PUBLISHED_EDITIONS,
                     len(oclc_editions)
                 )
-                
-                # If any contributors are identified solely by their
-                # VIAF IDs, look up those IDs and fill those in
-                # now. This will avoid problems later when it's time
-                # to turn these contributors into Contributor objects.
-                for i in metadata.contributors:
-                    if i.viaf and not i.sort_name:
-                        r = self.viaf.lookup_by_viaf(
-                            i.viaf, i.sort_name, i.display_name
-                        )
-                        i.viaf, i.display_name, i.family_name, i.sort_name, i.wikipedia_name = r
+
+                self.apply_viaf_to_contributor_data(metadata)
+
+                # When metadata is applied, it must be given a client that can
+                # response to 'canonicalize_author_name'. Usually this is an
+                # OPDSImporter that reaches out to the Metadata Wrangler, but
+                # in the case of being _on_ the Metadata Wrangler...:
+                from canonicalize import AuthorNameCanonicalizer
+                metadata_client = AuthorNameCanonicalizer(
+                    self._db, oclcld=self.api, viaf=self.viaf
+                )
 
                 num_new_isbns = self.new_isbns(metadata)
+                new_info_counter['isbns'] += num_new_isbns
                 if oclc_editions:
+                    # There are existing OCLC editions. Apply any new information to them.
                     for edition in oclc_editions:
-                        metadata.apply(edition)
-
-                        # Increment counters for logging.
-                        new_editions += 1
-                        new_isbns += num_new_isbns
-                        new_descriptions += len(metadata.links)
-                        new_subjects += len(metadata.subjects)
+                        metadata, new_info_counter = self.apply_metadata_to_edition(
+                            edition, metadata, metadata_client, new_info_counter
+                        )
                 elif num_new_isbns:
+                    # Create a new OCLC edition to hold the information.
                     edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.output_source,
                         primary_identifier=other_identifier
                     )
-                    metadata.apply(edition)
+                    metadata, new_info_counter = self.apply_metadata_to_edition(
+                        edition, metadata, metadata_client, new_info_counter
+                    )
+                    # Set the new OCLC edition's identifier equivalent to this
+                    # identifier so we know they're related.
                     self.set_equivalence(identifier, metadata)
-
-                    # Increment counters for logging.
-                    new_editions += 1
-                    new_isbns += num_new_isbns
-                    new_descriptions += len(metadata.links)
-                    new_subjects += len(metadata.subjects)
                 self.log.info(
-                    "Total: %s editions, %s ISBNs, %s descriptions, %s classifications.",
-                    new_editions, new_isbns, new_descriptions, new_subjects
+                    "Total: %(editions)d editions, %(isbns)d ISBNs, "\
+                    "%(descriptions)d descriptions, %(subjects)d classifications.",
+                    dict(new_info_counter)
                 )
         except IOError as e:
             if ", but couldn't find location" in e.message:
@@ -1352,6 +1350,32 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 transient=transient
             )
         return identifier
+
+    def apply_viaf_to_contributor_data(self, metadata):
+        """Looks up VIAF information for contributors identified by OCLC
+
+        This is particularly crucial for contributors identified solely
+        by VIAF IDs (and no sort_name), as it raises errors later in the
+        process.
+        """
+        for contributor_data in metadata.contributors:
+            viaf_contributor_data = self.viaf.lookup_by_viaf(
+                contributor_data.viaf,
+                working_sort_name=contributor_data.sort_name,
+                working_display_name=contributor_data.display_name
+            )[0]
+            if viaf_contributor_data:
+                viaf_contributor_data.apply(contributor_data)
+
+    def apply_metadata_to_edition(self, edition, metadata, metadata_client, counter):
+        """Applies metadata and increments counters"""
+
+        metadata.apply(edition, metadata_client=metadata_client)
+        counter['editions'] += 1
+        counter['descriptions'] += len(metadata.links)
+        counter['subjects'] += len(metadata.subjects)
+
+        return metadata, counter
 
     def new_isbns(self, metadata):
         """Returns the number of new isbns on a metadata object"""

@@ -1,9 +1,10 @@
+import logging
 import os
+import re
+
 from nose.tools import set_trace
 from lxml import etree
-import logging
 from fuzzywuzzy import fuzz
-import re
 
 from collections import Counter, defaultdict
 
@@ -34,16 +35,12 @@ from core.util.xmlparser import (
 )
 
 
-
-
 class VIAFParser(XMLParser):
 
     NAMESPACES = {'ns2' : "http://viaf.org/viaf/terms#"}
 
     log = logging.getLogger("VIAF Parser")
     wikidata_id = re.compile("^Q[0-9]")
-
-
 
     @classmethod
     def combine_nameparts(self, given, family, extra):
@@ -136,7 +133,7 @@ class VIAFParser(XMLParser):
         # the given author, make sure that one of the working names
         # shows up in a name record.
         if strict:
-            if len(match_confidences) == 0:
+            if not match_confidences:
                 return 0
 
         # Assign weights to fields matched in the xml.  
@@ -369,19 +366,24 @@ class VIAFParser(XMLParser):
         :return: the list of tuples, ordered by percent match, in descending order 
         (top match first).
         """
-
-        if len(contributor_candidates) == 0:
+        if not contributor_candidates:
             return contributor_candidates
 
-        # if the top library popularity candidate is a really bad name match, 
-        # then don't penalize the bottom popularity candidates for being on the bottom.
-        ignore_popularity = False
+        # Double-check that the candidate list is ordered by library
+        # popularity, as it came from viaf
+        contributor_candidates.sort(key=lambda c: c[1].get('library_popularity'))
+        # Grab the most popular candidate.
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
 
-        # double-check that the candidate list is ordered by library popularity, as it came from viaf
-        if match_confidences["library_popularity"] == 1:
-            # baaad match
-            if (("sort_name" in match_confidences) and (match_confidences["sort_name"] < 50)) or ("sort_name" not in match_confidences):
+        # If the top library popularity candidate is a really bad name
+        # match, then don't penalize the bottom popularity candidates
+        # for being on the bottom.
+        ignore_popularity = False
+        if match_confidences.get("library_popularity") == 1:
+            if (("sort_name" in match_confidences and
+                match_confidences["sort_name"] < 50)
+                or "sort_name" not in match_confidences):
+                # baaad match
                 ignore_popularity = True
 
             if "sort_name" not in match_confidences:
@@ -389,8 +391,14 @@ class VIAFParser(XMLParser):
                 pass
 
         # higher score for better match, so to have best match first, do desc order.
-        contributor_candidates.sort(key=lambda x: self.weigh_contributor(x, working_sort_name=working_sort_name, 
-            known_titles=known_titles, strict=strict, ignore_popularity=ignore_popularity), reverse=True)
+        contributor_candidates.sort(
+            key=lambda x: self.weigh_contributor(
+                x, working_sort_name=working_sort_name,
+                known_titles=known_titles, strict=strict,
+                ignore_popularity=ignore_popularity
+            ),
+            reverse=True
+        )
         return contributor_candidates
 
 
@@ -459,7 +467,8 @@ class VIAFParser(XMLParser):
 
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         return self.extract_viaf_info(
-            tree, working_sort_name, working_display_name)
+            tree, working_sort_name, working_display_name
+        )
 
 
     def extract_wikipedia_name(self, cluster):
@@ -498,7 +507,9 @@ class VIAFParser(XMLParser):
 
         # Find out if one of the working names shows up in a name record.
         match_confidences = self.cluster_has_record_for_named_author(
-                cluster, working_sort_name, working_display_name, contributor_data)        
+                cluster, working_sort_name, working_display_name,
+                contributor_data
+        )
 
         # Get the VIAF ID for this cluster, just in case we don't have one yet.
         viaf_tag = self._xpath1(cluster, './/*[local-name()="viafID"]')
@@ -646,11 +657,6 @@ class VIAFParser(XMLParser):
         """Turn a UNIMARC tag into a 4-tuple:
          (given name, family name, extra, sort name)
         """
-        # Only process author names and corporate names.
-        #if unimarc.get('tag') not in ('100', '110'):
-        #    return None, None, None, None
-        #if unimarc.get('tag') == '110':
-        #    set_trace()
         data = dict()
         sort_name_in_progress = []
         for (code, key) in (
@@ -677,6 +683,7 @@ class VIAFClient(object):
     SUBDIR = "viaf"
 
     MEDIA_TYPE = Representation.TEXT_XML_MEDIA_TYPE
+    REPRESENTATION_MAX_AGE = 60*60*24*30*6    # 6 months
 
     def __init__(self, _db):
         self._db = _db
@@ -699,23 +706,18 @@ class VIAFClient(object):
         from VIAF or None on error.
         """
         if contributor.viaf:
-            # We can look them up by VIAF.
-            contributor_candidates = self.lookup_by_viaf(
-                contributor.viaf, contributor.name, contributor.display_name)
+            contributor_candidate = self.lookup_by_viaf(
+                contributor.viaf, contributor.sort_name, contributor.display_name
+            )
         else:
-            contributor_candidates = self.lookup_by_name(contributor.name, contributor.display_name)
-
-        # we have the viaf results for all clusters corresponding to 
-        # this contributor.  now sort them to get the best match.
-        if contributor_candidates:
-            contributor_candidates = self.parser.order_candidates(working_sort_name=contributor.name, contributor_candidates=contributor_candidates)
-            (selected_candidate, match_confidences, contributor_titles)  = contributor_candidates[0]
-
-        # having a cluster of authors doesn't mean we found a match.  
-        if not selected_candidate or "total" not in match_confidences or match_confidences["total"] < 70:
-            # no match or bad match.  give up.
+            contributor_candidate = self.lookup_by_name(
+                contributor.sort_name, contributor.display_name
+            )
+        if not contributor_candidate:
+            # No good match was identified.
             return None
 
+        (selected_candidate, match_confidences, contributor_titles) = best_contributor_candidate
         # Is there already another contributor with this VIAF?
         if selected_candidate.viaf is not None:
             duplicates = self._db.query(Contributor).filter(
@@ -742,48 +744,78 @@ class VIAFClient(object):
 
         return selected_candidate
 
+    def select_best_match(self, candidates, working_sort_name):
+        """Gets the best VIAF match from a series of potential matches
+
+        Return a tuple containing the selected_candidate (a ContributorData
+        object), a dict of match_confidences, and a list of titles by the
+        contributor.
+        """
+        # Sort for the best match and select the first.
+        candidates = self.parser.order_candidates(
+            working_sort_name=working_sort_name,
+            contributor_candidates=candidates
+        )
+        if not candidates:
+            return None
+
+        (selected_candidate, match_confidences, contributor_titles) = candidates[0]
+
+        if (not selected_candidate or "total" not in match_confidences or
+            match_confidences["total"] < 70):
+            # The best match is dubious. Best to avoid this.
+            return None
+
+        return selected_candidate, match_confidences, contributor_titles
 
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
         url = self.LOOKUP_URL % dict(viaf=viaf)
-        r, cached = Representation.get(self._db, url, do_get=do_get)
+        r, cached = Representation.get(
+            self._db, url, do_get=do_get, max_age=self.REPRESENTATION_MAX_AGE
+        )
 
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
-
-    def lookup_by_name(self, sort_name, display_name=None, do_get=None):
-        name = sort_name or display_name
-        # from OCLC tech support:  
-        # VIAF's SRU endpoint can only return a maximum number of 10 records when the recordSchema is http://viaf.org/VIAFCluster
+    def lookup_by_name(self, sort_name, display_name=None, do_get=None,
+                       best_match=False):
+        sort_name = sort_name or display_name
+        # from OCLC tech support:
+        # VIAF's SRU endpoint can only return a maximum number of 10 records
+        # when the recordSchema is http://viaf.org/VIAFCluster
         maximum_records = 10 # viaf maximum that's not ignored
         page = 1
         contributor_candidates = []
 
-        # limit ourselves to reading the first 500 viaf clusters, on the assumption that 
-        # search match quality is unlikely to be usable after that.
-        #for page in range (20, 22):
+        # limit ourselves to reading the first 500 viaf clusters, on the
+        # assumption that search match quality is unlikely to be usable after that.
         for page in range (1, 51):
             start_record = 1 + maximum_records * (page-1)
             scope = 'local.personalNames'
             if is_corporate_name(sort_name):
                 scope = 'local.corporateNames'
 
-            url = self.SEARCH_URL.format(scope=scope, sort_name=name.encode("utf8"), maximum_records=maximum_records, start_record=start_record)
-            representation, cached = Representation.get(self._db, url, do_get=do_get)
+            url = self.SEARCH_URL.format(
+                scope=scope, sort_name=sort_name.encode("utf8"),
+                maximum_records=maximum_records, start_record=start_record
+            )
+            representation, cached = Representation.get(
+                self._db, url, do_get=do_get, max_age=self.REPRESENTATION_MAX_AGE
+            )
             xml = representation.content
 
             candidates = self.parser.parse_multiple(xml, sort_name, display_name, page)
             if not any(candidates):
                 # Delete the representation so it's not cached.
-                self._db.query(Representation).filter(Representation.id==representation.id).delete()
-                # we ran out of clusters, so we can relax and move on to ordering the returned results
+                self._db.query(Representation).filter(
+                    Representation.id==representation.id
+                ).delete()
+                # We ran out of clusters, so we can relax and move on to
+                # ordering the returned results
                 break
 
             contributor_candidates.extend(candidates)
             page += 1
 
-        return contributor_candidates
-
-
-
+        return self.select_best_match(contributor_candidates, sort_name)

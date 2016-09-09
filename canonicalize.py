@@ -1,18 +1,21 @@
 """Use external services to canonicalize names."""
-from nose.tools import set_trace
 import logging
-from oclc import OCLCLinkedData
+import re
+from nose.tools import set_trace
+
+from core.model import (
+    Contributor,
+    Identifier,
+)
 from core.util import MetadataSimilarity
 from core.util.personal_names import (
     display_name_to_sort_name,
     is_corporate_name,
 )
+
+from oclc import OCLCLinkedData
 from viaf import VIAFClient
-from core.model import (
-    Contributor,
-    Identifier,
-)
-import re
+
 
 class CanonicalizationError(Exception):
     pass
@@ -53,7 +56,7 @@ class AuthorNameCanonicalizer(object):
 
         return author_name
 
-    def canonicalize(self, identifier, display_name):
+    def canonicalize_author_name(self, identifier, display_name):
         """Canonicalize a book's primary author given an identifier and a
         display name.
 
@@ -71,7 +74,8 @@ class AuthorNameCanonicalizer(object):
             identifier = None
         if not identifier and not display_name:
             raise CanonicalizationError(
-                "Neither useful identifier nor display name was provided.")
+                "Neither useful identifier nor display name was provided."
+            )
 
         # From an author name that potentially names multiple people,
         # extract only the first name.
@@ -84,8 +88,9 @@ class AuthorNameCanonicalizer(object):
             if v:
                 return v
 
-        # All our techniques have failed. Woe!
-        return None
+        # All our techniques have failed. Woe! Let's just try to finagle
+        # this provided display name into a sort name.
+        return self.default_name(display_name)
 
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)
@@ -97,11 +102,11 @@ class AuthorNameCanonicalizer(object):
         self.log.debug("Attempting to canonicalize %s", display_name)
         contributors = self._db.query(Contributor).filter(
             Contributor.display_name==display_name).filter(
-                Contributor.name != None).all()
+                Contributor.sort_name != None).all()
         sort_name = None
         if contributors and False:
             # Yes, awesome. Use this name.
-            sort_name = contributors[0].name
+            sort_name = contributors[0].sort_name
             self.log.debug(
                 "Found existing contributor for %s: %s",
                 display_name, sort_name
@@ -125,10 +130,10 @@ class AuthorNameCanonicalizer(object):
                 m = self.VIAF_ID.search(uri)
                 if m:
                     viaf_id = m.groups()[0]
-                    viaf_id, display_name, family_name, sort_name, wikipedia_name = (
-                        self.viaf.lookup_by_viaf(
-                            viaf_id, working_display_name=display_name))
-                    if sort_name:
+                    contributor_data = self.viaf.lookup_by_viaf(
+                        viaf_id, working_display_name=display_name
+                    )[0]
+                    if contributor_data.sort_name:
                         return sort_name
 
         # Nope. If we were given a display name, let's ask VIAF about it
@@ -191,9 +196,16 @@ class AuthorNameCanonicalizer(object):
         return shortest_candidate, uris
 
     def sort_name_from_viaf(self, display_name):
-        viaf, display_name, family_name, sort_name, wikipedia_name = (
-                self.viaf.lookup_by_name(None, display_name))
-        self.log.debug("Asked VIAF for sort name for %s. Response: %s",
-                       display_name, sort_name)
-        return sort_name
+        sort_name = None
 
+        viaf_contributor = self.viaf.lookup_by_name(
+            None, display_name, best_match=True
+        )
+        if viaf_contributor:
+            contributor_data = viaf_contributor[0]
+            sort_name = contributor_data.sort_name
+            self.log.debug(
+                "Asked VIAF for sort name for %s. Response: %s",
+                display_name, sort_name
+            )
+        return sort_name

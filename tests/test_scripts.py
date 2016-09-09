@@ -118,5 +118,5 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         eq_(1, len(self.edition1.contributors))
         eq_(
             ["Denzel Washington"], 
-            [x.name for x in self.edition1.contributors]
+            [x.sort_name for x in self.edition1.contributors]
         )

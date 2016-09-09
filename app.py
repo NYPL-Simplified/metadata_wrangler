@@ -5,7 +5,7 @@ import flask
 import urlparse
 
 from functools import wraps
-from flask import Flask, make_response
+from flask import Flask
 from flask.ext.babel import Babel
 from core.util.problem_detail import ProblemDetail
 from core.opds import VerboseAnnotator
@@ -20,8 +20,11 @@ from core.model import (
 )
 from core.config import Configuration
 
-from canonicalize import AuthorNameCanonicalizer
-from controller import CollectionController
+from controller import (
+    CollectionController,
+    CanonicalizationController
+)
+
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -43,6 +46,7 @@ else:
     Conf.testing = False
     _db = production_session()
     Conf.initialize(_db)
+
 
 def accepts_collection(f):
     @wraps(f)
@@ -88,28 +92,7 @@ def lookup(collection=None):
 @app.route('/canonical-author-name')
 @returns_problem_detail
 def canonical_author_name():
-    urn = flask.request.args.get('urn')
-    display_name = flask.request.args.get('display_name')
-    if urn:
-        identifier = URNLookupController.parse_urn(Conf.db, urn, False)
-        if not isinstance(identifier, Identifier):
-            return INVALID_URN
-    else:
-        identifier = None
-
-    canonicalizer = AuthorNameCanonicalizer(Conf.db)
-    author_name = canonicalizer.canonicalize(identifier, display_name)
-    Conf.log.info("Incoming display name/identifier: %r/%s. Canonicalizer said: %s",
-                  display_name, identifier, author_name)
-    if not author_name:
-        if display_name:
-            author_name = canonicalizer.default_name(display_name)
-            Conf.log.info("Defaulting to %s for %r", author_name, identifier)
-    Conf.db.commit()
-    if author_name:
-        return make_response(author_name, 200, {"Content-Type": "text/plain"})
-    else:
-        return make_response("", 404)
+    return CanonicalizationController(Conf.db).canonicalize_author_name()
 
 @app.route('/updates')
 @requires_auth
@@ -142,6 +125,3 @@ if __name__ == '__main__':
 
     Conf.log.info("Starting app on %s:%s", host, port)
     app.run(debug=debug, host=host, port=port)
-
-
-

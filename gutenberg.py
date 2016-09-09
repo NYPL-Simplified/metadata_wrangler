@@ -51,7 +51,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         if len(authors) == 0:
             author = ''
         else:
-            author = authors[0].name
+            author = authors[0].sort_name
 
         language = edition.language
 
@@ -127,10 +127,10 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         gutenberg_authors_to_merge = [
             x for x in edition.author_contributors if not x.viaf or not x.lc
         ]
-        gutenberg_names = set([x.name for x in edition.author_contributors])
+        gutenberg_names = set([x.sort_name for x in edition.author_contributors])
         for r in records:
             if gutenberg_authors_to_merge:
-                oclc_names = set([x.name for x in r.author_contributors])
+                oclc_names = set([x.sort_name for x in r.author_contributors])
                 if gutenberg_names == oclc_names:
                     # Perfect overlap. We've found an OCLC record
                     # for a book written by exactly the same
@@ -138,7 +138,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
                     # Gutenberg author into its OCLC equivalent.
                     for gutenberg_author in gutenberg_authors_to_merge:
                         oclc_authors = [x for x in r.author_contributors
-                                        if x.name == gutenberg_author.name]
+                                        if x.sort_name == gutenberg_author.sort_name]
                         if len(oclc_authors) == 1:
                             oclc_author = oclc_authors[0]
                             if oclc_author != gutenberg_author:

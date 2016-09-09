@@ -26,12 +26,45 @@ from core.problem_details import (
     INVALID_URN,
 )
 
+from canonicalize import AuthorNameCanonicalizer
+
 HTTP_OK = 200
 HTTP_CREATED = 201
 HTTP_ACCEPTED = 202
 HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
+
+
+class CanonicalizationController(object):
+
+    log = logging.getLogger("Canonicalization Controller")
+
+    def __init__(self, _db):
+        self._db = _db
+        self.canonicalizer = AuthorNameCanonicalizer(self._db)
+
+    def canonicalize_author_name(self):
+        urn = request.args.get('urn')
+        display_name = request.args.get('display_name')
+        if urn:
+            identifier = URNLookupController.parse_urn(self._db, urn, False)
+            if not isinstance(identifier, Identifier):
+                return INVALID_URN
+        else:
+            identifier = None
+
+        author_name = self.canonicalizer.canonicalize_author_name(
+            identifier, display_name
+        )
+        self.log.info(
+            "Incoming display name/identifier: %r/%s. Canonicalizer said: %s",
+            display_name, identifier, author_name
+        )
+
+        if not author_name:
+            return make_response("", 404)
+        return make_response(author_name, 200, {"Content-Type": "text/plain"})
 
 
 class CollectionController(object):
