@@ -14,10 +14,7 @@ from core.app_server import (
     URNLookupController,
     returns_problem_detail,
 )
-from core.model import (
-    production_session,
-    Identifier,
-)
+from core.model import production_session
 from core.config import Configuration
 
 from controller import (

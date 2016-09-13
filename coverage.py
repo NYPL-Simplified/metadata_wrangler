@@ -172,7 +172,8 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
                 return self.transform_exception_into_failure(e, identifier)
 
         try:
-            self.finalize(identifier)
+            self.resolve_equivalent_oclc_identifiers(identifier)
+            self.process_work(identifier)
         except Exception as e:
             return self.transform_exception_into_failure(e, identifier)
 
