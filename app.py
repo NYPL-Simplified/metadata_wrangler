@@ -11,7 +11,6 @@ from core.util.problem_detail import ProblemDetail
 from core.opds import VerboseAnnotator
 from core.app_server import (
     HeartbeatController,
-    URNLookupController,
     returns_problem_detail,
 )
 from core.model import production_session
@@ -19,7 +18,8 @@ from core.config import Configuration
 
 from controller import (
     CollectionController,
-    CanonicalizationController
+    CanonicalizationController,
+    URNLookupController
 )
 
 

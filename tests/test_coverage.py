@@ -189,7 +189,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, isinstance(result, CoverageFailure))
         eq_(True, result.transient)
 
-
     def test_process_item_fails_when_required_provider_raises_exception(self):
         self.coverage_provider.required_coverage_providers = [self.broken]
         result = self.coverage_provider.process_item(self.identifier)
