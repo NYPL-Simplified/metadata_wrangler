@@ -11,6 +11,7 @@ from core.model import (
     DataSource,
     get_one, 
     Identifier,
+    LicensePool,
 )
 from core.coverage import CoverageFailure
 from core.opds_import import MockSimplifiedOPDSLookup
@@ -146,7 +147,19 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.never_successful = NeverSuccessfulCoverageProvider(
             "Never", [self.identifier.type], self.source
         )
-        self.broken = BrokenCoverageProvider("Broken", [self.identifier.type], self.source)
+        self.broken = BrokenCoverageProvider(
+            "Broken", [self.identifier.type], self.source
+        )
+
+    def test_process_item_creates_license_pool(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful
+        ]
+
+        self.coverage_provider.process_item(self.identifier)
+        lp = self.identifier.licensed_through
+        eq_(True, isinstance(lp, LicensePool))
+        eq_(lp.data_source, self.coverage_provider.output_source)
 
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.coverage_provider.required_coverage_providers = [

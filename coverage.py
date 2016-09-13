@@ -59,6 +59,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
     For ISBNs, make a bunch of Resources, rather than LicensePooled Editions.
     """
 
+    CAN_CREATE_LICENSE_POOLS = True
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
@@ -67,14 +68,14 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
                  uploader=None, providers=None, **kwargs):
         output_source, made_new = get_one_or_create(
             _db, DataSource,
-            name=DataSource.INTERNAL_PROCESSING, offers_licenses=False,
+            name=DataSource.INTERNAL_PROCESSING, offers_licenses=True,
         )
         input_identifier_types = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
             service_name="Identifier Resolution Coverage Provider",
             input_identifier_types=input_identifier_types,
-            output_source = output_source,
+            output_source=output_source,
             batch_size=batch_size,
             operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
         )
@@ -131,6 +132,13 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         required, then returns a CoverageFailure.
         """
         self.log.info("Ensuring coverage for %r", identifier)
+
+        license_pool = self.license_pool(identifier)
+        if isinstance(license_pool, CoverageFailure):
+            error = ValueError(
+                "Could not generate LicensePool for %r" % identifier
+            )
+            return self.transform_exception_into_failure(e, identifier)
 
         # Go through all relevant providers and tries to ensure coverage.
         # If there's a failure or an exception, create a CoverageFailure.
