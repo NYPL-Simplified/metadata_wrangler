@@ -222,10 +222,15 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         result = self.coverage_provider.process_item(self.identifier)
 
-        # A successful result is achieved.
+        # A successful result is achieved, even though the optional
+        # coverage provider failed.
         eq_(result, self.identifier)
-        # Even though the coverage provider failed and an appropriate
-        # coverage record was created to mark the failure.
-        r = get_one(self._db, CoverageRecord, identifier=self.identifier)
-        eq_("What did you expect?", r.exception)
 
+        # An appropriate coverage record was created to mark the failure.
+        presentation_edition = DataSource.lookup(
+            self._db, DataSource.PRESENTATION_EDITION
+        )
+        r = self._db.query(CoverageRecord).filter(
+            CoverageRecord.identifier==self.identifier,
+            CoverageRecord.data_source!=presentation_edition).one()
+        eq_("What did you expect?", r.exception)
