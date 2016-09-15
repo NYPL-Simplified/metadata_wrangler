@@ -694,7 +694,6 @@ class VIAFClient(object):
     def data_source(self):
         return DataSource.lookup(self._db, DataSource.VIAF)
 
-
     def process_contributor(self, contributor):
         """ Accepts a Contributor object, and asks VIAF for information on the contributor's name.
         Finds the VIAF cluster that's most likely to correspond to the passed-in contributor.
@@ -717,15 +716,15 @@ class VIAFClient(object):
             # No good match was identified.
             return None
 
-        (selected_candidate, match_confidences, contributor_titles) = best_contributor_candidate
+        (selected_candidate, match_confidences, contributor_titles) = contributor_candidate
         # Is there already another contributor with this VIAF?
         if selected_candidate.viaf is not None:
-            duplicates = self._db.query(Contributor).filter(
-                Contributor.viaf==selected_candidate.viaf).filter(
-                    Contributor.id != selected_candidate.id).all()
-            if duplicates:
-                if duplicates[0].display_name == selected_candidate.display_name:
-                    selected_candidate.apply(duplicates[0])
+            earliest_duplicate = self._db.query(Contributor).\
+                filter(Contributor.viaf==selected_candidate.viaf).\
+                filter(Contributor.id!=contributor.id).first()
+            if earliest_duplicate:
+                if earliest_duplicate.display_name == selected_candidate.display_name:
+                    selected_candidate.apply(earliest_duplicate)
                 else:
                     d1 = selected_candidate.display_name
                     if isinstance(d1, unicode):
