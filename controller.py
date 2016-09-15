@@ -238,7 +238,7 @@ class URNLookupController(CoreURNLookupController):
         # this Identifier part of the given collection.
         if collection:
             collection.catalog_identifier(self._db, identifier)
-        
+
         if identifier.type == Identifier.ISBN:
             # ISBNs are handled specially.
             return self.make_opds_entry_from_metadata_lookups(identifier)
@@ -315,7 +315,7 @@ class URNLookupController(CoreURNLookupController):
                 [x.id for x in metadata_sources]
             )
         )
-        
+
         coverage_records = q.all()
         unaccounted_for = set(metadata_sources)
         for r in coverage_records:

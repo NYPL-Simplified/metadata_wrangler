@@ -11,6 +11,7 @@ from core.model import (
     DataSource,
     get_one, 
     Identifier,
+    LicensePool,
 )
 from core.coverage import CoverageFailure
 from core.opds_import import MockSimplifiedOPDSLookup
@@ -146,7 +147,19 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.never_successful = NeverSuccessfulCoverageProvider(
             "Never", [self.identifier.type], self.source
         )
-        self.broken = BrokenCoverageProvider("Broken", [self.identifier.type], self.source)
+        self.broken = BrokenCoverageProvider(
+            "Broken", [self.identifier.type], self.source
+        )
+
+    def test_process_item_creates_license_pool(self):
+        self.coverage_provider.required_coverage_providers = [
+            self.always_successful
+        ]
+
+        self.coverage_provider.process_item(self.identifier)
+        lp = self.identifier.licensed_through
+        eq_(True, isinstance(lp, LicensePool))
+        eq_(lp.data_source, self.coverage_provider.output_source)
 
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.coverage_provider.required_coverage_providers = [
@@ -175,7 +188,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         result = self.coverage_provider.process_item(self.identifier)
         eq_(True, isinstance(result, CoverageFailure))
         eq_(True, result.transient)
-
 
     def test_process_item_fails_when_required_provider_raises_exception(self):
         self.coverage_provider.required_coverage_providers = [self.broken]
@@ -209,10 +221,15 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         result = self.coverage_provider.process_item(self.identifier)
 
-        # A successful result is achieved.
+        # A successful result is achieved, even though the optional
+        # coverage provider failed.
         eq_(result, self.identifier)
-        # Even though the coverage provider failed and an appropriate
-        # coverage record was created to mark the failure.
-        r = get_one(self._db, CoverageRecord, identifier=self.identifier)
-        eq_("What did you expect?", r.exception)
 
+        # An appropriate coverage record was created to mark the failure.
+        presentation_edition = DataSource.lookup(
+            self._db, DataSource.PRESENTATION_EDITION
+        )
+        r = self._db.query(CoverageRecord).filter(
+            CoverageRecord.identifier==self.identifier,
+            CoverageRecord.data_source!=presentation_edition).one()
+        eq_("What did you expect?", r.exception)
