@@ -238,34 +238,57 @@ class TestVIAFClient(DatabaseTest):
         contributor = self._contributor()[0]
 
         # If lookup returns an empty array (as in the case of
-        # VIAFParser#parse_multiple), #process_contributor returns None.
+        # VIAFParser#parse_multiple), the contributor is not updated.
         client.queue_lookup([])
-        eq_(client.process_contributor(contributor), None)
+        client.process_contributor(contributor)
+        eq_(contributor.sort_name, '2001')
+        eq_(contributor.display_name, None)
 
         def queue_lookup_result():
-            h = self.queue_file_in_mock_http("mindy_kaling.xml")
-            lookup = self.client.lookup_by_viaf(viaf="9581122", do_get=h.do_get)
-            client.queue_lookup(lookup)
+            http = self.queue_file_in_mock_http("mindy_kaling.xml")
+            lookup = self.client.lookup_by_viaf(viaf="9581122", do_get=http.do_get)
+            client.results = [lookup]
 
-        # When lookup returns a candidate, the candidate is returned.
+        # When lookup is successful, the contributor is updated.
         queue_lookup_result()
-        result = client.process_contributor(contributor)
-        eq_(True, isinstance(result, ContributorData))
+        client.process_contributor(contributor)
+        eq_(contributor.sort_name, "Kaling, Mindy")
+        eq_(contributor.display_name, "Mindy Kaling")
 
-        # If the contributor being processed is the only contributor with the
-        # viaf number in the database, it will not be automatically updated.
-        contributor.display_name = "Mindy Kaling"
-        contributor.viaf = "9581122"
-        queue_lookup_result()
-        result = client.process_contributor(contributor)
-        assert contributor.sort_name != result.sort_name
+        # If a contributor with the same VIAF number already exists,
+        # the original contributor will be updated with VIAF data
+        # and the processed contributor will be merged into the original.
+        earliest_contributor = contributor
+        # Reset the contributors sort name to confirm the data update.
+        earliest_contributor.sort_name = None
 
-        # If there are multiple contributors in the database with the same
-        # viaf number, the first one found will be updated with the viaf
-        duplicate_contributor = self._contributor()[0]
+        # Create a new contributor and contribution to confirm the merge.
+        contributor = self._contributor()[0]
+        edition = self._edition(authors=contributor.sort_name)
+        eq_(edition.contributors, set([contributor]))
+
         queue_lookup_result()
-        result = client.process_contributor(duplicate_contributor)
-        eq_(contributor.sort_name, result.sort_name)
+        client.process_contributor(contributor)
+        eq_(earliest_contributor.sort_name, "Kaling, Mindy")
+        eq_(edition.contributors, set([earliest_contributor]))
+        # The new contributor has been deleted.
+        assert contributor not in self._db
+
+        # If the display name of the original contributor is suspiciously
+        # different from the VIAF display name, the new contributor will be
+        # updated without being merged.
+        earliest_contributor.display_name = "Mindy L. Kaling"
+        earliest_contributor.sort_name = None
+        contributor = self._contributor()[0]
+        edition = self._edition(authors=contributor.sort_name)
+
+        queue_lookup_result()
+        client.process_contributor(contributor)
+        eq_(contributor.viaf, "9581122")
+        eq_(contributor.sort_name, "Kaling, Mindy")
+        # Earlier contributor has not been updated or merged.
+        eq_(earliest_contributor.sort_name, None)
+        assert earliest_contributor not in edition.contributors
 
     def test_lookup_by_viaf(self):
         # there can be one and only one Mindy

@@ -717,31 +717,27 @@ class VIAFClient(object):
             return None
 
         (selected_candidate, match_confidences, contributor_titles) = contributor_candidate
-        # Is there already another contributor with this VIAF?
         if selected_candidate.viaf is not None:
+            # Is there already another contributor with this VIAF?
             earliest_duplicate = self._db.query(Contributor).\
                 filter(Contributor.viaf==selected_candidate.viaf).\
                 filter(Contributor.id!=contributor.id).first()
             if earliest_duplicate:
                 if earliest_duplicate.display_name == selected_candidate.display_name:
                     selected_candidate.apply(earliest_duplicate)
+                    contributor.merge_into(earliest_duplicate)
+                    return
                 else:
-                    d1 = selected_candidate.display_name
-                    if isinstance(d1, unicode):
-                        d1 = d1.encode("utf8")
-                    d2 = duplicates[0].display_name
-                    if isinstance(d2, unicode):
-                        d2 = d2.encode("utf8")
-
-                    self.log.warn(
-                        "POSSIBLE SPURIOUS AUTHOR MERGE: %s => %s", d1, d2
-                    )
                     # TODO: This might be okay or it might be a
                     # problem we need to address. Whatever it is,
-                    # don't merge the records.
-                    pass
-
-        return selected_candidate
+                    # don't merge the records. Instead, apply the VIAF
+                    # data to the provided contributor, potentially
+                    # creating an accursed duplicate.
+                    self.log.warn(
+                        "AVOIDING POSSIBLE SPURIOUS AUTHOR MERGE: %r => %r",
+                        selected_candidate, earliest_duplicate
+                    )
+            selected_candidate.apply(contributor)
 
     def select_best_match(self, candidates, working_sort_name):
         """Gets the best VIAF match from a series of potential matches
