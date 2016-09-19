@@ -196,15 +196,16 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         if not (title and author):
             e = 'Cannot lookup edition without title and author!'
             return CoverageFailure(
-                identifier, e,
-                data_source=self.output_source, transient=True
+                identifier, e, data_source=self.output_source
             )
         xml = self.api.lookup_by(title=title, author=author)
 
         try:
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
-            return CoverageFailure(self, identifier, e)
+            return CoverageFailure(
+                identifier, e.message, data_source=self.output_source
+            )
 
         self.merge_contributors(edition, records)
         self.log.info("Created %s records(s).", len(records))
