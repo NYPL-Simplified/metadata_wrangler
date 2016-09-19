@@ -323,12 +323,14 @@ class TestURNLookupController(DatabaseTest):
         # Adds new identifiers to an existing catalog
         self.controller.process_urn(i2.urn, collection=collection)
         eq_(2, len(collection.catalog))
-        eq_([i1, i2], collection.catalog)
+        assert i1 in collection.catalog
+        assert i2 in collection.catalog
 
         # Does not duplicate identifiers in the catalog
         self.controller.process_urn(i1.urn, collection=collection)
         eq_(2, len(collection.catalog))
-        eq_([i1, i2], collection.catalog)
+        assert i1 in collection.catalog
+        assert i2 in collection.catalog
 
     def test_process_urn_isbn(self):
         # Create a new ISBN identifier.

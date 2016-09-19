@@ -8,6 +8,9 @@ from . import (
     sample_data,
 )
 
+from core.metadata_layer import ContributorData
+
+from testing import MockVIAFClient
 from viaf import (
     VIAFParser, 
     VIAFClient
@@ -204,35 +207,101 @@ class TestNameParser(DatabaseTest):
         # make sure birthdate is 1986
 
 
+class MockVIAFClientLookup(MockVIAFClient, VIAFClient):
+    """A mocked VIAFClient that can queue mocked lookup results and
+    still be used to test VIAFClient#process_contributor.
+    """
+    def __init__(self, _db, log):
+        self._db = _db
+        self.log = log
+        super(MockVIAFClientLookup, self).__init__()
+
 
 class TestVIAFClient(DatabaseTest):
+
     def setup(self):
         super(TestVIAFClient, self).setup()
         self.client = VIAFClient(self._db)
         self.log = logging.getLogger("VIAF Client Test")
 
-
     def sample_data(self, filename):
         return sample_data(filename, "viaf")
 
+    def queue_file_in_mock_http(self, filename):
+        h = DummyHTTPClient()
+        xml = self.sample_data(filename)
+        h.queue_response(200, media_type='text/xml', content=xml)
+        return h
+
+    def test_process_contributor(self):
+        client = MockVIAFClientLookup(self._db, self.log)
+        contributor = self._contributor()[0]
+
+        # If lookup returns an empty array (as in the case of
+        # VIAFParser#parse_multiple), the contributor is not updated.
+        client.queue_lookup([])
+        client.process_contributor(contributor)
+        eq_(contributor.sort_name, '2001')
+        eq_(contributor.display_name, None)
+
+        def queue_lookup_result():
+            http = self.queue_file_in_mock_http("mindy_kaling.xml")
+            lookup = self.client.lookup_by_viaf(viaf="9581122", do_get=http.do_get)
+            client.results = [lookup]
+
+        # When lookup is successful, the contributor is updated.
+        queue_lookup_result()
+        client.process_contributor(contributor)
+        eq_(contributor.sort_name, "Kaling, Mindy")
+        eq_(contributor.display_name, "Mindy Kaling")
+
+        # If a contributor with the same VIAF number already exists,
+        # the original contributor will be updated with VIAF data
+        # and the processed contributor will be merged into the original.
+        earliest_contributor = contributor
+        # Reset the contributors sort name to confirm the data update.
+        earliest_contributor.sort_name = None
+
+        # Create a new contributor and contribution to confirm the merge.
+        contributor = self._contributor()[0]
+        edition = self._edition(authors=contributor.sort_name)
+        eq_(edition.contributors, set([contributor]))
+
+        queue_lookup_result()
+        client.process_contributor(contributor)
+        eq_(earliest_contributor.sort_name, "Kaling, Mindy")
+        eq_(edition.contributors, set([earliest_contributor]))
+        # The new contributor has been deleted.
+        assert contributor not in self._db
+
+        # If the display name of the original contributor is suspiciously
+        # different from the VIAF display name, the new contributor will be
+        # updated without being merged.
+        earliest_contributor.display_name = "Mindy L. Kaling"
+        earliest_contributor.sort_name = None
+        contributor = self._contributor()[0]
+        edition = self._edition(authors=contributor.sort_name)
+
+        queue_lookup_result()
+        client.process_contributor(contributor)
+        eq_(contributor.viaf, "9581122")
+        eq_(contributor.sort_name, "Kaling, Mindy")
+        # Earlier contributor has not been updated or merged.
+        eq_(earliest_contributor.sort_name, None)
+        assert earliest_contributor not in edition.contributors
 
     def test_lookup_by_viaf(self):
         # there can be one and only one Mindy
-        h = DummyHTTPClient()
-        xml = self.sample_data("mindy_kaling.xml")
-        h.queue_response(200, media_type='text/xml', content=xml)
+        h = self.queue_file_in_mock_http("mindy_kaling.xml")
 
-        contributor_candidates = self.client.lookup_by_viaf(viaf="9581122", do_get=h.do_get)
-        (selected_candidate, match_confidences, contributor_titles) = contributor_candidates
+        contributor_candidate = self.client.lookup_by_viaf(viaf="9581122", do_get=h.do_get)
+        (selected_candidate, match_confidences, contributor_titles) = contributor_candidate
         eq_(selected_candidate.viaf, "9581122")
         eq_(selected_candidate.sort_name, "Kaling, Mindy")
 
-
     def test_lookup_by_name(self):
         # there can be one and only one Mindy
-        h = DummyHTTPClient()
-        xml = self.sample_data("mindy_kaling.xml")
-        h.queue_response(200, media_type='text/xml', content=xml)
+        h = self.queue_file_in_mock_http("mindy_kaling.xml")
 
         (selected_candidate,
          match_confidences,
