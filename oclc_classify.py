@@ -1,4 +1,5 @@
 import re
+import urllib
 from nose.tools import set_trace
 
 from core.coverage import (
@@ -8,11 +9,40 @@ from core.coverage import (
 from core.model import (
     DataSource,
     Identifier,
+    Representation,
 )
-from oclc import (
-    OCLCClassifyAPI,
-    OCLCXMLParser,
-)
+
+from oclc import OCLCXMLParser
+
+
+class OCLCClassifyAPI(object):
+
+    BASE_URL = 'http://classify.oclc.org/classify2/Classify?'
+
+    NO_SUMMARY = '&summary=false'
+
+    def __init__(self, _db):
+        self._db = _db
+
+    @property
+    def source(self):
+        return DataSource.lookup(self._db, DataSource.OCLC)
+
+    def query_string(self, **kwargs):
+        args = dict()
+        for k, v in kwargs.items():
+            if isinstance(v, unicode):
+                v = v.encode("utf8")
+            args[k] = v
+        return urllib.urlencode(sorted(args.items()))
+
+    def lookup_by(self, **kwargs):
+        """Perform an OCLC Classify lookup."""
+        query_string = self.query_string(**kwargs)
+        url = self.BASE_URL + query_string
+        representation, cached = Representation.get(self._db, url)
+        return representation.content
+
 
 class OCLCClassifyCoverageProvider(CoverageProvider):
     """Does title/author lookups using OCLC Classify."""
