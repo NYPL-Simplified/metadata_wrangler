@@ -56,7 +56,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
     # especially colons.
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
 
-    def __init__(self, _db):
+    def __init__(self, _db, api=None):
         input_identifier_types = [
             Identifier.GUTENBERG_ID, Identifier.URI
         ]
@@ -66,7 +66,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             output_source)
 
         self._db = _db
-        self.api = OCLCClassifyAPI(self._db)
+        self.api = api or OCLCClassifyAPI(self._db)
 
     def oclc_safe_title(self, title):
         if not title:
@@ -193,7 +193,14 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
 
         # Perform a title/author lookup.
         title, author, language = self.get_edition_info(edition)
+        if not (title and author):
+            e = 'Cannot lookup edition without title and author!'
+            return CoverageFailure(
+                identifier, e,
+                data_source=self.output_source, transient=True
+            )
         xml = self.api.lookup_by(title=title, author=author)
+
         try:
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
