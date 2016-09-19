@@ -28,7 +28,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
 
     def __init__(self, _db):
         input_identifier_types = [
-            Identifier.THREEM_ID, Identifier.GUTENBERG_ID, Identifier.URI
+            Identifier.GUTENBERG_ID, Identifier.URI
         ]
         output_source = DataSource.lookup(_db, DataSource.OCLC)
         super(OCLCClassifyCoverageProvider, self).__init__(
@@ -39,6 +39,8 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         self.api = OCLCClassifyAPI(self._db)
 
     def oclc_safe_title(self, title):
+        if not title:
+            return ''
         return self.NON_TITLE_SAFE.sub("", title)
 
     def get_edition_info(self, edition):
