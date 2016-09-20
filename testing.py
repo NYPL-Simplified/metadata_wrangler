@@ -1,5 +1,16 @@
 from nose.tools import set_trace
 
+class MockOCLCClassifyAPI(object):
+    def __init__(self):
+        self.results = []
+
+    def queue_lookup(self, *results):
+        self.results += results
+
+    def lookup_by(self, **kwargs):
+        return self.results.pop(0)
+
+
 class MockOCLCLinkedDataAPI(object):
 
     def __init__(self):

@@ -37,7 +37,7 @@ from content_server import (
     ContentServerCoverageProvider, 
 )
 
-from gutenberg import (
+from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
 

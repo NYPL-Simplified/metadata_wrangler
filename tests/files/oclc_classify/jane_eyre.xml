@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="4"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <workCount>229</workCount>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <orderBy>thold desc</orderBy>
+  <input type="title/author">Jane+Eyre|Charlotte+Bronte</input>
+  <works>
+    <work author="Eliot, George, 1819-1880 | Bloom, Harold [Editor] | Carroll, David, 1932- [Editor] | Leavis, Q. D. [Editor; Author of introduction; Other] | Witham, R. Adelaide 1873- [Editor] | Gulick, Edward Leeds, 1862-1931, [Editor]" editions="1767" format="eBook" holdings="22451" hyr="2016" itemtype="itemtype-book-digital" lyr="1800" owi="2829613261" title="Silas Marner" wi="1001514"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Smith, Margaret, 1931- [Editor] | Leavis, Q. D. [Editor; Author of introduction] | Jong, Erica | New York Public Library | Shared Experience Theatre" editions="828" format="eBook" holdings="17589" hyr="2014" itemtype="itemtype-book-digital" lyr="1847" owi="3503" title="Jane Eyre" wi="641531033"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Smith, Margaret, 1931- [Editor; Other; Author of introduction] | Rosengarten, Herbert [Author; Editor; Other] | Dolin, Tim, 1959- [Author of introduction] | Cooper, Helen M. [Editor] | Lawson, Kate, 1958-" editions="895" format="eBook" holdings="12284" hyr="2016" itemtype="itemtype-book-digital" lyr="1800" owi="59951" title="Villette" wi="10248317"/>
+    <work author="Gaskell, Elizabeth Cleghorn, 1810-1865 | Shorter, Clement King, 1857-1926 [Editor; Author of introduction] | Shelston, Alan [Editor] | Scott, Temple, 1864-1939 [Editor] | Willett, B. W. [Editor] | Jay, Elisabeth [Editor; Author of introduction; Other]" editions="570" format="eBook" holdings="8431" hyr="2015" itemtype="itemtype-book-digital" lyr="1844" owi="129574" title="The life of Charlotte Brontë" wi="10104131"/>
+    <work author="Melville, Herman, 1819-1891 | Crozier, Eric [Librettist; Author] | Freeman, Frederic Barron, 1912- [Editor] | Melville, Herman, 1819-1891 [Author; Bibliographic antecedent] | Large, Annabel [Illustrator] | Freeman, F. Barron" editions="367" format="eBook" holdings="5998" hyr="2016" itemtype="itemtype-book-digital" lyr="1891" owi="2863758887" title="Billy Budd, Benito Cereno and the enchanted isles" wi="11104392"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="351" format="eAudiobook" holdings="5996" hyr="2016" itemtype="itemtype-audiobook-digital" lyr="1847" owi="1070502498" title="Jane Eyre" wi="10120756"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Weisser, Susan Ostrov | Stade, George | Oates, Joyce Carol, 1938- | Malouf, David, 1934- | Wang, Zhanqing" editions="165" format="Book" holdings="3434" hyr="2011" itemtype="itemtype-book" lyr="1847" owi="1898667987" title="Jane Eyre" wi="155723799"/>
+    <work author="Amyes, Julian, 1917-1992" editions="111" format="DVD video" holdings="2942" hyr="2014" itemtype="itemtype-video-dvd" lyr="1973" owi="2791819431" title="Jane Eyre" wi="122927560"/>
+    <work author="Fukunaga, Cary Joji, 1977-" editions="77" format="DVD video" holdings="2435" hyr="2015" itemtype="itemtype-video-dvd" lyr="2010" owi="993891983" title="Jane Eyre" wi="728696779"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Davies, Stevie [Editor] | Brontë, Charlotte, 1816-1855 [Author; Creator]" editions="114" format="Book" holdings="2316" hyr="2009" itemtype="itemtype-book" lyr="1847" owi="1939217588" title="Jane Eyre" wi="123129486"/>
+    <work author="Zeffirelli, Franco" editions="106" format="DVD video" holdings="2106" hyr="2014" itemtype="itemtype-video-dvd" lyr="1983" owi="2890047404" title="Jane Eyre" wi="156745157"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="156" format="DVD video" holdings="1811" hyr="2015" itemtype="itemtype-video-dvd" lyr="1930" owi="2095173292" title="Jane Eyre" wi="133465167"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Eichenberg, Fritz, 1901-1990 [Illustrator] | Pforzheimer Bruce Rogers Collection (Library of Congress) | Rogers, Bruce, 1870-1957 [Former owner]" editions="37" format="Book" holdings="1764" hyr="2000" itemtype="itemtype-book" lyr="1937" owi="1932319620" title="Jane Eyre" wi="1524559"/>
+    <work author="Snodgrass, Mary Ellen" editions="51" format="eBook" holdings="1650" hyr="1999" itemtype="itemtype-book-digital" lyr="1964" owi="2044310935" title="Jane Eyre : notes" wi="18549339"/>
+    <work author="Sanders, Joe Sutliff" editions="132" format="Book" holdings="1525" hyr="2012" itemtype="itemtype-book" lyr="1847" owi="1151929686" title="Jane Eyre : the graphic novel" wi="190777031"/>
+    <work author="Young, Robert, 1933-" editions="43" format="DVD video" holdings="1414" hyr="2015" itemtype="itemtype-video-dvd" lyr="1996" owi="1278162565" title="Jane Eyre" wi="154800174"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="65" format="eBook" holdings="1392" hyr="2014" itemtype="itemtype-book-digital" lyr="1847" owi="2909305028" title="Jane Eyre" wi="11685215"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Yi, Kŭn-ch'ŏl" editions="68" format="Book" holdings="1240" hyr="2003" itemtype="itemtype-book" lyr="1966" owi="2487798873" title="Jane Eyre" wi="11576171"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="65" format="Book" holdings="1153" hyr="2013" itemtype="itemtype-book" lyr="1848" owi="2452693314" title="Jane Eyre" wi="186759486"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="74" format="Book" holdings="1084" hyr="1998" itemtype="itemtype-book" lyr="1847" owi="2015990295" title="Jane Eyre : authoritative text, backgrounds, criticism" wi="14187724"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="87" format="Book" holdings="1079" hyr="1998" itemtype="itemtype-book" lyr="1949" owi="2452577794" title="Jane Eyre" wi="183445026"/>
+    <work author="Brontë, Charlotte, 1816-1855" editions="67" format="Book" holdings="865" hyr="2012" itemtype="itemtype-book" lyr="1847" owi="2829829450" title="Jane Eyre" wi="152181049"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Bell, Florence [Author; Editor]" editions="79" format="Book" holdings="864" hyr="2010" itemtype="itemtype-book" lyr="1847" owi="1932927297" title="Jane Eyre" wi="156983280"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Bronte, Charlotte | Li, Jing" editions="91" format="Book" holdings="857" hyr="2014" itemtype="itemtype-book" lyr="1846" owi="1909792621" title="Jane Eyre : an authoritative text, context, criticism" wi="174992147"/>
+    <work author="Brontë, Charlotte, 1816-1855 | Li, Wenqi, 1951- [Translator]" editions="123" format="Book" holdings="838" hyr="2011" itemtype="itemtype-book" lyr="1847" owi="2289263278" title="Jane Eyre" wi="236339381"/>
+  </works>
+  <navigation>
+    <pages>
+      <page>
+        <label>1</label>
+      </page>
+      <page>
+        <label>2</label>
+        <link>25</link>
+      </page>
+      <page>
+        <label>3</label>
+        <link>50</link>
+      </page>
+    </pages>
+    <next>25</next>
+    <last>225</last>
+  </navigation>
+</classify>

@@ -14,7 +14,7 @@ from sqlalchemy.sql.functions import func
 from sqlalchemy.sql.expression import or_
 from overdrive import OverdriveCoverImageMirror
 from mirror import ImageScaler
-from gutenberg import OCLCClassifyCoverageProvider
+from oclc_classify import OCLCClassifyCoverageProvider
 from core.scripts import (
     Explain,
     IdentifierInputScript,
