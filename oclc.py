@@ -17,6 +17,7 @@ from core.coverage import (
 from core.model import (
     get_one_or_create,
     DataSource,
+    Edition,
     Hyperlink,
     Identifier,
     Measurement,
