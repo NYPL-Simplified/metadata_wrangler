@@ -766,7 +766,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 self.log.info(
                     "Total: %(editions)d editions, %(isbns)d ISBNs, "\
                     "%(descriptions)d descriptions, %(subjects)d classifications.",
-                    dict(new_info_counter)
+                    new_info_counter
                 )
         except IOError as e:
             if ", but couldn't find location" in e.message:
