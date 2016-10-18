@@ -1,0 +1,69 @@
+{
+  "@graph" : [ {
+    "@id" : "http://experiment.worldcat.org/entity/person/data/2641195499.jsonld",
+    "inDataset" : "http://purl.oclc.org/dataset/WorldCat/Person",
+    "about" : "http://worldcat.org/entity/person/id/2641195499"
+  }, {
+    "@id" : "http://worldcat.org/entity/person/id/2641195499",
+    "@type" : "schema:Person",
+    "additionalName" : [ "Anne", "N.", "O'Brien" ],
+    "alternateName" : [ "萊絲 (Rice, Anne)", "Anne O'Brien Rice", "Rampling, Anne", "Энн Райс", "アン ライス", "Anne O'Brien", "Enn Rais", "A.N Roquelaure", "Rice, Anne, 1941-", "Howard Allan Frances O'Brien Rice", "Ėnn Raĭs", "Rampling", "Anna Raisa", "A. N. Roquelaure", "Rice, Anne, (1941- )", "Anne Roquelaure", "Roquelaure", "Anne Rice", "Anne Rampling", "Aen Raisŭ", "A. N Roquelaure", "Howard Allan Frances O’Brien Rice", "Howard Allen Frances O'Brien", "Howard Allan Frances O'Brien", "A. Roquelaure" ],
+    "birthDate" : "1941-10-04",
+    "description" : "American author of gothic fiction",
+    "familyName" : [ "ライス", "Rampling", "Rice Anne", "萊絲", "O'Brien", "RICE", "莱丝", "RIce", "Райс", "ไร์ซ", "Roquelaure", "Anne", "Raisa", "Rais", "Raĭs", "O'Brien Rice", {
+      "@language" : "en",
+      "@value" : "Rice"
+    }, "Raisŭ" ],
+    "givenName" : [ "Anna", "A.N", "Ėnn", "A. N", "anne", "Aen", "Anne O'Brien", "Энн", "Rice", "1941-", "A. N.", "安", {
+      "@language" : "en",
+      "@value" : "Anne"
+    }, "ANNE", "แอนี่น", "アン", "Enn", "A." ],
+    "name" : [ "Anne Riceová", "آن رايس", "Енн Райс", "אן רייס", {
+      "@language" : "fr-be",
+      "@value" : "Rice, Anne"
+    }, "Rice Anne", "Anne O'Brien Rice", "En Rajs", "Anna Rice", "Ен Рајс", "Rice Anne 萊絲", "ANNE RICE", "Anne RICE", "安妮·莱斯", "ऐन राइस", "Энн Райс", "アン・ライス", "แอนี่น ไร์ซ", {
+      "@language" : "pt-pt",
+      "@value" : "Rice"
+    }, "አኔ ራይስ", "A. Roquelaure", {
+      "@language" : "en",
+      "@value" : "Anne Rice"
+    }, "1941- Rice", "앤 라이스", "Ан Райс", "Anne Roquelaure", "安 莱丝", "安·萊絲", "آن رایس", "A. N. Rice", "A. N. Roquelaure", "anne Rice", "1941- Anne Rice", "Anna Rays", "Anne RIce" ],
+    "sameAs" : [ "http://dbpedia.org/resource/Anne_Rice        ", "http://libris.kb.se/resource/auth/222427", "http://d-nb.info/gnd/119201909", "http://id.loc.gov/authorities/names/n79068491", "http://www.idref.fr/027098354/id", "http://id.ndl.go.jp/auth/entity/00454097", "http://id.worldcat.org/fast/37961", "http://isni.org/isni/0000000372894173", "http://www.wikidata.org/entity/Q184785", "http://data.bnf.fr/ark:/12148/cb11921826d#foaf:Person", "http://viaf.org/viaf/111989334" ],
+    "isIdentifiedByAuthority" : [ "http://viaf.org/viaf/sourceID/BNE%7CXX1044849#skos:Concept", "http://viaf.org/viaf/sourceID/DBC%7C87097968865778#skos:Concept", "http://viaf.org/viaf/sourceID/NLA%7C000035450371#skos:Concept", "http://viaf.org/viaf/sourceID/VLACC%7C000002024#skos:Concept", "http://viaf.org/viaf/sourceID/ICCU%7CCFIV035224#skos:Concept", "http://viaf.org/viaf/sourceID/SUDOC%7C027098354#skos:Concept", "http://viaf.org/viaf/sourceID/NSK%7C000102985#skos:Concept", "http://viaf.org/viaf/sourceID/LAC%7C0066A7861#skos:Concept", "http://viaf.org/viaf/sourceID/NLP%7Ca11630619#skos:Concept", "http://viaf.org/viaf/sourceID/NKC%7Cjn19990006996#skos:Concept", "http://viaf.org/viaf/sourceID/BNC%7Ca10433557#skos:Concept", "http://viaf.org/viaf/sourceID/SELIBR%7C222427#skos:Concept", "http://viaf.org/viaf/sourceID/RERO%7Cvtls011306349#skos:Concept", "http://viaf.org/viaf/sourceID/NTA%7C069088403#skos:Concept", "http://viaf.org/viaf/sourceID/LNB%7CLNC10-000017148#skos:Concept", "http://viaf.org/viaf/sourceID/PTBNP%7C82318#skos:Concept", "http://viaf.org/viaf/sourceID/NLI%7C001472277#skos:Concept", "http://viaf.org/viaf/sourceID/NUKAT%7Cn++94003654#skos:Concept" ]
+  } ],
+  "@context" : {
+    "inDataset" : {
+      "@id" : "http://rdfs.org/ns/void#inDataset",
+      "@type" : "@id"
+    },
+    "about" : {
+      "@id" : "http://schema.org/about",
+      "@type" : "@id"
+    },
+    "name" : "http://schema.org/name",
+    "familyName" : "http://schema.org/familyName",
+    "isIdentifiedByAuthority" : {
+      "@id" : "http://www.loc.gov/mads/rdf/v1#isIdentifiedByAuthority",
+      "@type" : "@id"
+    },
+    "givenName" : "http://schema.org/givenName",
+    "alternateName" : "http://schema.org/alternateName",
+    "additionalName" : "http://schema.org/additionalName",
+    "sameAs" : {
+      "@id" : "http://schema.org/sameAs",
+      "@type" : "@id"
+    },
+    "birthDate" : "http://schema.org/birthDate",
+    "description" : "http://schema.org/description",
+    "schema" : "http://schema.org/",
+    "dc" : "http://purl.org/dc/elements/1.1/",
+    "madsrdf" : "http://www.loc.gov/mads/rdf/v1#",
+    "dct" : "http://purl.org/dc/terms/",
+    "library" : "http://purl.org/library/",
+    "void" : "http://rdfs.org/ns/void#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "bgn" : "http://bibliograph.net/",
+    "pto" : "http://www.productontology.org/id/",
+    "discovery" : "http://worldcat.org/vocab/discovery/"
+  }
+}

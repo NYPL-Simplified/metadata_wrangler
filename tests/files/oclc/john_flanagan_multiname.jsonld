@@ -1,0 +1,72 @@
+{
+  "@graph" : [ {
+    "@id" : "http://experiment.worldcat.org/entity/person/data/2632412565.jsonld",
+    "inDataset" : "http://purl.oclc.org/dataset/WorldCat/Person",
+    "about" : "http://worldcat.org/entity/person/id/2632412565"
+  }, {
+    "@id" : "http://worldcat.org/entity/person/id/2632412565",
+    "@type" : "schema:Person",
+    "additionalName" : [ "John Anthony", {
+      "@language" : "en",
+      "@value" : "Anthony"
+    }, "A." ],
+    "alternateName" : [ "John Flanagan", "Flanagan, John (Flanagan, John Anthony)", "John Anthony Flanagan", "John A. Flanagan", "Flanagan, John (John Anthony)", "Flanagan" ],
+    "birthDate" : "1944-05-22",
+    "description" : "born 1944; Australian fantasy author",
+    "familyName" : [ "John", "ジョン・フラナガン", {
+      "@language" : "en",
+      "@value" : "Flanagan"
+    } ],
+    "givenName" : [ "John A.", {
+      "@language" : "en",
+      "@value" : "John"
+    }, "Flanagan", "John Anthony" ],
+    "name" : [ {
+      "@language" : "no-no",
+      "@value" : "John Flanagan"
+    }, {
+      "@language" : "en",
+      "@value" : "John Anthony Flanagan"
+    }, "John A. Flanagan", "ジョン・フラナガン", "Flanagan John", "Flanagan John Anthony Flanagan", {
+      "@language" : "pt-pt",
+      "@value" : "Flanagan"
+    } ],
+    "sameAs" : [ "http://viaf.org/viaf/85841451", "http://data.bnf.fr/ark:/12148/cb155306391#foaf:Person", "http://libris.kb.se/resource/auth/348417", "http://www.idref.fr/150411979/id", "http://www.wikidata.org/entity/Q181730", "http://id.loc.gov/authorities/names/n2009049211", "http://dbpedia.org/resource/John_Flanagan_(author)        ", "http://d-nb.info/gnd/132422573", "http://isni.org/isni/0000000114507820" ],
+    "isIdentifiedByAuthority" : [ "http://viaf.org/viaf/sourceID/BIBSYS%7Cx14020042#skos:Concept", "http://viaf.org/viaf/sourceID/NUKAT%7Cn+2009145968#skos:Concept", "http://viaf.org/viaf/sourceID/NLA%7C000035704664#skos:Concept", "http://viaf.org/viaf/sourceID/BNC%7Ca10617036#skos:Concept", "http://viaf.org/viaf/sourceID/PTBNP%7C1421480#skos:Concept", "http://viaf.org/viaf/sourceID/DBC%7C87097968310059#skos:Concept", "http://viaf.org/viaf/sourceID/NLP%7Ca27666220#skos:Concept", "http://viaf.org/viaf/sourceID/NTA%7C303496878#skos:Concept", "http://viaf.org/viaf/sourceID/SUDOC%7C150411979#skos:Concept", "http://viaf.org/viaf/sourceID/SELIBR%7C348417#skos:Concept", "http://viaf.org/viaf/sourceID/NKC%7Cxx0081982#skos:Concept" ]
+  } ],
+  "@context" : {
+    "inDataset" : {
+      "@id" : "http://rdfs.org/ns/void#inDataset",
+      "@type" : "@id"
+    },
+    "about" : {
+      "@id" : "http://schema.org/about",
+      "@type" : "@id"
+    },
+    "isIdentifiedByAuthority" : {
+      "@id" : "http://www.loc.gov/mads/rdf/v1#isIdentifiedByAuthority",
+      "@type" : "@id"
+    },
+    "name" : "http://schema.org/name",
+    "alternateName" : "http://schema.org/alternateName",
+    "sameAs" : {
+      "@id" : "http://schema.org/sameAs",
+      "@type" : "@id"
+    },
+    "givenName" : "http://schema.org/givenName",
+    "familyName" : "http://schema.org/familyName",
+    "additionalName" : "http://schema.org/additionalName",
+    "birthDate" : "http://schema.org/birthDate",
+    "description" : "http://schema.org/description",
+    "schema" : "http://schema.org/",
+    "dc" : "http://purl.org/dc/elements/1.1/",
+    "madsrdf" : "http://www.loc.gov/mads/rdf/v1#",
+    "dct" : "http://purl.org/dc/terms/",
+    "library" : "http://purl.org/library/",
+    "void" : "http://rdfs.org/ns/void#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "bgn" : "http://bibliograph.net/",
+    "pto" : "http://www.productontology.org/id/",
+    "discovery" : "http://worldcat.org/vocab/discovery/"
+  }
+}
