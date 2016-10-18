@@ -11,6 +11,7 @@ sys.path.append(os.path.abspath(package_dir))
 
 from nose.tools import set_trace
 from sqlalchemy import or_
+from sqlalchemy.orm import lazyload
 
 from core.model import (
     get_one_or_create,
@@ -32,9 +33,10 @@ resolved_identifiers = _db.query(Identifier).\
     filter(Identifier.type.in_([Identifier.ISBN, Identifier.OVERDRIVE_ID])).\
     outerjoin(Identifier.coverage_records).\
     outerjoin(CoverageRecord.data_source).\
-    filter(or_(DataSource.name==None, DataSource.name!=source.name)).\
+    filter(or_(CoverageRecord.id==None, DataSource.name!=source.name)).\
     outerjoin(Identifier.unresolved_identifier).\
-    filter(CoverageRecord.id==None, UnresolvedIdentifier.id==None).all()
+    filter(UnresolvedIdentifier.id==None).\
+    options(lazyload(Identifier.licensed_through)).all()
 
 print "Resolving %d Identifiers with CoverageRecords" % len(resolved_identifiers)
 
