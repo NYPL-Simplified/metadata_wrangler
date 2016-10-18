@@ -900,10 +900,11 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
     """
 
     SERVICE_NAME = "OCLC Linked Data Coverage Provider"
+    DEFAULT_BATCH_SIZE = 10
+
     DATA_SOURCE_NAME = DataSource.OCLC_LINKED_DATA
     INPUT_IDENTIFIER_TYPES = [
-        Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
-        Identifier.OVERDRIVE_ID, Identifier.THREEM_ID
+        Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.OVERDRIVE_ID
     ]
     
     def __init__(self, _db, *args, **kwargs):
@@ -923,8 +924,24 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         try:
             new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
+            metadatas = [m for m in self.api.info_for(identifier)]
 
-            for metadata in self.api.info_for(identifier):
+            if identifier.type==Identifier.ISBN:
+                # Currently info_for seeks the results of OCLC Work IDs only
+                # This segment will get the metadata of any equivalent OCLC Numbers
+                # as well.
+                equivalents = Identifier.recursively_equivalent_identifier_ids(
+                    self._db, [identifier.id]
+                )
+                oclc_numbers = self._db.query(Identifier).\
+                    filter(Identifier.id.in_(equivalents)).\
+                    filter(Identifier.type==Identifier.OCLC_NUMBER).all()
+                for oclc_number in oclc_numbers:
+                    more_metadata = [m for m in self.api.info_for(oclc_number)]
+                    metadatas += more_metadata
+                    metadatas = [m for m in metadatas if m]
+
+            for metadata in metadatas:
                 other_identifier, ignore = metadata.primary_identifier.load(self._db)
                 oclc_editions = other_identifier.primarily_identifies
 
@@ -954,7 +971,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                         metadata, new_info_counter = self.apply_metadata_to_edition(
                             edition, metadata, metadata_client, new_info_counter
                         )
-                elif num_new_isbns:
+                else:
                     # Create a new OCLC edition to hold the information.
                     edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.data_source,
@@ -966,6 +983,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                     # Set the new OCLC edition's identifier equivalent to this
                     # identifier so we know they're related.
                     self.set_equivalence(identifier, metadata)
+
                 self.log.info(
                     "Total: %(editions)d editions, %(isbns)d ISBNs, "\
                     "%(descriptions)d descriptions, %(subjects)d classifications.",
