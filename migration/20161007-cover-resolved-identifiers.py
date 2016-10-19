@@ -26,16 +26,18 @@ from core.model import (
 _db = production_session()
 source = DataSource.lookup(_db, DataSource.INTERNAL_PROCESSING)
 
+covered = _db.query(CoverageRecord.id).select_from(CoverageRecord).\
+    join(DataSource).filter(DataSource.name==source.name)
+covered = covered.subquery()
+
 # Get all of the Identifiers that can be resolved by the Metadata Wrangler
 # (ISBNs and Overdrive IDs only). Select only the ones that do not have
 # an either an UnresolvedIdentifier or a resolve-identifier CoverageRecord.
 resolved_identifiers = _db.query(Identifier).\
-    filter(Identifier.type.in_([Identifier.ISBN, Identifier.OVERDRIVE_ID])).\
-    outerjoin(Identifier.coverage_records).\
-    outerjoin(CoverageRecord.data_source).\
-    filter(or_(CoverageRecord.id==None, DataSource.name!=source.name)).\
     outerjoin(Identifier.unresolved_identifier).\
+    filter(Identifier.type.in_([Identifier.ISBN, Identifier.OVERDRIVE_ID])).\
     filter(UnresolvedIdentifier.id==None).\
+    filter(~Identifier.coverage_records.any(CoverageRecord.id.in_(covered))).\
     options(lazyload(Identifier.licensed_through)).all()
 
 print "Resolving %d Identifiers with CoverageRecords" % len(resolved_identifiers)
