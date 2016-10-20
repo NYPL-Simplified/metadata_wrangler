@@ -124,6 +124,20 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         )
         self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
 
+    def items_that_need_coverage(self, identifiers=None, **kwargs):
+        """Find all identifiers lacking coverage from this CoverageProvider.
+
+        Only identifiers that have been requested via the URNLookupController
+        (and thus given 'transient failure' CoverageRecords) should be
+        returned. Identifiers created through previous resolution processes
+        can be ignored.
+        """
+        qu = super(IdentifierResolutionCoverageProvider, self).items_that_need_coverage(
+            identifiers=identifiers, **kwargs
+        )
+        qu = qu.filter(CoverageRecord.id != None)
+        return qu
+
     def process_item(self, identifier):
         """For this identifier, checks that it has all of the available
         3rd party metadata, and if not, obtains it.

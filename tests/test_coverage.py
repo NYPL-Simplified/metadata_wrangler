@@ -151,6 +151,19 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             "Broken", [self.identifier.type], self.source
         )
 
+    def test_items_that_need_coverage(self):
+        # Only items with an existing transient failure status require coverage.
+        self._coverage_record(
+            self.identifier, self.coverage_provider.output_source,
+            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+            status=CoverageRecord.TRANSIENT_FAILURE
+        )
+        # Identifiers without coverage will be ignored.
+        no_coverage = self._identifier(identifier_type=Identifier.ISBN)
+
+        items = self.coverage_provider.items_that_need_coverage().all()
+        eq_([self.identifier], items)
+
     def test_process_item_creates_license_pool(self):
         self.coverage_provider.required_coverage_providers = [
             self.always_successful
