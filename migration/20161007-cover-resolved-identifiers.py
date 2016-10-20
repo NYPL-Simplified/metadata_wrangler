@@ -40,21 +40,28 @@ resolved_identifiers = _db.query(Identifier).\
     filter(~Identifier.coverage_records.any(CoverageRecord.id.in_(covered))).\
     options(lazyload(Identifier.licensed_through)).all()
 
-print "Resolving %d Identifiers with CoverageRecords" % len(resolved_identifiers)
+print "%d resolved Identifiers require coverage" % len(resolved_identifiers)
 
-for identifier in resolved_identifiers:
-    record, is_new = get_one_or_create(
-        _db, CoverageRecord,
-        identifier=identifier, data_source=source,
-        operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
-    )
+batch_size = 50
+index = 0
+while index < len(resolved_identifiers):
+    batch = resolved_identifiers[index:index+batch_size]
+    print "Resolving next batch of %d Identifiers" % len(batch)
 
-    if is_new:
-        # This CoverageRecord wasn't created from a lookup prior to this
-        # migration, so this is a successfully resolved identifier from
-        # the time of UnresolvedIdentifiers.
-        record.status = BaseCoverageRecord.SUCCESS
-        print "Resolution Coverage Record created for %r" % identifier
-    else:
-        print "Resolution Coverage Record already exists for %r" % identifier
-_db.commit()
+    for identifier in batch:
+        record, is_new = get_one_or_create(
+            _db, CoverageRecord,
+            identifier=identifier, data_source=source,
+            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
+        )
+
+        if is_new:
+            # This CoverageRecord wasn't created from a lookup prior to this
+            # migration, so this is a successfully resolved identifier from
+            # the time of UnresolvedIdentifiers.
+            record.status = BaseCoverageRecord.SUCCESS
+            print "Resolution Coverage Record created for %r" % identifier
+        else:
+            print "Resolution Coverage Record already exists for %r" % identifier
+    _db.commit()
+    index += batch_size
