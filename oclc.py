@@ -904,7 +904,8 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
 
     DATA_SOURCE_NAME = DataSource.OCLC_LINKED_DATA
     INPUT_IDENTIFIER_TYPES = [
-        Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.OVERDRIVE_ID
+        Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
+        Identifier.ISBN, Identifier.OVERDRIVE_ID
     ]
     
     def __init__(self, _db, *args, **kwargs):
