@@ -310,9 +310,17 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(lp.collection, self.resolver.collection)
         eq_(lp.data_source, self.resolver.data_source)
 
-        # There is no Work because we don't have enough metadata
-        # for this book to create one.
-        eq_(None, lp.work)
+        # Prepare an identifier that already has a LicensePool through
+        # another source.
+        licensed = self._identifier(identifier_type=Identifier.OVERDRIVE_ID)
+        other_source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        lp = LicensePool.for_foreign_id(
+            self._db, other_source, licensed.type, licensed.identifier,
+            collection=self._default_collection
+        )[0]
+
+        self.resolver.process_item(licensed)
+        eq_([lp], licensed.licensed_through)
 
     def test_process_item_may_create_work(self):
         self.resolver.required_coverage_providers = [
@@ -428,3 +436,45 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             CoverageRecord.identifier==self.identifier,
             CoverageRecord.data_source!=presentation_edition).one()
         eq_("What did you expect?", r.exception)
+
+    def test_generate_edition(self):
+        # Create an ISBN with a LicensePool.
+        identifier = self._identifier(identifier_type=Identifier.ISBN)
+        lp = LicensePool.for_foreign_id(
+            self._db, self.resolver.data_source,
+            identifier.type, identifier.identifier
+        )[0]
+
+        # Create editions and equivalencies for some OCLC equivalent identifiers.
+        number_ed = self._edition(identifier_type=Identifier.OCLC_NUMBER)
+        work_id_ed = self._edition(identifier_type=Identifier.OCLC_WORK)
+        identifier.equivalent_to(self.source, number_ed.primary_identifier, 1)
+        identifier.equivalent_to(self.source, work_id_ed.primary_identifier, 1)
+        self._db.commit()
+
+        number_ed_info = (number_ed.title, number_ed.author)
+        work_id_ed_info = (work_id_ed.title, work_id_ed.author)
+
+        def presentation_edition_info():
+            return (lp.presentation_edition.title, lp.presentation_edition.author)
+
+        # generate_edition sets a presentation_edition
+        self.resolver.generate_edition(identifier)
+        assert presentation_edition_info() in [number_ed_info, work_id_ed_info]
+
+        # (Remove the generated presentation_edition for next portion of the test.)
+        combined_edition = lp.presentation_edition
+        lp.presentation_edition = None
+        for contribution in combined_edition.contributions:
+            self._db.delete(contribution)
+        self._db.delete(combined_edition)
+
+        # When only one edition has title and author, that edition becomes the
+        # the presentation edition.
+        for contribution in work_id_ed.contributions:
+            work_id_ed.author = None
+            self._db.delete(contribution)
+        self._db.commit()
+
+        self.resolver.generate_edition(identifier)
+        eq_(number_ed_info, presentation_edition_info())

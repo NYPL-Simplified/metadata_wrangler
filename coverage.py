@@ -10,12 +10,12 @@ from core.metadata_layer import (
 )
 
 from core.model import (
-    CoverageRecord, 
-    DataSource, 
+    CoverageRecord,
+    DataSource,
     ExternalIntegration,
     get_one_or_create,
-    Identifier, 
-    PresentationCalculationPolicy, 
+    Identifier,
+    PresentationCalculationPolicy,
 )
 
 from core.overdrive import (
@@ -26,6 +26,8 @@ from core.overdrive import (
 from core.s3 import (
     S3Uploader, 
 )
+
+from core.util import fast_query_count
 
 from overdrive import (
     OverdriveCoverImageMirror, 
@@ -308,13 +310,46 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         self.resolve_equivalent_oclc_identifiers(identifier)
         if identifier.type==Identifier.ISBN:
+            self.generate_edition(identifier)
             # Currently we don't try to create Works for ISBNs,
             # we just make sure all the Resources associated with the
             # ISBN are properly handled. At this point, that has
             # completed successfully, so do nothing.
             pass
+
+        self.process_work(identifier)
+
+    def generate_edition(self, identifier):
+        """Utilizes an ISBN's equivalent identifiers (OCLC Number or Work IDs)
+        to set an appropriate LicensePool presentation edition so a Work can
+        later be created.
+        """
+        equivalent_ids = identifier.equivalent_identifier_ids()[identifier.id]
+
+        # Get the editions of equivalent identifiers (OCLC Number or Work IDs)
+        # to set as a presentation edition. These editions can be lower quality,
+        # and it's important that they have a title.
+        titled_equivalent_editions = self._db.query(Edition).\
+            join(Edition.primary_identifier).\
+            filter(Identifier.id.in_(equivalent_ids)).\
+            filter(Edition.title!=None)
+
+        # It's preferable that they have an author, too.
+        authored_equivalent_editions = titled_equivalent_editions.filter(
+            Edition.author!=None, Edition.author!=Edition.UNKNOWN_AUTHOR
+        )
+
+        if fast_query_count(authored_equivalent_editions):
+            # Prioritize editions with both a title and an author if available.
+            equivalent_editions = authored_equivalent_editions.all()
         else:
-            self.process_work(identifier)
+            equivalent_editions = titled_equivalent_editions.all()
+
+        if equivalent_editions:
+            # Set the presentation edition.
+            identifier.licensed_through.set_presentation_edition(
+                external_editions=equivalent_editions
+            )
 
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
@@ -345,6 +380,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         that equivalent OCLC identifiers are available.
         """
         oclc_ids = set()
+        if identifier.type == Identifier.ISBN:
+            # ISBNs won't have editions, so they should be run through OCLC
+            # to retrieve basic edition data (title, author).
+            oclc_ids.add(identifier)
+
         types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
         for edition in identifier.primarily_identifies:
             oclc_ids = oclc_ids.union(
