@@ -310,13 +310,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         self.resolve_equivalent_oclc_identifiers(identifier)
         if identifier.type==Identifier.ISBN:
+            # In order to create Works for ISBNs, we first have to
+            # create an edition associated with the ISBN as a primary
+            # identifier. At the moment, this is achieved via OCLC
+            # Linked Data.
             self.generate_edition(identifier)
-            # Currently we don't try to create Works for ISBNs,
-            # we just make sure all the Resources associated with the
-            # ISBN are properly handled. At this point, that has
-            # completed successfully, so do nothing.
-            pass
-
         self.process_work(identifier)
 
     def generate_edition(self, identifier):

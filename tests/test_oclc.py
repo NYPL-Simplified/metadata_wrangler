@@ -293,8 +293,6 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
 
         provider.process_item(identifier)
 
-        # The author without VIAF data didn't request a VIAF lookup.
-        eq_(viaf.results, ["Unrequested lookup"])
 
         # Both VIAF-identified authors have had their information updated
         # with the VIAF results.
@@ -308,3 +306,6 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             (u'Rice, Anne', u'Anne Rice', None, None, None)],
             filled_in
         )
+        # The author without VIAF data didn't request a VIAF lookup.
+        # Instead, that result is still in the mock VIAF queue.
+        eq_(viaf.results, ["Unrequested lookup"])
