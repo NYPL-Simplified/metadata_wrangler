@@ -44,7 +44,10 @@ class ContentCafeCoverageProvider(CoverageProvider):
             self.content_cafe.mirror_resources(identifier)
             return identifier
         except Exception as e:
-            return CoverageFailure(self, identifier, repr(e), transient=True)
+            return CoverageFailure(
+                identifier, repr(e),
+                data_source=self.output_source, transient=True
+            )
 
 
 class ContentCafeCoverImageMirror(CoverImageMirror):
