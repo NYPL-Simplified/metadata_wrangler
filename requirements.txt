@@ -17,6 +17,7 @@ loggly-python-handler
 mock
 cairosvg
 Flask-Babel
+money
 
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
