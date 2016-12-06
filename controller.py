@@ -175,7 +175,8 @@ class URNLookupController(CoreURNLookupController):
     UNRESOLVABLE_IDENTIFIER = "I can't gather information about an identifier of this type."
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
-
+    SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK = "Something's wrong. I have a record of covering this identifier but there's no presentation-ready work to show you."
+    
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     NO_WORK_DONE_EXCEPTION = u'No work done yet'
 

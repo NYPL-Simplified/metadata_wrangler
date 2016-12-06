@@ -287,6 +287,21 @@ class TestURNLookupController(DatabaseTest):
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"
         )
 
+    def test_process_urn_no_presentation_ready_work(self):
+        identifier = self._identifier(Identifier.GUTENBERG_ID)
+
+        # There's a record of success, but no presentation-ready work.
+        record, is_new = CoverageRecord.add_for(
+            identifier, self.source, self.controller.OPERATION,
+            status=CoverageRecord.SUCCESS
+        )
+
+        self.controller.process_urn(identifier.urn)
+        self.assert_one_message(
+            identifier.urn, HTTP_INTERNAL_SERVER_ERROR,
+            self.controller.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
+        )
+        
     def test_process_urn_unresolvable_type(self):
         # We can't resolve a 3M identifier because we don't have the
         # appropriate access to the bibliographic API.
@@ -375,6 +390,4 @@ class TestURNLookupController(DatabaseTest):
         expect = isbn.opds_entry()
         [actual] = self.controller.precomposed_entries
         eq_(etree.tostring(expect), etree.tostring(actual))
-
-
 
