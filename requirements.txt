@@ -8,7 +8,7 @@ lxml
 flask
 textblob
 isbnlib
-tinys3
+tinys3==0.1.11
 feedparser
 elasticsearch
 uwsgi
