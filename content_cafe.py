@@ -6,6 +6,9 @@ from nose.tools import set_trace
 from bs4 import BeautifulSoup
 from suds.client import Client as SudsClient
 
+# Tone down the verbose Suds logging.
+logging.getLogger('suds').setLevel(logging.ERROR)
+
 from core.config import Configuration
 from core.coverage import (
     CoverageProvider,

@@ -68,8 +68,12 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
                  uploader=None, providers=None, **kwargs):
         output_source, made_new = get_one_or_create(
             _db, DataSource,
-            name=DataSource.INTERNAL_PROCESSING, offers_licenses=True,
+            name=DataSource.INTERNAL_PROCESSING
         )
+        # Other components don't have INTERNAL_PROCESSING as offering
+        # licenses, but we do, because we're responsible for managing
+        # LicensePools.
+        output_source.offers_licenses=True
         input_identifier_types = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
