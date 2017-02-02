@@ -12,6 +12,9 @@ from core.util.personal_names import (
     display_name_to_sort_name,
     is_corporate_name,
 )
+from core.util.titles import (
+    title_match_ratio, 
+)
 
 from oclc import OCLCLinkedData
 from viaf import VIAFClient
@@ -68,10 +71,10 @@ class AuthorNameCanonicalizer(object):
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
         """
-        if identifier and identifier.type != Identifier.ISBN:
+        #if identifier and identifier.type != Identifier.ISBN:
             # The only identifier we can do a useful lookup on is
             # ISBN.
-            identifier = None
+        #    identifier = None
         if not identifier and not display_name:
             raise CanonicalizationError(
                 "Neither useful identifier nor display name was provided."
@@ -90,23 +93,54 @@ class AuthorNameCanonicalizer(object):
 
         # All our techniques have failed. Woe! Let's just try to finagle
         # this provided display name into a sort name.
+        set_trace() # TODO: make sure default_name puts in the comma
         return self.default_name(display_name)
+
 
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)
         return display_name_to_sort_name(shortened_name)
 
+
     def _canonicalize(self, identifier, display_name):
         # The best outcome would be that we already have a Contributor
         # with this exact display name and a known sort name.
         self.log.debug("Attempting to canonicalize %s", display_name)
+
+        # can we infer any titles we know this person wrote?
+        known_titles = []
+        if identifier:
+            editions = identifier.primarily_identifies
+            # only choose one version of the title
+            if editions and editions[0].title:
+                known_titles.append(editions[0].title)
+
         contributors = self._db.query(Contributor).filter(
             Contributor.display_name==display_name).filter(
                 Contributor.sort_name != None).all()
         sort_name = None
-        if contributors and False:
-            # Yes, awesome. Use this name.
-            sort_name = contributors[0].sort_name
+        if contributors:
+            # Yes, awesome. Let's gild this lily -- are there any contributors
+            # who have sort_names and also have written titles similar to the 
+            # identifier's?  If not, no worries, choose any sort_name, and it's 
+            # probably good.
+            for contributor in contributors:
+                # did we just find the sort_name in a previous iteration?
+                if sort_name:
+                    break
+
+                for contribution in contributor.contributions:
+                    if contribution.edition and contribution.edition.title and 
+                        known_titles and 
+                        title_match_ratio(known_titles[0], contribution.edition.title) > 80:
+                        # whew! 
+                        sort_name = contributor.sort_name
+                        break
+
+            else:
+                # we have contributors, but none of their titles matched what we know
+                sort_name = contributors[0].sort_name
+
             self.log.debug(
                 "Found existing contributor for %s: %s",
                 display_name, sort_name
@@ -139,26 +173,31 @@ class AuthorNameCanonicalizer(object):
         # Nope. If we were given a display name, let's ask VIAF about it
         # and see what it says.
         if display_name:
-            sort_name = self.sort_name_from_viaf(display_name)
+            sort_name = self.sort_name_from_viaf(display_name, known_titles)
+
         return sort_name
+
 
     def sort_name_from_oclc_linked_data(
             self, identifier, display_name):
         """Try to find an author sort name for this book from
         OCLC Linked Data.
+
+        :param identifier: Must be of Identifier.ISBN type.
         """
         def comparable_name(s):
             return s.replace(",", "").replace(".", "")
 
+        set_trace()
         if display_name:
             test_working_display_name = comparable_name(display_name)
         else:
             test_working_display_name = None
 
-        if identifier.type != Identifier.ISBN:
+        if ((not identifier) or (identifier.type != Identifier.ISBN)):
             # We have no way of telling OCLC Linked Data which book
             # we're talking about. Don't bother.
-            return None
+            return None, None
 
         try:
             self.log.debug(
@@ -195,12 +234,22 @@ class AuthorNameCanonicalizer(object):
                             shortest_candidate = name
         return shortest_candidate, uris
 
-    def sort_name_from_viaf(self, display_name):
-        sort_name = None
 
+    def sort_name_from_viaf(self, display_name, known_titles=None):
+        """
+        Ask VIAF about the contributor, looking them up by name, 
+        rather than any numeric id.
+
+        :param display_name: Author name in First Last format.
+        :param known_titles: A list of titles we know this author wrote 
+            (helps better match the VIAF results if there's more than one matching VIAF author record).
+        :return: Author name in Last, First format.
+        """
+        sort_name = None
         viaf_contributor = self.viaf.lookup_by_name(
-            None, display_name, best_match=True
+            sort_name=None, display_name=display_name, known_titles=known_titles
         )
+        set_trace()
         if viaf_contributor:
             contributor_data = viaf_contributor[0]
             sort_name = contributor_data.sort_name
@@ -209,3 +258,5 @@ class AuthorNameCanonicalizer(object):
                 display_name, sort_name
             )
         return sort_name
+
+

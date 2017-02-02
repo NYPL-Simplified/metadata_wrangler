@@ -27,6 +27,7 @@ from core.util.personal_names import (
 
 from core.util.titles import (
     normalize_title_for_matching, 
+    title_match_ratio, 
     unfluff_title, 
 )
 
@@ -83,6 +84,7 @@ class VIAFParser(XMLParser):
         return n1.replace(".", "").lower() == n2.replace(".", "").lower()
 
 
+    '''
     @classmethod
     def title_match_ratio(cls, title1, title2):
         """
@@ -94,7 +96,7 @@ class VIAFParser(XMLParser):
         title2 = normalize_title_for_matching(title2)
         match_ratio = fuzz.ratio(title1, title2)
         return match_ratio
-
+    '''
 
     @classmethod
     def prepare_contributor_name_for_matching(cls, name):
@@ -146,6 +148,7 @@ class VIAFParser(XMLParser):
         # to any other suggestions of a possible fit.
         match_confidences["total"] = 0
 
+        #set_trace()
         if "library_popularity" in match_confidences and not ignore_popularity:
             match_confidences["total"] += -10 * match_confidences["library_popularity"]
             report_string += ", pop=10 * %s" % match_confidences["library_popularity"]
@@ -169,7 +172,7 @@ class VIAFParser(XMLParser):
             report_string += ", mc[unimarc]=%s" % match_confidences["unimarc"]
 
         if "guessed_sort_name" in match_confidences:
-            match_confidences["total"] += 0.2 * match_confidences["guessed_sort_name"]
+            match_confidences["total"] += 0.5 * match_confidences["guessed_sort_name"]
             report_string += ", mc[guessed_sort_name]=%s" % match_confidences["guessed_sort_name"]
 
         if "alternate_name" in match_confidences:
@@ -231,7 +234,7 @@ class VIAFParser(XMLParser):
                         <ns1:title>Britain, detente and changing east-west relations</ns1:title> (with accented e in detente)
                         doesn't match "Britain, Detente and Changing East-West Relations" in our DB.
                         '''
-                        match_confidence = cls.title_match_ratio(known_title, contributor_title)
+                        match_confidence = title_match_ratio(known_title, contributor_title)
                         match_confidences["title"] = match_confidence
                         if match_confidence > 80:
                             match_confidences["total"] += 0.6 * match_confidence
@@ -277,6 +280,7 @@ class VIAFParser(XMLParser):
 
         # If we have a sort name to look for, and it's in this cluster's
         # sort names, great.
+        #set_trace()
         if working_sort_name:
             for potential_match in self.sort_names_for_cluster(cluster):
                 match_confidence = self.contributor_name_match_ratio(potential_match, working_sort_name)
@@ -371,6 +375,7 @@ class VIAFParser(XMLParser):
 
         # Double-check that the candidate list is ordered by library
         # popularity, as it came from viaf
+        #set_trace()
         contributor_candidates.sort(key=lambda c: c[1].get('library_popularity'))
         # Grab the most popular candidate.
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
@@ -380,15 +385,19 @@ class VIAFParser(XMLParser):
         # for being on the bottom.
         ignore_popularity = False
         if match_confidences.get("library_popularity") == 1:
-            if (("sort_name" in match_confidences and
-                match_confidences["sort_name"] < 50)
-                or "sort_name" not in match_confidences):
+            if ("sort_name" in match_confidences and
+                match_confidences["sort_name"] < 50):
                 # baaad match
                 ignore_popularity = True
 
-            if "sort_name" not in match_confidences:
-                # this happened once or twice, but the algorithm still worked.
-                pass
+            if ("guessed_sort_name" in match_confidences and
+                match_confidences["guessed_sort_name"] < 50):
+                ignore_popularity = True
+
+            if (("sort_name" not in match_confidences) and 
+                ("guessed_sort_name" not in match_confidences)):
+                ignore_popularity = True
+
 
         # higher score for better match, so to have best match first, do desc order.
         contributor_candidates.sort(
@@ -506,6 +515,7 @@ class VIAFParser(XMLParser):
         match_confidences = {}
 
         # Find out if one of the working names shows up in a name record.
+        # Note: Potentially sets contributor_data.sort_name.
         match_confidences = self.cluster_has_record_for_named_author(
                 cluster, working_sort_name, working_display_name,
                 contributor_data
@@ -543,6 +553,7 @@ class VIAFParser(XMLParser):
                 if not v:
                     continue
                 if not working_sort_name or v in working_sort_name:
+                    #set_trace()
                     self.log.debug(
                         "FOUND %s in %s", v, working_sort_name
                     )
@@ -582,6 +593,7 @@ class VIAFParser(XMLParser):
         for title in titles:
             contributor_titles.append(title.text)
 
+        #set_trace()
         return contributor_data, match_confidences, contributor_titles
 
 
@@ -678,7 +690,7 @@ class VIAFParser(XMLParser):
 class VIAFClient(object):
 
     LOOKUP_URL = 'http://viaf.org/viaf/%(viaf)s/viaf.xml'
-    SEARCH_URL = 'http://viaf.org/viaf/search?query={scope}+all+%22{sort_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
+    SEARCH_URL = 'http://viaf.org/viaf/search?query={scope}+all+%22{author_name}%22&sortKeys=holdingscount&maximumRecords={maximum_records:d}&startRecord={start_record:d}&httpAccept=text/xml'
 
     SUBDIR = "viaf"
 
@@ -709,8 +721,15 @@ class VIAFClient(object):
                 contributor.viaf, contributor.sort_name, contributor.display_name
             )
         else:
+            known_titles = {}
+            if contributor.contributions:
+                for contribution in contributor.contributions:
+                    if contribution.edition and contribution.edition.title:
+                        known_titles[contribution.edition.title] = 1
+
             contributor_candidate = self.lookup_by_name(
-                contributor.sort_name, contributor.display_name
+                sort_name=contributor.sort_name, display_name=contributor.display_name, 
+                known_titles=known_titles.keys()
             )
         if not contributor_candidate:
             # No good match was identified.
@@ -739,29 +758,35 @@ class VIAFClient(object):
                     )
             selected_candidate.apply(contributor)
 
-    def select_best_match(self, candidates, working_sort_name):
+    def select_best_match(self, candidates, working_sort_name, known_titles=None):
         """Gets the best VIAF match from a series of potential matches
 
         Return a tuple containing the selected_candidate (a ContributorData
         object), a dict of match_confidences, and a list of titles by the
         contributor.
+
+        :param known_titles: A list of titles we know this author wrote.
         """
         # Sort for the best match and select the first.
+        #set_trace()
         candidates = self.parser.order_candidates(
             working_sort_name=working_sort_name,
-            contributor_candidates=candidates
+            contributor_candidates=candidates, 
+            known_titles=known_titles
         )
         if not candidates:
             return None
 
         (selected_candidate, match_confidences, contributor_titles) = candidates[0]
 
+        #set_trace()
         if (not selected_candidate or "total" not in match_confidences or
             match_confidences["total"] < 70):
             # The best match is dubious. Best to avoid this.
             return None
 
         return selected_candidate, match_confidences, contributor_titles
+
 
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
@@ -773,9 +798,21 @@ class VIAFClient(object):
         xml = r.content
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
+
     def lookup_by_name(self, sort_name, display_name=None, do_get=None,
-                       best_match=False):
-        sort_name = sort_name or display_name
+                       known_titles=None):
+        """
+        Asks VIAF for a list of author clusters, matching the passed-in 
+        author name.  Selects the cluster we deem the best match for 
+        the author we mean.
+
+        :param sort_name: Author name in Last, First format.
+        :param display_name: Author name in First Last format.
+        :param do_get: Ask Representation to use Http GET?
+        :param known_titles: A list of titles we know this author wrote.
+        :return: (selected_candidate, match_confidences, contributor_titles) for selected ContributorData.
+        """
+        author_name = sort_name or display_name
         # from OCLC tech support:
         # VIAF's SRU endpoint can only return a maximum number of 10 records
         # when the recordSchema is http://viaf.org/VIAFCluster
@@ -788,11 +825,11 @@ class VIAFClient(object):
         for page in range (1, 51):
             start_record = 1 + maximum_records * (page-1)
             scope = 'local.personalNames'
-            if is_corporate_name(sort_name):
+            if is_corporate_name(author_name):
                 scope = 'local.corporateNames'
 
             url = self.SEARCH_URL.format(
-                scope=scope, sort_name=sort_name.encode("utf8"),
+                scope=scope, author_name=author_name.encode("utf8"),
                 maximum_records=maximum_records, start_record=start_record
             )
             representation, cached = Representation.get(
@@ -813,4 +850,9 @@ class VIAFClient(object):
             contributor_candidates.extend(candidates)
             page += 1
 
-        return self.select_best_match(contributor_candidates, sort_name)
+        best_match = self.select_best_match(candidates=contributor_candidates, 
+            working_sort_name=author_name, known_titles=known_titles)
+        #set_trace()
+        return best_match
+
+        
