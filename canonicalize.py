@@ -130,9 +130,9 @@ class AuthorNameCanonicalizer(object):
                     break
 
                 for contribution in contributor.contributions:
-                    if contribution.edition and contribution.edition.title and 
+                    if (contribution.edition and contribution.edition.title and 
                         known_titles and 
-                        title_match_ratio(known_titles[0], contribution.edition.title) > 80:
+                        (title_match_ratio(known_titles[0], contribution.edition.title) > 80)):
                         # whew! 
                         sort_name = contributor.sort_name
                         break
