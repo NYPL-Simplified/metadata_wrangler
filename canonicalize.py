@@ -93,13 +93,12 @@ class AuthorNameCanonicalizer(object):
 
         # All our techniques have failed. Woe! Let's just try to finagle
         # this provided display name into a sort name.
-        set_trace() # TODO: make sure default_name puts in the comma
         return self.default_name(display_name)
 
 
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)
-        return display_name_to_sort_name(shortened_name)
+        return display_name_to_sort_name(shortened_name, advanced=True)
 
 
     def _canonicalize(self, identifier, display_name):
