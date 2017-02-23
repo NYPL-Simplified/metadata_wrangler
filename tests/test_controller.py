@@ -179,7 +179,7 @@ class TestCatalogController(DatabaseTest):
                 parser._xpath(uncatalogued, 'atom:id')[0].text)
             eq_(str(HTTP_NOT_FOUND),
                 parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
-            eq_("Not in catalog catalog",
+            eq_("Not in catalog",
                 parser._xpath(uncatalogued, 'schema:description')[0].text)
 
             # It sends no <entry> tags.
