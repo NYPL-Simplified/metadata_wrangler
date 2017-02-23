@@ -2,7 +2,7 @@ import csv
 import sys
 from nose.tools import set_trace
 from core.model import (
-    Collection,
+    Catalog,
     Contribution,
     DataSource,
     Edition,
@@ -118,7 +118,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
                        "ebook")
 
 
-class CollectionCategorizationOverviewScript(Script):
+class CatalogCategorizationOverviewScript(Script):
 
     def __init__(self, output_path=None, cutoff=0):
         self.cutoff=cutoff
@@ -312,20 +312,20 @@ class RedoOCLCForThreeMScript(Script):
                 edition.add_contributor(contribution.contributor, contribution.role)
 
 
-class CollectionGeneratorScript(Script):
-    """Creates a new Collection object and prints client details to STDOUT"""
+class CatalogGeneratorScript(Script):
+    """Creates a new Catalog object and prints client details to STDOUT"""
 
     def run(self, name):
         if not name:
-            ValueError("No name provided. Could not create collection.")
+            ValueError("No name provided. Could not create catalog.")
 
         name = " ".join(name)
-        print "Creating collection %s... " % name
-        collection, plaintext_client_secret = Collection.register(self._db, name)
+        print "Creating catalog %s... " % name
+        catalog, plaintext_client_secret = Catalog.register(self._db, name)
 
-        print collection
+        print catalog
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
         print "-" * 40
-        print "CLIENT ID: %s" % collection.client_id
+        print "CLIENT ID: %s" % catalog.client_id
         print "CLIENT SECRET: %s" % plaintext_client_secret
