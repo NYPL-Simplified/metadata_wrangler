@@ -10,7 +10,7 @@ from core.app_server import (
     URNLookupController as CoreURNLookupController,
 )
 from core.model import (
-    Collection,
+    Catalog,
     CoverageRecord,
     DataSource,
     Identifier,
@@ -48,7 +48,7 @@ class CanonicalizationController(object):
         urn = request.args.get('urn')
         display_name = request.args.get('display_name')
         if urn:
-            identifier = URNLookupController.parse_urn(self._db, urn, False)
+            identifier, is_new = Identifier.parse_urn(self._db, urn, False)
             if not isinstance(identifier, Identifier):
                 return INVALID_URN
         else:
@@ -67,19 +67,19 @@ class CanonicalizationController(object):
         return make_response(author_name, 200, {"Content-Type": "text/plain"})
 
 
-class CollectionController(object):
-    """A controller to manage collections and their assets"""
+class CatalogController(object):
+    """A controller to manage catalogs and their assets"""
 
     def __init__(self, _db):
         self._db = _db
 
-    def authenticated_collection_from_request(self, required=True):
+    def authenticated_catalog_from_request(self, required=True):
         header = request.authorization
         if header:
             client_id, client_secret = header.username, header.password
-            collection = Collection.authenticate(self._db, client_id, client_secret)
-            if collection:
-                return collection
+            catalog = Catalog.authenticate(self._db, client_id, client_secret)
+            if catalog:
+                return catalog
         if not required and not header:
             # In the case that authentication is not required
             # (i.e. URN lookup) return None instead of an error.
@@ -87,18 +87,18 @@ class CollectionController(object):
         return INVALID_CREDENTIALS
 
     def updates_feed(self):
-        collection = self.authenticated_collection_from_request()
-        if isinstance(collection, ProblemDetail):
-            return collection
+        catalog = self.authenticated_catalog_from_request()
+        if isinstance(catalog, ProblemDetail):
+            return catalog
 
         last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
             last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
-        updated_works = collection.works_updated_since(self._db, last_update_time)
+        updated_works = catalog.works_updated_since(self._db, last_update_time)
 
         pagination = load_pagination_from_request()
         works = pagination.apply(updated_works).all()
-        title = "%s Updates" % collection.name
+        title = "%s Updates" % catalog.name
         def update_url(time=last_update_time, page=None):
             kw = dict(_external=True)
             if time:
@@ -130,9 +130,9 @@ class CollectionController(object):
         return feed_response(update_feed)
 
     def remove_items(self):
-        collection = self.authenticated_collection_from_request()
-        if isinstance(collection, ProblemDetail):
-            return collection
+        catalog = self.authenticated_catalog_from_request()
+        if isinstance(catalog, ProblemDetail):
+            return catalog
 
         urns = request.args.getlist('urn')
         messages = []
@@ -148,19 +148,19 @@ class CollectionController(object):
                     urn, INVALID_URN.status_code, INVALID_URN.detail
                 )
             else:
-                if identifier in collection.catalog:
-                    collection.catalog.remove(identifier)
+                if identifier in catalog.catalog:
+                    catalog.catalog.remove(identifier)
                     message = OPDSMessage(
                         urn, HTTP_OK, "Successfully removed"
                     )
                 else:
                     message = OPDSMessage(
-                        urn, HTTP_NOT_FOUND, "Not in collection catalog"
+                        urn, HTTP_NOT_FOUND, "Not in catalog catalog"
                     )
             if message:
                 messages.append(message)
 
-        title = "%s Catalog Item Removal" % collection.name
+        title = "%s Catalog Item Removal" % catalog.name
         url = cdn_url_for("remove", urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
@@ -219,7 +219,7 @@ class URNLookupController(CoreURNLookupController):
             return False
         return True
   
-    def process_urn(self, urn, collection=None, **kwargs):
+    def process_urn(self, urn, catalog=None, **kwargs):
         """Turn a URN into a Work suitable for use in an OPDS feed.
         """
         try:
@@ -235,10 +235,10 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
-        # If a Collection was provided, this also means we consider
-        # this Identifier part of the given collection.
-        if collection:
-            collection.catalog_identifier(self._db, identifier)
+        # If a Catalog was provided, this also means we consider
+        # this Identifier part of the given catalog.
+        if catalog:
+            catalog.catalog_identifier(self._db, identifier)
 
         if identifier.type == Identifier.ISBN:
             # ISBNs are handled specially.

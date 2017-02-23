@@ -17,7 +17,7 @@ from core.model import production_session
 from core.config import Configuration
 
 from controller import (
-    CollectionController,
+    CatalogController,
     CanonicalizationController,
     URNLookupController
 )
@@ -45,23 +45,23 @@ else:
     Conf.initialize(_db)
 
 
-def accepts_collection(f):
+def accepts_catalog(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        collection = CollectionController(Conf.db).authenticated_collection_from_request(
+        catalog = CatalogController(Conf.db).authenticated_catalog_from_request(
             required=False
         )
-        if isinstance(collection, ProblemDetail):
-            return collection.response
-        return f(collection=collection, *args, **kwargs)
+        if isinstance(catalog, ProblemDetail):
+            return catalog.response
+        return f(catalog=catalog, *args, **kwargs)
     return decorated
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        collection = CollectionController(Conf.db).authenticated_collection_from_request()
-        if isinstance(collection, ProblemDetail):
-            return collection.response
+        catalog = CatalogController(Conf.db).authenticated_catalog_from_request()
+        if isinstance(catalog, ProblemDetail):
+            return catalog.response
         return f(*args, **kwargs)
     return decorated
 
@@ -79,11 +79,11 @@ def heartbeat():
     return HeartbeatController().heartbeat()
 
 @app.route('/lookup')
-@accepts_collection
-def lookup(collection=None):
+@accepts_catalog
+def lookup(catalog=None):
     return URNLookupController(Conf.db).work_lookup(
         VerboseAnnotator, require_active_licensepool=False,
-        collection=collection
+        catalog=catalog
     )
 
 @app.route('/canonical-author-name')
@@ -94,12 +94,12 @@ def canonical_author_name():
 @app.route('/updates')
 @requires_auth
 def updates():
-    return CollectionController(Conf.db).updates_feed()
+    return CatalogController(Conf.db).updates_feed()
 
 @app.route('/remove', methods=['POST'])
 @requires_auth
 def remove():
-    return CollectionController(Conf.db).remove_items()
+    return CatalogController(Conf.db).remove_items()
 
 if __name__ == '__main__':
 
