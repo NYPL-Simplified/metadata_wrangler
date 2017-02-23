@@ -98,7 +98,7 @@ class AuthorNameCanonicalizer(object):
 
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)
-        return display_name_to_sort_name(shortened_name, advanced=True)
+        return display_name_to_sort_name(shortened_name)
 
 
     def _canonicalize(self, identifier, display_name):

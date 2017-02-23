@@ -330,7 +330,7 @@ class VIAFParser(XMLParser):
         # Last-ditch effort. Guess at the sort name and see if *that's* one
         # of the cluster sort names.
         if working_display_name and not working_sort_name:
-            test_sort_name = display_name_to_sort_name(working_display_name, advanced=True)
+            test_sort_name = display_name_to_sort_name(working_display_name)
             for potential_match in self.sort_names_for_cluster(cluster):
                 match_confidence = self.contributor_name_match_ratio(potential_match, test_sort_name)
                 match_confidences["guessed_sort_name"] = match_confidence
