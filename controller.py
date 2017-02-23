@@ -155,7 +155,7 @@ class CatalogController(object):
                     )
                 else:
                     message = OPDSMessage(
-                        urn, HTTP_NOT_FOUND, "Not in catalog catalog"
+                        urn, HTTP_NOT_FOUND, "Not in catalog"
                     )
             if message:
                 messages.append(message)
