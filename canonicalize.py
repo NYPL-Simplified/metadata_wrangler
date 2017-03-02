@@ -71,10 +71,7 @@ class AuthorNameCanonicalizer(object):
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
         """
-        #if identifier and identifier.type != Identifier.ISBN:
-            # The only identifier we can do a useful lookup on is
-            # ISBN.
-        #    identifier = None
+
         if not identifier and not display_name:
             raise CanonicalizationError(
                 "Neither useful identifier nor display name was provided."
@@ -187,7 +184,6 @@ class AuthorNameCanonicalizer(object):
         def comparable_name(s):
             return s.replace(",", "").replace(".", "")
 
-        set_trace()
         if display_name:
             test_working_display_name = comparable_name(display_name)
         else:
@@ -248,7 +244,7 @@ class AuthorNameCanonicalizer(object):
         viaf_contributor = self.viaf.lookup_by_name(
             sort_name=None, display_name=display_name, known_titles=known_titles
         )
-        set_trace()
+
         if viaf_contributor:
             contributor_data = viaf_contributor[0]
             sort_name = contributor_data.sort_name
