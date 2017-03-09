@@ -20,6 +20,7 @@ from core.model import (
 )
 
 from core.util.personal_names import (
+    contributor_name_match_ratio, 
     display_name_to_sort_name, 
     is_corporate_name, 
     normalize_contributor_name_for_matching, 
@@ -62,19 +63,6 @@ class VIAFParser(XMLParser):
             else:
                 display_name += ' ' + extra
         return display_name
-
-
-    @classmethod
-    def contributor_name_match_ratio(cls, name1, name2):
-        """
-        Returns a number between 0 and 100, representing the percent 
-        match (Levenshtein Distance) between name1 and name2, 
-        after each has been normalized.
-        """
-        name1 = cls.prepare_contributor_name_for_matching(name1)
-        name2 = cls.prepare_contributor_name_for_matching(name2)
-        match_ratio = fuzz.ratio(name1, name2)
-        return match_ratio
 
 
     @classmethod
@@ -720,7 +708,7 @@ class VIAFClient(object):
 
             contributor_candidate = self.lookup_by_name(
                 sort_name=contributor.sort_name, display_name=contributor.display_name, 
-                known_titles=known_titles
+                known_titles=list(known_titles)
             )
         if not contributor_candidate:
             # No good match was identified.
@@ -758,12 +746,12 @@ class VIAFClient(object):
 
         :param known_titles: A list of titles we know this author wrote.
         """
-        # Sort for the best match and select the first.
 
+        # Sort for the best match and select the first.
         candidates = self.parser.order_candidates(
             working_sort_name=working_sort_name,
             contributor_candidates=candidates, 
-            known_titles=list(known_titles)
+            known_titles=known_titles
         )
         if not candidates:
             return None
