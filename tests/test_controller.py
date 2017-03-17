@@ -17,7 +17,7 @@ from core.util.opds_writer import OPDSMessage
 from core.opds_import import OPDSXMLParser
 
 from controller import (
-    CollectionController,
+    CatalogController,
     URNLookupController,
     HTTP_OK, 
     HTTP_CREATED, 
@@ -27,73 +27,73 @@ from controller import (
     HTTP_INTERNAL_SERVER_ERROR, 
 )
 
-class TestCollectionController(DatabaseTest):
+class TestCatalogController(DatabaseTest):
 
     def setup(self):
-        super(TestCollectionController, self).setup()
+        super(TestCatalogController, self).setup()
         from app import app
         self.app = app
 
-        self.controller = CollectionController(self._db)
-        self.collection = self._collection()
+        self.controller = CatalogController(self._db)
+        self.catalog = self._catalog()
         self.valid_auth = 'Basic ' + base64.b64encode('abc:def')
 
         self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
         self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
 
-    def test_authenticated_collection_required(self):
-        # Returns collection if authentication is valid.
+    def test_authenticated_catalog_required(self):
+        # Returns catalog if authentication is valid.
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
-            result = self.controller.authenticated_collection_from_request()
-            eq_(result, self.collection)
+            result = self.controller.authenticated_catalog_from_request()
+            eq_(result, self.catalog)
         
         # Returns error if authentication is invalid.
         invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
         with self.app.test_request_context('/',
                 headers=dict(Authorization=invalid_auth)):
-            result = self.controller.authenticated_collection_from_request()
+            result = self.controller.authenticated_catalog_from_request()
             eq_(True, isinstance(result, ProblemDetail))
             eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns errors without authentication.
         with self.app.test_request_context('/'):
-            result = self.controller.authenticated_collection_from_request()
+            result = self.controller.authenticated_catalog_from_request()
             eq_(True, isinstance(result, ProblemDetail))
 
-    def test_authenticated_collection_optional(self):
-        # Returns collection of authentication is valid.
+    def test_authenticated_catalog_optional(self):
+        # Returns catalog of authentication is valid.
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
-            result = self.controller.authenticated_collection_from_request(required=False)
-            eq_(result, self.collection)
+            result = self.controller.authenticated_catalog_from_request(required=False)
+            eq_(result, self.catalog)
         
         # Returns error if attempted authentication is invalid.
         invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
         with self.app.test_request_context('/',
                 headers=dict(Authorization=invalid_auth)):
-            result = self.controller.authenticated_collection_from_request(required=False)
+            result = self.controller.authenticated_catalog_from_request(required=False)
             eq_(True, isinstance(result, ProblemDetail))
             eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns none if no authentication.
         with self.app.test_request_context('/'):
-            result = self.controller.authenticated_collection_from_request(required=False)
+            result = self.controller.authenticated_catalog_from_request(required=False)
             eq_(None, result)
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
-        self.collection.catalog_identifier(self._db, identifier)
+        self.catalog.catalog_identifier(self._db, identifier)
 
         with self.app.test_request_context('/',
                 headers=dict(Authorization=self.valid_auth)):
             response = self.controller.updates_feed()
-            # The collection's updates feed is returned.
+            # The catalog's updates feed is returned.
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
-            eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
+            eq_(feed['feed']['title'],"%s Updates" % self.catalog.name)
             
-            # The feed has the collection's catalog.
+            # The feed has the catalog's catalog.
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
             eq_(self.work1.title, entry['title'])
@@ -110,7 +110,7 @@ class TestCollectionController(DatabaseTest):
             response = self.controller.updates_feed()
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
-            eq_(feed['feed']['title'],"%s Updates" % self.collection.name)
+            eq_(feed['feed']['title'],"%s Updates" % self.catalog.name)
             # The timestamp is included in the url.
             linkified_timestamp = time.strftime("%Y-%m-%d+%H:%M:%S").replace(":", "%3A")
             assert feed['feed']['id'].endswith(linkified_timestamp)
@@ -130,7 +130,7 @@ class TestCollectionController(DatabaseTest):
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
-            self.collection.catalog_identifier(
+            self.catalog.catalog_identifier(
                 self._db, work.license_pools[0].identifier
             )
         with self.app.test_request_context('/?size=1',
@@ -153,7 +153,7 @@ class TestCollectionController(DatabaseTest):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         uncatalogued_id = self._identifier()
-        self.collection.catalog_identifier(self._db, catalogued_id)
+        self.catalog.catalog_identifier(self._db, catalogued_id)
 
         parser = OPDSXMLParser()
         message_path = '/atom:feed/simplified:message'
@@ -179,20 +179,20 @@ class TestCollectionController(DatabaseTest):
                 parser._xpath(uncatalogued, 'atom:id')[0].text)
             eq_(str(HTTP_NOT_FOUND),
                 parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
-            eq_("Not in collection catalog",
+            eq_("Not in catalog",
                 parser._xpath(uncatalogued, 'schema:description')[0].text)
 
             # It sends no <entry> tags.
             eq_([], parser._xpath(root, "//atom:entry"))
 
             # The catalogued identifier isn't in the catalog.
-            assert catalogued_id not in self.collection.catalog
+            assert catalogued_id not in self.catalog.catalog
             # But it's still in the database.
             eq_(catalogued_id, self._db.query(Identifier).filter_by(
                 id=catalogued_id.id).one())
 
         # Try again, this time including an invalid URN.
-        self.collection.catalog_identifier(self._db, catalogued_id)
+        self.catalog.catalog_identifier(self._db, catalogued_id)
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
                 headers=dict(Authorization=self.valid_auth)):
@@ -220,7 +220,7 @@ class TestCollectionController(DatabaseTest):
             eq_([], parser._xpath(root, "//atom:entry"))
             
             # The catalogued identifier is still removed.
-            assert catalogued_id not in self.collection.catalog
+            assert catalogued_id not in self.catalog.catalog
 
 
 class TestURNLookupController(DatabaseTest):
@@ -325,27 +325,27 @@ class TestURNLookupController(DatabaseTest):
         self.controller.process_urn(identifier.urn)
         eq_([(identifier, work)], self.controller.works)
         
-    def test_process_urn_with_collection(self):
-        collection = self._collection()
+    def test_process_urn_with_catalog(self):
+        catalog = self._catalog()
         i1 = self._identifier()
         i2 = self._identifier()
 
-        eq_([], collection.catalog)
-        self.controller.process_urn(i1.urn, collection=collection)
-        eq_(1, len(collection.catalog))
-        eq_([i1], collection.catalog)
+        eq_([], catalog.catalog)
+        self.controller.process_urn(i1.urn, catalog=catalog)
+        eq_(1, len(catalog.catalog))
+        eq_([i1], catalog.catalog)
 
         # Adds new identifiers to an existing catalog
-        self.controller.process_urn(i2.urn, collection=collection)
-        eq_(2, len(collection.catalog))
-        assert i1 in collection.catalog
-        assert i2 in collection.catalog
+        self.controller.process_urn(i2.urn, catalog=catalog)
+        eq_(2, len(catalog.catalog))
+        assert i1 in catalog.catalog
+        assert i2 in catalog.catalog
 
         # Does not duplicate identifiers in the catalog
-        self.controller.process_urn(i1.urn, collection=collection)
-        eq_(2, len(collection.catalog))
-        assert i1 in collection.catalog
-        assert i2 in collection.catalog
+        self.controller.process_urn(i1.urn, catalog=catalog)
+        eq_(2, len(catalog.catalog))
+        assert i1 in catalog.catalog
+        assert i2 in catalog.catalog
 
     def test_process_urn_isbn(self):
         # Create a new ISBN identifier.
