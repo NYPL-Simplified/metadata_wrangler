@@ -265,7 +265,7 @@ class VIAFParser(XMLParser):
         # sort names, great.
         if working_sort_name:
             for potential_match in self.sort_names_for_cluster(cluster):
-                match_confidence = self.contributor_name_match_ratio(potential_match, working_sort_name)
+                match_confidence = contributor_name_match_ratio(potential_match, working_sort_name)
                 match_confidences["sort_name"] = match_confidence
                 # fuzzy match filter may not always give a 100% match, so cap arbitrarily at 90% as a "sure match"
                 if match_confidence > 90:
@@ -279,7 +279,7 @@ class VIAFParser(XMLParser):
             if wikipedia_name:
                 contributor_data.wikipedia_name=wikipedia_name
                 display_name = self.wikipedia_name_to_display_name(wikipedia_name)
-                match_confidence = self.contributor_name_match_ratio(display_name, working_display_name)
+                match_confidence = contributor_name_match_ratio(display_name, working_display_name)
                 match_confidences["display_name"] = match_confidence
                 if match_confidence > 90:
                     contributor_data.display_name=display_name
@@ -293,7 +293,7 @@ class VIAFParser(XMLParser):
             (possible_given, possible_family,
              possible_extra, possible_sort_name) = self.extract_name_from_unimarc(unimarc)
             if working_sort_name:
-                match_confidence = self.contributor_name_match_ratio(possible_sort_name, working_sort_name)
+                match_confidence = contributor_name_match_ratio(possible_sort_name, working_sort_name)
                 match_confidences["unimarc"] = match_confidence
                 if match_confidence > 90:
                     contributor_data.family_name=possible_sort_name
@@ -314,7 +314,7 @@ class VIAFParser(XMLParser):
         if working_display_name and not working_sort_name:
             test_sort_name = display_name_to_sort_name(working_display_name)
             for potential_match in self.sort_names_for_cluster(cluster):
-                match_confidence = self.contributor_name_match_ratio(potential_match, test_sort_name)
+                match_confidence = contributor_name_match_ratio(potential_match, test_sort_name)
                 match_confidences["guessed_sort_name"] = match_confidence
                 if match_confidence > 90:
                     contributor_data.sort_name=potential_match
@@ -323,7 +323,7 @@ class VIAFParser(XMLParser):
         # OK, last last-ditch effort.  See if the alternate name forms (pseudonyms) are it.
         if working_sort_name:
             for potential_match in self.alternate_name_forms_for_cluster(cluster):
-                match_confidence = self.contributor_name_match_ratio(potential_match, working_sort_name)
+                match_confidence = contributor_name_match_ratio(potential_match, working_sort_name)
                 match_confidences["alternate_name"] = match_confidence
                 if match_confidence > 90:
                     contributor_data.family_name=potential_match
