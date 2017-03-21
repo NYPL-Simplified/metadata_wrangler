@@ -2,7 +2,7 @@ import csv
 import sys
 from nose.tools import set_trace
 from core.model import (
-    Catalog,
+    ClientServer,
     Contribution,
     DataSource,
     Edition,
@@ -312,20 +312,20 @@ class RedoOCLCForThreeMScript(Script):
                 edition.add_contributor(contribution.contributor, contribution.role)
 
 
-class CatalogGeneratorScript(Script):
-    """Creates a new Catalog object and prints client details to STDOUT"""
+class ClientServerGeneratorScript(Script):
+    """Creates a new ClientServer object and prints client details to STDOUT"""
 
     def run(self, name):
         if not name:
-            ValueError("No name provided. Could not create catalog.")
+            ValueError("No name provided. Could not create client server.")
 
         name = " ".join(name)
-        print "Creating catalog %s... " % name
-        catalog, plaintext_client_secret = Catalog.register(self._db, name)
+        print "Creating client server %s... " % name
+        server, plaintext_secret = ClientServer.register(self._db, name)
 
-        print catalog
+        print server
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
         print "-" * 40
-        print "CLIENT ID: %s" % catalog.client_id
-        print "CLIENT SECRET: %s" % plaintext_client_secret
+        print "CLIENT KEY: %s" % server
+        print "CLIENT SECRET: %s" % plaintext_secret

@@ -45,23 +45,23 @@ else:
     Conf.initialize(_db)
 
 
-def accepts_catalog(f):
+def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        catalog = CatalogController(Conf.db).authenticated_catalog_from_request(
+        server = CatalogController(Conf.db).authenticated_server_from_request(
             required=False
         )
-        if isinstance(catalog, ProblemDetail):
-            return catalog.response
-        return f(catalog=catalog, *args, **kwargs)
+        if isinstance(server, ProblemDetail):
+            return server.response
+        return f(*args, **kwargs)
     return decorated
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        catalog = CatalogController(Conf.db).authenticated_catalog_from_request()
-        if isinstance(catalog, ProblemDetail):
-            return catalog.response
+        server = CatalogController(Conf.db).authenticated_server_from_request()
+        if isinstance(server, ProblemDetail):
+            return server.response
         return f(*args, **kwargs)
     return decorated
 
@@ -78,28 +78,33 @@ def shutdown_session(exception):
 def heartbeat():
     return HeartbeatController().heartbeat()
 
-@app.route('/lookup')
-@accepts_catalog
-def lookup(catalog=None):
-    return URNLookupController(Conf.db).work_lookup(
-        VerboseAnnotator, require_active_licensepool=False,
-        catalog=catalog
-    )
-
 @app.route('/canonical-author-name')
 @returns_problem_detail
 def canonical_author_name():
     return CanonicalizationController(Conf.db).canonicalize_author_name()
 
-@app.route('/updates')
-@requires_auth
-def updates():
-    return CatalogController(Conf.db).updates_feed()
+@app.route('/lookup', defaults=dict(collection_metadata_identifier=None))
+@app.route('/<collection_metadata_identifier>/lookup')
+@accepts_auth
+def lookup(collection_metadata_identifier=None):
+    return URNLookupController(Conf.db).work_lookup(
+        VerboseAnnotator, require_active_licensepool=False,
+        collection_details=collection_metadata_identifier
+    )
 
-@app.route('/remove', methods=['POST'])
+@app.route('/<collection_metadata_identifier>/updates')
 @requires_auth
-def remove():
-    return CatalogController(Conf.db).remove_items()
+def updates(collection_metadata_identifier):
+    return CatalogController(Conf.db).updates_feed(
+        collection_details=collection_metadata_identifier
+    )
+
+@app.route('/<collection_metadata_identifier>/remove', methods=['POST'])
+@requires_auth
+def remove(collection_metadata_identifier):
+    return CatalogController(Conf.db).remove_items(
+        collection_details=collection_metadata_identifier
+    )
 
 if __name__ == '__main__':
 
