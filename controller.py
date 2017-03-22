@@ -43,6 +43,20 @@ HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 
+def authenticated_server_from_request(_db, required=True):
+    header = request.authorization
+    if header:
+        key, secret = header.username, header.password
+        server = ClientServer.authenticate(_db, key, secret)
+        if server:
+            return server
+    if not required and not header:
+        # In the case that authentication is not required
+        # (i.e. URN lookup) return None instead of an error.
+        return None
+    return INVALID_CREDENTIALS
+
+
 class CanonicalizationController(object):
 
     log = logging.getLogger("Canonicalization Controller")
@@ -80,21 +94,8 @@ class CatalogController(object):
     def __init__(self, _db):
         self._db = _db
 
-    def authenticated_server_from_request(self, required=True):
-        header = request.authorization
-        if header:
-            key, secret = header.username, header.password
-            server = ClientServer.authenticate(self._db, key, secret)
-            if server:
-                return server
-        if not required and not header:
-            # In the case that authentication is not required
-            # (i.e. URN lookup) return None instead of an error.
-            return None
-        return INVALID_CREDENTIALS
-
     def updates_feed(self, collection_details):
-        server = self.authenticated_server_from_request()
+        server = authenticated_server_from_request(self._db)
         if isinstance(server, ProblemDetail):
             return server
         collection = Collection.from_metadata_identifier(self._db, collection_details)[0]
@@ -158,7 +159,7 @@ class CatalogController(object):
 
     def remove_items(self, collection_details):
         """Removes identifiers from a collection's catalog"""
-        server = self.authenticated_server_from_request()
+        server = authenticated_server_from_request(self._db)
         if isinstance(server, ProblemDetail):
             return server
 
@@ -200,7 +201,7 @@ class CatalogController(object):
 
     def update_client_url(self):
         """Updates the URL of a ClientServer"""
-        server = self.authenticated_server_from_request()
+        server = authenticated_server_from_request(self._db)
         if isinstance(server, ProblemDetail):
             return server
 
@@ -279,9 +280,10 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
-        # If a Catalog was provided, this also means we consider
-        # this Identifier part of the given catalog.
-        if collection_details:
+        # If a Collection was provided by an authenticated server, this
+        # Identifier is part of the Collection's catalog.
+        server = authenticated_server_from_request(self._db, required=False)
+        if server and collection_details:
             collection = Collection.from_metadata_identifier(self._db, collection_details)[0]
             collection.catalog_identifier(self._db, identifier)
             self._db.commit()

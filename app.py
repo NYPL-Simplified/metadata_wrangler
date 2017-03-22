@@ -17,6 +17,7 @@ from core.model import production_session
 from core.config import Configuration
 
 from controller import (
+    authenticated_server_from_request,
     CatalogController,
     CanonicalizationController,
     URNLookupController
@@ -48,9 +49,7 @@ else:
 def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        server = CatalogController(Conf.db).authenticated_server_from_request(
-            required=False
-        )
+        server = authenticated_server_from_request(Conf.db, required=False)
         if isinstance(server, ProblemDetail):
             return server.response
         return f(*args, **kwargs)
@@ -59,7 +58,7 @@ def accepts_auth(f):
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        server = CatalogController(Conf.db).authenticated_server_from_request()
+        server = authenticated_server_from_request(Conf.db)
         if isinstance(server, ProblemDetail):
             return server.response
         return f(*args, **kwargs)
@@ -83,7 +82,7 @@ def heartbeat():
 def canonical_author_name():
     return CanonicalizationController(Conf.db).canonicalize_author_name()
 
-@app.route('/lookup', defaults=dict(collection_metadata_identifier=None))
+@app.route('/lookup')
 @app.route('/<collection_metadata_identifier>/lookup')
 @accepts_auth
 @returns_problem_detail
