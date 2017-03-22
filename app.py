@@ -86,6 +86,7 @@ def canonical_author_name():
 @app.route('/lookup', defaults=dict(collection_metadata_identifier=None))
 @app.route('/<collection_metadata_identifier>/lookup')
 @accepts_auth
+@returns_problem_detail
 def lookup(collection_metadata_identifier=None):
     return URNLookupController(Conf.db).work_lookup(
         VerboseAnnotator, require_active_licensepool=False,
@@ -94,6 +95,7 @@ def lookup(collection_metadata_identifier=None):
 
 @app.route('/<collection_metadata_identifier>/updates')
 @requires_auth
+@returns_problem_detail
 def updates(collection_metadata_identifier):
     return CatalogController(Conf.db).updates_feed(
         collection_details=collection_metadata_identifier
@@ -101,6 +103,7 @@ def updates(collection_metadata_identifier):
 
 @app.route('/<collection_metadata_identifier>/remove', methods=['POST'])
 @requires_auth
+@returns_problem_detail
 def remove(collection_metadata_identifier):
     return CatalogController(Conf.db).remove_items(
         collection_details=collection_metadata_identifier
@@ -113,8 +116,9 @@ def register_client():
 
 @app.route('/client/update_url', methods=['POST'])
 @requires_auth
+@returns_problem_detail
 def update_url():
-    return CatalogController(Conf.db).update_url()
+    return CatalogController(Conf.db).update_client_url()
 
 if __name__ == '__main__':
 
