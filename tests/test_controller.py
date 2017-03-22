@@ -182,7 +182,8 @@ class TestCatalogController(DatabaseTest):
             assert body.get('secret')
 
             # A server was created with the proper credentials
-            server = get_one(self._db, ClientServer, url=server_url)
+            normalized_url = ClientServer.normalize_url(server_url)
+            server = get_one(self._db, ClientServer, url=normalized_url)
             eq_(server.key, body.get('key'))
 
             # If a server with the url is already in the database, a
@@ -191,7 +192,7 @@ class TestCatalogController(DatabaseTest):
             eq_(True, isinstance(response, ProblemDetail))
             eq_(INVALID_INPUT.uri, response.uri)
             eq_(400, response.status_code)
-            assert server_url in response.detail
+            assert normalized_url in response.detail
             assert "already exists" in response.detail
 
         with self.app.test_request_context('/'):
