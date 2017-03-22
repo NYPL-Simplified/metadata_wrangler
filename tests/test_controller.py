@@ -1,6 +1,8 @@
 import os
 import base64
 import feedparser
+import json
+import urllib
 from StringIO import StringIO
 from datetime import datetime, timedelta
 from lxml import etree
@@ -8,10 +10,16 @@ from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
 from core.model import (
+    ClientServer,
     Collection,
     CoverageRecord,
     DataSource,
     Identifier,
+    get_one,
+)
+from core.problem_details import (
+    INVALID_CREDENTIALS,
+    INVALID_INPUT,
 )
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
@@ -46,15 +54,15 @@ class TestCatalogController(DatabaseTest):
         )
 
         self.server = self._server()
-        self.valid_auth = 'Basic ' + base64.b64encode('abc:def')
+        valid_auth = 'Basic ' + base64.b64encode('abc:def')
+        self.valid_auth = dict(Authorization=valid_auth)
 
         self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
         self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
 
     def test_authenticated_server_required(self):
         # Returns catalog if authentication is valid.
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=self.valid_auth)):
+        with self.app.test_request_context('/', headers=self.valid_auth):
             result = self.controller.authenticated_server_from_request()
             eq_(result, self.server)
         
@@ -73,8 +81,7 @@ class TestCatalogController(DatabaseTest):
 
     def test_authenticated_server_optional(self):
         # Returns catalog of authentication is valid.
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=self.valid_auth)):
+        with self.app.test_request_context('/', headers=self.valid_auth):
             result = self.controller.authenticated_server_from_request(required=False)
             eq_(result, self.server)
         
@@ -95,8 +102,7 @@ class TestCatalogController(DatabaseTest):
         identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(self._db, identifier)
 
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=self.valid_auth)):
+        with self.app.test_request_context('/', headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
             eq_(HTTP_OK, response.status_code)
@@ -117,7 +123,7 @@ class TestCatalogController(DatabaseTest):
             # Set back the clock on all of work1's time records
             record.timestamp = time - timedelta(days=1)
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-                headers=dict(Authorization=self.valid_auth)):
+            headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
@@ -133,7 +139,7 @@ class TestCatalogController(DatabaseTest):
         # Works updated since the timestamp are returned
         self.work1.coverage_records[0].timestamp = datetime.utcnow()
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-                headers=dict(Authorization=self.valid_auth)):
+            headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             feed = feedparser.parse(response.get_data())
             eq_(1, len(feed['entries']))
@@ -147,7 +153,7 @@ class TestCatalogController(DatabaseTest):
                 self._db, work.license_pools[0].identifier
             )
         with self.app.test_request_context('/?size=1',
-                headers=dict(Authorization=self.valid_auth)):
+            headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'next' for link in links])
@@ -155,12 +161,46 @@ class TestCatalogController(DatabaseTest):
             assert not any([link['rel'] == 'first' for l in links])
 
         with self.app.test_request_context('/?size=1&after=1',
-                headers=dict(Authorization=self.valid_auth)):
+            headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'previous' for link in links])
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
+
+    def test_register_client(self):
+        server_url = self._url
+        with self.app.test_request_context(
+                '/?client_url=%s' % urllib.quote(server_url)):
+            response = self.controller.register_client()
+            eq_('application/json', response.content_type)
+            eq_(200, response.status_code)
+
+            # The key and secret for this ClientServer were returned.
+            body = json.loads(response.data)
+            assert body.get('key')
+            assert body.get('secret')
+
+            # A server was created with the proper credentials
+            server = get_one(self._db, ClientServer, url=server_url)
+            eq_(server.key, body.get('key'))
+
+            # If a server with the url is already in the database, a
+            # ProblemDetail is returned.
+            response = self.controller.register_client()
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_(INVALID_INPUT.uri, response.uri)
+            eq_(400, response.status_code)
+            assert server_url in response.detail
+            assert "already exists" in response.detail
+
+        with self.app.test_request_context('/'):
+            # If not client_url is sent, a Problem Detail is returned.
+            response = self.controller.register_client()
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_(INVALID_INPUT.uri, response.uri)
+            eq_(400, response.status_code)
+            assert 'client_url' in response.detail
 
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
@@ -172,7 +212,7 @@ class TestCatalogController(DatabaseTest):
         message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
-                headers=dict(Authorization=self.valid_auth)):
+                headers=self.valid_auth):
 
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
@@ -206,7 +246,7 @@ class TestCatalogController(DatabaseTest):
         self.collection.catalog_identifier(self._db, catalogued_id)
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
-                headers=dict(Authorization=self.valid_auth)):
+                headers=self.valid_auth):
             response = self.controller.remove_items(self.collection.name)
             eq_(HTTP_OK, int(response.status_code))
 
@@ -232,6 +272,30 @@ class TestCatalogController(DatabaseTest):
             
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
+
+    def test_update_client_url(self):
+        url = urllib.quote('https://try-me.fake.us/')
+        with self.app.test_request_context('/'):
+            # Without authentication a ProblemDetail is returned.
+            response = self.controller.update_client_url()
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_(INVALID_CREDENTIALS, response)
+
+        with self.app.test_request_context('/', headers=self.valid_auth):
+            # When a URL isn't provided, a ProblemDetail is returned.
+            response = self.controller.update_client_url()
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_(400, response.status_code)
+            eq_(INVALID_INPUT.uri, response.uri)
+            assert 'client_url' in response.detail
+
+        with self.app.test_request_context('/?client_url=%s' % url,
+            headers=self.valid_auth):
+            response = self.controller.update_client_url()
+            # The request was successful.
+            eq_(202, response.status_code)
+            # The server's URL has been changed.
+            self.server.url = 'try-me.fake.us'
 
 
 class TestURNLookupController(DatabaseTest):

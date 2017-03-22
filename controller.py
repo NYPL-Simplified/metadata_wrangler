@@ -2,7 +2,9 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 import base64
+import json
 import logging
+import urllib
 
 from core.app_server import (
     cdn_url_for,
@@ -27,6 +29,7 @@ from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.problem_details import (
     INVALID_CREDENTIALS,
+    INVALID_INPUT,
     INVALID_URN,
 )
 
@@ -67,8 +70,8 @@ class CanonicalizationController(object):
         )
 
         if not author_name:
-            return make_response("", 404)
-        return make_response(author_name, 200, {"Content-Type": "text/plain"})
+            return make_response("", HTTP_NOT_FOUND)
+        return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
 class CatalogController(object):
@@ -137,7 +140,24 @@ class CatalogController(object):
 
         return feed_response(update_feed)
 
+    def register_client(self):
+        """Creates authentication details for a server"""
+        url = request.args.get('client_url')
+        if not url:
+            return INVALID_INPUT.detailed("No 'client_url' provided")
+
+        try:
+            url = urllib.unquote(url)
+            server, plaintext_secret = ClientServer.register(self._db, url)
+            self._db.commit()
+
+            body = json.dumps(dict(key=server.key, secret=plaintext_secret))
+            return make_response(body, 200, {"Content-Type": "application/json"})
+        except ValueError, e:
+            return INVALID_INPUT.detailed(e.message)
+
     def remove_items(self, collection_details):
+        """Removes identifiers from a collection's catalog"""
         server = self.authenticated_server_from_request()
         if isinstance(server, ProblemDetail):
             return server
@@ -177,6 +197,21 @@ class CatalogController(object):
         )
 
         return feed_response(removal_feed)
+
+    def update_client_url(self):
+        """Updates the URL of a ClientServer"""
+        server = self.authenticated_server_from_request()
+        if isinstance(server, ProblemDetail):
+            return server
+
+        url = request.args.get('client_url')
+        if not url:
+            return INVALID_INPUT.detailed("No 'client_url' provided")
+
+        server.url = ClientServer.normalize_url(urllib.unquote(url))
+        self._db.commit()
+
+        return make_response("", HTTP_ACCEPTED)
 
 
 class URNLookupController(CoreURNLookupController):
