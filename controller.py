@@ -189,6 +189,7 @@ class CatalogController(object):
                     )
             if message:
                 messages.append(message)
+        self._db.commit()
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, server.url)
         url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
