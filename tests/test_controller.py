@@ -5,6 +5,7 @@ import json
 import urllib
 from StringIO import StringIO
 from datetime import datetime, timedelta
+from functools import wraps
 from lxml import etree
 from nose.tools import set_trace, eq_
 
@@ -28,21 +29,74 @@ from core.opds_import import OPDSXMLParser
 from controller import (
     CatalogController,
     URNLookupController,
-    HTTP_OK, 
-    HTTP_CREATED, 
-    HTTP_ACCEPTED, 
-    HTTP_UNAUTHORIZED, 
-    HTTP_NOT_FOUND, 
-    HTTP_INTERNAL_SERVER_ERROR, 
+    HTTP_OK,
+    HTTP_CREATED,
+    HTTP_ACCEPTED,
+    HTTP_UNAUTHORIZED,
+    HTTP_NOT_FOUND,
+    HTTP_INTERNAL_SERVER_ERROR,
+    authenticated_server_from_request,
 )
 
-class TestCatalogController(DatabaseTest):
+
+class ControllerTest(DatabaseTest):
 
     def setup(self):
-        super(TestCatalogController, self).setup()
+        super(ControllerTest, self).setup()
+
         from app import app
         self.app = app
 
+        self.server = self._server()
+        valid_auth = 'Basic ' + base64.b64encode('abc:def')
+        self.valid_auth = dict(Authorization=valid_auth)
+
+
+class TestClientServerAuthentication(ControllerTest):
+
+    def test_authenticated_server_required(self):
+        # Returns catalog if authentication is valid.
+        with self.app.test_request_context('/', headers=self.valid_auth):
+            result = authenticated_server_from_request(self._db)
+            eq_(result, self.server)
+        
+        # Returns error if authentication is invalid.
+        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
+        with self.app.test_request_context('/',
+                headers=dict(Authorization=invalid_auth)):
+            result = authenticated_server_from_request(self._db)
+            eq_(True, isinstance(result, ProblemDetail))
+            eq_(HTTP_UNAUTHORIZED, result.status_code)
+
+        # Returns errors without authentication.
+        with self.app.test_request_context('/'):
+            result = authenticated_server_from_request(self._db)
+            eq_(True, isinstance(result, ProblemDetail))
+
+    def test_authenticated_server_optional(self):
+        # Returns catalog of authentication is valid.
+        with self.app.test_request_context('/', headers=self.valid_auth):
+            result = authenticated_server_from_request(self._db, required=False)
+            eq_(result, self.server)
+        
+        # Returns error if attempted authentication is invalid.
+        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
+        with self.app.test_request_context('/',
+                headers=dict(Authorization=invalid_auth)):
+            result = authenticated_server_from_request(self._db, required=False)
+            eq_(True, isinstance(result, ProblemDetail))
+            eq_(HTTP_UNAUTHORIZED, result.status_code)
+
+        # Returns none if no authentication.
+        with self.app.test_request_context('/'):
+            result = authenticated_server_from_request(self._db, required=False)
+            eq_(None, result)
+
+
+class TestCatalogController(ControllerTest):
+
+    def setup(self):
+        super(TestCatalogController, self).setup()
         self.controller = CatalogController(self._db)
 
         # The collection as it exists on the circulation manager.
@@ -53,50 +107,8 @@ class TestCatalogController(DatabaseTest):
             protocol=remote_collection.protocol
         )
 
-        self.server = self._server()
-        valid_auth = 'Basic ' + base64.b64encode('abc:def')
-        self.valid_auth = dict(Authorization=valid_auth)
-
         self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
         self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
-
-    def test_authenticated_server_required(self):
-        # Returns catalog if authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
-            result = self.controller.authenticated_server_from_request()
-            eq_(result, self.server)
-        
-        # Returns error if authentication is invalid.
-        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = self.controller.authenticated_server_from_request()
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
-
-        # Returns errors without authentication.
-        with self.app.test_request_context('/'):
-            result = self.controller.authenticated_server_from_request()
-            eq_(True, isinstance(result, ProblemDetail))
-
-    def test_authenticated_server_optional(self):
-        # Returns catalog of authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
-            result = self.controller.authenticated_server_from_request(required=False)
-            eq_(result, self.server)
-        
-        # Returns error if attempted authentication is invalid.
-        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = self.controller.authenticated_server_from_request(required=False)
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
-
-        # Returns none if no authentication.
-        with self.app.test_request_context('/'):
-            result = self.controller.authenticated_server_from_request(required=False)
-            eq_(None, result)
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
@@ -299,13 +311,22 @@ class TestCatalogController(DatabaseTest):
             self.server.url = 'try-me.fake.us'
 
 
-class TestURNLookupController(DatabaseTest):
+class TestURNLookupController(ControllerTest):
 
     def setup(self):
         super(TestURNLookupController, self).setup()
         self.controller = URNLookupController(self._db)
         self.source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-        
+
+    def basic_request_context(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            from app import app
+            with app.test_request_context('/'):
+                return f(*args, **kwargs)
+        return decorated
+
+    @basic_request_context
     def assert_one_message(self, urn, code, message):
         """Assert that the given message is the only thing
         in the feed.
@@ -317,7 +338,8 @@ class TestURNLookupController(DatabaseTest):
         eq_(code, obj.status_code)
         eq_(message, obj.message)
         eq_([], self.controller.works)
-        
+
+    @basic_request_context
     def test_process_urn_initial_registration(self):
         urn = Identifier.URN_SCHEME_PREFIX + "Overdrive ID/nosuchidentifier"
         self.controller.process_urn(urn)
@@ -334,6 +356,7 @@ class TestURNLookupController(DatabaseTest):
         [coverage] = identifier.coverage_records
         eq_(CoverageRecord.TRANSIENT_FAILURE, coverage.status)
 
+    @basic_request_context
     def test_process_urn_pending_resolve_attempt(self):
         # Simulate calling process_urn twice, and make sure the 
         # second call results in an "I'm working on it, hold your horses" message.
@@ -351,6 +374,7 @@ class TestURNLookupController(DatabaseTest):
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
+    @basic_request_context
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
@@ -363,6 +387,7 @@ class TestURNLookupController(DatabaseTest):
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"
         )
 
+    @basic_request_context
     def test_process_urn_no_presentation_ready_work(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
@@ -377,7 +402,8 @@ class TestURNLookupController(DatabaseTest):
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR,
             self.controller.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
         )
-        
+
+    @basic_request_context
     def test_process_urn_unresolvable_type(self):
         # We can't resolve a 3M identifier because we don't have the
         # appropriate access to the bibliographic API.
@@ -387,6 +413,7 @@ class TestURNLookupController(DatabaseTest):
             identifier.urn, HTTP_NOT_FOUND, self.controller.UNRESOLVABLE_IDENTIFIER
         )
 
+    @basic_request_context
     def test_presentation_ready_work_overrides_unresolveable_type(self):
         # If there is a presentation-ready Work associated
         # with the identifier, turns out we can resolve it even if the
@@ -400,30 +427,39 @@ class TestURNLookupController(DatabaseTest):
         identifier = edition.primary_identifier
         self.controller.process_urn(identifier.urn)
         eq_([(identifier, work)], self.controller.works)
-        
+
     def test_process_urn_with_collection(self):
         name = base64.b64encode((Collection.OPDS_IMPORT+':'+self._url), '-_')
         collection = self._collection(name=name, url=self._url)
-        i1 = self._identifier()
-        i2 = self._identifier()
 
-        eq_([], collection.catalog)
-        self.controller.process_urn(i1.urn, collection_details=collection.name)
-        eq_(1, len(collection.catalog))
-        eq_([i1], collection.catalog)
+        with self.app.test_request_context('/', headers=self.valid_auth):
+            i1 = self._identifier()
+            i2 = self._identifier()
 
-        # Adds new identifiers to an existing catalog
-        self.controller.process_urn(i2.urn, collection_details=collection.name)
-        eq_(2, len(collection.catalog))
-        assert i1 in collection.catalog
-        assert i2 in collection.catalog
+            eq_([], collection.catalog)
+            self.controller.process_urn(i1.urn, collection_details=name)
+            eq_(1, len(collection.catalog))
+            eq_([i1], collection.catalog)
 
-        # Does not duplicate identifiers in the catalog
-        self.controller.process_urn(i1.urn, collection_details=collection.name)
-        eq_(2, len(collection.catalog))
-        assert i1 in collection.catalog
-        assert i2 in collection.catalog
+            # Adds new identifiers to an existing collection's catalog
+            self.controller.process_urn(i2.urn, collection_details=name)
+            eq_(2, len(collection.catalog))
+            eq_(sorted([i1, i2]), sorted(collection.catalog))
 
+            # Does not duplicate identifiers in the collection's catalog
+            self.controller.process_urn(i1.urn, collection_details=name)
+            eq_(2, len(collection.catalog))
+            eq_(sorted([i1, i2]), sorted(collection.catalog))
+
+        with self.app.test_request_context('/'):
+            # Does not add identifiers to a collection if it isn't
+            # sent by an authenticated server, even if there's a
+            # collection attached.
+            i3 = self._identifier()
+            self.controller.process_urn(i3.urn, collection_details=name)
+            assert i3 not in collection.catalog
+
+    @basic_request_context
     def test_process_urn_isbn(self):
         # Create a new ISBN identifier.
         # Ask online providers for metadata to turn into an opds feed about this identifier.
