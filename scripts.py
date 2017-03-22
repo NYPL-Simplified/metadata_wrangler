@@ -315,13 +315,13 @@ class RedoOCLCForThreeMScript(Script):
 class ClientServerGeneratorScript(Script):
     """Creates a new ClientServer object and prints client details to STDOUT"""
 
-    def run(self, name):
-        if not name:
-            ValueError("No name provided. Could not create client server.")
+    def run(self, url):
+        if not url:
+            ValueError("No url provided. Could not create client server.")
 
-        name = " ".join(name)
-        print "Creating client server %s... " % name
-        server, plaintext_secret = ClientServer.register(self._db, name)
+        url = " ".join(url)
+        print "Creating client server at '%s'" % url
+        server, plaintext_secret = ClientServer.register(self._db, url)
 
         print server
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "

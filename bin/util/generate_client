@@ -1,14 +1,16 @@
 #!/usr/bin/env python
-"""Creates a new Catalog with a provided name
+"""Creates a new ClientServer with a provided url
 
 Utilize this script with the following format:
-bin/util/generate_catalog The New York Public Library
+
+    $ bin/util/generate_client https://circulation.librarysimplified.org
+
 """
 import os
 import sys
 bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..", "..")
 sys.path.append(os.path.abspath(package_dir))
-from scripts import CatalogGeneratorScript
+from scripts import ClientServerGeneratorScript
 
-CatalogGeneratorScript().run(sys.argv[1:])
+ClientServerGeneratorScript().run(sys.argv[1:])
