@@ -271,7 +271,7 @@ class TestCatalogController(ControllerTest):
             headers=self.valid_auth):
             response = self.controller.update_client_url()
             # The request was successful.
-            eq_(202, response.status_code)
+            eq_(HTTP_OK, response.status_code)
             # The IntegrationClient's URL has been changed.
             self.client.url = 'try-me.fake.us'
 

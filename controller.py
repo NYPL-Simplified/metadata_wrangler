@@ -201,7 +201,7 @@ class CatalogController(object):
 
         client.url = IntegrationClient.normalize_url(urllib.unquote(url))
 
-        return make_response("", HTTP_ACCEPTED)
+        return make_response("", HTTP_OK)
 
 
 class URNLookupController(CoreURNLookupController):
