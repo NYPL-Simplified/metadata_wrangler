@@ -11,7 +11,7 @@ from nose.tools import set_trace, eq_
 
 from . import DatabaseTest
 from core.model import (
-    ClientServer,
+    IntegrationClient,
     Collection,
     CoverageRecord,
     DataSource,
@@ -35,7 +35,7 @@ from controller import (
     HTTP_UNAUTHORIZED,
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
-    authenticated_server_from_request,
+    authenticated_client_from_request,
 )
 
 
@@ -47,49 +47,49 @@ class ControllerTest(DatabaseTest):
         from app import app
         self.app = app
 
-        self.server = self._server()
+        self.client = self._integration_client()
         valid_auth = 'Basic ' + base64.b64encode('abc:def')
         self.valid_auth = dict(Authorization=valid_auth)
 
 
-class TestClientServerAuthentication(ControllerTest):
+class TestIntegrationClientAuthentication(ControllerTest):
 
-    def test_authenticated_server_required(self):
+    def test_authenticated_client_required(self):
         # Returns catalog if authentication is valid.
         with self.app.test_request_context('/', headers=self.valid_auth):
-            result = authenticated_server_from_request(self._db)
-            eq_(result, self.server)
+            result = authenticated_client_from_request(self._db)
+            eq_(result, self.client)
         
         # Returns error if authentication is invalid.
         invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
         with self.app.test_request_context('/',
                 headers=dict(Authorization=invalid_auth)):
-            result = authenticated_server_from_request(self._db)
+            result = authenticated_client_from_request(self._db)
             eq_(True, isinstance(result, ProblemDetail))
             eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns errors without authentication.
         with self.app.test_request_context('/'):
-            result = authenticated_server_from_request(self._db)
+            result = authenticated_client_from_request(self._db)
             eq_(True, isinstance(result, ProblemDetail))
 
-    def test_authenticated_server_optional(self):
+    def test_authenticated_client_optional(self):
         # Returns catalog of authentication is valid.
         with self.app.test_request_context('/', headers=self.valid_auth):
-            result = authenticated_server_from_request(self._db, required=False)
-            eq_(result, self.server)
+            result = authenticated_client_from_request(self._db, required=False)
+            eq_(result, self.client)
         
         # Returns error if attempted authentication is invalid.
         invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
         with self.app.test_request_context('/',
                 headers=dict(Authorization=invalid_auth)):
-            result = authenticated_server_from_request(self._db, required=False)
+            result = authenticated_client_from_request(self._db, required=False)
             eq_(True, isinstance(result, ProblemDetail))
             eq_(HTTP_UNAUTHORIZED, result.status_code)
 
         # Returns none if no authentication.
         with self.app.test_request_context('/'):
-            result = authenticated_server_from_request(self._db, required=False)
+            result = authenticated_client_from_request(self._db, required=False)
             eq_(None, result)
 
 
@@ -120,7 +120,7 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed.feed.title,
-                u"%s Collection Updates for %s" % (self.collection.protocol, self.server.url))
+                u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The feed has the catalog's catalog.
             eq_(1, len(feed['entries']))
@@ -140,7 +140,7 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed.feed.title,
-                u"%s Collection Updates for %s" % (self.collection.protocol, self.server.url))
+                u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The timestamp is included in the url.
             linkified_timestamp = time.strftime("%Y-%m-%d+%H:%M:%S").replace(":", "%3A")
@@ -181,25 +181,25 @@ class TestCatalogController(ControllerTest):
             assert not any([link['rel'] == 'next'for link in links])
 
     def test_register_client(self):
-        server_url = self._url
+        client_url = self._url
         with self.app.test_request_context(
-                '/?client_url=%s' % urllib.quote(server_url)):
+                '/?client_url=%s' % urllib.quote(client_url)):
             response = self.controller.register_client()
             eq_('application/json', response.content_type)
             eq_(200, response.status_code)
 
-            # The key and secret for this ClientServer were returned.
+            # The key and secret for this IntegrationClient were returned.
             body = json.loads(response.data)
             assert body.get('key')
             assert body.get('secret')
 
-            # A server was created with the proper credentials
-            normalized_url = ClientServer.normalize_url(server_url)
-            server = get_one(self._db, ClientServer, url=normalized_url)
-            eq_(server.key, body.get('key'))
+            # An IntegrationClient was created with the proper credentials
+            normalized_url = IntegrationClient.normalize_url(client_url)
+            client = get_one(self._db, IntegrationClient, url=normalized_url)
+            eq_(client.key, body.get('key'))
 
-            # If a server with the url is already in the database, a
-            # ProblemDetail is returned.
+            # If an IntegrationClient with the url is already in the
+            # database, a ProblemDetail is returned.
             response = self.controller.register_client()
             eq_(True, isinstance(response, ProblemDetail))
             eq_(INVALID_INPUT.uri, response.uri)
@@ -307,8 +307,8 @@ class TestCatalogController(ControllerTest):
             response = self.controller.update_client_url()
             # The request was successful.
             eq_(202, response.status_code)
-            # The server's URL has been changed.
-            self.server.url = 'try-me.fake.us'
+            # The IntegrationClient's URL has been changed.
+            self.client.url = 'try-me.fake.us'
 
 
 class TestURNLookupController(ControllerTest):
@@ -453,7 +453,7 @@ class TestURNLookupController(ControllerTest):
 
         with self.app.test_request_context('/'):
             # Does not add identifiers to a collection if it isn't
-            # sent by an authenticated server, even if there's a
+            # sent by an authenticated client, even if there's a
             # collection attached.
             i3 = self._identifier()
             self.controller.process_urn(i3.urn, collection_details=name)

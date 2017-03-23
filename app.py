@@ -17,7 +17,7 @@ from core.model import production_session
 from core.config import Configuration
 
 from controller import (
-    authenticated_server_from_request,
+    authenticated_client_from_request,
     CatalogController,
     CanonicalizationController,
     URNLookupController
@@ -49,18 +49,18 @@ else:
 def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        server = authenticated_server_from_request(Conf.db, required=False)
-        if isinstance(server, ProblemDetail):
-            return server.response
+        client = authenticated_client_from_request(Conf.db, required=False)
+        if isinstance(client, ProblemDetail):
+            return client.response
         return f(*args, **kwargs)
     return decorated
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        server = authenticated_server_from_request(Conf.db)
-        if isinstance(server, ProblemDetail):
-            return server.response
+        client = authenticated_client_from_request(Conf.db)
+        if isinstance(client, ProblemDetail):
+            return client.response
         return f(*args, **kwargs)
     return decorated
 

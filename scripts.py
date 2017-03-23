@@ -2,7 +2,7 @@ import csv
 import sys
 from nose.tools import set_trace
 from core.model import (
-    ClientServer,
+    IntegrationClient,
     Contribution,
     DataSource,
     Edition,
@@ -312,20 +312,23 @@ class RedoOCLCForThreeMScript(Script):
                 edition.add_contributor(contribution.contributor, contribution.role)
 
 
-class ClientServerGeneratorScript(Script):
-    """Creates a new ClientServer object and prints client details to STDOUT"""
+class IntegrationClientGeneratorScript(Script):
+
+    """Creates a new IntegrationClient object and prints client details
+    to STDOUT
+    """
 
     def run(self, url):
         if not url:
-            ValueError("No url provided. Could not create client server.")
+            ValueError("No url provided. Could not create IntegrationClient.")
 
         url = " ".join(url)
-        print "Creating client server at '%s'" % url
-        server, plaintext_secret = ClientServer.register(self._db, url)
+        print "Creating IntegrationClient for '%s'" % url
+        client, plaintext_secret = IntegrationClient.register(self._db, url)
 
-        print server
+        print client
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
         print "-" * 40
-        print "CLIENT KEY: %s" % server
+        print "CLIENT KEY: %s" % client
         print "CLIENT SECRET: %s" % plaintext_secret

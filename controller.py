@@ -13,11 +13,11 @@ from core.app_server import (
     URNLookupController as CoreURNLookupController,
 )
 from core.model import (
-    ClientServer,
     Collection,
     CoverageRecord,
     DataSource,
     Identifier,
+    IntegrationClient,
     create,
     get_one,
 )
@@ -43,13 +43,13 @@ HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 
-def authenticated_server_from_request(_db, required=True):
+def authenticated_client_from_request(_db, required=True):
     header = request.authorization
     if header:
         key, secret = header.username, header.password
-        server = ClientServer.authenticate(_db, key, secret)
-        if server:
-            return server
+        client = IntegrationClient.authenticate(_db, key, secret)
+        if client:
+            return client
     if not required and not header:
         # In the case that authentication is not required
         # (i.e. URN lookup) return None instead of an error.
@@ -95,9 +95,9 @@ class CatalogController(object):
         self._db = _db
 
     def updates_feed(self, collection_details):
-        server = authenticated_server_from_request(self._db)
-        if isinstance(server, ProblemDetail):
-            return server
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
 
         collection, ignore = Collection.from_metadata_identifier(
             self._db, collection_details
@@ -110,7 +110,7 @@ class CatalogController(object):
 
         pagination = load_pagination_from_request()
         works = pagination.apply(updated_works).all()
-        title = "%s Collection Updates for %s" % (collection.protocol, server.url)
+        title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         def update_url(time=last_update_time, page=None):
             kw = dict(
                 _external=True,
@@ -145,25 +145,25 @@ class CatalogController(object):
         return feed_response(update_feed)
 
     def register_client(self):
-        """Creates authentication details for a server"""
+        """Creates authentication details for an IntegrationClient"""
         url = request.args.get('client_url')
         if not url:
             return INVALID_INPUT.detailed("No 'client_url' provided")
 
         try:
             url = urllib.unquote(url)
-            server, plaintext_secret = ClientServer.register(self._db, url)
+            client, plaintext_secret = IntegrationClient.register(self._db, url)
 
-            body = json.dumps(dict(key=server.key, secret=plaintext_secret))
+            body = json.dumps(dict(key=client.key, secret=plaintext_secret))
             return make_response(body, 200, {"Content-Type": "application/json"})
         except ValueError, e:
             return INVALID_INPUT.detailed(e.message)
 
     def remove_items(self, collection_details):
         """Removes identifiers from a collection's catalog"""
-        server = authenticated_server_from_request(self._db)
-        if isinstance(server, ProblemDetail):
-            return server
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
 
         collection, ignore = Collection.from_metadata_identifier(
             self._db, collection_details
@@ -195,7 +195,7 @@ class CatalogController(object):
             if message:
                 messages.append(message)
 
-        title = "%s Catalog Item Removal for %s" % (collection.protocol, server.url)
+        title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
         url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
@@ -205,16 +205,16 @@ class CatalogController(object):
         return feed_response(removal_feed)
 
     def update_client_url(self):
-        """Updates the URL of a ClientServer"""
-        server = authenticated_server_from_request(self._db)
-        if isinstance(server, ProblemDetail):
-            return server
+        """Updates the URL of a IntegrationClient"""
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
 
         url = request.args.get('client_url')
         if not url:
             return INVALID_INPUT.detailed("No 'client_url' provided")
 
-        server.url = ClientServer.normalize_url(urllib.unquote(url))
+        client.url = IntegrationClient.normalize_url(urllib.unquote(url))
 
         return make_response("", HTTP_ACCEPTED)
 
@@ -284,10 +284,10 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
-        # If a Collection was provided by an authenticated server, this
-        # Identifier is part of the Collection's catalog.
-        server = authenticated_server_from_request(self._db, required=False)
-        if server and collection_details:
+        # If a Collection was provided by an authenticated IntegrationClient,
+        # this Identifier is part of the Collection's catalog.
+        client = authenticated_client_from_request(self._db, required=False)
+        if client and collection_details:
             collection, ignore = Collection.from_metadata_identifier(
                 self._db, collection_details
             )
