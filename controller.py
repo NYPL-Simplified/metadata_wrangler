@@ -144,21 +144,6 @@ class CatalogController(object):
 
         return feed_response(update_feed)
 
-    def register_client(self):
-        """Creates authentication details for an IntegrationClient"""
-        url = request.args.get('client_url')
-        if not url:
-            return INVALID_INPUT.detailed("No 'client_url' provided")
-
-        try:
-            url = urllib.unquote(url)
-            client, plaintext_secret = IntegrationClient.register(self._db, url)
-
-            body = json.dumps(dict(key=client.key, secret=plaintext_secret))
-            return make_response(body, 200, {"Content-Type": "application/json"})
-        except ValueError, e:
-            return INVALID_INPUT.detailed(e.message)
-
     def remove_items(self, collection_details):
         """Removes identifiers from a collection's catalog"""
         client = authenticated_client_from_request(self._db)

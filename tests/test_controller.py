@@ -180,41 +180,6 @@ class TestCatalogController(ControllerTest):
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
 
-    def test_register_client(self):
-        client_url = self._url
-        with self.app.test_request_context(
-                '/?client_url=%s' % urllib.quote(client_url)):
-            response = self.controller.register_client()
-            eq_('application/json', response.content_type)
-            eq_(200, response.status_code)
-
-            # The key and secret for this IntegrationClient were returned.
-            body = json.loads(response.data)
-            assert body.get('key')
-            assert body.get('secret')
-
-            # An IntegrationClient was created with the proper credentials
-            normalized_url = IntegrationClient.normalize_url(client_url)
-            client = get_one(self._db, IntegrationClient, url=normalized_url)
-            eq_(client.key, body.get('key'))
-
-            # If an IntegrationClient with the url is already in the
-            # database, a ProblemDetail is returned.
-            response = self.controller.register_client()
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_(INVALID_INPUT.uri, response.uri)
-            eq_(400, response.status_code)
-            assert normalized_url in response.detail
-            assert "already exists" in response.detail
-
-        with self.app.test_request_context('/'):
-            # If not client_url is sent, a Problem Detail is returned.
-            response = self.controller.register_client()
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_(INVALID_INPUT.uri, response.uri)
-            eq_(400, response.status_code)
-            assert 'client_url' in response.detail
-
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
