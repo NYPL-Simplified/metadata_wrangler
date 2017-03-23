@@ -1,7 +1,10 @@
 from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
+import base64
+import json
 import logging
+import urllib
 
 from core.app_server import (
     cdn_url_for,
@@ -10,10 +13,13 @@ from core.app_server import (
     URNLookupController as CoreURNLookupController,
 )
 from core.model import (
-    Catalog,
+    Collection,
     CoverageRecord,
     DataSource,
     Identifier,
+    IntegrationClient,
+    create,
+    get_one,
 )
 from core.opds import (
     AcquisitionFeed,
@@ -23,6 +29,7 @@ from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.problem_details import (
     INVALID_CREDENTIALS,
+    INVALID_INPUT,
     INVALID_URN,
 )
 
@@ -34,6 +41,20 @@ HTTP_ACCEPTED = 202
 HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
+
+
+def authenticated_client_from_request(_db, required=True):
+    header = request.authorization
+    if header:
+        key, secret = header.username, header.password
+        client = IntegrationClient.authenticate(_db, key, secret)
+        if client:
+            return client
+    if not required and not header:
+        # In the case that authentication is not required
+        # (i.e. URN lookup) return None instead of an error.
+        return None
+    return INVALID_CREDENTIALS
 
 
 class CanonicalizationController(object):
@@ -63,44 +84,38 @@ class CanonicalizationController(object):
         )
 
         if not author_name:
-            return make_response("", 404)
-        return make_response(author_name, 200, {"Content-Type": "text/plain"})
+            return make_response("", HTTP_NOT_FOUND)
+        return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
 class CatalogController(object):
-    """A controller to manage catalogs and their assets"""
+    """A controller to manage a Collection's catalog"""
 
     def __init__(self, _db):
         self._db = _db
 
-    def authenticated_catalog_from_request(self, required=True):
-        header = request.authorization
-        if header:
-            client_id, client_secret = header.username, header.password
-            catalog = Catalog.authenticate(self._db, client_id, client_secret)
-            if catalog:
-                return catalog
-        if not required and not header:
-            # In the case that authentication is not required
-            # (i.e. URN lookup) return None instead of an error.
-            return None
-        return INVALID_CREDENTIALS
+    def updates_feed(self, collection_details):
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
 
-    def updates_feed(self):
-        catalog = self.authenticated_catalog_from_request()
-        if isinstance(catalog, ProblemDetail):
-            return catalog
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
 
         last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
             last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
-        updated_works = catalog.works_updated_since(self._db, last_update_time)
+        updated_works = collection.works_updated_since(self._db, last_update_time)
 
         pagination = load_pagination_from_request()
         works = pagination.apply(updated_works).all()
-        title = "%s Updates" % catalog.name
+        title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         def update_url(time=last_update_time, page=None):
-            kw = dict(_external=True)
+            kw = dict(
+                _external=True,
+                collection_metadata_identifier=collection_details
+            )
             if time:
                 kw.update({'last_update_time' : last_update_time})
             if page:
@@ -129,10 +144,15 @@ class CatalogController(object):
 
         return feed_response(update_feed)
 
-    def remove_items(self):
-        catalog = self.authenticated_catalog_from_request()
-        if isinstance(catalog, ProblemDetail):
-            return catalog
+    def remove_items(self, collection_details):
+        """Removes identifiers from a collection's catalog"""
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
 
         urns = request.args.getlist('urn')
         messages = []
@@ -148,8 +168,8 @@ class CatalogController(object):
                     urn, INVALID_URN.status_code, INVALID_URN.detail
                 )
             else:
-                if identifier in catalog.catalog:
-                    catalog.catalog.remove(identifier)
+                if identifier in collection.catalog:
+                    collection.catalog.remove(identifier)
                     message = OPDSMessage(
                         urn, HTTP_OK, "Successfully removed"
                     )
@@ -160,14 +180,28 @@ class CatalogController(object):
             if message:
                 messages.append(message)
 
-        title = "%s Catalog Item Removal" % catalog.name
-        url = cdn_url_for("remove", urn=urns)
+        title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
+        url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages
         )
 
         return feed_response(removal_feed)
+
+    def update_client_url(self):
+        """Updates the URL of a IntegrationClient"""
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        url = request.args.get('client_url')
+        if not url:
+            return INVALID_INPUT.detailed("No 'client_url' provided")
+
+        client.url = IntegrationClient.normalize_url(urllib.unquote(url))
+
+        return make_response("", HTTP_OK)
 
 
 class URNLookupController(CoreURNLookupController):
@@ -219,7 +253,7 @@ class URNLookupController(CoreURNLookupController):
             return False
         return True
   
-    def process_urn(self, urn, catalog=None, **kwargs):
+    def process_urn(self, urn, collection_details=None, **kwargs):
         """Turn a URN into a Work suitable for use in an OPDS feed.
         """
         try:
@@ -235,10 +269,14 @@ class URNLookupController(CoreURNLookupController):
             return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         # We are at least willing to try to resolve this Identifier.
-        # If a Catalog was provided, this also means we consider
-        # this Identifier part of the given catalog.
-        if catalog:
-            catalog.catalog_identifier(self._db, identifier)
+        # If a Collection was provided by an authenticated IntegrationClient,
+        # this Identifier is part of the Collection's catalog.
+        client = authenticated_client_from_request(self._db, required=False)
+        if client and collection_details:
+            collection, ignore = Collection.from_metadata_identifier(
+                self._db, collection_details
+            )
+            collection.catalog_identifier(self._db, identifier)
 
         if identifier.type == Identifier.ISBN:
             # ISBNs are handled specially.
