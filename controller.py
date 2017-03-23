@@ -98,7 +98,10 @@ class CatalogController(object):
         server = authenticated_server_from_request(self._db)
         if isinstance(server, ProblemDetail):
             return server
-        collection = Collection.from_metadata_identifier(self._db, collection_details)[0]
+
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
 
         last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
@@ -150,7 +153,6 @@ class CatalogController(object):
         try:
             url = urllib.unquote(url)
             server, plaintext_secret = ClientServer.register(self._db, url)
-            self._db.commit()
 
             body = json.dumps(dict(key=server.key, secret=plaintext_secret))
             return make_response(body, 200, {"Content-Type": "application/json"})
@@ -163,7 +165,10 @@ class CatalogController(object):
         if isinstance(server, ProblemDetail):
             return server
 
-        collection = Collection.from_metadata_identifier(self._db, collection_details)[0]
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
+
         urns = request.args.getlist('urn')
         messages = []
         for urn in urns:
@@ -189,7 +194,6 @@ class CatalogController(object):
                     )
             if message:
                 messages.append(message)
-        self._db.commit()
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, server.url)
         url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
@@ -211,7 +215,6 @@ class CatalogController(object):
             return INVALID_INPUT.detailed("No 'client_url' provided")
 
         server.url = ClientServer.normalize_url(urllib.unquote(url))
-        self._db.commit()
 
         return make_response("", HTTP_ACCEPTED)
 
@@ -285,9 +288,10 @@ class URNLookupController(CoreURNLookupController):
         # Identifier is part of the Collection's catalog.
         server = authenticated_server_from_request(self._db, required=False)
         if server and collection_details:
-            collection = Collection.from_metadata_identifier(self._db, collection_details)[0]
+            collection, ignore = Collection.from_metadata_identifier(
+                self._db, collection_details
+            )
             collection.catalog_identifier(self._db, identifier)
-            self._db.commit()
 
         if identifier.type == Identifier.ISBN:
             # ISBNs are handled specially.
