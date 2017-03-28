@@ -100,7 +100,7 @@ class TestCatalogController(ControllerTest):
         self.controller = CatalogController(self._db)
 
         # The collection as it exists on the circulation manager.
-        remote_collection = self._collection(username='test_coll', url=self._url)
+        remote_collection = self._collection(username='test_coll', external_account_id=self._url)
         # The collection as it is recorded / catalogued here.
         self.collection = self._collection(
             name=remote_collection.metadata_identifier,
