@@ -180,6 +180,24 @@ class TestCatalogController(ControllerTest):
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
 
+    def test_add_items(self):
+        invalid_urn = "FAKE AS I WANNA BE"
+        catalogued_id = self._identifier()
+        uncatalogued_id = self._identifier()
+        self.collection.catalog_identifier(self._db, catalogued_id)
+
+        parser = OPDSXMLParser()
+        message_path = '/atom:feed/simplified:message'
+
+        with self.app.test_request_context(
+                '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
+                headers=self.valid_auth):
+
+            # The catalogued identifier doesn't raise or return an error.
+            response = self.controller.add_items(self.collection.name)
+            eq_(HTTP_OK, response.status_code)
+
+
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
