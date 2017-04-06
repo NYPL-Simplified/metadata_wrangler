@@ -171,10 +171,11 @@ class CatalogController(object):
                     urn, INVALID_URN.status_code, INVALID_URN.detail
                 )
             else:
-                collection.catalog_identifier(self._db, identifier)
-                message = OPDSMessage(
-                    urn, HTTP_OK, "Successfully added"
-                )
+                description = "Already in catalog"
+                if identifier not in collection.catalog:
+                    collection.catalog_identifier(self._db, identifier)
+                    description = "Successfully added"
+                message = OPDSMessage(urn, HTTP_OK, description)
 
             messages.append(message)
 
