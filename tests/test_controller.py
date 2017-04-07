@@ -212,7 +212,7 @@ class TestCatalogController(ControllerTest):
         assert uncatalogued_id in self.collection.catalog
         # It has an accurate response message.
         eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
-        eq_('200', self.xml_value(uncatalogued, 'simplified:status_code'))
+        eq_('201', self.xml_value(uncatalogued, 'simplified:status_code'))
         eq_('Successfully added', self.xml_value(uncatalogued, 'schema:description'))
 
         # The catalogued identifier is still in the catalog.
