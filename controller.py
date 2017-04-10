@@ -144,8 +144,58 @@ class CatalogController(object):
 
         return feed_response(update_feed)
 
+    def add_items(self, collection_details):
+        """Adds identifiers to a Collection's catalog"""
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
+
+        urns = request.args.getlist('urn')
+        messages = []
+        for urn in urns:
+            message = None
+            identifier = None
+            try:
+                identifier, ignore = Identifier.parse_urn(
+                    self._db, urn
+                )
+            except Exception as e:
+                identifier = None
+
+            if not identifier:
+                message = OPDSMessage(
+                    urn, INVALID_URN.status_code, INVALID_URN.detail
+                )
+            else:
+                status = HTTP_OK
+                description = "Already in catalog"
+
+                if identifier not in collection.catalog:
+                    collection.catalog_identifier(self._db, identifier)
+                    status = HTTP_CREATED
+                    description = "Successfully added"
+
+                message = OPDSMessage(urn, status, description)
+
+            messages.append(message)
+
+        title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
+        url = cdn_url_for(
+            "add", collection_metadata_identifier=collection.name, urn=urns
+        )
+        addition_feed = AcquisitionFeed(
+            self._db, title, url, [], VerboseAnnotator,
+            precomposed_entries=messages
+        )
+
+        return feed_response(addition_feed)
+
     def remove_items(self, collection_details):
-        """Removes identifiers from a collection's catalog"""
+        """Removes identifiers from a Collection's catalog"""
         client = authenticated_client_from_request(self._db)
         if isinstance(client, ProblemDetail):
             return client
@@ -163,6 +213,7 @@ class CatalogController(object):
                 identifier, ignore = Identifier.parse_urn(self._db, urn)
             except Exception as e:
                 identifier = None
+
             if not identifier:
                 message = OPDSMessage(
                     urn, INVALID_URN.status_code, INVALID_URN.detail
@@ -177,8 +228,8 @@ class CatalogController(object):
                     message = OPDSMessage(
                         urn, HTTP_NOT_FOUND, "Not in catalog"
                     )
-            if message:
-                messages.append(message)
+
+            messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
         url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)

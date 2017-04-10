@@ -95,6 +95,8 @@ class TestIntegrationClientAuthentication(ControllerTest):
 
 class TestCatalogController(ControllerTest):
 
+    XML_PARSE = OPDSXMLParser()._xpath
+
     def setup(self):
         super(TestCatalogController, self).setup()
         self.controller = CatalogController(self._db)
@@ -109,6 +111,9 @@ class TestCatalogController(ControllerTest):
 
         self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
         self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
+
+    def xml_value(self, message, tag):
+        return self.XML_PARSE(message, tag)[0].text
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
@@ -180,13 +185,55 @@ class TestCatalogController(ControllerTest):
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
 
-    def test_remove_items(self):
+    def test_add_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(self._db, catalogued_id)
 
         parser = OPDSXMLParser()
+        message_path = '/atom:feed/simplified:message'
+
+        with self.app.test_request_context(
+                '/?urn=%s&urn=%s&urn=%s' % (
+                catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
+                headers=self.valid_auth):
+
+            response = self.controller.add_items(self.collection.name)
+
+        # None of the identifiers raise or return an error.
+        eq_(HTTP_OK, response.status_code)
+
+        # It sends three messages.
+        root = etree.parse(StringIO(response.data))
+        catalogued, uncatalogued, invalid = self.XML_PARSE(root, message_path)
+
+        # The uncatalogued identifier is now in the catalog.
+        assert uncatalogued_id in self.collection.catalog
+        # It has an accurate response message.
+        eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
+        eq_('201', self.xml_value(uncatalogued, 'simplified:status_code'))
+        eq_('Successfully added', self.xml_value(uncatalogued, 'schema:description'))
+
+        # The catalogued identifier is still in the catalog.
+        assert catalogued_id in self.collection.catalog
+        # And even though it responds 'OK', the message tells you it
+        # was already there.
+        eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+        eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
+        eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
+
+        # Invalid identifier return 400 errors.
+        eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+        eq_('400', self.xml_value(invalid, 'simplified:status_code'))
+        eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
+
+    def test_remove_items(self):
+        invalid_urn = "FAKE AS I WANNA BE"
+        catalogued_id = self._identifier()
+        uncatalogued_id = self._identifier()
+        self.collection.catalog_identifier(self._db, catalogued_id)
+
         message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
@@ -198,21 +245,18 @@ class TestCatalogController(ControllerTest):
 
             # It sends two <simplified:message> tags.
             root = etree.parse(StringIO(response.data))
-            catalogued, uncatalogued = parser._xpath(root, message_path)
-            eq_(catalogued_id.urn, parser._xpath(catalogued, 'atom:id')[0].text)
-            eq_(str(HTTP_OK),
-                parser._xpath(catalogued, 'simplified:status_code')[0].text)
-            eq_("Successfully removed",
-                parser._xpath(catalogued, 'schema:description')[0].text)
+            catalogued, uncatalogued = self.XML_PARSE(root, message_path)
 
-            eq_(uncatalogued_id.urn, parser._xpath(uncatalogued, 'atom:id')[0].text)
-            eq_(str(HTTP_NOT_FOUND),
-                parser._xpath(uncatalogued, 'simplified:status_code')[0].text)
-            eq_("Not in catalog",
-                parser._xpath(uncatalogued, 'schema:description')[0].text)
+            eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+            eq_(str(HTTP_OK), self.xml_value(catalogued, 'simplified:status_code'))
+            eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
+
+            eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
+            eq_(str(HTTP_NOT_FOUND), self.xml_value(uncatalogued, 'simplified:status_code'))
+            eq_("Not in catalog", self.xml_value(uncatalogued, 'schema:description'))
 
             # It sends no <entry> tags.
-            eq_([], parser._xpath(root, "//atom:entry"))
+            eq_([], self.XML_PARSE(root, "//atom:entry"))
 
             # The catalogued identifier isn't in the catalog.
             assert catalogued_id not in self.collection.catalog
@@ -230,23 +274,18 @@ class TestCatalogController(ControllerTest):
 
             # Once again we get two <simplified:message> tags.
             root = etree.parse(StringIO(response.data))
-            invalid, catalogued = parser._xpath(root, message_path)
-            eq_(invalid_urn,
-                parser._xpath(invalid, 'atom:id')[0].text)
-            eq_("400",
-                parser._xpath(invalid, 'simplified:status_code')[0].text)
-            eq_("Could not parse identifier.",
-                parser._xpath(invalid, 'schema:description')[0].text)
+            invalid, catalogued = self.XML_PARSE(root, message_path)
 
-            eq_(catalogued_id.urn,
-                parser._xpath(catalogued, 'atom:id')[0].text)
-            eq_("200",
-                parser._xpath(catalogued, 'simplified:status_code')[0].text)
-            eq_("Successfully removed",
-                parser._xpath(catalogued, 'schema:description')[0].text)
+            eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+            eq_("400", self.xml_value(invalid, 'simplified:status_code'))
+            eq_("Could not parse identifier.", self.xml_value(invalid, 'schema:description'))
+
+            eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+            eq_("200", self.xml_value(catalogued, 'simplified:status_code'))
+            eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
 
             # We have no <entry> tags.
-            eq_([], parser._xpath(root, "//atom:entry"))
+            eq_([], self.XML_PARSE(root, "//atom:entry"))
             
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
