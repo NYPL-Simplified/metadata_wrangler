@@ -20,5 +20,9 @@ sys.path.append(os.path.abspath(package_dir))
 from scripts import (
      CheckContributorNamesOnWeb
 )
+
+# uncomment or use --mock on command line to mock web calls on prod data:
+#CheckContributorNamesOnWeb(cmd_args=["--mock"]).run()
+
 CheckContributorNamesOnWeb().run()
 

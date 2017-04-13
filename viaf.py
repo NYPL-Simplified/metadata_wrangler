@@ -141,7 +141,7 @@ class VIAFParser(XMLParser):
             report_string += ", mc[display_name]=%s" % match_confidences["display_name"]
 
         if "unimarc" in match_confidences:
-            match_confidences["total"] += 0.2 * match_confidences["unimarc"]
+            match_confidences["total"] += 0.3 * match_confidences["unimarc"]
             report_string += ", mc[unimarc]=%s" % match_confidences["unimarc"]
 
         if "guessed_sort_name" in match_confidences:
@@ -494,6 +494,7 @@ class VIAFParser(XMLParser):
         contributor_data = ContributorData()
         contributor_titles = []
         match_confidences = {}
+        known_name = working_sort_name or working_display_name
 
         # Find out if one of the working names shows up in a name record.
         # Note: Potentially sets contributor_data.sort_name.
@@ -533,20 +534,21 @@ class VIAFParser(XMLParser):
             for v in (possible_given, possible_family, possible_extra):
                 if not v:
                     continue
-                if not working_sort_name or v in working_sort_name:
+                if not known_name or v in known_name:
                     self.log.debug(
-                        "FOUND %s in %s", v, working_sort_name
+                        "FOUND %s in %s", v, known_name
                     )
                     candidates.append((possible_given, possible_family, possible_extra))
-                    if possible_sort_name and possible_sort_name.endswith(","):
-                        possible_sort_name = contributor_data.sort_name[:-1]
+                    if possible_sort_name:
+                        if possible_sort_name.endswith(","):
+                            possible_sort_name = possible_sort_name[:-1]
                         sort_name_popularity[possible_sort_name] += 1
                     break
             else:
                 self.log.debug(
                     "EXCLUDED %s/%s/%s for lack of resemblance to %s",
                     possible_given, possible_family, possible_extra,
-                    working_sort_name
+                    known_name
                 )
                 pass
 
@@ -849,4 +851,28 @@ class VIAFClient(object):
 
         return best_match
 
+
         
+class MockVIAFClient(VIAFClient):
+
+    def __init__(self, _db):
+        super(MockVIAFClient, self).__init__(_db)
+        self.log = logging.getLogger("Mocked VIAF Client")
+        base_path = os.path.split(__file__)[0]
+        self.resource_path = os.path.join(base_path, "tests", "files", "viaf")
+
+
+    def get_data(self, filename):
+        # returns contents of sample file as xml string
+        path = os.path.join(self.resource_path, filename)
+        data = open(path).read()
+        return data
+
+
+    def lookup_by_viaf(self, viaf, working_sort_name=None,
+                       working_display_name=None, do_get=None):
+        xml = self.get_data("mindy_kaling.xml")
+        return self.parser.parse(xml, working_sort_name, working_display_name)
+
+
+

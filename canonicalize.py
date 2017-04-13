@@ -1,27 +1,33 @@
 """Use external services to canonicalize names."""
 import logging
+import os
 import re
+
 from nose.tools import set_trace
+from oclc import OCLCLinkedData
+from viaf import VIAFClient, MockVIAFClient
 
 from core.model import (
     Contributor,
     Identifier,
 )
-from core.util import MetadataSimilarity
+#from core.util import MetadataSimilarity
 from core.util.personal_names import (
+    contributor_name_match_ratio, 
     display_name_to_sort_name,
     is_corporate_name,
+    name_tidy, 
 )
 from core.util.titles import (
     title_match_ratio, 
 )
 
-from oclc import OCLCLinkedData
-from viaf import VIAFClient
 
 
 class CanonicalizationError(Exception):
     pass
+
+
 
 class AuthorNameCanonicalizer(object):
 
@@ -71,7 +77,6 @@ class AuthorNameCanonicalizer(object):
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
         """
-
         if not identifier and not display_name:
             raise CanonicalizationError(
                 "Neither useful identifier nor display name was provided."
@@ -181,11 +186,8 @@ class AuthorNameCanonicalizer(object):
 
         :param identifier: Must be of Identifier.ISBN type.
         """
-        def comparable_name(s):
-            return s.replace(",", "").replace(".", "")
-
         if display_name:
-            test_working_display_name = comparable_name(display_name)
+            test_working_display_name = name_tidy(display_name)
         else:
             test_working_display_name = None
 
@@ -218,15 +220,17 @@ class AuthorNameCanonicalizer(object):
                     # be trustworthy.
                     uris.extend(new_uris)
                 for name in names:
-                    if name.endswith(','):
-                        name = name[:-1]
-                    test_name = comparable_name(name)
-                    sim = MetadataSimilarity.title_similarity(
-                        test_name, test_working_display_name)
-                    if sim > 0.6:
+                    #if name.endswith(','):
+                    #    name = name[:-1]
+                    #test_name = comparable_name(name)
+                    test_name = name_tidy(name)
+
+                    match_ratio = contributor_name_match_ratio(test_name, test_working_display_name, normalize_names=False)
+                    if (match_ratio > 60):
                         if (not shortest_candidate
-                            or len(name) < len(shortest_candidate)):
-                            shortest_candidate = name
+                            or len(test_name) < len(shortest_candidate)):
+                            shortest_candidate = test_name
+
         return shortest_candidate, uris
 
 
@@ -241,6 +245,7 @@ class AuthorNameCanonicalizer(object):
         :return: Author name in Last, First format.
         """
         sort_name = None
+        
         viaf_contributor = self.viaf.lookup_by_name(
             sort_name=None, display_name=display_name, known_titles=known_titles
         )
@@ -253,5 +258,72 @@ class AuthorNameCanonicalizer(object):
                 display_name, sort_name
             )
         return sort_name
+
+
+
+class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
+
+    def __init__(self, _db, oclcld=None, viaf=None):
+        super(MockAuthorNameCanonicalizer, self).__init__(_db)
+        self._db = _db
+        self.viaf = viaf or MockVIAFClient(_db)
+        self.oclcld = oclcld or MockOCLCLinkedData(_db)
+        self.log = logging.getLogger("Mocked Author Name Canonicalizer")
+        self.responses = []
+        self.requests = []
+        self.non_response_results = [] # all mocked results that are not http response objects
+        base_path = os.path.split(__file__)[0]
+        self.resource_path = os.path.join(base_path, "files", "canonicalizer")
+
+
+    def queue_response(self, status_code, headers={}, content=None):
+        from testing import MockRequestsResponse
+        self.responses.insert(
+            0, MockRequestsResponse(status_code, headers, content)
+        )
+
+
+    def _make_request(self, url, *args, **kwargs):
+        self.requests.append([url, args, kwargs])
+        response = self.responses.pop()
+        return HTTP._process_response(
+            url, response, kwargs.get('allowed_response_codes'),
+            kwargs.get('disallowed_response_codes')
+        )
+
+
+    def get_data(self, filename):
+        # returns contents of sample file as string and as dict
+        path = os.path.join(self.resource_path, filename)
+        data = open(path).read()
+        return data, json.loads(data)
+
+
+    def queue_non_response_result(self, dummy_result):
+        self.non_response_results.insert(dummy_result)
+
+
+    def sort_name_from_oclc_linked_data(self, identifier, display_name):
+        """
+        Skip calling parent sort_name_from_oclc_linked_data for now.  It contains http 
+        calls it'd be hard to mock.  Return a dummy response.
+        """
+        uris = ["http://viaf.org/viaf/9581122"]
+        if len(self.non_response_results) > 0:
+            return self.non_response_results.pop()
+        else:
+            return None, uris
+
+
+    def sort_name_from_viaf(self, display_name, known_titles=None):
+        """
+        Skip calling parent sort_name_from_viaf for now.  It contains http 
+        calls it'd be hard to mock.  Return a dummy response.
+        """
+        if len(self.non_response_results) > 0:
+            return self.non_response_results.pop()
+        else:
+            return None
+
 
 
