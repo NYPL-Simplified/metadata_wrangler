@@ -58,13 +58,20 @@ class FillInVIAFAuthorNames(Script):
 
 
 class CheckContributorTitles(Script):
-    """ TODO """
+    """ For the Contributr objects in our database, goes to VIAF and extracts 
+    titles (Mrs., Eminence, Prince, etc.) from the MARC records. 
+    Output those titles to stdout.  Used to gather common name parts to help 
+    hone the HumanName libraries. 
+    """
 
     def __init__(self, viaf=None):
         self.viaf = viaf or VIAFClient(self._db)
 
 
-    def run(self, batch_size=1000):        
+    def run(self, batch_size=1000):
+        """ 
+        NOTE: We do not want to _db.commit in this method, as this script is look-no-touch. 
+        """
         query = self._db.query(Contributor).filter(Contributor.viaf!=None).order_by(Contributor.id)
 
         if self.log:
@@ -80,14 +87,12 @@ class CheckContributorTitles(Script):
         while contributors:
             my_query = query.offset(offset).limit(batch_size)
 
-            #print "query=%s" % dump_query(my_query)
+            print "query=%s" % dump_query(my_query)
             contributors = my_query.all()
 
             for contributor in contributors:
                 self.process_contributor(contributor)
             offset += batch_size
-            #self._db.commit()
-        #self._db.commit()
 
 
     def process_contributor(self, contributor):
@@ -539,14 +544,6 @@ class RedoOCLC(Explain):
         t1.commit()
 
         self.coverage.process_item(primary_identifier)
-
-        equivalent_ids = primary_identifier.equivalent_identifier_ids(
-            levels=6, threshold=0)
-        # TODO: equivalencies is not used?
-        equivalencies = self._db.query(Equivalency).filter(
-            Equivalency.data_source == self.oclcld).filter(
-                Equivalency.input_id.in_(equivalent_ids),
-            )
 
         for edition in primary_identifier.primarily_identifies:
             if edition.work:

@@ -11,7 +11,7 @@ from core.model import (
     Contributor,
     Identifier,
 )
-#from core.util import MetadataSimilarity
+
 from core.util.personal_names import (
     contributor_name_match_ratio, 
     display_name_to_sort_name,
