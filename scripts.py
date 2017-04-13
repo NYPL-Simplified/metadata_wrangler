@@ -22,6 +22,7 @@ from core.model import (
     Edition,
     Equivalency,
     Identifier,
+    IntegrationClient,
 )
 
 from core.scripts import (
@@ -439,7 +440,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
                        "ebook")
 
 
-class CollectionCategorizationOverviewScript(Script):
+class CatalogCategorizationOverviewScript(Script):
 
     def __init__(self, output_path=None, cutoff=0):
         self.cutoff=cutoff
@@ -634,20 +635,23 @@ class RedoOCLCForThreeMScript(Script):
                 edition.add_contributor(contribution.contributor, contribution.role)
 
 
-class CollectionGeneratorScript(Script):
-    """Creates a new Collection object and prints client details to STDOUT"""
+class IntegrationClientGeneratorScript(Script):
 
-    def run(self, name):
-        if not name:
-            ValueError("No name provided. Could not create collection.")
+    """Creates a new IntegrationClient object and prints client details
+    to STDOUT
+    """
 
-        name = " ".join(name)
-        print "Creating collection %s... " % name
-        collection, plaintext_client_secret = Collection.register(self._db, name)
+    def run(self, url):
+        if not url:
+            ValueError("No url provided. Could not create IntegrationClient.")
 
-        print collection
+        url = " ".join(url)
+        print "Creating IntegrationClient for '%s'" % url
+        client, plaintext_secret = IntegrationClient.register(self._db, url)
+
+        print client
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
         print "-" * 40
-        print "CLIENT ID: %s" % collection.client_id
-        print "CLIENT SECRET: %s" % plaintext_client_secret
+        print "CLIENT KEY: %s" % client
+        print "CLIENT SECRET: %s" % plaintext_secret
