@@ -32,6 +32,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
     def test_process_item_can_return_coverage_failure(self):
 
         class AlwaysFailsContentCafe(DummyContentCafeAPI):
+            mirror = None
             def mirror_resources(self, identifier):
                 raise Exception("Oh no!")
 

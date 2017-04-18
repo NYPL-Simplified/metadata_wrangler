@@ -11,7 +11,7 @@ logging.getLogger('suds').setLevel(logging.ERROR)
 
 from core.config import Configuration
 from core.coverage import (
-    CoverageProvider,
+    IdentifierCoverageProvider,
     CoverageFailure,
 )
 from core.model import (
@@ -27,30 +27,32 @@ from mirror import (
 )
 from core.util.summary import SummaryEvaluator
 
-class ContentCafeCoverageProvider(CoverageProvider):
-    def __init__(self, _db, api=None, uploader=None):
-        self._db = _db
-        self.input_identifier_types = [Identifier.ISBN]
-        output_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
-        self.mirror = ContentCafeCoverImageMirror(self._db, uploader=uploader)
-        self.content_cafe = api or ContentCafeAPI(
-            self._db, self.mirror, uploader=uploader
-        )
 
-        super(ContentCafeCoverageProvider, self).__init__(
-            "Content Cafe Coverage Provider",
-            self.input_identifier_types, output_source,
-            batch_size=25)
+class ContentCafeCoverageProvider(IdentifierCoverageProvider):
+    SERVICE_NAME = "Content Cafe Coverage Provider"
+    DEFAULT_BATCH_SIZE = 25
+    INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
+    DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
+    
+    def __init__(self, _db, api=None, uploader=None, **kwargs):
+        super(ContentCafeCoverageProvider, self).__init__(_db, **kwargs)
+        if api:
+            self.content_cafe = api
+            self.mirror = api.mirror
+        else:
+            self.mirror = ContentCafeCoverImageMirror(
+                self._db, uploader=uploader
+            )
+            self.content_cafe = api or ContentCafeAPI(
+                self._db, self.mirror, uploader=uploader
+            )
 
     def process_item(self, identifier):
         try:
             self.content_cafe.mirror_resources(identifier)
             return identifier
         except Exception as e:
-            return CoverageFailure(
-                identifier, repr(e),
-                data_source=self.output_source, transient=True
-            )
+            return self.failure(identifier, repr(e), transient=True)
 
 
 class ContentCafeCoverImageMirror(CoverImageMirror):
