@@ -4,13 +4,15 @@ import urllib
 
 from lxml import etree
 from nose.tools import set_trace
+from sqlalchemy.orm.session import Session
 
 from core.coverage import (
-    CoverageProvider,
+    IdentifierCoverageProvider,
     CoverageFailure,
 )
 from core.model import (
     get_one_or_create,
+    Contribution,
     Contributor,
     DataSource,
     Edition,
@@ -589,7 +591,7 @@ class OCLCClassifyAPI(object):
         return representation.content
 
 
-class OCLCClassifyCoverageProvider(CoverageProvider):
+class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify."""
 
     # Strips most non-alphanumerics from the title.
@@ -601,16 +603,12 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
     # especially colons.
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
 
+    SERVICE_NAME = "OCLC Classify Coverage Provider"
+    INPUT_IDENTIFIER_TYPES = [Identifier.GUTENBERG_ID, Identifier.URI]
+    DATA_SOURCE_NAME = DataSource.OCLC
+    
     def __init__(self, _db, api=None, **kwargs):
-        input_identifier_types = [
-            Identifier.GUTENBERG_ID, Identifier.URI
-        ]
-        output_source = DataSource.lookup(_db, DataSource.OCLC)
-        super(OCLCClassifyCoverageProvider, self).__init__(
-            "OCLC Classify Coverage Provider", input_identifier_types,
-            output_source)
-
-        self._db = _db
+        super(OCLCClassifyCoverageProvider, self).__init__(_db, **kwargs)
         self.api = api or OCLCClassifyAPI(self._db)
 
     def oclc_safe_title(self, title):
@@ -618,18 +616,29 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             return ''
         return self.NON_TITLE_SAFE.sub("", title)
 
-    def get_edition_info(self, edition):
-        """Returns the API-safe title, author(s), and language for an
-        edition
+    def get_bibliographic_info(self, identifier):
+        """Find any local source for this Identifier that lists title, author
+        and language, so we can do a lookup based on that information.
         """
-        title = self.oclc_safe_title(edition.title)
+        _db = Session.object_session(identifier)
+        editions = _db.query(Edition).join(Edition.contributions).filter(
+            Edition.primary_identifier==identifier
+        ).filter(Edition.title != None).filter(
+            Edition.language != None).filter(
+                Contribution.role.in_(Contributor.AUTHOR_ROLES)
+            ).all()
+        if not editions:
+            return None, None, None
+        edition = editions[0]
 
+        title = self.oclc_safe_title(edition.title)
         authors = edition.author_contributors
         if len(authors) == 0:
+            # Should never happen.
             author = ''
         else:
             author = authors[0].sort_name
-
+        author = edition.author
         language = edition.language
 
         # Log the info
@@ -728,7 +737,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             strength = edition.similarity_to(r)
             if strength > 0:
                 edition.primary_identifier.equivalent_to(
-                    self.output_source, r.primary_identifier, strength
+                    self.data_source, r.primary_identifier, strength
                 )
 
     def process_item(self, identifier):
@@ -737,20 +746,16 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             return edition
 
         # Perform a title/author lookup.
-        title, author, language = self.get_edition_info(edition)
+        title, author, language = self.get_bibliographic_info(identifier)
         if not (title and author):
             e = 'Cannot lookup edition without title and author!'
-            return CoverageFailure(
-                identifier, e, data_source=self.output_source
-            )
+            return self.failure(identifier, e)
         xml = self.api.lookup_by(title=title, author=author)
 
         try:
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
-            return CoverageFailure(
-                identifier, e.message, data_source=self.output_source
-            )
+            return self.failure(identifier, e.message)
 
         self.merge_contributors(edition, records)
         self.log.info("Created %s records(s).", len(records))
