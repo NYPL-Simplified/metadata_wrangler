@@ -2,7 +2,7 @@ from nose.tools import set_trace
 
 from core.coverage import (
     CoverageFailure, 
-    CoverageProvider, 
+    CollectionCoverageProvider, 
 )
 
 from core.metadata_layer import (
@@ -50,7 +50,7 @@ from viaf import (
 )
 
 
-class IdentifierResolutionCoverageProvider(CoverageProvider):
+class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
     """ Resolve all of the Identifiers with CoverageProviders in transient 
     failure states, turning them into Editions with LicensePools.
     Create CoverageProviders to contact 3rd party entities for information on 
@@ -59,34 +59,29 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
     For ISBNs, make a bunch of Resources, rather than LicensePooled Editions.
     """
 
+    SERVICE_NAME = "Identifier Resolution Coverage Provider"
+    DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
+    INPUT_IDENTIFIER_TYPES = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
+    OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
+    
     CAN_CREATE_LICENSE_POOLS = True
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, _db, batch_size=10, cutoff_time=None,
-                 uploader=None, providers=None, **kwargs):
-        output_source, made_new = get_one_or_create(
-            _db, DataSource,
-            name=DataSource.INTERNAL_PROCESSING
-        )
-        # Other components don't have INTERNAL_PROCESSING as offering
-        # licenses, but we do, because we're responsible for managing
-        # LicensePools.
-        output_source.offers_licenses=True
-        input_identifier_types = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
+    def __init__(self, _db, collection, uploader=None,
+                 viaf_client=None,
+                 linked_data_coverage_provider=None,
+                 providers=None, **kwargs):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
-            service_name="Identifier Resolution Coverage Provider",
-            input_identifier_types=input_identifier_types,
-            output_source=output_source,
-            batch_size=batch_size,
-            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+            collection, **kwargs
         )
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
-        mirror = uploader or S3Uploader()
+        if not uploader:
+            uploader = S3Uploader()
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -96,28 +91,48 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             update_search_index=True
         )
         policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror, even_if_not_apparently_updated=True,
+            mirror=uploader, even_if_not_apparently_updated=True,
             presentation_calculation_policy=presentation_calculation_policy
         )
-        if providers:
+
+        # Determine the optional and required coverage providers.
+        # Each item in this Collection will be run through 
+        
+        if providers is not None:
             # For testing purposes. Initializing the real coverage providers
             # during tests can cause requests to third-parties.
             (self.required_coverage_providers,
-            self.optional_coverage_providers) = providers
+             self.optional_coverage_providers) = providers
         else:
-            overdrive = OverdriveBibliographicCoverageProvider(
-                _db, metadata_replacement_policy=policy
-            )
-            content_cafe = ContentCafeCoverageProvider(self._db)
-            content_server = ContentServerCoverageProvider(self._db)
-            oclc_classify = OCLCClassifyCoverageProvider(self._db)
+            self.required_coverage_providers, self.optional_coverage_providers = self.providers()
 
-            self.required_coverage_providers = [
-                overdrive, content_cafe, content_server, oclc_classify
-            ]
-            self.optional_coverage_providers = []
-
-        self.viaf = VIAFClient(self._db)
+        # When we need to look up a contributor via VIAF we will use this
+        # client.
+        self.viaf_client = viaf_client or VIAFClient(self._db)
+                
+        # Books are not looked up in OCLC Linked Data directly, since
+        # there is no Collection that identifies a book by its OCLC Number.
+        # However, when a book is looked up through OCLC Classify, some
+        # OCLC Numbers may be associated with it, and at that point it';s
+        #
+        # TODO: We get many books identified by ISBN, and those books
+        # _could_ be run through a LinkedDataCoverageProvider if it
+        # worked a little differently. However, I don't think this
+        # would be very useful, since those books will get looked up
+        # through OCLC Classify, which will probably result in us
+        # finding that same ISBN via OCLC Number.
+        self.oclc_linked_data = (
+            linked_data_coverage_provider or
+            LinkedDataCoverageProvider(self._db, viaf_api=self.viaf_client)
+        )
+        
+        # The ordinary OverdriveBibiliographicCoverageProvider
+        # doesn't upload images, so we need to create our own
+        # mirror and scaler.
+        #
+        # TODO: This class would be neater if we were to subclass
+        # OverdriveBibliographicCoverageProvider to do the scaling and
+        # uploading.
         self.image_mirrors = {
             DataSource.OVERDRIVE : OverdriveCoverImageMirror(
                 self._db, uploader=uploader
@@ -125,8 +140,50 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
         }
         self.image_scaler = ImageScaler(
             self._db, self.image_mirrors.values(), uploader=uploader
-        )
-        self.oclc_linked_data = LinkedDataCoverageProvider(self._db)
+        )        
+
+    def providers(self, policy):
+        """Instantiate required and optional CoverageProviders.
+
+        All Identifiers in this Collection will be run through each
+        provider. If an optional provider fails, nothing will happen.
+        If a required provider fails, the coverage operation as a whole
+        will fail.
+        """
+        # All books must be run through Content Cafe and OCLC
+        # Classify, assuming their identifiers are of the right
+        # type.
+        content_cafe = ContentCafeCoverageProvider(self._db)
+        oclc_classify = OCLCClassifyCoverageProvider(self._db)
+
+        optional = []
+        required = [content_cafe, oclc_classify]
+            
+        # All books derived from OPDS import against the open-access
+        # content server must be looked up in that server.
+        #
+        # TODO: This could stand some generalization. In general,
+        # any OPDS server that also supports the lookup protocol
+        # can be used here.
+        if (self.collection.protocol == Collection.OPDS_IMPORT
+            and self.collection.data_source.name == Collection.OA_CONTENT_SERVER):
+            # TODO: This will create a CSCP that goes against the real
+            # content server. It should be possible to mock this.
+            required.append(
+                content_server = ContentServerCoverageProvider(
+                    self._db
+                )
+            )
+
+        # All books obtained from Overdrive must be looked up via the
+        # Overdrive API.
+        if self.collection.protocol == Collection.OVERDRIVE:
+            required.append(
+                OverdriveBibliographicCoverageProvider(
+                    self.collection, metadata_replacement_policy=policy
+                )
+            )
+        return optional, required
 
     def items_that_need_coverage(self, identifiers=None, **kwargs):
         """Find all identifiers lacking coverage from this CoverageProvider.
@@ -153,15 +210,16 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
 
         license_pool = self.license_pool(identifier)
         if isinstance(license_pool, CoverageFailure):
-            error = ValueError(
-                "Could not generate LicensePool for %r" % identifier
+            return self.failure(
+                identifier,
+                "Could not generate LicensePool for %r" % identifier,
+                transient=True
             )
-            return self.transform_exception_into_failure(e, identifier)
 
         # Go through all relevant providers and tries to ensure coverage.
         # If there's a failure or an exception, create a CoverageFailure.
         for provider in self.required_coverage_providers:
-            if not identifier.type in provider.input_identifier_types:
+            if provider.input_identifier_types and not identifier.type in provider.input_identifier_types:
                 continue
             try:
                 record = provider.ensure_coverage(identifier, force=True)
@@ -173,16 +231,16 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
                 transiency = True
                 if record.status == CoverageRecord.PERSISTENT_FAILURE:
                     transiency = False
-                return CoverageFailure(
-                    identifier, error_msg,
-                    data_source=self.output_source, transient=transiency
+                return self.failure(
+                    identifier, error_msg, transient=transiency
                 )
 
         # Now go through the optional providers. It's the same deal,
         # but a CoverageFailure doesn't cause the entire identifier
         # resolution process to fail.
         for provider in self.optional_coverage_providers:
-            if not identifier.type in provider.input_identifier_types:
+            if (provider.input_identifier_types
+                and not identifier.type in provider.input_identifier_types):
                 continue
             try:
                 record = provider.ensure_coverage(identifier, force=True)
@@ -204,10 +262,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             "Error completing coverage for %r: %r", identifier, error,
             exc_info=error
         )
-        return CoverageFailure(
-            identifier, repr(error),
-            data_source=self.output_source, transient=True
-        )
+        return self.failure(identifier, repr(error), transient=True)
 
     def finalize(self, identifier):
         """Sets equivalent identifiers from OCLC and processes the work."""
@@ -225,11 +280,15 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
         a previously-unresolved identifier's work as presentation ready.
+
+        TODO: I think this should be split into a separate
+        WorkCoverageProvider.
         """
         work = None
-        license_pool = identifier.licensed_through
-        if license_pool:
-            work, created = license_pool.calculate_work(even_if_no_author=True)
+        license_pools = identifier.licensed_through
+        if license_pools:
+            pool = license_pools[0]
+            work, created = pool.calculate_work(even_if_no_author=True)
         if work:
             self.resolve_viaf(work)
             self.resolve_cover_image(work)
@@ -237,11 +296,7 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
             work.set_presentation_ready()
         else:
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
-            transiency = True
-            return CoverageFailure(
-                identifier, error_msg,
-                data_source=self.output_source, transient=transiency
-            )
+            return self.failure(identifier, error_msg, transient=True)
 
     def resolve_equivalent_oclc_identifiers(self, identifier):
         """Ensures OCLC coverage for an identifier.
@@ -262,11 +317,10 @@ class IdentifierResolutionCoverageProvider(CoverageProvider):
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""
 
-        viaf = VIAFClient(self._db)
         for pool in work.license_pools:
             edition = pool.presentation_edition
             for contributor in edition.contributors:
-                viaf.process_contributor(contributor)
+                self.viaf_client.process_contributor(contributor)
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names())

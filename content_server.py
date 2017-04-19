@@ -1,6 +1,7 @@
 from nose.tools import set_trace
 from core.config import Configuration
 from core.model import (
+    Collection,
     DataSource,
     Identifier,
 )
@@ -8,59 +9,58 @@ from core.opds_import import (
     SimplifiedOPDSLookup,
     OPDSImporter,
 )
-from core.coverage import (
-    CoverageProvider,
-    CoverageFailure,
-)
+from core.coverage import IdentifierCoverageProvider
 from core.util.http import BadResponseException
 
 class ContentServerException(Exception):
     # Raised when the ContentServer can't connect or returns bad data
     pass
 
-class ContentServerCoverageProvider(CoverageProvider):
+class ContentServerCoverageProvider(IdentifierCoverageProvider):
     """Checks the OA Content Server for metadata about Gutenberg books
     and books identified by URI.
+
+    Although this uses an OPDSImporter, it is not a
+    CollectionCoverageProvider because it does not aim to create 
+    LicensePools in any particular Collection, only Editions.
     """
 
+    SERVICE_NAME = "OA Content Server Coverage Provider"
+    DATA_SOURCE_NAME = DataSource.OA_CONTENT_SERVER
+    INPUT_IDENTIFIER_TYPES = [Identifier.GUTENBERG_ID, Identifier.URI]
+    
     CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served unhandleable media type: %s"
-
-    def __init__(self, _db, content_server=None):
-        self._db = _db
-        if not content_server:
-            content_server_url = Configuration.integration_url(
-                Configuration.CONTENT_SERVER_INTEGRATION, required=True)
-            content_server = SimplifiedOPDSLookup(content_server_url)
-        self.content_server = content_server
-        self.importer = OPDSImporter(self._db, DataSource.OA_CONTENT_SERVER)
-        input_identifier_types = [Identifier.GUTENBERG_ID, Identifier.URI]
-        output_source = DataSource.lookup(
-            self._db, DataSource.OA_CONTENT_SERVER
-        )
+    
+    def __init__(self, _db, lookup_client=None,
+                 importer=None, **kwargs):
         super(ContentServerCoverageProvider, self).__init__(
-                "OA Content Server Coverage Provider",
-                input_identifier_types, output_source, batch_size=10
+            _db, **kwargs
         )
+        if not lookup_client:
+            content_server_url = Configuration.integration_url(
+                Configuration.CONTENT_SERVER_INTEGRATION, required=True
+            )
+            lookup_client = SimplifiedOPDSLookup(content_server_url)
+        self.lookup_client = lookup_client
+        if not importer:
+            importer = OPDSImporter(
+                self._db, self.collection, self.DATA_SOURCE_NAME
+            )
+        self.importer = importer
 
     def process_item(self, identifier):
-        data_source = DataSource.lookup(
-            self._db, self.importer.data_source_name
-        )
+        data_source = self.collection.data_source
         try:
-            response = self.content_server.lookup([identifier])
+            response = self.lookup_client.lookup([identifier])
         except BadResponseException, e:
-            return CoverageFailure(
-                identifier,
-                e.message,
-                data_source
-            )
+            return self.failure(identifier, e.message)
         content_type = response.headers['content-type']
         if not content_type.startswith("application/atom+xml"):
-            return CoverageFailure(
+            return self.failure(
                 identifier,
                 self.CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
-                    content_type),
-                data_source
+                    content_type
+                )
             )
         
         editions, licensepools, works, messages = self.importer.import_from_feed(
@@ -76,8 +76,6 @@ class ContentServerCoverageProvider(CoverageProvider):
         messages = messages.values()
         if messages:
             return messages[0]
-        return CoverageFailure(
-            identifier,
-            "Identifier was not mentioned in lookup response",
-            data_source
+        return self.failure(
+            identifier, "Identifier was not mentioned in lookup response"
         )

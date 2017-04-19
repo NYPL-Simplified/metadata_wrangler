@@ -19,6 +19,8 @@ from core.opds_import import MockSimplifiedOPDSLookup
 from content_server import ContentServerCoverageProvider
 
 from coverage import IdentifierResolutionCoverageProvider
+from oclc import LinkedDataCoverageProvider
+from viaf import VIAFClient
 
 from core.testing import (
     AlwaysSuccessfulCoverageProvider,
@@ -35,7 +37,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
         super(TestContentServerCoverageProvider, self).setup()
         self.lookup = MockSimplifiedOPDSLookup("http://url/")
         self.provider = ContentServerCoverageProvider(
-            self._db, content_server=self.lookup
+            self._db, lookup_client=self.lookup
         )
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "files", "opds")
@@ -136,25 +138,29 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
         self.source = DataSource.license_source_for(self._db, self.identifier)
-        uploader = DummyS3Uploader()
+
+        # TODO: This should become a mock VIAF client.
+        self.viaf = VIAFClient(self._db)
+        self.linked_data = LinkedDataCoverageProvider(self._db, None, self.viaf)
+        self.uploader = DummyS3Uploader()
+        self.provider_kwargs = dict(
+            uploader=self.uploader,
+            viaf_client=self.viaf,
+            linked_data_coverage_provider=self.linked_data,
+            providers=([], [])
+        )
         self.coverage_provider = IdentifierResolutionCoverageProvider(
-            self._db, uploader=uploader, providers=([], [])
+            self._db, self._default_collection, **self.provider_kwargs
         )
 
-        self.always_successful = AlwaysSuccessfulCoverageProvider(
-            "Always", [self.identifier.type], self.source
-        )
-        self.never_successful = NeverSuccessfulCoverageProvider(
-            "Never", [self.identifier.type], self.source
-        )
-        self.broken = BrokenCoverageProvider(
-            "Broken", [self.identifier.type], self.source
-        )
+        self.always_successful = AlwaysSuccessfulCoverageProvider(self._db)
+        self.never_successful = NeverSuccessfulCoverageProvider(self._db)
+        self.broken = BrokenCoverageProvider(self._db)
 
     def test_items_that_need_coverage(self):
         # Only items with an existing transient failure status require coverage.
         self._coverage_record(
-            self.identifier, self.coverage_provider.output_source,
+            self.identifier, self.coverage_provider.data_source,
             operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
@@ -172,7 +178,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.coverage_provider.process_item(self.identifier)
         lp = self.identifier.licensed_through
         eq_(True, isinstance(lp, LicensePool))
-        eq_(lp.data_source, self.coverage_provider.output_source)
+        eq_(lp.collection, self.coverage_provider.collection)
+        eq_(lp.data_source, self.coverage_provider.data_source)
 
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.coverage_provider.required_coverage_providers = [
@@ -215,7 +222,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
                 raise Exception("Oh no!")
 
         provider = FinalizeAlwaysFails(
-            self._db, uploader=DummyS3Uploader(), providers=([], [])
+            self._db, self._default_collection, **self.provider_kwargs
         )
         result = provider.process_item(self.identifier)
 
