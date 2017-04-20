@@ -1,24 +1,33 @@
 """Use external services to canonicalize names."""
 import logging
+import os
 import re
+
 from nose.tools import set_trace
+from oclc import OCLCLinkedData
+from viaf import VIAFClient, MockVIAFClient
 
 from core.model import (
     Contributor,
     Identifier,
 )
-from core.util import MetadataSimilarity
+
 from core.util.personal_names import (
+    contributor_name_match_ratio, 
     display_name_to_sort_name,
     is_corporate_name,
+    name_tidy, 
+)
+from core.util.titles import (
+    title_match_ratio, 
 )
 
-from oclc import OCLCLinkedData
-from viaf import VIAFClient
 
 
 class CanonicalizationError(Exception):
     pass
+
+
 
 class AuthorNameCanonicalizer(object):
 
@@ -68,10 +77,6 @@ class AuthorNameCanonicalizer(object):
         not "DH Lawrence".  NYT commonly formats names like "DH
         Lawrence".
         """
-        if identifier and identifier.type != Identifier.ISBN:
-            # The only identifier we can do a useful lookup on is
-            # ISBN.
-            identifier = None
         if not identifier and not display_name:
             raise CanonicalizationError(
                 "Neither useful identifier nor display name was provided."
@@ -92,21 +97,51 @@ class AuthorNameCanonicalizer(object):
         # this provided display name into a sort name.
         return self.default_name(display_name)
 
+
     def default_name(self, display_name):
         shortened_name = self.primary_author_name(display_name)
         return display_name_to_sort_name(shortened_name)
+
 
     def _canonicalize(self, identifier, display_name):
         # The best outcome would be that we already have a Contributor
         # with this exact display name and a known sort name.
         self.log.debug("Attempting to canonicalize %s", display_name)
+
+        # can we infer any titles we know this person wrote?
+        known_titles = []
+        if identifier:
+            editions = identifier.primarily_identifies
+            # only choose one version of the title
+            if editions and editions[0].title:
+                known_titles.append(editions[0].title)
+
         contributors = self._db.query(Contributor).filter(
             Contributor.display_name==display_name).filter(
                 Contributor.sort_name != None).all()
         sort_name = None
-        if contributors and False:
-            # Yes, awesome. Use this name.
-            sort_name = contributors[0].sort_name
+        if contributors:
+            # Yes, awesome. Let's gild this lily -- are there any contributors
+            # who have sort_names and also have written titles similar to the 
+            # identifier's?  If not, no worries, choose any sort_name, and it's 
+            # probably good.
+            for contributor in contributors:
+                # did we just find the sort_name in a previous iteration?
+                if sort_name:
+                    break
+
+                for contribution in contributor.contributions:
+                    if (contribution.edition and contribution.edition.title and 
+                        known_titles and 
+                        (title_match_ratio(known_titles[0], contribution.edition.title) > 80)):
+                        # whew! 
+                        sort_name = contributor.sort_name
+                        break
+
+            else:
+                # we have contributors, but none of their titles matched what we know
+                sort_name = contributors[0].sort_name
+
             self.log.debug(
                 "Found existing contributor for %s: %s",
                 display_name, sort_name
@@ -139,26 +174,27 @@ class AuthorNameCanonicalizer(object):
         # Nope. If we were given a display name, let's ask VIAF about it
         # and see what it says.
         if display_name:
-            sort_name = self.sort_name_from_viaf(display_name)
+            sort_name = self.sort_name_from_viaf(display_name, known_titles)
+
         return sort_name
+
 
     def sort_name_from_oclc_linked_data(
             self, identifier, display_name):
         """Try to find an author sort name for this book from
         OCLC Linked Data.
-        """
-        def comparable_name(s):
-            return s.replace(",", "").replace(".", "")
 
+        :param identifier: Must be of Identifier.ISBN type.
+        """
         if display_name:
-            test_working_display_name = comparable_name(display_name)
+            test_working_display_name = name_tidy(display_name)
         else:
             test_working_display_name = None
 
-        if identifier.type != Identifier.ISBN:
+        if ((not identifier) or (identifier.type != Identifier.ISBN)):
             # We have no way of telling OCLC Linked Data which book
             # we're talking about. Don't bother.
-            return None
+            return None, None
 
         try:
             self.log.debug(
@@ -184,23 +220,36 @@ class AuthorNameCanonicalizer(object):
                     # be trustworthy.
                     uris.extend(new_uris)
                 for name in names:
-                    if name.endswith(','):
-                        name = name[:-1]
-                    test_name = comparable_name(name)
-                    sim = MetadataSimilarity.title_similarity(
-                        test_name, test_working_display_name)
-                    if sim > 0.6:
+                    #if name.endswith(','):
+                    #    name = name[:-1]
+                    #test_name = comparable_name(name)
+                    test_name = name_tidy(name)
+
+                    match_ratio = contributor_name_match_ratio(test_name, test_working_display_name, normalize_names=False)
+                    if (match_ratio > 60):
                         if (not shortest_candidate
-                            or len(name) < len(shortest_candidate)):
-                            shortest_candidate = name
+                            or len(test_name) < len(shortest_candidate)):
+                            shortest_candidate = test_name
+
         return shortest_candidate, uris
 
-    def sort_name_from_viaf(self, display_name):
-        sort_name = None
 
+    def sort_name_from_viaf(self, display_name, known_titles=None):
+        """
+        Ask VIAF about the contributor, looking them up by name, 
+        rather than any numeric id.
+
+        :param display_name: Author name in First Last format.
+        :param known_titles: A list of titles we know this author wrote 
+            (helps better match the VIAF results if there's more than one matching VIAF author record).
+        :return: Author name in Last, First format.
+        """
+        sort_name = None
+        
         viaf_contributor = self.viaf.lookup_by_name(
-            None, display_name, best_match=True
+            sort_name=None, display_name=display_name, known_titles=known_titles
         )
+
         if viaf_contributor:
             contributor_data = viaf_contributor[0]
             sort_name = contributor_data.sort_name
@@ -209,3 +258,72 @@ class AuthorNameCanonicalizer(object):
                 display_name, sort_name
             )
         return sort_name
+
+
+
+class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
+
+    def __init__(self, _db, oclcld=None, viaf=None):
+        super(MockAuthorNameCanonicalizer, self).__init__(_db)
+        self._db = _db
+        self.viaf = viaf or MockVIAFClient(_db)
+        self.oclcld = oclcld or MockOCLCLinkedData(_db)
+        self.log = logging.getLogger("Mocked Author Name Canonicalizer")
+        self.responses = []
+        self.requests = []
+        self.non_response_results = [] # all mocked results that are not http response objects
+        base_path = os.path.split(__file__)[0]
+        self.resource_path = os.path.join(base_path, "files", "canonicalizer")
+
+
+    def queue_response(self, status_code, headers={}, content=None):
+        from testing import MockRequestsResponse
+        self.responses.insert(
+            0, MockRequestsResponse(status_code, headers, content)
+        )
+
+
+    def _make_request(self, url, *args, **kwargs):
+        self.requests.append([url, args, kwargs])
+        response = self.responses.pop()
+        return HTTP._process_response(
+            url, response, kwargs.get('allowed_response_codes'),
+            kwargs.get('disallowed_response_codes')
+        )
+
+
+    def get_data(self, filename):
+        # returns contents of sample file as string and as dict
+        path = os.path.join(self.resource_path, filename)
+        data = open(path).read()
+        return data, json.loads(data)
+
+
+    def queue_non_response_result(self, dummy_result):
+        self.non_response_results.insert(dummy_result)
+
+
+    def sort_name_from_oclc_linked_data(self, identifier, display_name):
+        """
+        Skip calling parent sort_name_from_oclc_linked_data for now.  It contains http 
+        calls it'd be hard to mock.  Return a dummy response.
+        """
+        uris = ["http://viaf.org/viaf/9581122"]
+        if len(self.non_response_results) > 0:
+            return self.non_response_results.pop()
+        else:
+            return None, uris
+
+
+    def sort_name_from_viaf(self, display_name, known_titles=None):
+        """
+        Skip calling parent sort_name_from_viaf for now.  It contains http 
+        calls it'd be hard to mock.  Return a dummy response.
+        """
+        if len(self.non_response_results) > 0:
+            return self.non_response_results.pop()
+        else:
+            return None
+
+
+
