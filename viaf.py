@@ -494,7 +494,6 @@ class VIAFParser(XMLParser):
         contributor_data = ContributorData()
         contributor_titles = []
         match_confidences = {}
-        known_name = working_sort_name or working_display_name
 
         # Find out if one of the working names shows up in a name record.
         # Note: Potentially sets contributor_data.sort_name.
@@ -523,6 +522,7 @@ class VIAFParser(XMLParser):
             # Wikipedia page other than their personal page (e.g. for
             # a band they're in.)
 
+        known_name = working_sort_name or working_display_name
         unimarcs = self._xpath(cluster, './/*[local-name()="datafield"][@dtype="UNIMARC"]')
         candidates = []
         for unimarc in unimarcs:
