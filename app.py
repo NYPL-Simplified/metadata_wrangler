@@ -17,6 +17,7 @@ from core.model import production_session
 from core.config import Configuration
 
 from controller import (
+    authenticated_client_from_request,
     CatalogController,
     CanonicalizationController,
     URNLookupController
@@ -45,23 +46,21 @@ else:
     Conf.initialize(_db)
 
 
-def accepts_catalog(f):
+def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        catalog = CatalogController(Conf.db).authenticated_catalog_from_request(
-            required=False
-        )
-        if isinstance(catalog, ProblemDetail):
-            return catalog.response
-        return f(catalog=catalog, *args, **kwargs)
+        client = authenticated_client_from_request(Conf.db, required=False)
+        if isinstance(client, ProblemDetail):
+            return client.response
+        return f(*args, **kwargs)
     return decorated
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        catalog = CatalogController(Conf.db).authenticated_catalog_from_request()
-        if isinstance(catalog, ProblemDetail):
-            return catalog.response
+        client = authenticated_client_from_request(Conf.db)
+        if isinstance(client, ProblemDetail):
+            return client.response
         return f(*args, **kwargs)
     return decorated
 
@@ -78,28 +77,50 @@ def shutdown_session(exception):
 def heartbeat():
     return HeartbeatController().heartbeat()
 
-@app.route('/lookup')
-@accepts_catalog
-def lookup(catalog=None):
-    return URNLookupController(Conf.db).work_lookup(
-        VerboseAnnotator, require_active_licensepool=False,
-        catalog=catalog
-    )
-
 @app.route('/canonical-author-name')
 @returns_problem_detail
 def canonical_author_name():
     return CanonicalizationController(Conf.db).canonicalize_author_name()
 
-@app.route('/updates')
-@requires_auth
-def updates():
-    return CatalogController(Conf.db).updates_feed()
+@app.route('/lookup')
+@app.route('/<collection_metadata_identifier>/lookup')
+@accepts_auth
+@returns_problem_detail
+def lookup(collection_metadata_identifier=None):
+    return URNLookupController(Conf.db).work_lookup(
+        VerboseAnnotator, require_active_licensepool=False,
+        collection_details=collection_metadata_identifier
+    )
 
-@app.route('/remove', methods=['POST'])
+@app.route('/<collection_metadata_identifier>/add', methods=['POST'])
 @requires_auth
-def remove():
-    return CatalogController(Conf.db).remove_items()
+@returns_problem_detail
+def add(collection_metadata_identifier):
+    return CatalogController(Conf.db).add_items(
+        collection_details=collection_metadata_identifier
+    )
+
+@app.route('/<collection_metadata_identifier>/updates')
+@requires_auth
+@returns_problem_detail
+def updates(collection_metadata_identifier):
+    return CatalogController(Conf.db).updates_feed(
+        collection_details=collection_metadata_identifier
+    )
+
+@app.route('/<collection_metadata_identifier>/remove', methods=['POST'])
+@requires_auth
+@returns_problem_detail
+def remove(collection_metadata_identifier):
+    return CatalogController(Conf.db).remove_items(
+        collection_details=collection_metadata_identifier
+    )
+
+@app.route('/client/update_url', methods=['POST'])
+@requires_auth
+@returns_problem_detail
+def update_url():
+    return CatalogController(Conf.db).update_client_url()
 
 if __name__ == '__main__':
 
