@@ -2,7 +2,7 @@ from nose.tools import set_trace
 
 from core.coverage import (
     CoverageFailure, 
-    CollectionCoverageProvider, 
+    CatalogCoverageProvider, 
 )
 
 from core.metadata_layer import (
@@ -50,13 +50,17 @@ from viaf import (
 )
 
 
-class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
-    """ Resolve all of the Identifiers with CoverageProviders in transient 
-    failure states, turning them into Editions with LicensePools.
-    Create CoverageProviders to contact 3rd party entities for information on 
-    Identifier-represented library item (book).
+class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
+    """Make sure all Identifiers registered as needing coverage by this
+    CoverageProvider become Works with Editions and (probably dummy)
+    LicensePools.
 
-    For ISBNs, make a bunch of Resources, rather than LicensePooled Editions.
+    Coverage happens by running the Identifier through _other_
+    CoverageProviders, filling in the blanks with additional data from
+    third-party entities.
+
+    For ISBNs, we end up with a bunch of Resources, rather than
+    Works. TODO: This needs to change.
     """
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
@@ -64,7 +68,6 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
     INPUT_IDENTIFIER_TYPES = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     
-    CAN_CREATE_LICENSE_POOLS = True
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
@@ -96,8 +99,8 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         )
 
         # Determine the optional and required coverage providers.
-        # Each item in this Collection will be run through 
-        
+        # Each Identifier in this Collection's catalog will be run
+        # through all relevant providers.
         if providers is not None:
             # For testing purposes. Initializing the real coverage providers
             # during tests can cause requests to third-parties.
@@ -113,7 +116,8 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         # Books are not looked up in OCLC Linked Data directly, since
         # there is no Collection that identifies a book by its OCLC Number.
         # However, when a book is looked up through OCLC Classify, some
-        # OCLC Numbers may be associated with it, and at that point it';s
+        # OCLC Numbers may be associated with it, and _those_ numbers
+        # can be run through OCLC Linked Data.
         #
         # TODO: We get many books identified by ISBN, and those books
         # _could_ be run through a LinkedDataCoverageProvider if it
@@ -145,10 +149,16 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
     def providers(self, policy):
         """Instantiate required and optional CoverageProviders.
 
-        All Identifiers in this Collection will be run through each
-        provider. If an optional provider fails, nothing will happen.
-        If a required provider fails, the coverage operation as a whole
-        will fail.
+        All Identifiers in this Collection's catalog will be run
+        through each provider. If an optional provider fails, nothing
+        will happen.  If a required provider fails, the coverage
+        operation as a whole will fail.
+
+        NOTE: This method creates CoverageProviders that go against
+        real servers. Because of this, tests must use a subclass that
+        mocks providers(). This method should be tested in isolation
+        to verify that it creates the expected types of
+        CoverageProviders.
         """
         # All books must be run through Content Cafe and OCLC
         # Classify, assuming their identifiers are of the right
@@ -162,16 +172,13 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         # All books derived from OPDS import against the open-access
         # content server must be looked up in that server.
         #
-        # TODO: This could stand some generalization. In general,
-        # any OPDS server that also supports the lookup protocol
-        # can be used here.
+        # TODO: This could stand some generalization. Any OPDS server
+        # that also supports the lookup protocol can be used here.
         if (self.collection.protocol == Collection.OPDS_IMPORT
             and self.collection.data_source.name == Collection.OA_CONTENT_SERVER):
-            # TODO: This will create a CSCP that goes against the real
-            # content server. It should be possible to mock this.
             required.append(
                 content_server = ContentServerCoverageProvider(
-                    self._db
+                    self.collection, 
                 )
             )
 
@@ -196,9 +203,11 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         qu = super(IdentifierResolutionCoverageProvider, self).items_that_need_coverage(
             identifiers=identifiers, **kwargs
         )
+        # TODO: Not sure why we don't also filter on the status. Do
+        # we delete these records when we're done with them?
         qu = qu.filter(CoverageRecord.id != None)
         return qu
-
+            
     def process_item(self, identifier):
         """For this identifier, checks that it has all of the available
         3rd party metadata, and if not, obtains it.
@@ -208,51 +217,79 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         """
         self.log.info("Ensuring coverage for %r", identifier)
 
+        # Make sure there's a LicensePool for this Identifier in this
+        # Collection. Since we're the metadata wrangler, the
+        # LicensePool will probably be a stub that doesn't actually
+        # represent the right to loan the book, but that's okay.
         license_pool = self.license_pool(identifier)
-        if isinstance(license_pool, CoverageFailure):
-            return self.failure(
-                identifier,
-                "Could not generate LicensePool for %r" % identifier,
-                transient=True
-            )
 
-        # Go through all relevant providers and tries to ensure coverage.
-        # If there's a failure or an exception, create a CoverageFailure.
-        for provider in self.required_coverage_providers:
-            if provider.input_identifier_types and not identifier.type in provider.input_identifier_types:
-                continue
-            try:
-                record = provider.ensure_coverage(identifier, force=True)
-            except Exception as e:
-                return self.transform_exception_into_failure(e, identifier)
+        # Go through all relevant providers and try to ensure coverage.
+        failure = self.run_through_relevant_providers(
+            identifier, self.required_coverage_providers,
+            fail_on_any_failure=True
+        )
+        if failure:
+            return failure
 
-            if record.exception:
-                error_msg = "500: " + record.exception
-                transiency = True
-                if record.status == CoverageRecord.PERSISTENT_FAILURE:
-                    transiency = False
-                return self.failure(
-                    identifier, error_msg, transient=transiency
-                )
+        # Now go through relevant optional providers and try to ensure
+        # coverage.
+        failure = self.run_through_relevant_providers(
+            identifier, self.optional_coverage_providers,
+            fail_on_any_failure=False
+        )
+        if failure:
+            return failure
 
-        # Now go through the optional providers. It's the same deal,
-        # but a CoverageFailure doesn't cause the entire identifier
-        # resolution process to fail.
-        for provider in self.optional_coverage_providers:
-            if (provider.input_identifier_types
-                and not identifier.type in provider.input_identifier_types):
-                continue
-            try:
-                record = provider.ensure_coverage(identifier, force=True)
-            except Exception as e:
-                return self.transform_exception_into_failure(e, identifier)
-
+        # We got coverage from all the required coverage providers,
+        # and none of the optional coverage providers raised an exception,
+        # so we're ready.
         try:
             self.finalize(identifier)
         except Exception as e:
             return self.transform_exception_into_failure(e, identifier)
 
         return identifier
+
+    def run_through_relevant_providers(self, identifier, providers,
+                                       fail_on_any_failure):
+        """Run the given Identifier through a set of CoverageProviders.
+
+        :param identifier: Process this Identifier.
+        :param providers: Run `identifier` through every relevant
+            CoverageProvider in this list.
+        :param fail_on_any_failure: True means that each
+            CoverageProvider must succeed or the whole operation
+            fails. False means that if a CoverageProvider fails it's
+            not a deal-breaker.
+        :return: A CoverageFailure if there was an unrecoverable failure,
+            None if everything went okay.
+        """
+        for provider in providers:
+            if (provider.input_identifier_types
+                and not identifier.type in provider.input_identifier_types):
+                # The CoverageProvider under consideration doesn't
+                # handle Identifiers of this type.
+                print "Not covered."
+                continue
+            try:
+                record = provider.ensure_coverage(identifier, force=True)
+                if fail_on_any_failure and record.exception:
+                    # As the CoverageProvider under consideration has
+                    # fallen, so must this CoverageProvider also fall.
+                    error_msg = "500: " + record.exception
+                    transient = (
+                        record.status == CoverageRecord.TRANSIENT_FAILURE
+                    )
+                    return self.failure(
+                        identifier, error_msg, transient=transient
+                    )                
+            except Exception as e:
+                # An uncaught exception becomes a CoverageFailure no
+                # matter what.
+                return self.transform_exception_into_failure(e, identifier)
+
+        # Return None to indicate success.
+        return None
 
     def transform_exception_into_failure(self, error, identifier):
         """Ensures coverage of a given identifier by a given provider with
@@ -282,7 +319,7 @@ class IdentifierResolutionCoverageProvider(CollectionCoverageProvider):
         a previously-unresolved identifier's work as presentation ready.
 
         TODO: I think this should be split into a separate
-        WorkCoverageProvider.
+        WorkCoverageProvider which runs last.
         """
         work = None
         license_pools = identifier.licensed_through

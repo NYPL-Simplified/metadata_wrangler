@@ -9,34 +9,33 @@ from core.opds_import import (
     SimplifiedOPDSLookup,
     OPDSImporter,
 )
-from core.coverage import IdentifierCoverageProvider
+from core.coverage import CatalogCoverageProvider
 from core.util.http import BadResponseException
 
 class ContentServerException(Exception):
     # Raised when the ContentServer can't connect or returns bad data
     pass
 
-class ContentServerCoverageProvider(IdentifierCoverageProvider):
+class ContentServerCoverageProvider(CatalogCoverageProvider):
     """Checks the OA Content Server for metadata about Gutenberg books
     and books identified by URI.
-
-    Although this uses an OPDSImporter, it is not a
-    CollectionCoverageProvider because it does not aim to create 
-    LicensePools in any particular Collection, only Editions.
     """
 
     SERVICE_NAME = "OA Content Server Coverage Provider"
-    DATA_SOURCE_NAME = DataSource.OA_CONTENT_SERVER
+    PROTOCOL = Collection.OPDS_IMPORT
     INPUT_IDENTIFIER_TYPES = [Identifier.GUTENBERG_ID, Identifier.URI]
     
     CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served unhandleable media type: %s"
     
-    def __init__(self, _db, lookup_client=None,
+    def __init__(self, collection, lookup_client=None,
                  importer=None, **kwargs):
+        self.DATA_SOURCE_NAME = collection.data_source.name
         super(ContentServerCoverageProvider, self).__init__(
-            _db, **kwargs
+            collection, **kwargs
         )
         if not lookup_client:
+            # TODO: It should be possible to get this information
+            # from the Collection object.
             content_server_url = Configuration.integration_url(
                 Configuration.CONTENT_SERVER_INTEGRATION, required=True
             )
@@ -44,12 +43,11 @@ class ContentServerCoverageProvider(IdentifierCoverageProvider):
         self.lookup_client = lookup_client
         if not importer:
             importer = OPDSImporter(
-                self._db, self.collection, self.DATA_SOURCE_NAME
+                self._db, collection, collection.data_source.name
             )
         self.importer = importer
-
+        
     def process_item(self, identifier):
-        data_source = self.collection.data_source
         try:
             response = self.lookup_client.lookup([identifier])
         except BadResponseException, e:

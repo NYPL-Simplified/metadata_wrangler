@@ -7,6 +7,7 @@ import os
 from . import DatabaseTest
 
 from core.model import (
+    Collection,
     CoverageRecord, 
     DataSource,
     get_one, 
@@ -36,8 +37,14 @@ class TestContentServerCoverageProvider(DatabaseTest):
     def setup(self):
         super(TestContentServerCoverageProvider, self).setup()
         self.lookup = MockSimplifiedOPDSLookup("http://url/")
+
+        # Make the default collection look like a collection that goes
+        # against the Library Simplified open-access content server.
+        self._default_collection.external_integration.set_setting(
+            Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
+        )
         self.provider = ContentServerCoverageProvider(
-            self._db, lookup_client=self.lookup
+            self._default_collection, lookup_client=self.lookup
         )
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "files", "opds")
@@ -61,7 +68,8 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_(success, identifier)
 
         # The book was imported and turned into a Work.
-        work = identifier.licensed_through.work
+        [lp] = identifier.licensed_through
+        work = lp.work
         eq_("Mary Gray", work.title)
 
         # It's not presentation-ready yet, because we are the metadata
@@ -132,11 +140,27 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
 
 
+class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvider):
+    """An IdentifierResolutionCoverageProvider that makes it easy to
+    plug in different required and optional CoverageProviders.
+    """
+    def __init__(self, *args, **kwargs):
+        super(MockIdentifierResolutionCoverageProvider, self).__init__(
+            *args, **kwargs
+        )
+        self.required_coverage_providers = []
+        self.optional_coverage_providers = []
+    
+    def providers(self):
+        return self.required_coverage_providers, self.optional_coverage_providers
+        
+        
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
+        self._default_collection.catalog_identifier(self._db, self.identifier)
         self.source = DataSource.license_source_for(self._db, self.identifier)
 
         # TODO: This should become a mock VIAF client.
@@ -149,7 +173,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             linked_data_coverage_provider=self.linked_data,
             providers=([], [])
         )
-        self.coverage_provider = IdentifierResolutionCoverageProvider(
+        self.coverage_provider = MockIdentifierResolutionCoverageProvider(
             self._db, self._default_collection, **self.provider_kwargs
         )
 
@@ -164,8 +188,19 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
+
         # Identifiers without coverage will be ignored.
         no_coverage = self._identifier(identifier_type=Identifier.ISBN)
+        self._default_collection.catalog_identifier(self._db, no_coverage)
+
+        # Identifiers with successful coverage will also be ignored.
+        success = self._identifier(identifier_type=Identifier.ISBN)
+        self._default_collection.catalog_identifier(self._db, success)
+        self._coverage_record(
+            success, self.coverage_provider.data_source,
+            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+            status=CoverageRecord.SUCCESS
+        )
 
         items = self.coverage_provider.items_that_need_coverage().all()
         eq_([self.identifier], items)
@@ -176,7 +211,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         ]
 
         self.coverage_provider.process_item(self.identifier)
-        lp = self.identifier.licensed_through
+        [lp] = self.identifier.licensed_through
         eq_(True, isinstance(lp, LicensePool))
         eq_(lp.collection, self.coverage_provider.collection)
         eq_(lp.data_source, self.coverage_provider.data_source)
@@ -196,7 +231,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         ]
 
         result = self.coverage_provider.process_item(self.identifier)
-
         eq_(True, isinstance(result, CoverageFailure))
         eq_("500: What did you expect?", result.exception)
         eq_(False, result.transient)
