@@ -164,8 +164,11 @@ class OCLCLinkedData(object):
     FILTER_TAGS = POINTLESS_TAGS.union(TAGS_FOR_UNUSABLE_RECORDS)
     log = logging.getLogger("OCLC Linked Data Client")
 
+
     def __init__(self, _db):
         self._db = _db
+        self.log = logging.getLogger("OCLC Linked Data")
+
 
     @property
     def source(self):
@@ -205,6 +208,7 @@ class OCLCLinkedData(object):
         if url in processed_uris:
             self.log.debug("SKIPPING %s, already processed.", url)
             return None, True
+
         processed_uris.add(url)
         representation, cached = Representation.get(self._db, url)
         try:
@@ -219,6 +223,7 @@ class OCLCLinkedData(object):
 
         if not representation.content:
             return None, False
+        
         doc = {
             'contextUrl': None,
             'documentUrl': url,
@@ -663,6 +668,57 @@ class OCLCLinkedData(object):
                     for graph in self.graphs_for(i.output):
                         yield graph
         self.log.debug("END GRAPHS FOR %r", identifier)
+
+
+
+class MockOCLCLinkedData(OCLCLinkedData):    
+    def __init__(self, _db):
+        super(MockOCLCLinkedData, self).__init__(_db)
+        self._db = _db
+        self.log = logging.getLogger("Mocked OCLC Linked Data")
+        base_path = os.path.split(__file__)[0]
+        self.resource_path = os.path.join(base_path, "tests", "files", "oclc")
+
+
+    def get_data(self, filename):
+        # returns contents of sample file as string and as dict
+        path = os.path.join(self.resource_path, filename)
+        data = open(path).read()
+        return data, json.loads(data)
+
+
+    def oclc_number_for_isbn(self, isbn):
+        """Turn an ISBN identifier into an OCLC Number identifier."""
+
+        # Let's pretend any id can be an oclc id.
+        oclc_number = isbn.identifier
+        oclc_identifier, made_new = Identifier.for_foreign_id(
+            self._db, Identifier.OCLC_NUMBER, oclc_number, autocreate=True)
+
+        return oclc_identifier
+
+
+    def oclc_works_for_isbn(self, isbn, processed_uris=set()):
+        """Empty-yielding stub for: Yield every OCLC Work graph for the given ISBN."""
+
+        # assume the calling test code has put a test file-derived graph into the queue
+        # TODO: Code full functionality later.
+        return None
+
+
+    @classmethod
+    def creator_names(cls, graph, field_name='creator'):
+        """Empty-yielding stub for: Extract names and VIAF IDs for the creator(s) of the work described
+        in `graph`.
+
+        :param field_name: Try 'creator' first, then 'contributor' if
+        that doesn't work.
+        """
+        # TODO: Code full functionality later.
+        names = []
+        uris = []
+        return names, uris
+
 
 
 class LinkedDataURLLister:

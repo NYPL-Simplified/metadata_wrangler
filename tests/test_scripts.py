@@ -117,6 +117,6 @@ class TestRedoOCLCForThreeM(DatabaseTest):
         self.script.merge_contributors(self.edition1.primary_identifier)
         eq_(1, len(self.edition1.contributors))
         eq_(
-            ["Denzel Washington"], 
+            ["Washington, Denzel"], 
             [x.sort_name for x in self.edition1.contributors]
         )

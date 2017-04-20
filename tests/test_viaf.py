@@ -69,16 +69,17 @@ class TestNameParser(DatabaseTest):
         # family name we get back is "Twain", because we give very
         # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
-
+        
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Sam Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Mark_Twain", contributor_data.wikipedia_name)
         eq_("Twain", contributor_data.family_name)
 
+        
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
-
+        
         # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
@@ -86,15 +87,17 @@ class TestNameParser(DatabaseTest):
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Twain", contributor_data.family_name)
         eq_(None, contributor_data.wikipedia_name)
-
-        # Even if we go in expecting something like "Sam Clemens",
-        # we get the consensus result.
+        
+        # NOTE:  Old behavior:  Even if we go in expecting something like "Sam Clemens", we get the consensus result.
+        # New behavior:  If the wikipedia name is not there to correct our working_display_name for us, 
+        # then either "Samuel Langhorne Clemens" or "Mark Twain" is acceptable to us here now.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", contributor_data.viaf)
-        eq_("Mark Twain", contributor_data.display_name)
+        eq_("Samuel Langhorne Clemens", contributor_data.display_name)
         eq_("Twain, Mark", contributor_data.sort_name)
-        eq_("Twain", contributor_data.family_name)
+        eq_("Clemens", contributor_data.family_name)
         eq_(None, contributor_data.wikipedia_name)
+
 
     def test_ignore_results_if_author_not_in_viaf(self):
         # This is the VIAF result for searching for "Howard,
