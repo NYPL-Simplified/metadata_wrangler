@@ -32,8 +32,6 @@ from core.testing import (
     BrokenCoverageProvider,
 )
 
-from core.testing import DummyHTTPClient
-
 
 class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
 
@@ -41,11 +39,13 @@ class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
         return MockSimplifiedOPDSLookup(url)
 
     def _importer(self):
-        self.http = DummyHTTPClient()
-        
+        # Part of this test is verifying that we just import the OPDS
+        # metadata and don't try to make any other HTTP requests or
+        # mirror anything. If we should try to do that, we'll get a 
+        # crash because object() isn't really an HTTP client.
         return OPDSImporter(
             self._db, collection=self.collection,
-            mirror=None, http_get=self.http.do_get
+            mirror=None, http_get=object()
         )
 
 
