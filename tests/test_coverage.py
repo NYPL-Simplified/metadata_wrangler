@@ -15,9 +15,12 @@ from core.model import (
     LicensePool,
 )
 from core.coverage import CoverageFailure
-from core.opds_import import MockSimplifiedOPDSLookup
+from core.opds_import import (
+    MockSimplifiedOPDSLookup,
+    OPDSImporter,
+)
 
-from content_server import ContentServerCoverageProvider
+from content_server import LookupClientCoverageProvider
 
 from coverage import IdentifierResolutionCoverageProvider
 from oclc import LinkedDataCoverageProvider
@@ -29,23 +32,37 @@ from core.testing import (
     BrokenCoverageProvider,
 )
 
-from core.s3 import DummyS3Uploader
+from core.testing import DummyHTTPClient
 
 
-class TestContentServerCoverageProvider(DatabaseTest):
+class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
 
+    def _lookup_client(self, url):
+        return MockSimplifiedOPDSLookup(url)
+
+    def _importer(self):
+        self.http = DummyHTTPClient()
+        
+        return OPDSImporter(
+            self._db, collection=self.collection,
+            mirror=None, http_get=self.http.do_get
+        )
+
+
+class TestLookupClientCoverageProvider(DatabaseTest):
+    
     def setup(self):
-        super(TestContentServerCoverageProvider, self).setup()
-        self.lookup = MockSimplifiedOPDSLookup("http://url/")
+        super(TestLookupClientCoverageProvider, self).setup()
 
         # Make the default collection look like a collection that goes
         # against the Library Simplified open-access content server.
         self._default_collection.external_integration.set_setting(
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
-        self.provider = ContentServerCoverageProvider(
-            self._default_collection, lookup_client=self.lookup
+        self.provider = MockLookupClientCoverageProvider(
+            self._default_collection
         )
+        self.lookup_client = self.provider.lookup_client
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "files", "opds")
 
@@ -55,7 +72,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
     def test_success(self):
         data = self.sample_data("content_server_lookup.opds")
-        self.lookup.queue_response(
+        self.lookup_client.queue_response(
             200, {"content-type": "application/atom+xml"},
             content=data
         )
@@ -78,7 +95,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
     def test_no_such_work(self):
         data = self.sample_data("no_such_work.opds")
-        self.lookup.queue_response(
+        self.lookup_client.queue_response(
             200, {"content-type": "application/atom+xml"},
             content=data
         )
@@ -99,7 +116,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
     def test_wrong_work_in_response(self):
         data = self.sample_data("content_server_lookup.opds")
-        self.lookup.queue_response(
+        self.lookup_client.queue_response(
             200, {"content-type": "application/atom+xml"},
             content=data
         )
@@ -120,7 +137,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
         """
         identifier = self._identifier(identifier_type=Identifier.GUTENBERG_ID)
 
-        self.lookup.queue_response(
+        self.lookup_client.queue_response(
             500, content="help me!"
         )
         failure = self.provider.process_item(identifier)
@@ -129,12 +146,12 @@ class TestContentServerCoverageProvider(DatabaseTest):
             failure.exception)
         eq_(True, failure.transient)
 
-        self.lookup.queue_response(
+        self.lookup_client.queue_response(
             200, {"content-type": "text/plain"}, content="help me!"
         )
         failure = self.provider.process_item(identifier)
         eq_(identifier, failure.obj)
-        eq_("Content Server served unhandleable media type: text/plain",
+        eq_("OPDS Server served unhandleable media type: text/plain",
             failure.exception)
         eq_(True, failure.transient)
         eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)

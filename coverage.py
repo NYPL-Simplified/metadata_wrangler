@@ -34,7 +34,7 @@ from content_cafe import (
 )
 
 from content_server import (
-    ContentServerCoverageProvider, 
+    LookupClientCoverageProvider, 
 )
 
 from oclc_classify import (
@@ -73,9 +73,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     UNKNOWN_FAILURE = "Unknown failure."
 
     def __init__(self, _db, collection, uploader=None,
-                 viaf_client=None,
-                 linked_data_coverage_provider=None,
-                 providers=None, **kwargs):
+                 viaf_client=None, linked_data_coverage_provider=None,
+                 **kwargs):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
             collection, **kwargs
@@ -101,13 +100,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # Determine the optional and required coverage providers.
         # Each Identifier in this Collection's catalog will be run
         # through all relevant providers.
-        if providers is not None:
-            # For testing purposes. Initializing the real coverage providers
-            # during tests can cause requests to third-parties.
-            (self.required_coverage_providers,
-             self.optional_coverage_providers) = providers
-        else:
-            self.required_coverage_providers, self.optional_coverage_providers = self.providers()
+        self.required_coverage_providers, self.optional_coverage_providers = self.providers()
 
         # When we need to look up a contributor via VIAF we will use this
         # client.
@@ -177,8 +170,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if (self.collection.protocol == Collection.OPDS_IMPORT
             and self.collection.data_source.name == Collection.OA_CONTENT_SERVER):
             required.append(
-                content_server = ContentServerCoverageProvider(
-                    self.collection, 
+                content_server = LookupClientCoverageProvider(
+                    self.collection
                 )
             )
 

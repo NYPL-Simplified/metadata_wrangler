@@ -272,10 +272,11 @@ class URNLookupController(CoreURNLookupController):
         """Either return a presentation-ready work associated with the 
         given `identifier`, or return None.
         """
-        pool = identifier.licensed_through
-        if not pool:
+        pools = identifier.licensed_through
+        if not pools:
             return None
-        work = pool.work
+        # All LicensePools for a given Identifier have the same Work.
+        work = pools[0].work
         if not work or not work.presentation_ready:
             return None
         return work
