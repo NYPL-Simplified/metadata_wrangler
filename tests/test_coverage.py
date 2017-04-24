@@ -189,6 +189,45 @@ class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvi
 
 class TestIdentifierResolutionCoverageProvider1(DatabaseTest):
 
+       
+    
+class TestIdentifierResolutionCoverageProvider(DatabaseTest):
+
+    def setup(self):
+        super(TestIdentifierResolutionCoverageProvider, self).setup()
+        self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
+        self._default_collection.catalog_identifier(self._db, self.identifier)
+        self.source = DataSource.license_source_for(self._db, self.identifier)
+
+        # Create mocks for the different APIs used by
+        # IdentifierResolutionCoverageProvider.
+        self.viaf = MockVIAFClient(self._db)
+        self.linked_data_client = MockOCLCLinkedData(self._db)
+        self.linked_data_coverage_provider = LinkedDataCoverageProvider(
+            self._db, None, self.viaf, api=self.linked_data_client
+        )
+        self.uploader = DummyS3Uploader()
+
+        # Make the constructor arguments available in case a test
+        # needs to create a different type of resolver.
+        self.provider_kwargs = dict(
+            uploader=self.uploader,
+            viaf_client=self.viaf,
+            linked_data_coverage_provider=self.linked_data_coverage_provider,
+        )
+
+        # But most tests will use this resolver.
+        self.resolver = MockIdentifierResolutionCoverageProvider(
+            self._default_collection, **self.provider_kwargs
+        )
+
+        # Create some useful CoverageProviders that can be inserted
+        # into self.resolver.required_coverage_providers
+        # and self.resolver.optional_coverage_providers
+        self.always_successful = AlwaysSuccessfulCoverageProvider(self._db)
+        self.never_successful = NeverSuccessfulCoverageProvider(self._db)
+        self.broken = BrokenCoverageProvider(self._db)
+
     def test_providers_opds(self):
         # For an OPDS collection that goes against the open-access content
         # server...
@@ -223,37 +262,6 @@ class TestIdentifierResolutionCoverageProvider1(DatabaseTest):
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
         
-    
-class TestIdentifierResolutionCoverageProvider(DatabaseTest):
-
-    def setup(self):
-        super(TestIdentifierResolutionCoverageProvider, self).setup()
-        self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
-        self._default_collection.catalog_identifier(self._db, self.identifier)
-        self.source = DataSource.license_source_for(self._db, self.identifier)
-
-        self.viaf = MockVIAFClient(self._db)
-        self.linked_data_client = MockOCLCLinkedData(self._db)
-        self.linked_data_coverage_provider = LinkedDataCoverageProvider(
-            self._db, None, self.viaf, api=self.linked_data_client
-        )
-        self.uploader = DummyS3Uploader()
-        self.provider_kwargs = dict(
-            uploader=self.uploader,
-            viaf_client=self.viaf,
-            linked_data_coverage_provider=self.linked_data_coverage_provider,
-        )
-        self.resolver = MockIdentifierResolutionCoverageProvider(
-            self._default_collection, **self.provider_kwargs
-        )
-
-        # Create some useful CoverageProviders that can be inserted
-        # into self.resolver.required_coverage_providers
-        # and self.resolver.optional_coverage_providers
-        self.always_successful = AlwaysSuccessfulCoverageProvider(self._db)
-        self.never_successful = NeverSuccessfulCoverageProvider(self._db)
-        self.broken = BrokenCoverageProvider(self._db)
-
     def test_items_that_need_coverage(self):
         # Only items with an existing transient failure status require coverage.
         self._coverage_record(
@@ -288,7 +296,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, isinstance(lp, LicensePool))
         eq_(lp.collection, self.resolver.collection)
         eq_(lp.data_source, self.resolver.data_source)
-
+        set_trace()
+        
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.resolver.required_coverage_providers = [
             self.always_successful, self.always_successful
