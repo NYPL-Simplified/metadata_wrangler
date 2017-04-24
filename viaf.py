@@ -872,3 +872,11 @@ class MockVIAFClient(VIAFClient):
                        working_display_name=None, do_get=None):
         xml = self.get_data("mindy_kaling.xml")
         return self.parser.parse(xml, working_sort_name, working_display_name)
+
+    def lookup_by_name(self, sort_name, display_name=None, do_get=None,
+                       known_titles=None):
+        def do_get(*args, **kwargs):
+            return (200, {}, self.get_data("mindy_kaling.xml"))
+        return super(MockVIAFClient, self).lookup_by_name(
+            sort_name, display_name, do_get, known_titles
+        )

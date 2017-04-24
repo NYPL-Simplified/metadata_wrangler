@@ -312,9 +312,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(lp.collection, self.resolver.collection)
         eq_(lp.data_source, self.resolver.data_source)
 
-        # There is a work.
-        set_trace()
-        eq_(False, lp.work)
+        # Because this book had a presentation Edition, we were able
+        # to create a Work.
+        eq_(edition.title, lp.work.title)
         
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.resolver.required_coverage_providers = [
