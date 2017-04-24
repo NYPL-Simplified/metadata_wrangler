@@ -186,10 +186,6 @@ class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvi
     def providers(self):
         return self.required_coverage_providers, self.optional_coverage_providers
         
-
-class TestIdentifierResolutionCoverageProvider1(DatabaseTest):
-
-       
     
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
@@ -296,7 +292,29 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, isinstance(lp, LicensePool))
         eq_(lp.collection, self.resolver.collection)
         eq_(lp.data_source, self.resolver.data_source)
+
+        # There is no Work because we don't have enough metadata
+        # for this book to create one.
+        eq_(None, lp.work)
+
+    def test_process_item_may_create_work(self):
+        self.resolver.required_coverage_providers = [
+            self.always_successful
+        ]
+        edition = self._edition(
+            identifier_type=self.identifier.type,
+            identifier_id=self.identifier.identifier,
+        )
+        
+        self.resolver.process_item(self.identifier)
+        [lp] = self.identifier.licensed_through
+        eq_(True, isinstance(lp, LicensePool))
+        eq_(lp.collection, self.resolver.collection)
+        eq_(lp.data_source, self.resolver.data_source)
+
+        # There is a work.
         set_trace()
+        eq_(False, lp.work)
         
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.resolver.required_coverage_providers = [

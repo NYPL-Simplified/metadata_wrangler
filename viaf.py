@@ -868,11 +868,7 @@ class MockVIAFClient(VIAFClient):
         data = open(path).read()
         return data
 
-
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
         xml = self.get_data("mindy_kaling.xml")
         return self.parser.parse(xml, working_sort_name, working_display_name)
-
-
-
