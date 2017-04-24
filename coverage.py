@@ -10,6 +10,7 @@ from core.metadata_layer import (
 )
 
 from core.model import (
+    Collection,
     CoverageRecord, 
     DataSource, 
     get_one_or_create,
@@ -18,7 +19,8 @@ from core.model import (
 )
 
 from core.overdrive import (
-    OverdriveBibliographicCoverageProvider, 
+    OverdriveBibliographicCoverageProvider,
+    OverdriveAPI,
 )
 
 from core.s3 import (
@@ -43,7 +45,9 @@ from oclc_classify import (
 
 from mirror import ImageScaler
 
-from oclc import LinkedDataCoverageProvider
+from oclc import (
+    LinkedDataCoverageProvider,
+)
 
 from viaf import (
     VIAFClient, 
@@ -72,8 +76,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, _db, collection, uploader=None,
+    def __init__(self, collection, uploader=None,
                  viaf_client=None, linked_data_coverage_provider=None,
+                 overdrive_api_class=OverdriveAPI,
                  **kwargs):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
@@ -97,6 +102,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             presentation_calculation_policy=presentation_calculation_policy
         )
 
+        self.overdrive_api_class = overdrive_api_class
+        
         # Determine the optional and required coverage providers.
         # Each Identifier in this Collection's catalog will be run
         # through all relevant providers.
@@ -139,7 +146,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             self._db, self.image_mirrors.values(), uploader=uploader
         )        
 
-    def providers(self, policy):
+    def providers(self):
         """Instantiate required and optional CoverageProviders.
 
         All Identifiers in this Collection's catalog will be run
@@ -149,9 +156,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         NOTE: This method creates CoverageProviders that go against
         real servers. Because of this, tests must use a subclass that
-        mocks providers(). This method should be tested in isolation
-        to verify that it creates the expected types of
-        CoverageProviders.
+        mocks providers(), such as
+        MockIdentifierResolutionCoverageProvider.
         """
         # All books must be run through Content Cafe and OCLC
         # Classify, assuming their identifiers are of the right
@@ -168,19 +174,16 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # TODO: This could stand some generalization. Any OPDS server
         # that also supports the lookup protocol can be used here.
         if (self.collection.protocol == Collection.OPDS_IMPORT
-            and self.collection.data_source.name == Collection.OA_CONTENT_SERVER):
-            required.append(
-                content_server = LookupClientCoverageProvider(
-                    self.collection
-                )
-            )
+            and self.collection.data_source
+            and self.collection.data_source.name == DataSource.OA_CONTENT_SERVER):
+            required.append(LookupClientCoverageProvider(self.collection))
 
         # All books obtained from Overdrive must be looked up via the
         # Overdrive API.
         if self.collection.protocol == Collection.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.collection, metadata_replacement_policy=policy
+                    self.collection, api_class=self.overdrive_api_class
                 )
             )
         return optional, required
