@@ -304,6 +304,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         edition = self._edition(
             identifier_type=self.identifier.type,
             identifier_id=self.identifier.identifier,
+            authors=['Mindy K']
         )
         
         self.resolver.process_item(self.identifier)
@@ -315,6 +316,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # Because this book had a presentation Edition, we were able
         # to create a Work.
         eq_(edition.title, lp.work.title)
+
+        # VIAF improved the name of the author.
+        eq_("Mindy Kaling", lp.work.author)
         
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.resolver.required_coverage_providers = [
