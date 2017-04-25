@@ -191,16 +191,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     def items_that_need_coverage(self, identifiers=None, **kwargs):
         """Find all identifiers lacking coverage from this CoverageProvider.
 
-        Only identifiers that have been requested via the URNLookupController
-        (and thus given 'transient failure' CoverageRecords) should be
-        returned. Identifiers created through previous resolution processes
-        can be ignored.
+        Only identifiers that have CoverageRecords in the 'transient
+        failure' state will be returned. Unlike with other
+        CoverageProviders, Identifiers that have no CoverageRecord at
+        all will not be processed.
         """
         qu = super(IdentifierResolutionCoverageProvider, self).items_that_need_coverage(
             identifiers=identifiers, **kwargs
         )
-        # TODO: Not sure why we don't also filter on the status. Do
-        # we delete these records when we're done with them?
         qu = qu.filter(CoverageRecord.id != None)
         return qu
             
