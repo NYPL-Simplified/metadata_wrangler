@@ -327,6 +327,27 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # VIAF improved the name of the author.
         eq_("Mindy Kaling", lp.work.author)
+
+    def test_run_through_relevant_providers(self):
+        providers = [self.always_successful, self.never_successful]
+
+        # Try to process an identifier through two providers, one of
+        # which will fail.
+        success = self.resolver.run_through_relevant_providers(
+            self.identifier, providers, fail_on_any_failure=False
+        )
+        # Even though one of the providers failed, the operation as a
+        # whole succeeded.
+        eq_(None, success)
+
+        # Try again, under less permissive rules.
+        failure = self.resolver.run_through_relevant_providers(
+            self.identifier, providers, fail_on_any_failure=True
+        )
+        # We get a CoverageFailure representing the first failed
+        # coverage provider.
+        assert isinstance(failure, CoverageFailure)
+        eq_("500: What did you expect?", failure.exception)
         
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.resolver.required_coverage_providers = [
@@ -341,7 +362,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.resolver.required_coverage_providers = [
             self.always_successful, self.never_successful
         ]
-
         result = self.resolver.process_item(self.identifier)
         eq_(True, isinstance(result, CoverageFailure))
         eq_("500: What did you expect?", result.exception)

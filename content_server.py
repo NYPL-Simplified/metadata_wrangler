@@ -75,7 +75,7 @@ class LookupClientCoverageProvider(CatalogCoverageProvider):
         expect = identifier.urn
         messages = messages.values()
         if messages:
-            # OPDSImporter turns <simplified:message: tags into
+            # OPDSImporter turns <simplified:message> tags into
             # CoverageFailures, which can be returned directly.
             return messages[0]
         return self.failure(
