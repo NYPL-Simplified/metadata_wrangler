@@ -263,7 +263,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                 and not identifier.type in provider.input_identifier_types):
                 # The CoverageProvider under consideration doesn't
                 # handle Identifiers of this type.
-                print "Not covered."
                 continue
             try:
                 record = provider.ensure_coverage(identifier, force=True)
@@ -313,7 +312,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         a previously-unresolved identifier's work as presentation ready.
 
         TODO: I think this should be split into a separate
-        WorkCoverageProvider which runs last.
+        WorkCoverageProvider which runs last. That way we have a record
+        of which Works have had this service.
         """
         work = None
         license_pools = identifier.licensed_through
@@ -361,7 +361,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         for pool in work.license_pools:
             edition = pool.presentation_edition
-            data_source_name = edition.data_source.name
+            data_source_name = pool.data_source.name
             if data_source_name in self.image_mirrors:
                 self.image_mirrors[data_source_name].mirror_edition(edition)
                 self.image_scaler.scale_edition(edition)
