@@ -183,7 +183,7 @@ class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvi
             *args, **kwargs
         )
     
-    def providers(self):
+    def providers(self, *args, **kwargs):
         return self.required_coverage_providers, self.optional_coverage_providers
         
     
@@ -231,28 +231,36 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
         resolver = IdentifierResolutionCoverageProvider(
-            self._default_collection
+            self._default_collection, uploader=self.uploader
         )
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and OPDS Lookup Protocol.
-        optional, [content_cafe, oclc_classify, opds] = resolver.providers()
+        uploader = object()
+        optional, [content_cafe, oclc_classify, opds] = resolver.providers(
+            uploader
+        )
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(opds, LookupClientCoverageProvider)
+        eq_(uploader, content_cafe.mirror.uploader)
+        eq_(uploader, content_cafe.content_cafe.scaler.uploader)
         eq_(self._default_collection, opds.collection)
         
     def test_providers_overdrive(self):
         # For an Overdrive collection...
         collection = MockOverdriveAPI.mock_collection(self._db)
         resolver = IdentifierResolutionCoverageProvider(
-            collection, overdrive_api_class=MockOverdriveAPI
+            collection, overdrive_api_class=MockOverdriveAPI,
+            uploader=self.uploader
         )
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and Overdrive.
-        optional, [content_cafe, oclc_classify, overdrive] = resolver.providers()
+        optional, [content_cafe, oclc_classify, overdrive] = resolver.providers(
+            object()
+        )
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)

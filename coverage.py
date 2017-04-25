@@ -107,7 +107,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # Determine the optional and required coverage providers.
         # Each Identifier in this Collection's catalog will be run
         # through all relevant providers.
-        self.required_coverage_providers, self.optional_coverage_providers = self.providers()
+        self.required_coverage_providers, self.optional_coverage_providers = self.providers(uploader)
 
         # When we need to look up a contributor via VIAF we will use this
         # client.
@@ -144,9 +144,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         }
         self.image_scaler = ImageScaler(
             self._db, self.image_mirrors.values(), uploader=uploader
-        )        
-
-    def providers(self):
+        )
+        
+    def providers(self, uploader):
         """Instantiate required and optional CoverageProviders.
 
         All Identifiers in this Collection's catalog will be run
@@ -162,7 +162,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # All books must be run through Content Cafe and OCLC
         # Classify, assuming their identifiers are of the right
         # type.
-        content_cafe = ContentCafeCoverageProvider(self._db)
+        content_cafe = ContentCafeCoverageProvider(
+            self._db, uploader=uploader
+        )
         oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
         optional = []
