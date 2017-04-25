@@ -82,6 +82,8 @@ class ContentCafeAPI(object):
         else:
             self.scaler = None
         integration = Configuration.integration("Content Cafe")
+        if not user_id:
+            set_trace()
         self.user_id = user_id or integration['username']
         self.password = password or integration['password']
         self.log = logging.getLogger("Content Cafe API")

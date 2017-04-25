@@ -23,6 +23,7 @@ from core.s3 import DummyS3Uploader
 
 from content_server import LookupClientCoverageProvider
 from content_cafe import (
+    ContentCafeAPI,
     ContentCafeCoverageProvider, 
 )
 from oclc_classify import (
@@ -230,37 +231,45 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self._default_collection.external_integration.set_setting(
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
+        uploader = object()
+        # In lieu of a proper mock API, create one that will crash
+        # if it tries to make a real HTTP request.
+        mock_content_cafe = ContentCafeAPI(
+            self._db, None, object(), object(), self.uploader
+        )
         resolver = IdentifierResolutionCoverageProvider(
-            self._default_collection, uploader=self.uploader
+            self._default_collection, content_cafe_api=mock_content_cafe,
+            uploader=uploader
         )
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and OPDS Lookup Protocol.
-        uploader = object()
-        optional, [content_cafe, oclc_classify, opds] = resolver.providers(
-            uploader
-        )
+        optional, [content_cafe, oclc_classify, opds] = resolver.providers()
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(opds, LookupClientCoverageProvider)
-        eq_(uploader, content_cafe.mirror.uploader)
-        eq_(uploader, content_cafe.content_cafe.scaler.uploader)
+        eq_(mock_content_cafe, content_cafe.content_cafe)
         eq_(self._default_collection, opds.collection)
         
     def test_providers_overdrive(self):
         # For an Overdrive collection...
         collection = MockOverdriveAPI.mock_collection(self._db)
+
+        # In lieu of a proper mock API, create one that will crash
+        # if it tries to make a real HTTP request.
+        mock_content_cafe = ContentCafeAPI(
+            self._db, None, object(), object(), self.uploader
+        )
         resolver = IdentifierResolutionCoverageProvider(
             collection, overdrive_api_class=MockOverdriveAPI,
+            content_cafe_api=mock_content_cafe,
             uploader=self.uploader
         )
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and Overdrive.
-        optional, [content_cafe, oclc_classify, overdrive] = resolver.providers(
-            object()
-        )
+        optional, [content_cafe, oclc_classify, overdrive] = resolver.providers()
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
@@ -383,7 +392,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, result.transient)
 
     def test_process_item_fails_when_finalize_raises_exception(self):
-        class FinalizeAlwaysFails(IdentifierResolutionCoverageProvider):
+        class FinalizeAlwaysFails(MockIdentifierResolutionCoverageProvider):
             def finalize(self, unresolved_identifier):
                 raise Exception("Oh no!")
 
