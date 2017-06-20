@@ -267,19 +267,16 @@ class URNLookupController(CoreURNLookupController):
 
 
     log = logging.getLogger("URN lookup controller")
-    
+
     def presentation_ready_work_for(self, identifier):
-        """Either return a presentation-ready work associated with the 
+        """Either return a presentation-ready work associated with the
         given `identifier`, or return None.
         """
-        pool = identifier.licensed_through
-        if not pool:
-            return None
-        work = pool.work
+        work = identifier.work
         if not work or not work.presentation_ready:
             return None
         return work
-    
+
     def can_resolve_identifier(self, identifier):
         """A chance to determine whether resolution should proceed."""
         # We can resolve any ISBN and any Overdrive ID.
@@ -289,7 +286,7 @@ class URNLookupController(CoreURNLookupController):
         #
         # We can attempt to resolve URIs by looking them up in the
         # open-access content server, though there's no guarantee
-        # it will work.        
+        # it will work.
         if identifier.type in (
                 Identifier.ISBN, Identifier.OVERDRIVE_ID,
                 Identifier.GUTENBERG_ID, Identifier.URI

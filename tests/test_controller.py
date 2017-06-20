@@ -12,9 +12,9 @@ from nose.tools import set_trace, eq_
 from . import DatabaseTest
 from core.model import (
     IntegrationClient,
-    Collection,
     CoverageRecord,
     DataSource,
+    ExternalIntegration,
     Identifier,
     get_one,
 )
@@ -433,7 +433,7 @@ class TestURNLookupController(ControllerTest):
         eq_([(identifier, work)], self.controller.works)
 
     def test_process_urn_with_collection(self):
-        name = base64.b64encode((Collection.OPDS_IMPORT+':'+self._url), '-_')
+        name = base64.b64encode((ExternalIntegration.OPDS_IMPORT+':'+self._url), '-_')
         collection = self._collection(name=name, url=self._url)
 
         with self.app.test_request_context('/', headers=self.valid_auth):
