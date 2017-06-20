@@ -49,7 +49,7 @@ class ContentServerCoverageProvider(IdentifierCoverageProvider):
         self.lookup = content_server
 
         collection = kwargs.get('collection')
-        mirror = uploader or S3Uploader(_db)
+        mirror = uploader or S3Uploader.from_config(_db)
         metadata_client = metadata_client or AuthorNameCanonicalizer(_db)
         self.importer = OPDSImporter(
             _db, collection, data_source_name=DataSource.OA_CONTENT_SERVER,
