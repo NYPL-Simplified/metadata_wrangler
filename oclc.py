@@ -11,7 +11,7 @@ from pyld import jsonld
 from nose.tools import set_trace
 
 from core.coverage import (
-    CoverageProvider,
+    IdentifierCoverageProvider,
     CoverageFailure,
 )
 from core.model import (
@@ -750,7 +750,7 @@ class LinkedDataURLLister:
                     output.write("\n")
 
 
-class LinkedDataCoverageProvider(CoverageProvider):
+class LinkedDataCoverageProvider(IdentifierCoverageProvider):
 
     """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
 
@@ -758,24 +758,38 @@ class LinkedDataCoverageProvider(CoverageProvider):
     number of ISBNs, which can be used as input into other services.
     """
 
-    def __init__(self, _db, api=None, viaf_api=None):
-        self._db = _db
-        self.api = api or OCLCLinkedData(self._db)
-        self.viaf = viaf_api or VIAFClient(self._db)
-        output_source = DataSource.lookup(_db, DataSource.OCLC_LINKED_DATA)
-        input_identifier_types = [
-            Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
-            Identifier.OVERDRIVE_ID, Identifier.THREEM_ID
-        ]
-        super(LinkedDataCoverageProvider, self).__init__(
-            "OCLC Linked Data Coverage Provider", input_identifier_types,
-            output_source, batch_size=10
-        )
+    SERVICE_NAME = u'OCLC Linked Data Coverage Provider'
+
+    DEFAULT_BATCH_SIZE = 10
+
+    DATA_SOURCE_NAME = DataSource.OCLC_LINKED_DATA
+
+    INPUT_IDENTIFIER_TYPES = [
+        Identifier.OCLC_WORK,
+        Identifier.OCLC_NUMBER,
+        Identifier.OVERDRIVE_ID,
+        Identifier.THREEM_ID
+    ]
+
+    def __init__(self, _db, api=None, viaf_api=None, **kwargs):
+        self.api = api or OCLCLinkedData(_db)
+        self.viaf = viaf_api or VIAFClient(_db)
+
+        super(LinkedDataCoverageProvider, self).__init__(_db, **kwargs)
 
     def process_item(self, identifier):
         try:
             new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
+
+            # When metadata is applied, it must be given a client that can
+            # respond to 'canonicalize_author_name'. Usually this is an
+            # OPDSImporter that reaches out to the Metadata Wrangler, but
+            # in the case of being _on_ the Metadata Wrangler...:
+            from canonicalize import AuthorNameCanonicalizer
+            metadata_client = AuthorNameCanonicalizer(
+                self._db, oclcld=self.api, viaf=self.viaf
+            )
 
             for metadata in self.api.info_for(identifier):
                 other_identifier, ignore = metadata.primary_identifier.load(self._db)
@@ -784,20 +798,11 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 # Keep track of the number of editions OCLC associates
                 # with this identifier.
                 other_identifier.add_measurement(
-                    self.output_source, Measurement.PUBLISHED_EDITIONS,
+                    self.data_source, Measurement.PUBLISHED_EDITIONS,
                     len(oclc_editions)
                 )
 
                 self.apply_viaf_to_contributor_data(metadata)
-
-                # When metadata is applied, it must be given a client that can
-                # response to 'canonicalize_author_name'. Usually this is an
-                # OPDSImporter that reaches out to the Metadata Wrangler, but
-                # in the case of being _on_ the Metadata Wrangler...:
-                from canonicalize import AuthorNameCanonicalizer
-                metadata_client = AuthorNameCanonicalizer(
-                    self._db, oclcld=self.api, viaf=self.viaf
-                )
 
                 num_new_isbns = self.new_isbns(metadata)
                 new_info_counter['isbns'] += num_new_isbns
@@ -810,7 +815,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 elif num_new_isbns:
                     # Create a new OCLC edition to hold the information.
                     edition, ignore = get_one_or_create(
-                        self._db, Edition, data_source=self.output_source,
+                        self._db, Edition, data_source=self.data_source,
                         primary_identifier=other_identifier
                     )
                     metadata, new_info_counter = self.apply_metadata_to_edition(
@@ -832,7 +837,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 exception = "OCLC raised an error: %r" % e
                 transient = True
             return CoverageFailure(
-                identifier, exception, data_source=self.output_source,
+                identifier, exception, data_source=self.data_source,
                 transient=transient
             )
         return identifier
@@ -856,7 +861,7 @@ class LinkedDataCoverageProvider(CoverageProvider):
     def apply_metadata_to_edition(self, edition, metadata, metadata_client, counter):
         """Applies metadata and increments counters"""
 
-        metadata.apply(edition, metadata_client=metadata_client)
+        metadata.apply(edition, None, metadata_client=metadata_client)
         counter['editions'] += 1
         counter['descriptions'] += len(metadata.links)
         counter['subjects'] += len(metadata.subjects)
@@ -906,5 +911,5 @@ class LinkedDataCoverageProvider(CoverageProvider):
                 self._db
             )
             identifier.equivalent_to(
-                self.output_source, primary_identifier, strength
+                self.data_source, primary_identifier, strength
             )

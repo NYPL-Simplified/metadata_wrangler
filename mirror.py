@@ -213,3 +213,9 @@ class ImageScaler(object):
             resultset = q.filter(~Resource.id.in_(blacklist)).limit(batch_size).all()
 
         self._db.commit()
+
+
+class OverdriveCoverImageMirror(CoverImageMirror):
+    """Downloads images from Overdrive and writes them to disk."""
+
+    DATA_SOURCE = DataSource.OVERDRIVE

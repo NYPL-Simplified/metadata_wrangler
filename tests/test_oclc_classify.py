@@ -342,7 +342,10 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
     def setup(self):
         super(TestOCLCClassifyCoverageProvider, self).setup()
 
-        self.edition = self._edition(with_license_pool=True)[0]
+        self.edition = self._edition(
+            with_license_pool=True,
+            data_source_name=OCLCClassifyCoverageProvider.DATA_SOURCE_NAME
+        )[0]
         self.identifier = self.edition.primary_identifier
         self.api = MockOCLCClassifyAPI()
         self.provider = OCLCClassifyCoverageProvider(self._db, api=self.api)
@@ -404,4 +407,4 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
         eq_(True, isinstance(result, CoverageFailure))
         eq_(self.identifier, result.obj)
         eq_('It broke!', result.exception)
-        eq_(provider.output_source, result.data_source)
+        eq_(provider.data_source, result.data_source)

@@ -6,7 +6,7 @@ from lxml import etree
 from nose.tools import set_trace
 
 from core.coverage import (
-    CoverageProvider,
+    IdentifierCoverageProvider,
     CoverageFailure,
 )
 from core.model import (
@@ -589,8 +589,17 @@ class OCLCClassifyAPI(object):
         return representation.content
 
 
-class OCLCClassifyCoverageProvider(CoverageProvider):
+class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify."""
+
+    SERVICE_NAME = u'OCLC Classify Coverage Provider'
+
+    DATA_SOURCE_NAME = DataSource.OCLC
+
+    INPUT_IDENTIFIER_TYPES = [
+        Identifier.GUTENBERG_ID,
+        Identifier.URI
+    ]
 
     # Strips most non-alphanumerics from the title.
     # 'Alphanumerics' includes alphanumeric characters
@@ -602,16 +611,9 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
     NON_TITLE_SAFE = re.compile("[^\w\-' ]", re.UNICODE)
 
     def __init__(self, _db, api=None, **kwargs):
-        input_identifier_types = [
-            Identifier.GUTENBERG_ID, Identifier.URI
-        ]
-        output_source = DataSource.lookup(_db, DataSource.OCLC)
-        super(OCLCClassifyCoverageProvider, self).__init__(
-            "OCLC Classify Coverage Provider", input_identifier_types,
-            output_source)
+        self.api = api or OCLCClassifyAPI(_db)
 
-        self._db = _db
-        self.api = api or OCLCClassifyAPI(self._db)
+        super(OCLCClassifyCoverageProvider, self).__init__(_db, **kwargs)
 
     def oclc_safe_title(self, title):
         if not title:
@@ -728,7 +730,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             strength = edition.similarity_to(r)
             if strength > 0:
                 edition.primary_identifier.equivalent_to(
-                    self.output_source, r.primary_identifier, strength
+                    self.data_source, r.primary_identifier, strength
                 )
 
     def process_item(self, identifier):
@@ -741,7 +743,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
         if not (title and author):
             e = 'Cannot lookup edition without title and author!'
             return CoverageFailure(
-                identifier, e, data_source=self.output_source
+                identifier, e, data_source=self.data_source
             )
         xml = self.api.lookup_by(title=title, author=author)
 
@@ -749,7 +751,7 @@ class OCLCClassifyCoverageProvider(CoverageProvider):
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
             return CoverageFailure(
-                identifier, e.message, data_source=self.output_source
+                identifier, e.message, data_source=self.data_source
             )
 
         self.merge_contributors(edition, records)

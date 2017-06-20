@@ -36,9 +36,11 @@ from core.scripts import (
 from core.util.permanent_work_id import WorkIDCalculator
 from core.util.personal_names import contributor_name_match_ratio
 
-from mirror import ImageScaler
+from mirror import (
+    ImageScaler,
+    OverdriveCoverImageMirror,
+)
 from oclc import LinkedDataCoverageProvider
-from overdrive import OverdriveCoverImageMirror
 from oclc_classify import OCLCClassifyCoverageProvider
 from viaf import VIAFClient
 

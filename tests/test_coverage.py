@@ -14,7 +14,10 @@ from core.model import (
     LicensePool,
 )
 from core.coverage import CoverageFailure
-from core.opds_import import MockSimplifiedOPDSLookup
+from core.opds_import import (
+    MockSimplifiedOPDSLookup,
+    MockMetadataWranglerOPDSLookup,
+)
 
 from content_server import ContentServerCoverageProvider
 
@@ -33,9 +36,15 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestContentServerCoverageProvider, self).setup()
+        default_collection = self._collection(
+            name=u'Default Collection',
+            protocol=DataSource.INTERNAL_PROCESSING,
+        )
         self.lookup = MockSimplifiedOPDSLookup("http://url/")
+        metadata_client = MockMetadataWranglerOPDSLookup("http://metadata/")
         self.provider = ContentServerCoverageProvider(
-            self._db, content_server=self.lookup
+            self._db, collection=default_collection, content_server=self.lookup,
+            uploader=DummyS3Uploader(), metadata_client=metadata_client,
         )
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "files", "opds")
@@ -59,7 +68,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_(success, identifier)
 
         # The book was imported and turned into a Work.
-        work = identifier.licensed_through.work
+        work = identifier.work
         eq_("Mary Gray", work.title)
 
         # It's not presentation-ready yet, because we are the metadata
@@ -132,6 +141,12 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
+    TEST_PROVIDER_CLASSES = [
+        AlwaysSuccessfulCoverageProvider,
+        NeverSuccessfulCoverageProvider,
+        BrokenCoverageProvider,
+    ]
+
     def setup(self):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
@@ -141,20 +156,29 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             self._db, uploader=uploader, providers=([], [])
         )
 
+        for cls in self.TEST_PROVIDER_CLASSES:
+            cls.INPUT_IDENTIFIER_TYPES = [self.identifier.type]
+
         self.always_successful = AlwaysSuccessfulCoverageProvider(
-            "Always", [self.identifier.type], self.source
+            self._db, input_identifiers=[self.identifier]
         )
         self.never_successful = NeverSuccessfulCoverageProvider(
-            "Never", [self.identifier.type], self.source
+            self._db, input_identifiers=[self.identifier]
         )
         self.broken = BrokenCoverageProvider(
-            "Broken", [self.identifier.type], self.source
+            self._db, input_identifiers=[self.identifier]
         )
+
+    def teardown(self):
+        for cls in self.TEST_PROVIDER_CLASSES:
+            cls.INPUT_IDENTIFIER_TYPES = cls.NO_SPECIFIED_TYPES
+
+        super(TestIdentifierResolutionCoverageProvider, self).teardown()
 
     def test_items_that_need_coverage(self):
         # Only items with an existing transient failure status require coverage.
         self._coverage_record(
-            self.identifier, self.coverage_provider.output_source,
+            self.identifier, self.coverage_provider.data_source,
             operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
@@ -170,9 +194,22 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         ]
 
         self.coverage_provider.process_item(self.identifier)
-        lp = self.identifier.licensed_through
-        eq_(True, isinstance(lp, LicensePool))
-        eq_(lp.data_source, self.coverage_provider.output_source)
+        # Because this is an Overdrive ID, two LicensePools are created.
+        # One for the broad default INTERNAL_PROCESSING collection, and
+        # one for a default Overdrive Collection.
+        pools = self.identifier.licensed_through
+        eq_(2, len(pools))
+        expected = list(set([DataSource.OVERDRIVE, DataSource.INTERNAL_PROCESSING]))
+        eq_(sorted(expected), sorted([p.collection.data_source.name for p in pools]))
+
+        # An ISBN also gets a LicensePool and a collection.
+        isbn = self._identifier(identifier_type=Identifier.ISBN)
+        self.coverage_provider.process_item(isbn)
+        [lp] = isbn.licensed_through
+        # Because this is not an Overdrive ID -- and thus doens't need
+        # to use a BibliographicCoverageProvider -- it uses the default
+        # Collection.
+        eq_(lp.collection.data_source, self.coverage_provider.data_source)
 
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         self.coverage_provider.required_coverage_providers = [
@@ -239,10 +276,10 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(result, self.identifier)
 
         # An appropriate coverage record was created to mark the failure.
-        presentation_edition = DataSource.lookup(
+        edition_source = DataSource.lookup(
             self._db, DataSource.PRESENTATION_EDITION
         )
         r = self._db.query(CoverageRecord).filter(
             CoverageRecord.identifier==self.identifier,
-            CoverageRecord.data_source!=presentation_edition).one()
+            CoverageRecord.data_source!=edition_source).one()
         eq_("What did you expect?", r.exception)
