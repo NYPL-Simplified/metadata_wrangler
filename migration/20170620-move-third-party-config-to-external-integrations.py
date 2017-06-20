@@ -43,7 +43,10 @@ try:
         content_cafe.username = content_cafe_conf.get('username')
         content_cafe.password = content_cafe_conf.get('password')
 
-    
+    metadata_wrangler_conf = Configuration.integration('Metadata Wrangler')
+    if metadata_wrangler_conf:
+        url = metadata_wrangler_conf.get('url')
+        ConfigurationSetting.sitewide(_db, Configuration.BASE_URL_KEY).value = url
 
 
 finally:
