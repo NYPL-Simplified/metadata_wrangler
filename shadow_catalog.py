@@ -8,6 +8,7 @@ from nose.tools import set_trace
 from core.config import Configuration
 from core.model import (
     DataSource,
+    ExternalIntegration,
     Identifier,
     Subject,
 )
@@ -86,9 +87,19 @@ class ShadowCatalogAPI(object):
     # 969: ???
     # 995: ???
 
+    @classmethod
+    def from_config(cls, _db):
+        integration = ExternalIntegration.lookup(
+            _db, ExternalIntegration.NYPL_SHADOWCAT,
+            ExternalIntegration.METADATA_GOAL
+        )
+        if not integration.url:
+            raise ValueError('No url found for NYPL Shadowcat')
 
-    def __init__(self):
-        self.base_url = Configuration.integration_url(self.SERVICE_NAME)
+        return cls(integration.url)
+
+    def __init__(self, url):
+        self.base_url = url
 
     def url(self, type, identifier):
         if type == Identifier.ISBN:

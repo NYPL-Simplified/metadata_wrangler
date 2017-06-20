@@ -1,7 +1,12 @@
-from nose.tools import set_trace, eq_
+from nose.tools import (
+    set_trace,
+    eq_,
+    assert_raises,
+)
 
-from core.s3 import DummyS3Uploader
 from core.coverage import CoverageFailure
+from core.model import ExternalIntegration
+from core.s3 import DummyS3Uploader
 
 from . import (
     DatabaseTest,
@@ -16,6 +21,38 @@ class DummyContentCafeAPI(object):
 
 class DummyContentCafeSOAPClient(object):
     pass
+
+class TestContentCafeAPI(DatabaseTest):
+
+    def test_from_config(self):
+        # Without an integration, an error is raised.
+        assert_raises(
+            ValueError, ContentCafeAPI.from_config, self._db, object()
+        )
+
+        # With incomplete integrations, an error is raised.
+        integration = self._external_integration(
+            ExternalIntegration.CONTENT_CAFE,
+            goal=ExternalIntegration.METADATA_GOAL,
+            username=u'yup'
+        )
+        assert_raises(
+            ValueError, ContentCafeAPI.from_config, self._db, object()
+        )
+
+        integration.username = None
+        integration.password = u'yurp'
+        assert_raises(
+            ValueError, ContentCafeAPI.from_config, self._db, object()
+        )
+
+        integration.username = u'yup'
+        result = ContentCafeAPI.from_config(
+            self._db, None, uploader=DummyS3Uploader(),
+            soap_client=DummyContentCafeSOAPClient()
+        )
+        eq_(True, isinstance(result, ContentCafeAPI))
+
 
 class TestContentCafeCoverageProvider(DatabaseTest):
 
