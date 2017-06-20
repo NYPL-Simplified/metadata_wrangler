@@ -28,10 +28,6 @@ from core.s3 import (
     S3Uploader, 
 )
 
-from overdrive import (
-    OverdriveCoverImageMirror, 
-)
-
 from content_cafe import (
     ContentCafeCoverageProvider, 
 )
@@ -40,11 +36,14 @@ from content_server import (
     ContentServerCoverageProvider, 
 )
 
+from mirror import (
+    ImageScaler,
+    OverdriveCoverImageMirror,
+)
+
 from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
-
-from mirror import ImageScaler
 
 from oclc import LinkedDataCoverageProvider
 
