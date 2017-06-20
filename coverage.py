@@ -71,7 +71,9 @@ class IdentifierResolutionCoverageProvider(IdentifierCoverageProvider):
 
     INPUT_IDENTIFIER_TYPES = [
         Identifier.OVERDRIVE_ID,
-        Identifier.ISBN
+        Identifier.ISBN,
+        Identifier.GUTENBERG_ID,
+        Identifier.URI,
     ]
 
     def __init__(self, _db, uploader=None, providers=None, **kwargs):
