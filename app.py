@@ -128,7 +128,7 @@ def update_url():
 if __name__ == '__main__':
 
     debug = True
-    url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY)
+    url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY).value
     scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
     if ':' in netloc:
         host, port = netloc.split(':')
