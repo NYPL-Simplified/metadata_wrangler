@@ -69,7 +69,10 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
-    INPUT_IDENTIFIER_TYPES = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
+    INPUT_IDENTIFIER_TYPES = [
+        Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
+        Identifier.GUTENBERG_ID
+    ]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
