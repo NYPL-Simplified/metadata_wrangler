@@ -14,7 +14,10 @@ from core.model import (
     LicensePool,
 )
 from core.coverage import CoverageFailure
-from core.opds_import import MockSimplifiedOPDSLookup
+from core.opds_import import (
+    MockSimplifiedOPDSLookup,
+    MockMetadataWranglerOPDSLookup,
+)
 
 from content_server import ContentServerCoverageProvider
 
@@ -33,9 +36,15 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestContentServerCoverageProvider, self).setup()
+        default_collection = self._collection(
+            name=u'Default Collection',
+            protocol=DataSource.INTERNAL_PROCESSING,
+        )
         self.lookup = MockSimplifiedOPDSLookup("http://url/")
+        metadata_client = MockMetadataWranglerOPDSLookup("http://metadata/")
         self.provider = ContentServerCoverageProvider(
-            self._db, content_server=self.lookup
+            self._db, collection=default_collection, content_server=self.lookup,
+            uploader=DummyS3Uploader(), metadata_client=metadata_client,
         )
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "files", "opds")
@@ -59,7 +68,7 @@ class TestContentServerCoverageProvider(DatabaseTest):
         eq_(success, identifier)
 
         # The book was imported and turned into a Work.
-        work = identifier.licensed_through.work
+        work = identifier.work
         eq_("Mary Gray", work.title)
 
         # It's not presentation-ready yet, because we are the metadata
@@ -131,6 +140,12 @@ class TestContentServerCoverageProvider(DatabaseTest):
 
 
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
+
+    TEST_PROVIDER_CLASSES = [
+        AlwaysSuccessfulCoverageProvider,
+        NeverSuccessfulCoverageProvider,
+        BrokenCoverageProvider,
+    ]
 
     def setup(self):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
