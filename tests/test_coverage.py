@@ -60,7 +60,7 @@ class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
         # mirror anything. If we should try to do that, we'll get a 
         # crash because object() isn't really an HTTP client.
         return OPDSImporter(
-            self._db, collection=self.collection,
+            self._db, collection=self.collection, metadata_client=object(),
             mirror=None, http_get=object()
         )
 

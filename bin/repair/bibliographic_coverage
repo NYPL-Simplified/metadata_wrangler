@@ -5,8 +5,14 @@ import sys
 bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..", "..")
 sys.path.append(os.path.abspath(package_dir))
+from core.model import production_session
 from core.scripts import BibliographicRefreshScript
 from core.s3 import S3Uploader
-mirror = S3Uploader()
-BibliographicRefreshScript(mirror=mirror).run()
 
+try:
+    _db = production_session()
+    mirror = S3Uploader.from_config(_db)
+    BibliographicRefreshScript(mirror=mirror).run()
+finally:
+    _db.commit()
+    _db.close()

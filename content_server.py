@@ -2,8 +2,8 @@ import urlparse
 from nose.tools import set_trace
 from core.config import Configuration
 from core.model import (
-    Collection,
     DataSource,
+    ExternalIntegration,
     Identifier,
 )
 from core.opds_import import (
@@ -12,6 +12,8 @@ from core.opds_import import (
 )
 from core.coverage import CatalogCoverageProvider
 from core.util.http import BadResponseException
+
+from canonicalize import AuthorNameCanonicalizer
 
 
 class LookupClientCoverageProvider(CatalogCoverageProvider):
@@ -22,7 +24,7 @@ class LookupClientCoverageProvider(CatalogCoverageProvider):
     # TODO: We should rename this because in theory it can be used
     # other places, but in practice this is it.
     SERVICE_NAME = "OA Content Server Coverage Provider"
-    PROTOCOL = Collection.OPDS_IMPORT
+    PROTOCOL = ExternalIntegration.OPDS_IMPORT
     
     OPDS_SERVER_RETURNED_WRONG_CONTENT_TYPE = "OPDS Server served unhandleable media type: %s"
    
@@ -45,7 +47,12 @@ class LookupClientCoverageProvider(CatalogCoverageProvider):
     def _importer(self):
         """Instantiate an appropriate OPDSImporter for the given Collection."""
         collection = self.collection
-        return OPDSImporter(self._db, collection, collection.data_source.name)
+        metadata_client = AuthorNameCanonicalizer(self._db)
+        return OPDSImporter(
+            self._db, collection,
+            data_source_name=collection.data_source.name,
+            metadata_client=metadata_client
+        )
         
     def process_item(self, identifier):
         try:
