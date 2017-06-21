@@ -13,7 +13,10 @@ from core.app_server import (
     HeartbeatController,
     returns_problem_detail,
 )
-from core.model import production_session
+from core.model import (
+    ConfigurationSetting,
+    production_session,
+)
 from core.config import Configuration
 
 from controller import (
@@ -125,8 +128,7 @@ def update_url():
 if __name__ == '__main__':
 
     debug = True
-    url = Configuration.integration_url(
-        Configuration.METADATA_WRANGLER_INTEGRATION, required=True)
+    url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY).value
     scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
     if ':' in netloc:
         host, port = netloc.split(':')

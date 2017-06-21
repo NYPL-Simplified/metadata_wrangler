@@ -10,9 +10,9 @@ from core.metadata_layer import (
 )
 
 from core.model import (
-    Collection,
     CoverageRecord, 
     DataSource, 
+    ExternalIntegration,
     get_one_or_create,
     Identifier, 
     PresentationCalculationPolicy, 
@@ -69,7 +69,10 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
-    INPUT_IDENTIFIER_TYPES = [Identifier.OVERDRIVE_ID, Identifier.ISBN]
+    INPUT_IDENTIFIER_TYPES = [
+        Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
+        Identifier.GUTENBERG_ID
+    ]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     
     LICENSE_SOURCE_NOT_ACCESSIBLE = (
@@ -89,7 +92,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
         if not uploader:
-            uploader = S3Uploader()
+            uploader = S3Uploader.from_config(self._db)
+        self.uploader = uploader
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -105,7 +109,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         self.overdrive_api_class = overdrive_api_class
 
-        self.uploader = uploader
         self.content_cafe_api = content_cafe_api
         
         # Determine the optional and required coverage providers.
@@ -179,14 +182,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         #
         # TODO: This could stand some generalization. Any OPDS server
         # that also supports the lookup protocol can be used here.
-        if (self.collection.protocol == Collection.OPDS_IMPORT
+        if (self.collection.protocol == ExternalIntegration.OPDS_IMPORT
             and self.collection.data_source
             and self.collection.data_source.name == DataSource.OA_CONTENT_SERVER):
             required.append(LookupClientCoverageProvider(self.collection))
 
         # All books obtained from Overdrive must be looked up via the
         # Overdrive API.
-        if self.collection.protocol == Collection.OVERDRIVE:
+        if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
                     self.collection, api_class=self.overdrive_api_class

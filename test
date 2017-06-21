@@ -1,2 +1,2 @@
 #!/bin/sh
-TESTING=true nosetests -w tests
+PYTHONWARNINGS=ignore TESTING=true nosetests -w tests
