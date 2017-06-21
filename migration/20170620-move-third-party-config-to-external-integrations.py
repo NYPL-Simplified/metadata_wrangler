@@ -19,7 +19,7 @@ from core.model import (
     production_session,
 )
 
-log = logging.getLogger(name="Core configuration import")
+log = logging.getLogger(name="Metadata Wrangler configuration import")
 
 def log_import(integration_or_setting):
     log.info("CREATED: %r" % integration_or_setting)
