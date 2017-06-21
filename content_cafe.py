@@ -9,6 +9,7 @@ from suds.client import Client as SudsClient
 # Tone down the verbose Suds logging.
 logging.getLogger('suds').setLevel(logging.ERROR)
 
+from core.config import CannotLoadConfiguration
 from core.coverage import (
     IdentifierCoverageProvider,
     CoverageFailure,
@@ -20,12 +21,12 @@ from core.model import (
     Measurement,
     Identifier,
 )
+from core.util.summary import SummaryEvaluator
 
 from mirror import (
     CoverImageMirror,
     ImageScaler,
 )
-from core.util.summary import SummaryEvaluator
 
 
 class ContentCafeCoverageProvider(IdentifierCoverageProvider):
@@ -84,7 +85,7 @@ class ContentCafeAPI(object):
         )
 
         if not integration or not (integration.username and integration.password):
-            raise ValueError('Content Cafe not properly configured')
+            raise CannotLoadConfiguration('Content Cafe not properly configured')
 
         return cls(
             _db, mirror, integration.username, integration.password,

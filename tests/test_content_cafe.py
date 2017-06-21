@@ -4,6 +4,7 @@ from nose.tools import (
     assert_raises,
 )
 
+from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
 from core.model import ExternalIntegration
 from core.s3 import DummyS3Uploader
@@ -27,7 +28,8 @@ class TestContentCafeAPI(DatabaseTest):
     def test_from_config(self):
         # Without an integration, an error is raised.
         assert_raises(
-            ValueError, ContentCafeAPI.from_config, self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config,
+            self._db, object()
         )
 
         # With incomplete integrations, an error is raised.
@@ -37,13 +39,15 @@ class TestContentCafeAPI(DatabaseTest):
             username=u'yup'
         )
         assert_raises(
-            ValueError, ContentCafeAPI.from_config, self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config,
+            self._db, object()
         )
 
         integration.username = None
         integration.password = u'yurp'
         assert_raises(
-            ValueError, ContentCafeAPI.from_config, self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config,
+            self._db, object()
         )
 
         integration.username = u'yup'

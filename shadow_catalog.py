@@ -5,7 +5,7 @@ import requests
 import re
 from nose.tools import set_trace
 
-from core.config import Configuration
+from core.config import CannotLoadConfiguration
 from core.model import (
     DataSource,
     ExternalIntegration,
@@ -94,7 +94,7 @@ class ShadowCatalogAPI(object):
             ExternalIntegration.METADATA_GOAL
         )
         if not integration.url:
-            raise ValueError('No url found for NYPL Shadowcat')
+            raise CannotLoadConfiguration('No url found for NYPL Shadowcat')
 
         return cls(integration.url)
 
