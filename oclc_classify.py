@@ -638,7 +638,6 @@ class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
             author = ''
         else:
             author = authors[0].sort_name
-        author = edition.author
         language = edition.language
 
         # Log the info
