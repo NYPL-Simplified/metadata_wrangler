@@ -9,6 +9,7 @@ from . import (
 
 from core.coverage import CoverageFailure
 from core.model import (
+    DataSource,
     Identifier,
     Contributor,
     Subject,
@@ -341,8 +342,9 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestOCLCClassifyCoverageProvider, self).setup()
-
-        self.edition = self._edition(with_license_pool=True)[0]
+        self.edition, ignore = self._edition(
+            with_license_pool=True, data_source_name=DataSource.GUTENBERG
+        )
         self.identifier = self.edition.primary_identifier
         self.api = MockOCLCClassifyAPI()
         self.provider = OCLCClassifyCoverageProvider(self._db, api=self.api)
@@ -377,7 +379,7 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
         eq_(True, result.exception.endswith('title and author!'))
 
         # Create an edition without an author
-        self.edition.title = "Jane Eyre"
+        self.edition.title = u"Jane Eyre"
         self._db.delete(self.edition.contributions[0])
         self._db.commit()
 
@@ -404,4 +406,4 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
         eq_(True, isinstance(result, CoverageFailure))
         eq_(self.identifier, result.obj)
         eq_('It broke!', result.exception)
-        eq_(provider.output_source, result.data_source)
+        eq_(provider.data_source, result.data_source)

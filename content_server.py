@@ -1,83 +1,90 @@
+import urlparse
 from nose.tools import set_trace
 from core.config import Configuration
 from core.model import (
     DataSource,
+    ExternalIntegration,
     Identifier,
 )
 from core.opds_import import (
     SimplifiedOPDSLookup,
     OPDSImporter,
 )
-from core.coverage import (
-    CoverageProvider,
-    CoverageFailure,
-)
+from core.coverage import CatalogCoverageProvider
 from core.util.http import BadResponseException
 
-class ContentServerException(Exception):
-    # Raised when the ContentServer can't connect or returns bad data
-    pass
+from canonicalize import AuthorNameCanonicalizer
 
-class ContentServerCoverageProvider(CoverageProvider):
-    """Checks the OA Content Server for metadata about Gutenberg books
-    and books identified by URI.
+
+class LookupClientCoverageProvider(CatalogCoverageProvider):
+    """Uses the Library Simplified OPDS Lookup Protocol to get
+    extra information about books in a Catalog.
     """
 
-    CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE = "Content Server served unhandleable media type: %s"
-
-    def __init__(self, _db, content_server=None):
-        self._db = _db
-        if not content_server:
-            content_server_url = Configuration.integration_url(
-                Configuration.CONTENT_SERVER_INTEGRATION, required=True)
-            content_server = SimplifiedOPDSLookup(content_server_url)
-        self.content_server = content_server
-        self.importer = OPDSImporter(self._db, DataSource.OA_CONTENT_SERVER)
-        input_identifier_types = [Identifier.GUTENBERG_ID, Identifier.URI]
-        output_source = DataSource.lookup(
-            self._db, DataSource.OA_CONTENT_SERVER
-        )
-        super(ContentServerCoverageProvider, self).__init__(
-                "OA Content Server Coverage Provider",
-                input_identifier_types, output_source, batch_size=10
+    # TODO: We should rename this because in theory it can be used
+    # other places, but in practice this is it.
+    SERVICE_NAME = "OA Content Server Coverage Provider"
+    PROTOCOL = ExternalIntegration.OPDS_IMPORT
+    
+    OPDS_SERVER_RETURNED_WRONG_CONTENT_TYPE = "OPDS Server served unhandleable media type: %s"
+   
+    def __init__(self, collection, **kwargs):
+        self.DATA_SOURCE_NAME = collection.data_source.name
+        super(LookupClientCoverageProvider, self).__init__(
+            collection, **kwargs
         )
 
+        # Assume that this collection's OPDS server also implements
+        # the lookup protocol.
+        feed_url = collection.external_account_id
+        root = urlparse.urljoin(feed_url, '/')
+        self.lookup_client = self._lookup_client(root)
+        self.importer = self._importer()
+
+    def _lookup_client(self, root):
+        return SimplifiedOPDSLookup(root)
+        
+    def _importer(self):
+        """Instantiate an appropriate OPDSImporter for the given Collection."""
+        collection = self.collection
+        metadata_client = AuthorNameCanonicalizer(self._db)
+        return OPDSImporter(
+            self._db, collection,
+            data_source_name=collection.data_source.name,
+            metadata_client=metadata_client
+        )
+        
     def process_item(self, identifier):
-        data_source = DataSource.lookup(
-            self._db, self.importer.data_source_name
-        )
         try:
-            response = self.content_server.lookup([identifier])
+            response = self.lookup_client.lookup([identifier])
         except BadResponseException, e:
-            return CoverageFailure(
+            return self.failure(identifier, e.message)
+        content_type = response.headers.get('content-type')
+        if not content_type or not content_type.startswith(
+                "application/atom+xml"
+        ):
+            return self.failure(
                 identifier,
-                e.message,
-                data_source
-            )
-        content_type = response.headers['content-type']
-        if not content_type.startswith("application/atom+xml"):
-            return CoverageFailure(
-                identifier,
-                self.CONTENT_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
-                    content_type),
-                data_source
+                self.OPDS_SERVER_RETURNED_WRONG_CONTENT_TYPE % (
+                    content_type
+                )
             )
         
         editions, licensepools, works, messages = self.importer.import_from_feed(
             response.content
         )
         for edition in editions:
-            # Check that this identifier's edition was imported
-            # and return it as a success if so.
+            # If an Edition for this identifier was imported, return
+            # the Identifier to indicate success.
             edition_identifier = edition.primary_identifier
             if edition_identifier == identifier:
                 return identifier
         expect = identifier.urn
         messages = messages.values()
         if messages:
+            # OPDSImporter turns <simplified:message> tags into
+            # CoverageFailures, which can be returned directly.
             return messages[0]
-        return CoverageFailure(
-            identifier,
-            "Identifier was not mentioned in lookup response",
-            data_source
+        return self.failure(
+            identifier, "Identifier was not mentioned in lookup response"
         )
