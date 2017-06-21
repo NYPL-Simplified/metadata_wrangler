@@ -13,6 +13,7 @@ sys.path.append(os.path.abspath(package_dir))
 
 from core.config import Configuration
 from core.model import (
+    ConfigurationSetting,
     ExternalIntegration as EI,
     get_one_or_create,
     production_session,
@@ -29,15 +30,23 @@ try:
     Configuration.load()
 
     shadowcat_conf = Configuration.integration('Shadowcat')
-    if shadowcat_conf and shadowcat_config.get('url'):
-        shadowcat = EI(name=EI.NYPL_SHADOWCAT, goal=EI.METADATA_GOAL)
+    if shadowcat_conf and shadowcat_conf.get('url'):
+        shadowcat = EI(
+            name=EI.NYPL_SHADOWCAT,
+            protocol=EI.NYPL_SHADOWCAT,
+            goal=EI.METADATA_GOAL
+        )
         _db.add(shadowcat)
-        shadowcat.url = shadowcat_config.get('url')
+        shadowcat.url = shadowcat_conf.get('url')
         log_import(shadowcat)
 
     content_cafe_conf = Configuration.integration('Content Cafe')
     if content_cafe_conf:
-        content_cafe = EI(name=EI.CONTENT_CAFE, goal=EI.METADATA_GOAL)
+        content_cafe = EI(
+            name=EI.CONTENT_CAFE,
+            protocol=EI.CONTENT_CAFE,
+            goal=EI.METADATA_GOAL
+        )
         _db.add(content_cafe)
 
         content_cafe.username = content_cafe_conf.get('username')

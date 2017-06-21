@@ -87,8 +87,7 @@ class ContentCafeAPI(object):
             raise ValueError('Content Cafe not properly configured')
 
         return cls(
-            _db, mirror,
-            user_id=integration.username, password=integration.password,
+            _db, mirror, integration.username, integration.password,
             **kwargs
         )
 
