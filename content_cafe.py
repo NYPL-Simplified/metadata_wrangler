@@ -9,54 +9,58 @@ from suds.client import Client as SudsClient
 # Tone down the verbose Suds logging.
 logging.getLogger('suds').setLevel(logging.ERROR)
 
-from core.config import Configuration
+from core.config import CannotLoadConfiguration
 from core.coverage import (
-    CoverageProvider,
+    IdentifierCoverageProvider,
     CoverageFailure,
 )
 from core.model import (
     DataSource,
+    ExternalIntegration,
     Hyperlink,
     Measurement,
     Identifier,
 )
+from core.util.summary import SummaryEvaluator
 
 from mirror import (
     CoverImageMirror,
     ImageScaler,
 )
-from core.util.summary import SummaryEvaluator
 
-class ContentCafeCoverageProvider(CoverageProvider):
-    def __init__(self, _db, api=None, uploader=None):
-        self._db = _db
-        self.input_identifier_types = [Identifier.ISBN]
-        output_source = DataSource.lookup(_db, DataSource.CONTENT_CAFE)
-        self.mirror = ContentCafeCoverImageMirror(self._db, uploader=uploader)
-        self.content_cafe = api or ContentCafeAPI(
-            self._db, self.mirror, uploader=uploader
-        )
 
-        super(ContentCafeCoverageProvider, self).__init__(
-            "Content Cafe Coverage Provider",
-            self.input_identifier_types, output_source,
-            batch_size=25)
+class ContentCafeCoverageProvider(IdentifierCoverageProvider):
+    SERVICE_NAME = "Content Cafe Coverage Provider"
+    DEFAULT_BATCH_SIZE = 25
+    INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
+    DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
+    
+    def __init__(self, _db, api=None, uploader=None, **kwargs):
+        super(ContentCafeCoverageProvider, self).__init__(_db, **kwargs)
+        if api:
+            self.content_cafe = api
+            self.mirror = api.mirror
+        else:
+            self.mirror = ContentCafeCoverImageMirror(
+                self._db, uploader=uploader
+            )
+            self.content_cafe = api or ContentCafeAPI(
+                self._db, self.mirror, uploader=uploader
+            )
 
     def process_item(self, identifier):
         try:
             self.content_cafe.mirror_resources(identifier)
             return identifier
         except Exception as e:
-            return CoverageFailure(
-                identifier, repr(e),
-                data_source=self.output_source, transient=True
-            )
+            return self.failure(identifier, repr(e), transient=True)
 
 
 class ContentCafeCoverImageMirror(CoverImageMirror):
     """Downloads images from Content Cafe."""
 
     DATA_SOURCE = DataSource.CONTENT_CAFE
+
 
 class ContentCafeAPI(object):
     """Associates up to four resources with an ISBN."""
@@ -71,20 +75,35 @@ class ContentCafeAPI(object):
     excerpt_url = BASE_URL + "ContentCafeClient/Excerpt.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     author_notes_url = BASE_URL + "ContentCafeClient/AuthorNotes.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
-    def __init__(self, db, mirror, user_id=None, password=None, uploader=None,
+    log = logging.getLogger("Content Cafe API")
+
+    @classmethod
+    def from_config(cls, _db, mirror, **kwargs):
+        integration = ExternalIntegration.lookup(
+            _db, ExternalIntegration.CONTENT_CAFE,
+            ExternalIntegration.METADATA_GOAL
+        )
+
+        if not integration or not (integration.username and integration.password):
+            raise CannotLoadConfiguration('Content Cafe not properly configured')
+
+        return cls(
+            _db, mirror, integration.username, integration.password,
+            **kwargs
+        )
+
+    def __init__(self, _db, mirror, user_id, password, uploader=None,
                  soap_client=None):
-        self._db = db
+        self._db = _db
+
         self.mirror = mirror
         if self.mirror:
             self.scaler = ImageScaler(db, [self.mirror], uploader=uploader)
         else:
             self.scaler = None
-        integration = Configuration.integration("Content Cafe")
-        self.user_id = user_id or integration['username']
-        self.password = password or integration['password']
-        self.log = logging.getLogger("Content Cafe API")
+
         self.soap_client = (
-            soap_client or ContentCafeSOAPClient(self.user_id, self.password)
+            soap_client or ContentCafeSOAPClient(user_id, password)
         )
 
     @property
