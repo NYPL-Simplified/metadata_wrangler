@@ -39,6 +39,7 @@ class Conf:
     @classmethod
     def initialize(cls, _db):
         cls.db = _db
+        Configuration.load(cls.db)
         cls.log = logging.getLogger("Metadata web app")
 
 if os.environ.get('TESTING') == "true":
