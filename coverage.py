@@ -81,11 +81,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
-    def __init__(self, collection, uploader=None,
-                 viaf_client=None, linked_data_coverage_provider=None,
-                 content_cafe_api=None,
-                 overdrive_api_class=OverdriveAPI,
-                 **kwargs):
+    def __init__(
+        self, collection, uploader=None, viaf_client=None,
+        linked_data_coverage_provider=None, content_cafe_api=None,
+        overdrive_api_class=OverdriveAPI, **kwargs
+    ):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
             collection, **kwargs
@@ -361,12 +361,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         license_pools = identifier.licensed_through
         if license_pools:
             pool = license_pools[0]
-            work, created = pool.calculate_work(even_if_no_author=True)
+            work, created = pool.calculate_work(
+                even_if_no_author=True, exclude_search=True
+            )
         if work:
             self.resolve_viaf(work)
             self.resolve_cover_image(work)
-            work.calculate_presentation()
-            work.set_presentation_ready()
+            work.calculate_presentation(exclude_search=True)
+            work.set_presentation_ready(exclude_search=True)
         else:
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
             return self.failure(identifier, error_msg, transient=True)
