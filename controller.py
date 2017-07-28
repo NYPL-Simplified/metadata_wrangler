@@ -330,8 +330,10 @@ class URNLookupController(CoreURNLookupController):
             )
             collection.catalog_identifier(self._db, identifier)
 
-        if identifier.type == Identifier.ISBN:
-            # ISBNs are handled specially.
+        if (identifier.type == Identifier.ISBN and not identifier.work):
+            # There's not always enough information about an ISBN to
+            # create a full Work. If not, we scrape together the cover
+            # and description information and force the entry.
             return self.make_opds_entry_from_metadata_lookups(identifier)
 
         # All other identifiers need to be associated with a

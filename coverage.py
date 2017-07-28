@@ -100,13 +100,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.
-        presentation_calculation_policy = PresentationCalculationPolicy(
-            regenerate_opds_entries=True,
-            update_search_index=True
-        )
-        policy = ReplacementPolicy.from_metadata_source(
-            mirror=uploader, even_if_not_apparently_updated=True,
-            presentation_calculation_policy=presentation_calculation_policy
+        self.policy = PresentationCalculationPolicy(
+            regenerate_opds_entries=True
         )
 
         self.overdrive_api_class = overdrive_api_class
@@ -367,7 +362,10 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if work:
             self.resolve_viaf(work)
             self.resolve_cover_image(work)
-            work.calculate_presentation(exclude_search=True)
+
+            work.calculate_presentation(
+                policy=self.policy, exclude_search=True
+            )
             work.set_presentation_ready(exclude_search=True)
         else:
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
