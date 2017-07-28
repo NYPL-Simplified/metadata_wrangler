@@ -369,7 +369,7 @@ class OCLCLinkedData(object):
                 if isinstance(name, basestring):
                     names.append(name)
                 if isinstance(name, dict):
-                    more_names = list(ldq.restrict_to_language(name, '@value', 'en'))
+                    more_names = list(ldq.restrict_to_language(name, 'en'))
                     [names.append(n) for n in extract_names(more_names)]
                 if isinstance(name, list):
                     [names.append(n) for n in extract_names(name)]
@@ -382,9 +382,10 @@ class OCLCLinkedData(object):
             return None
 
         family_name = person_dict.get('familyName', None)
-        if isinstance(family_name, list):
+        if family_name and isinstance(family_name, list):
             family_name = cls._best_name_from_list(family_name)
-        if display_name.startswith(family_name+' '):
+        if ((display_name and family_name)
+            and display_name.startswith(family_name+' ')):
             # Because _best_name_from_list trends toward the longest name,
             # sometimes the best name that we selected for the display name
             # is annoyingly formatted as LastName FirstName LastName. This
@@ -399,6 +400,10 @@ class OCLCLinkedData(object):
             def extract_year(date_string):
                 if not date_string:
                     return None
+                if isinstance(date_string, list):
+                    date_string = date_string[0]
+                if date_string.endswith(','):
+                    date_string = date_string[:-1]
                 if len(date_string)==4:
                     return date_string
                 if re.match('\d{8}', date_string):
@@ -410,11 +415,12 @@ class OCLCLinkedData(object):
                         year = [d for d in split_date if len(d)==4]
                         if year:
                             return year[0]
-            birth = extract_year(birth)
-            death = extract_year(death)
+
             if birth:
+                birth = extract_year(birth)
                 extra['birthDate'] = birth
             if death:
+                death = extract_year(death)
                 extra['deathDate'] = death
         return dict(
             display_name=display_name, family_name=family_name, extra=extra
@@ -435,6 +441,9 @@ class OCLCLinkedData(object):
                 # some number of alphanumeric are present.
                 if re.match('[A-z]+', name_obj):
                     names.append(name_obj)
+
+        if not names:
+            return None
 
         # Remove odd punctuation to try to create a higher-counted name option.
         names = [re.sub('[.,]', '', name) for name in names]
@@ -953,7 +962,14 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                     len(oclc_editions)
                 )
 
+                # Clean up contributor information.
                 self.apply_viaf_to_contributor_data(metadata)
+                # Remove any empty ContributorData objects that may have
+                # been created.
+                metadata.contributors = filter(
+                    lambda c: c.sort_name or c.display_name,
+                    metadata.contributors
+                )
 
                 # When metadata is applied, it must be given a client that can
                 # response to 'canonicalize_author_name'. Usually this is an
@@ -1019,9 +1035,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
 
     def apply_metadata_to_edition(self, edition, metadata, metadata_client, counter):
         """Applies metadata and increments counters"""
-
-        metadata.apply(edition, collection=None,
-                       metadata_client=metadata_client)
+        metadata.apply(edition, collection=None, metadata_client=metadata_client)
         counter['editions'] += 1
         counter['descriptions'] += len(metadata.links)
         counter['subjects'] += len(metadata.subjects)
