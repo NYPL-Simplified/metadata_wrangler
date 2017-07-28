@@ -441,8 +441,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # Create an ISBN with a LicensePool.
         identifier = self._identifier(identifier_type=Identifier.ISBN)
         lp = LicensePool.for_foreign_id(
-            self._db, self.resolver.data_source,
-            identifier.type, identifier.identifier
+            self._db, self.resolver.data_source, identifier.type,
+            identifier.identifier, collection=self._default_collection
         )[0]
 
         # Create editions and equivalencies for some OCLC equivalent identifiers.

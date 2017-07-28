@@ -12,6 +12,7 @@ from core.metadata_layer import (
 from core.model import (
     CoverageRecord,
     DataSource,
+    Edition,
     ExternalIntegration,
     get_one_or_create,
     Identifier,
@@ -340,8 +341,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         if equivalent_editions:
             # Set the presentation edition.
-            identifier.licensed_through.set_presentation_edition(
-                external_editions=equivalent_editions
+            pool = identifier.licensed_through[0]
+            pool.set_presentation_edition(
+                equivalent_editions=equivalent_editions
             )
 
     def process_work(self, identifier):
