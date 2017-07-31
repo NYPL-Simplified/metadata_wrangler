@@ -57,6 +57,29 @@ class TestOCLCLinkedData(DatabaseTest):
                  "http://viaf.org/viaf/305306689"]),
             set(uris))
 
+    def test_extract_contributor(self):
+        # It pulls relevant contributor data out of an OCLC person entity graph.
+        sloane_info = json.loads(self.sample_data('sloane_crosley.jsonld'))['@graph'][1]
+        result = OCLCLinkedData.extract_contributor(sloane_info)
+        eq_(result['family_name'], 'Crosley')
+        eq_(result['display_name'], 'Sloane Crosley')
+
+        flanagan_info = json.loads(self.sample_data('john_flanagan_multiname.jsonld'))
+        flanagan_info = flanagan_info['@graph'][1]
+        result = OCLCLinkedData.extract_contributor(flanagan_info)
+        eq_(result['family_name'], 'Flanagan')
+        eq_(result['display_name'], 'John Anthony Flanagan')
+        eq_(result['extra']['birthDate'], '1944')
+
+        # TODO: Modify the contributor extraction to handle cases where
+        # maiden names are included and/or multiple name options are the
+        # same except for capitalization.
+        rice_info = json.loads(self.sample_data('anne_rice.jsonld'))
+        result = OCLCLinkedData.extract_contributor(rice_info['@graph'][1])
+        eq_(result['family_name'], "O'Brien Rice")
+        eq_(result['display_name'], "Anne O'Brien Rice")
+        eq_(result['extra']['birthDate'], '1941')
+
     def test_extract_useful_data(self):
         subgraph = json.loads(
             self.sample_data('galapagos.jsonld')
@@ -222,7 +245,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         assert isinstance(result, CoverageFailure)
         assert "OCLC doesn't know about this ISBN" in result.exception
 
-    def test_all_authors_get_viaf_lookup(self):
+    def test_viaf_authors_get_viaf_lookup(self):
         # TODO: The code this calls could be refactored quite a bit --
         # we don't really need to test all of process_item() here.
         # But ATM it does seem to be our only test of process_item().
@@ -245,18 +268,20 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         # a sort name + VIAF, and one with a VIAF but no sort name.
         contributor1 = ContributorData(viaf="1")
         contributor2 = ContributorData(viaf="2", sort_name="Jordan, Robert")
+        contributor3 = ContributorData(sort_name="Rice, Anne", display_name="Anne Rice")
         idata = IdentifierData(type=identifier.type, 
                                identifier=identifier.identifier)
         metadata = Metadata(
             DataSource.OCLC_LINKED_DATA,
-            contributors=[contributor1, contributor2],
+            contributors=[contributor1, contributor2, contributor3],
             primary_identifier=idata,
             title=u"foo"
         )
         oclc.queue_info_for(metadata)
 
         # Our OCLC Linked Data client is going to try to fill in the
-        # data, asking VIAF about the contributors.
+        # data, asking VIAF about the contributors that have VIAF data,
+        # and not those who do not.
         lookup1 = (ContributorData(
                   viaf="1", display_name="Display Name",
                   family_name="Family", sort_name="Name, Sort",
@@ -264,18 +289,23 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         lookup2 = (ContributorData(
                    viaf="2", wikipedia_name="Robert_Jordan_(Author)",
                    biography="That guy."), None, None)
-        viaf.queue_lookup(lookup1, lookup2)
+        viaf.queue_lookup(lookup1, lookup2, "Unrequested lookup")
 
         provider.process_item(identifier)
 
-        # Both authors have had their information updated with the
-        # VIAF results.
+
+        # Both VIAF-identified authors have had their information updated
+        # with the VIAF results.
         filled_in = sorted(
             [(x.sort_name, x.display_name, x.viaf, x.wikipedia_name, x.biography)
              for x in edition.contributors]
         )
         eq_(
             [(u'Jordan, Robert', None, u'2', u'Robert_Jordan_(Author)', u'That guy.'),
-            (u'Name, Sort', u'Display Name', u'1', u'Wikipedia_Name', None)],
+            (u'Name, Sort', u'Display Name', u'1', u'Wikipedia_Name', None),
+            (u'Rice, Anne', u'Anne Rice', None, None, None)],
             filled_in
         )
+        # The author without VIAF data didn't request a VIAF lookup.
+        # Instead, that result is still in the mock VIAF queue.
+        eq_(viaf.results, ["Unrequested lookup"])

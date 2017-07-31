@@ -93,6 +93,8 @@ class OCLCLinkedData(object):
     URI_WITH_ISBN = re.compile('^http://[^/]*worldcat.org/.*isbn/([0-9X]+)$')
     URI_WITH_OCLC_WORK_ID = re.compile('^http://[^/]*worldcat.org/.*work/id/([0-9]+)$')
 
+    EXTERNAL_PERSON_URI = re.compile('^http://experiment.worldcat.org/entity/person/data/([0-9]+)$')
+    INTERNAL_PERSON_URI = re.compile('^http://experiment.worldcat.org/entity/work/data/[0-9]+#Person/[\w]+$')
     VIAF_ID = re.compile("^http://viaf.org/viaf/([0-9]+)/?$")
 
     CAN_HANDLE = set([Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
@@ -211,10 +213,13 @@ class OCLCLinkedData(object):
             return None, True
 
         processed_uris.add(url)
+        return self.get_jsonld(url)
+
+    def get_jsonld(self, url):
         representation, cached = Representation.get(self._db, url)
         try:
             data = jsonld.load_document(url)
-        except Exception, e:
+        except Exception as e:
             self.log.error("EXCEPTION on %s: %s", url, e, exc_info=e)
             return None, False
 
@@ -352,6 +357,112 @@ class OCLCLinkedData(object):
         return works
 
     @classmethod
+    def extract_contributor(cls, person_dict):
+        """Extract a dict of args that can be used to create a Contributor or
+        ContributorData object from an OCLC person entity graph.
+        """
+        def extract_names(name_list):
+            # Sometimes OCLC sends back a list of names instead of
+            # a single name. (This is really fun, of course!)
+            names = list()
+            for name in name_list:
+                if isinstance(name, basestring):
+                    names.append(name)
+                if isinstance(name, dict):
+                    more_names = list(ldq.restrict_to_language(name, 'en'))
+                    [names.append(n) for n in extract_names(more_names)]
+                if isinstance(name, list):
+                    [names.append(n) for n in extract_names(name)]
+            return names
+
+        display_name = person_dict.get('name', None)
+        if isinstance(display_name, list):
+            display_name = cls._best_name_from_list(display_name)
+        if not display_name:
+            return None
+
+        family_name = person_dict.get('familyName', None)
+        if family_name and isinstance(family_name, list):
+            family_name = cls._best_name_from_list(family_name)
+        if ((display_name and family_name)
+            and display_name.startswith(family_name+' ')):
+            # Because _best_name_from_list trends toward the longest name,
+            # sometimes the best name that we selected for the display name
+            # is annoyingly formatted as LastName FirstName LastName. This
+            # is a rudimentary fix.
+            display_name = re.sub(family_name+' ', '', display_name)
+
+        birth = person_dict.get('birthDate', None)
+        death = person_dict.get('deathDate', None)
+
+        extra = dict()
+        if birth or death:
+            def extract_year(date_string):
+                if not date_string:
+                    return None
+                if isinstance(date_string, list):
+                    date_string = date_string[0]
+                if date_string.endswith(','):
+                    date_string = date_string[:-1]
+                if len(date_string)==4:
+                    return date_string
+                if re.match('\d{8}', date_string):
+                    return date_string[0:4]
+                dashed = date_string.split('-')
+                slashed = date_string.split('/')
+                for split_date in [dashed, slashed]:
+                    if len(split_date) > 1:
+                        year = [d for d in split_date if len(d)==4]
+                        if year:
+                            return year[0]
+
+            if birth:
+                birth = extract_year(birth)
+                extra['birthDate'] = birth
+            if death:
+                death = extract_year(death)
+                extra['deathDate'] = death
+        return dict(
+            display_name=display_name, family_name=family_name, extra=extra
+        )
+
+    @classmethod
+    def _best_name_from_list(cls, name_list):
+        """Selects the best contributor name data given a list of names"""
+
+        names = list()
+        for name_obj in name_list:
+            if isinstance(name_obj, dict):
+                if name_obj.get('@language', None) == 'en':
+                    name_obj = name_obj.get('@value', None)
+            if isinstance(name_obj, basestring):
+                # Sometimes names in character-based languages are included,
+                # without indication. They're being removed below by ensuring
+                # some number of alphanumeric are present.
+                if re.match('[A-z]+', name_obj):
+                    names.append(name_obj)
+
+        if not names:
+            return None
+
+        # Remove odd punctuation to try to create a higher-counted name option.
+        names = [re.sub('[.,]', '', name) for name in names]
+        if len(set(names)) == 1:
+            # There's only one name, once you remove punctuation.
+            return names[0]
+
+        # Get all of the names with the highest count
+        most_common = Counter(names).most_common()
+        highest_count = most_common[0][1]
+        most_common = [name for name, count in most_common if count==highest_count]
+        if len(most_common)==1:
+            return most_common[0]
+        else:
+            # Just pick the longest name to try to get the most data ¯\_(ツ)_/¯
+            most_common.sort(cmp=lambda a,b: cmp(-len(a), -len(b)))
+            return most_common[0]
+
+    @classmethod
     def extract_useful_data(cls, subgraph, book):
         titles = []
         descriptions = []
@@ -393,6 +504,7 @@ class OCLCLinkedData(object):
                 ('workExample', example_uris),
                 ('publisher', publisher_uris),
                 ('creator', creator_uris),
+                ('author', creator_uris)
         ):
             values = book.get(k, [])
             repository.extend(ldq.values(
@@ -594,11 +706,30 @@ class OCLCLinkedData(object):
                         type=subject_type, identifier=subject_detail
                     ))
 
-        for uri in creator_uris:
-            viaf_uri = self.VIAF_ID.search(uri)
-            if viaf_uri:
-                viaf = viaf_uri.groups()[0]
-                metadata.contributors.append(ContributorData(viaf=viaf))
+        viafs = [self.VIAF_ID.search(uri) for uri in creator_uris]
+        viafs = [viaf.groups()[0] for viaf in viafs if viaf is not None]
+        for viaf in viafs:
+            metadata.contributors.append(ContributorData(viaf=viaf))
+
+        if creator_uris and not viafs:
+            # We vastly prefer VIAF author information over OCLC.
+            # We'll only extract OCLC author information if we have
+            # _NO_ author information at all.
+            contributors_data = []
+            for uri in creator_uris:
+                external = self.EXTERNAL_PERSON_URI.search(uri)
+                if external:
+                    contributors_data += self.get_contributors(uri)
+                internal = self.INTERNAL_PERSON_URI.search(uri)
+                if internal:
+                    graphs = self.internal_lookup(subgraph, [uri])
+                    for person_graph in graphs:
+                        contributor_data = self.extract_contributor(person_graph)
+                    if contributor_data:
+                        contributors_data.append(contributor_data)
+
+            for contributor_data in contributors_data:
+                metadata.contributors.append(ContributorData(**contributor_data))
 
         if (not metadata.links and not metadata.identifiers and
             not metadata.subjects and not metadata.contributors):
@@ -624,9 +755,28 @@ class OCLCLinkedData(object):
                  i['@id'] not in self.UNUSED_TYPES]
         return len(types) > 0
 
+    def get_contributors(self, person_uri):
+        """Creates ContributorData objects for OCLC Person entities"""
+        document = self.get_jsonld(person_uri+'.jsonld')[0]
+        if not document:
+            return []
+
+        graph = self.graph(document)
+        if not graph:
+            return []
+
+        contributors_data = []
+        for item in graph:
+            if item['@id'] == person_uri:
+                contributors_data = self.extract_contributor(item)
+                if contributor:
+                    contributors.append(contributor)
+        return contributors
+
     def graphs_for(self, identifier):
         self.log.debug("BEGIN GRAPHS FOR %r", identifier)
         work_data = None
+
         if identifier.type in self.CAN_HANDLE:
             if identifier.type == Identifier.ISBN:
                 work_data = list(self.oclc_works_for_isbn(identifier))
@@ -759,10 +909,12 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
     """
 
     SERVICE_NAME = "OCLC Linked Data Coverage Provider"
+    DEFAULT_BATCH_SIZE = 10
+
     DATA_SOURCE_NAME = DataSource.OCLC_LINKED_DATA
     INPUT_IDENTIFIER_TYPES = [
         Identifier.OCLC_WORK, Identifier.OCLC_NUMBER,
-        Identifier.OVERDRIVE_ID, Identifier.THREEM_ID
+        Identifier.ISBN, Identifier.OVERDRIVE_ID
     ]
     
     def __init__(self, _db, *args, **kwargs):
@@ -782,8 +934,24 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         try:
             new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
+            metadatas = [m for m in self.api.info_for(identifier)]
 
-            for metadata in self.api.info_for(identifier):
+            if identifier.type==Identifier.ISBN:
+                # Currently info_for seeks the results of OCLC Work IDs only
+                # This segment will get the metadata of any equivalent OCLC Numbers
+                # as well.
+                equivalents = Identifier.recursively_equivalent_identifier_ids(
+                    self._db, [identifier.id]
+                )
+                oclc_numbers = self._db.query(Identifier).\
+                    filter(Identifier.id.in_(equivalents)).\
+                    filter(Identifier.type==Identifier.OCLC_NUMBER).all()
+                for oclc_number in oclc_numbers:
+                    more_metadata = [m for m in self.api.info_for(oclc_number)]
+                    metadatas += more_metadata
+                    metadatas = [m for m in metadatas if m]
+
+            for metadata in metadatas:
                 other_identifier, ignore = metadata.primary_identifier.load(self._db)
                 oclc_editions = other_identifier.primarily_identifies
 
@@ -794,7 +962,14 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                     len(oclc_editions)
                 )
 
+                # Clean up contributor information.
                 self.apply_viaf_to_contributor_data(metadata)
+                # Remove any empty ContributorData objects that may have
+                # been created.
+                metadata.contributors = filter(
+                    lambda c: c.sort_name or c.display_name,
+                    metadata.contributors
+                )
 
                 # When metadata is applied, it must be given a client that can
                 # response to 'canonicalize_author_name'. Usually this is an
@@ -813,7 +988,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                         metadata, new_info_counter = self.apply_metadata_to_edition(
                             edition, metadata, metadata_client, new_info_counter
                         )
-                elif num_new_isbns:
+                else:
                     # Create a new OCLC edition to hold the information.
                     edition, ignore = get_one_or_create(
                         self._db, Edition, data_source=self.data_source,
@@ -825,6 +1000,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                     # Set the new OCLC edition's identifier equivalent to this
                     # identifier so we know they're related.
                     self.set_equivalence(identifier, metadata)
+
                 self.log.info(
                     "Total: %(editions)d editions, %(isbns)d ISBNs, "\
                     "%(descriptions)d descriptions, %(subjects)d classifications.",
@@ -848,19 +1024,18 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         process.
         """
         for contributor_data in metadata.contributors:
-            viaf_contributor_data = self.viaf.lookup_by_viaf(
-                contributor_data.viaf,
-                working_sort_name=contributor_data.sort_name,
-                working_display_name=contributor_data.display_name
-            )[0]
-            if viaf_contributor_data:
-                viaf_contributor_data.apply(contributor_data)
+            if contributor_data.viaf:
+                viaf_contributor_data = self.viaf.lookup_by_viaf(
+                    contributor_data.viaf,
+                    working_sort_name=contributor_data.sort_name,
+                    working_display_name=contributor_data.display_name
+                )[0]
+                if viaf_contributor_data:
+                    viaf_contributor_data.apply(contributor_data)
 
     def apply_metadata_to_edition(self, edition, metadata, metadata_client, counter):
         """Applies metadata and increments counters"""
-
-        metadata.apply(edition, collection=None,
-                       metadata_client=metadata_client)
+        metadata.apply(edition, collection=None, metadata_client=metadata_client)
         counter['editions'] += 1
         counter['descriptions'] += len(metadata.links)
         counter['subjects'] += len(metadata.subjects)

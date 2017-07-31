@@ -1,0 +1,36 @@
+{
+  "@graph" : [ {
+    "@id" : "http://experiment.worldcat.org/entity/person/data/2671862171.jsonld",
+    "inDataset" : "http://purl.oclc.org/dataset/WorldCat/Person",
+    "about" : "http://worldcat.org/entity/person/id/2671862171"
+  }, {
+    "@id" : "http://worldcat.org/entity/person/id/2671862171",
+    "@type" : "schema:Person",
+    "familyName" : "Crosley",
+    "givenName" : "Sloane",
+    "name" : "Sloane Crosley"
+  } ],
+  "@context" : {
+    "inDataset" : {
+      "@id" : "http://rdfs.org/ns/void#inDataset",
+      "@type" : "@id"
+    },
+    "about" : {
+      "@id" : "http://schema.org/about",
+      "@type" : "@id"
+    },
+    "familyName" : "http://schema.org/familyName",
+    "givenName" : "http://schema.org/givenName",
+    "name" : "http://schema.org/name",
+    "schema" : "http://schema.org/",
+    "dc" : "http://purl.org/dc/elements/1.1/",
+    "madsrdf" : "http://www.loc.gov/mads/rdf/v1#",
+    "dct" : "http://purl.org/dc/terms/",
+    "library" : "http://purl.org/library/",
+    "void" : "http://rdfs.org/ns/void#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "bgn" : "http://bibliograph.net/",
+    "pto" : "http://www.productontology.org/id/",
+    "discovery" : "http://worldcat.org/vocab/discovery/"
+  }
+}

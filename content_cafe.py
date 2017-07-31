@@ -44,7 +44,7 @@ class ContentCafeCoverageProvider(IdentifierCoverageProvider):
             self.mirror = ContentCafeCoverImageMirror(
                 self._db, uploader=uploader
             )
-            self.content_cafe = api or ContentCafeAPI(
+            self.content_cafe = api or ContentCafeAPI.from_config(
                 self._db, self.mirror, uploader=uploader
             )
 
@@ -98,10 +98,12 @@ class ContentCafeAPI(object):
 
         self.mirror = mirror
         if self.mirror:
-            self.scaler = ImageScaler(db, [self.mirror], uploader=uploader)
+            self.scaler = ImageScaler(_db, [self.mirror], uploader=uploader)
         else:
             self.scaler = None
 
+        self.user_id = user_id
+        self.password = password
         self.soap_client = (
             soap_client or ContentCafeSOAPClient(user_id, password)
         )
