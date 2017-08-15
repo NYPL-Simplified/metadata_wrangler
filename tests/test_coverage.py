@@ -196,8 +196,12 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self._default_collection.catalog_identifier(self._db, self.identifier)
         self.source = DataSource.license_source_for(self._db, self.identifier)
 
-        # Create mocks for the different APIs used by
+        # Create mocks for the different collections and APIs used by
         # IdentifierResolutionCoverageProvider.
+        overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
+        overdrive_collection.name = (
+            IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
+        )
         self.viaf = MockVIAFClient(self._db)
         self.linked_data_client = MockOCLCLinkedData(self._db)
         self.linked_data_coverage_provider = LinkedDataCoverageProvider(
@@ -210,6 +214,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.provider_kwargs = dict(
             uploader=self.uploader,
             viaf_client=self.viaf,
+            overdrive_api_class = MockOverdriveAPI,
             linked_data_coverage_provider=self.linked_data_coverage_provider,
         )
 

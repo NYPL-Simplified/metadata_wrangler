@@ -10,6 +10,7 @@ from core.metadata_layer import (
 )
 
 from core.model import (
+    Collection,
     CoverageRecord,
     DataSource,
     Edition,
@@ -82,6 +83,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
+    DEFAULT_OVERDRIVE_COLLECTION_NAME = u'Default Overdrive'
+
     def __init__(
         self, collection, uploader=None, viaf_client=None,
         linked_data_coverage_provider=None, content_cafe_api=None,
@@ -105,7 +108,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             regenerate_opds_entries=True
         )
 
-        self.overdrive_api_class = overdrive_api_class
+        self.overdrive_api = self.overdrive_api(overdrive_api_class)
 
         self.content_cafe_api = content_cafe_api
         
@@ -150,7 +153,16 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         self.image_scaler = ImageScaler(
             self._db, self.image_mirrors.values(), uploader=uploader
         )
-        
+
+    def overdrive_api(self, overdrive_api_class):
+        collection, is_new = Collection.by_name_and_protocol(
+            self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
+            ExternalIntegration.OVERDRIVE
+        )
+        if is_new:
+            raise ValueError('Default Overdrive collection has not been configured.')
+        return overdrive_api_class(self._db, collection)
+
     def providers(self):
         """Instantiate required and optional CoverageProviders.
 
@@ -190,7 +202,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.collection, api_class=self.overdrive_api_class
+                    self.collection, api_class=self.overdrive_api
                 )
             )
         return optional, required
