@@ -214,7 +214,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.provider_kwargs = dict(
             uploader=self.uploader,
             viaf_client=self.viaf,
-            overdrive_api_class = MockOverdriveAPI,
+            overdrive_api_class=MockOverdriveAPI,
             linked_data_coverage_provider=self.linked_data_coverage_provider,
         )
 
@@ -372,6 +372,12 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_("500: What did you expect?", failure.exception)
         
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
+        # Give the identifier an edition so a work can be created.
+        edition = self._edition(
+            identifier_type=self.identifier.type,
+            identifier_id=self.identifier.identifier
+        )
+
         self.resolver.required_coverage_providers = [
             self.always_successful, self.always_successful
         ]
@@ -419,6 +425,12 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, result.transient)
 
     def test_process_item_succeeds_when_optional_provider_fails(self):
+        # Give the identifier an edition so a work can be created.
+        edition = self._edition(
+            identifier_type=self.identifier.type,
+            identifier_id=self.identifier.identifier
+        )
+
         self.resolver.required_coverage_providers = [
             self.always_successful, self.always_successful
         ]
@@ -434,12 +446,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(result, self.identifier)
 
         # An appropriate coverage record was created to mark the failure.
-        presentation_edition = DataSource.lookup(
-            self._db, DataSource.PRESENTATION_EDITION
-        )
         r = self._db.query(CoverageRecord).filter(
             CoverageRecord.identifier==self.identifier,
-            CoverageRecord.data_source!=presentation_edition).one()
+            CoverageRecord.operation==self.never_successful.OPERATION).one()
         eq_("What did you expect?", r.exception)
 
     def test_generate_edition(self):
