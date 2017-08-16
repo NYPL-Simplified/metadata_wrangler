@@ -10,6 +10,7 @@ from core.metadata_layer import (
 )
 
 from core.model import (
+    Collection,
     CoverageRecord,
     DataSource,
     Edition,
@@ -19,10 +20,7 @@ from core.model import (
     PresentationCalculationPolicy,
 )
 
-from core.overdrive import (
-    OverdriveBibliographicCoverageProvider,
-    OverdriveAPI,
-)
+from core.overdrive import OverdriveAPI
 
 from core.s3 import (
     S3Uploader, 
@@ -31,7 +29,8 @@ from core.s3 import (
 from core.util import fast_query_count
 
 from overdrive import (
-    OverdriveCoverImageMirror, 
+    OverdriveBibliographicCoverageProvider,
+    OverdriveCoverImageMirror,
 )
 
 from content_cafe import (
@@ -82,6 +81,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         "Could not access underlying license source over the network.")
     UNKNOWN_FAILURE = "Unknown failure."
 
+    DEFAULT_OVERDRIVE_COLLECTION_NAME = u'Default Overdrive'
+
     def __init__(
         self, collection, uploader=None, viaf_client=None,
         linked_data_coverage_provider=None, content_cafe_api=None,
@@ -105,7 +106,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             regenerate_opds_entries=True
         )
 
-        self.overdrive_api_class = overdrive_api_class
+        self.overdrive_api = self.create_overdrive_api(overdrive_api_class)
 
         self.content_cafe_api = content_cafe_api
         
@@ -135,7 +136,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             LinkedDataCoverageProvider(self._db, viaf_api=self.viaf_client)
         )
         
-        # The ordinary OverdriveBibiliographicCoverageProvider
+        # The ordinary OverdriveBibliographicCoverageProvider
         # doesn't upload images, so we need to create our own
         # mirror and scaler.
         #
@@ -150,7 +151,16 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         self.image_scaler = ImageScaler(
             self._db, self.image_mirrors.values(), uploader=uploader
         )
-        
+
+    def create_overdrive_api(self, overdrive_api_class):
+        collection, is_new = Collection.by_name_and_protocol(
+            self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
+            ExternalIntegration.OVERDRIVE
+        )
+        if is_new:
+            raise ValueError('Default Overdrive collection has not been configured.')
+        return overdrive_api_class(self._db, collection)
+
     def providers(self):
         """Instantiate required and optional CoverageProviders.
 
@@ -190,7 +200,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.collection, api_class=self.overdrive_api_class
+                    self.collection, api_class=self.overdrive_api
                 )
             )
         return optional, required
@@ -223,6 +233,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # LicensePool will probably be a stub that doesn't actually
         # represent the right to loan the book, but that's okay.
         license_pool = self.license_pool(identifier)
+        if not license_pool.licenses_owned:
+            license_pool.update_availability(1, 1, 0, 0)
 
         # Go through all relevant providers and try to ensure coverage.
         failure = self.run_through_relevant_providers(
@@ -371,7 +383,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             work.set_presentation_ready(exclude_search=True)
         else:
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
-            return self.failure(identifier, error_msg, transient=True)
+            raise RuntimeError(error_msg)
 
     def resolve_equivalent_oclc_identifiers(self, identifier):
         """Ensures OCLC coverage for an identifier.
@@ -399,6 +411,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         for pool in work.license_pools:
             edition = pool.presentation_edition
+            if not edition:
+                continue
             for contributor in edition.contributors:
                 self.viaf_client.process_contributor(contributor)
                 if not contributor.display_name:

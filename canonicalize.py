@@ -324,6 +324,3 @@ class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
             return self.non_response_results.pop()
         else:
             return None
-
-
-

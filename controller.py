@@ -1,6 +1,7 @@
 from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
+from lxml import etree
 import base64
 import json
 import logging
@@ -23,6 +24,7 @@ from core.model import (
 )
 from core.opds import (
     AcquisitionFeed,
+    LookupAcquisitionFeed,
     VerboseAnnotator,
 )
 from core.util.opds_writer import OPDSMessage
@@ -121,8 +123,20 @@ class CatalogController(object):
             if page:
                 kw.update(page.items())
             return cdn_url_for("updates", **kw)
-        update_feed = AcquisitionFeed(
-            self._db, title, update_url(), works, VerboseAnnotator
+
+        entries = []
+        for work in works[:]:
+            entry = work.verbose_opds_entry or work.simple_opds_entry
+            entry = etree.fromstring(entry)
+            if entry:
+                entries.append(entry)
+                works.remove(work)
+
+        works = [(work.identifier, work) for work in works]
+
+        update_feed = LookupAcquisitionFeed(
+            self._db, title, update_url(), works, VerboseAnnotator,
+            precomposed_entries=entries
         )
 
         if len(updated_works.all()) > pagination.size + pagination.offset:
