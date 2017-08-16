@@ -233,6 +233,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # LicensePool will probably be a stub that doesn't actually
         # represent the right to loan the book, but that's okay.
         license_pool = self.license_pool(identifier)
+        if not license_pool.licenses_owned:
+            license_pool.update_availability(1, 1, 0, 0)
 
         # Go through all relevant providers and try to ensure coverage.
         failure = self.run_through_relevant_providers(
