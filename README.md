@@ -1,7 +1,7 @@
 # Library Simplified Metadata Wrangler
 [![Build Status](https://travis-ci.org/NYPL-Simplified/metadata_wrangler.svg?branch=master)](https://travis-ci.org/NYPL-Simplified/metadata_wrangler)
 
-This is the Metadata Wrangler for [Library Simplified](http://www.librarysimplified.org/). The metadata server utilizes and intelligently almagamates a wide variety of information sources for library ebooks and incorporates them into the reading experience for users by improving selection, search, and recommendations.
+This is the Metadata Wrangler for [Library Simplified](http://www.librarysimplified.org/). The metadata server utilizes and intelligently amalgamates a wide variety of information sources for library ebooks and incorporates them into the reading experience for users by improving selection, search, and recommendations.
 
 It depends on the [LS Server Core](https://github.com/NYPL-Simplified/server_core) as a git submodule.
 
