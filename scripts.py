@@ -652,3 +652,5 @@ class IntegrationClientGeneratorScript(Script):
         print "-" * 40
         print "CLIENT KEY: %s" % client
         print "CLIENT SECRET: %s" % plaintext_secret
+
+        self._db.commit()
