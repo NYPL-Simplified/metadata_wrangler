@@ -126,6 +126,12 @@ def remove(collection_metadata_identifier):
 def update_url():
     return CatalogController(Conf.db).update_client_url()
 
+@app.route("/register", methods=["POST"])
+@returns_problem_detail
+def register():
+    return CatalogController(Conf.db).register()
+
+
 if __name__ == '__main__':
 
     debug = True
