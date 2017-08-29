@@ -27,6 +27,7 @@ from core.opds import (
     LookupAcquisitionFeed,
     VerboseAnnotator,
 )
+from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.problem_details import (
@@ -267,6 +268,21 @@ class CatalogController(object):
         client.url = IntegrationClient.normalize_url(urllib.unquote(url))
 
         return make_response("", HTTP_OK)
+
+    def register(self, do_get=HTTP.get_with_timeout):
+        opds_url = request.form.get('url')
+        if not opds_url:
+            return INVALID_INPUT.detailed('No OPDS URL')
+
+        AUTH_DOCUMENT_REL = "http://opds-spec.org/auth/document"
+        auth_response = None
+
+        try:
+            response = do_get(
+                opds_url, allowed_response_codes=['2xx', '3xx', 401]
+            )
+        except Exception as e:
+            return INVALID_INPUT.detailed('Invalid OPDS feed')
 
 
 class URNLookupController(CoreURNLookupController):

@@ -18,13 +18,14 @@ from core.model import (
     Identifier,
     get_one,
 )
+from core.opds_import import OPDSXMLParser
 from core.problem_details import (
     INVALID_CREDENTIALS,
     INVALID_INPUT,
 )
+from core.testing import DummyHTTPClient
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
-from core.opds_import import OPDSXMLParser
 
 from controller import (
     CatalogController,
@@ -197,7 +198,7 @@ class TestCatalogController(ControllerTest):
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
-                headers=self.valid_auth):
+                method='POST', headers=self.valid_auth):
 
             response = self.controller.add_items(self.collection.name)
 
@@ -237,7 +238,7 @@ class TestCatalogController(ControllerTest):
         message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
-                headers=self.valid_auth):
+                method='POST', headers=self.valid_auth):
 
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
@@ -268,7 +269,7 @@ class TestCatalogController(ControllerTest):
         self.collection.catalog_identifier(self._db, catalogued_id)
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
-                headers=self.valid_auth):
+                method='POST', headers=self.valid_auth):
             response = self.controller.remove_items(self.collection.name)
             eq_(HTTP_OK, int(response.status_code))
 
@@ -292,13 +293,15 @@ class TestCatalogController(ControllerTest):
 
     def test_update_client_url(self):
         url = urllib.quote('https://try-me.fake.us/')
-        with self.app.test_request_context('/'):
+        with self.app.test_request_context('/', method='POST'):
             # Without authentication a ProblemDetail is returned.
             response = self.controller.update_client_url()
             eq_(True, isinstance(response, ProblemDetail))
             eq_(INVALID_CREDENTIALS, response)
 
-        with self.app.test_request_context('/', headers=self.valid_auth):
+        with self.app.test_request_context('/',
+            method='POST', headers=self.valid_auth
+        ):
             # When a URL isn't provided, a ProblemDetail is returned.
             response = self.controller.update_client_url()
             eq_(True, isinstance(response, ProblemDetail))
@@ -307,12 +310,41 @@ class TestCatalogController(ControllerTest):
             assert 'client_url' in response.detail
 
         with self.app.test_request_context('/?client_url=%s' % url,
-            headers=self.valid_auth):
+            method='POST', headers=self.valid_auth
+        ):
             response = self.controller.update_client_url()
             # The request was successful.
             eq_(HTTP_OK, response.status_code)
             # The IntegrationClient's URL has been changed.
             self.client.url = 'try-me.fake.us'
+
+    def test_register_fails_without_url(self):
+        # If not URL is given, a ProblemDetail is returned.
+        with self.app.test_request_context('/', method='POST'):
+            response = self.controller.register()
+
+        eq_(True, isinstance(response, ProblemDetail))
+        eq_(400, response.status_code)
+        eq_(INVALID_INPUT.uri, response.uri)
+        eq_('No OPDS URL', response.detail)
+
+    def test_register_fails_if_error_is_raised_fetching_document(self):
+        def error_get(*args, **kwargs):
+            raise RuntimeError('An OPDS Error')
+
+        url = "https://test.org/okay/authentication_document"
+        request_args = dict(
+            method='POST',
+            data=dict(url=url),
+            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
+        )
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=error_get)
+
+        assert isinstance(response, ProblemDetail)
+        eq_(400, response.status_code)
+        eq_(INVALID_INPUT.uri, response.uri)
+        eq_('Invalid OPDS feed', response.detail)
 
 
 class TestURNLookupController(ControllerTest):
@@ -507,4 +539,3 @@ class TestURNLookupController(ControllerTest):
         expect = isbn.opds_entry()
         [actual] = self.controller.precomposed_entries
         eq_(etree.tostring(expect), etree.tostring(actual))
-
