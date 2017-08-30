@@ -1,0 +1,57 @@
+{
+  "authentication": [
+    {
+      "inputs": {
+
+        "login": {
+          "keyboard": "Default"
+        },
+
+        "password": {
+            "keyboard": "Default"
+        }
+      },
+
+      "labels": {
+        "login": "Barcode",
+        "password": "PIN"
+      },
+
+      "type": "http://opds-spec.org/auth/basic",
+      "description": "Library Barcode"
+    }
+  ],
+
+  "features": {
+    "disabled": [],
+    "enabled": ["https://test.org/rel/policy/reservations"]
+  },
+
+  "id": "https://test.org/okay/authentication_document",
+
+  "links": [
+    {
+      "href": "http://test.org/EULA",
+      "type": "text/html",
+      "rel": "terms-of-service"
+    },
+    {
+      "href": "http://www.test.org/privacypolicy.html",
+      "type": "text/html",
+      "rel": "privacy-policy"
+    },
+    {
+      "href": "http://www.test.org/acknowledgments.html",
+      "type": "text/html",
+      "rel": "copyright"
+    },
+    {
+      "href": "whatever",
+      "type": "text/html",
+      "rel": "alternate"
+    }
+  ],
+
+  "title": "Library",
+  "metadata_wrangler_public_key": "public_key"
+}

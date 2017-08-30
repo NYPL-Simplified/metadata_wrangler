@@ -9,7 +9,10 @@ from functools import wraps
 from lxml import etree
 from nose.tools import set_trace, eq_
 
-from . import DatabaseTest
+from . import (
+    DatabaseTest,
+    sample_data
+)
 from core.model import (
     IntegrationClient,
     CoverageRecord,
@@ -23,7 +26,10 @@ from core.problem_details import (
     INVALID_CREDENTIALS,
     INVALID_INPUT,
 )
-from core.testing import DummyHTTPClient
+from core.testing import (
+    DummyHTTPClient,
+    MockRequestsResponse,
+)
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
 
@@ -51,6 +57,9 @@ class ControllerTest(DatabaseTest):
         self.client = self._integration_client()
         valid_auth = 'Basic ' + base64.b64encode('abc:def')
         self.valid_auth = dict(Authorization=valid_auth)
+
+    def sample_data(self, filename):
+        return sample_data(filename, 'controller')
 
 
 class TestIntegrationClientAuthentication(ControllerTest):
@@ -345,6 +354,50 @@ class TestCatalogController(ControllerTest):
         eq_(400, response.status_code)
         eq_(INVALID_INPUT.uri, response.uri)
         eq_('Invalid OPDS feed', response.detail)
+
+    def test_register_succeeds_if_authentication_document_is_returned(self):
+        http = DummyHTTPClient()
+
+        mock_auth_doc = self.sample_data('auth_document.json')
+        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
+        http.responses.append(mock_doc_response)
+
+        url = "https://test.org/okay/authentication_document"
+        request_args = dict(
+            method='POST',
+            data=dict(url=url),
+            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
+        )
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=http.do_get)
+
+        eq_(url, response.get('id'))
+        eq_('Library', response.get('title'))
+        eq_('public_key', response.get('metadata_wrangler_public_key'))
+
+    def test_register_succeeds_if_authentication_document_is_linked(self):
+        http = DummyHTTPClient()
+
+        mock_feed = self.sample_data('circ_feed.opds')
+        mock_feed_response = MockRequestsResponse(200, content=mock_feed)
+
+        mock_auth_doc = self.sample_data('auth_document.json')
+        mock_doc_response = MockRequestsResponse(200, content=mock_auth_doc)
+
+        http.responses.extend([mock_feed_response, mock_doc_response])
+
+        url = "https://test.org/okay/authentication_document"
+        request_args = dict(
+            method='POST',
+            data=dict(url=url),
+            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
+        )
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=http.do_get)
+
+        eq_(url, response.get('id'))
+        eq_('Library', response.get('title'))
+        eq_('public_key', response.get('metadata_wrangler_public_key'))
 
 
 class TestURNLookupController(ControllerTest):

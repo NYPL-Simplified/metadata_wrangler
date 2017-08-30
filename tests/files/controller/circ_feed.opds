@@ -1,0 +1,163 @@
+<feed xmlns:app="http://www.w3.org/2007/app" xmlns:bibframe="http://bibframe.org/vocab/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:drm="http://librarysimplified.org/terms/drm" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:schema="http://schema.org/" xmlns:simplified="http://librarysimplified.org/terms/" xmlns="http://www.w3.org/2005/Atom">
+  <id>/okay/groups/</id>
+  <title>All Books</title>
+  <updated>2017-08-29T20:03:31Z</updated>
+  <link href="/okay/groups/" rel="self"/>
+  <entry schema:additionalType="http://schema.org/Book">
+    <id>urn:librarysimplified.org/terms/id/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19</id>
+    <title>Brave</title>
+    <schema:alternativeHeadline>How I rebuilt my life after love turned to hate</schema:alternativeHeadline>
+    <author>
+      <name>Adele Bellis</name>
+      <link href="http://localhost:6500/okay/works/contributor/Adele%20Bellis/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Adele Bellis"/>
+    </author>
+    <summary type="html">Control. Jealousy. Isolation. Blame. Anger. Violence.The inspiring true story of a young woman who suffered a terrifyingly abusive relationship culminating in a horrific acid attack from the man who claimed to love her. Adele was just 23 years old when she was scarred for life by an acid attack arranged by her ex-boyfriend, Anthony. The attack left her partially bald and she lost her right ear. This was Anthony's attempt to stop her from ever being attractive to another man &#8211; a final act of 'control' over her and the horrific end to a terrifying case of domestic abuse. The acid attack came after she had ended her relationship of several years with Anthony Riley, the man who said he couldn't live without her. Anthony Riley was convicted in October 2015 and was sentenced to a minimum of 13 years in prison. This is Adele's brave story, the story of one woman's incredible fight to recover from the most appalling injuries and to decide that she would not be controlled, she would be strong.</summary>
+    <updated>2017-08-08T15:24:39Z</updated>
+    <simplified:pwid>220d88e3-3122-68e0-9c81-ab6b842a60f8</simplified:pwid>
+    <link href="https://img1.od-cdn.com/ImageType-100/0292-1/%7B44C72445-F1B1-463E-8938-1B323F814E19%7DImg100.jpg" type="image/jpeg" rel="http://opds-spec.org/image"/>
+    <link href="https://img1.od-cdn.com/ImageType-400/0292-1/44C/724/45/%7B44C72445-F1B1-463E-8938-1B323F814E19%7DImg400.jpg" type="image/jpeg" rel="http://opds-spec.org/image/thumbnail"/>
+    <category term="Adult" scheme="http://schema.org/audience" label="Adult"/>
+    <category term="18" scheme="http://schema.org/typicalAgeRange" label="18"/>
+    <category term="http://librarysimplified.org/terms/fiction/Nonfiction" scheme="http://librarysimplified.org/terms/fiction/" label="Nonfiction"/>
+    <category term="http://librarysimplified.org/terms/genres/Simplified/Biography%20%26%20Memoir" scheme="http://librarysimplified.org/terms/genres/Simplified/" label="Biography &amp; Memoir"/>
+    <dcterms:language>en</dcterms:language>
+    <dcterms:publisher>HarperCollins Publishers</dcterms:publisher>
+    <dcterms:created>2016-09-22</dcterms:created>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19" type="application/atom+xml;type=entry;profile=opds-catalog" rel="alternate"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19/report" rel="issues"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19/borrow" rel="http://opds-spec.org/acquisition/borrow" type="application/atom+xml;type=entry;profile=opds-catalog">
+      <opds:indirectAcquisition type="vnd.adobe/adept+xml">
+        <opds:indirectAcquisition type="application/epub+zip"/>
+      </opds:indirectAcquisition>
+      <opds:indirectAcquisition type="application/atom+xml;type=entry;profile=opds-catalog">
+        <opds:indirectAcquisition type="text/html;profile=http://librarysimplified.org/terms/profiles/streaming-media"/>
+      </opds:indirectAcquisition>
+      <opds:availability status="available"/>
+      <opds:holds total="0"/>
+      <opds:copies available="2" total="2"/>
+    </link>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19/recommendations" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="recommendations" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19/related_books" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="related" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/annotations/Overdrive%20ID/44c72445-f1b1-463e-8938-1b323f814e19/" type="application/ld+json; profile=&quot;http://www.w3.org/ns/anno.jsonld&quot;" rel="http://www.w3.org/ns/oa#annotationService"/>
+  </entry>
+  <entry schema:additionalType="http://schema.org/Book">
+    <id>urn:librarysimplified.org/terms/id/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f</id>
+    <title>Do Not Disturb</title>
+    <schema:alternativeHeadline>An Erotica Collection</schema:alternativeHeadline>
+    <author>
+      <name>Rachel Kramer Bussel</name>
+      <link href="http://localhost:6500/okay/works/contributor/Rachel%20Kramer%20Bussel/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Rachel Kramer Bussel"/>
+    </author>
+    <author>
+      <name>de Fer</name>
+      <link href="http://localhost:6500/okay/works/contributor/de%20Fer/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="de Fer"/>
+    </author>
+    <author>
+      <name>Elizabeth Coldwell</name>
+      <link href="http://localhost:6500/okay/works/contributor/Elizabeth%20Coldwell/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Elizabeth Coldwell"/>
+    </author>
+    <author>
+      <name>Flora Dain</name>
+      <link href="http://localhost:6500/okay/works/contributor/Flora%20Dain/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Flora Dain"/>
+    </author>
+    <author>
+      <name>Kathleen Tudor</name>
+      <link href="http://localhost:6500/okay/works/contributor/Kathleen%20Tudor/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Kathleen Tudor"/>
+    </author>
+    <author>
+      <name>Jason Rubis</name>
+      <link href="http://localhost:6500/okay/works/contributor/Jason%20Rubis/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Jason Rubis"/>
+    </author>
+    <summary type="html">&lt;p&gt;
+        &lt;p&gt;Discreet liaisons and steamy connections in hotel rooms: ten original erotica stories from Mischief, featuring Rachel Kramer Bussell, Flora Dain, Elizabeth Coldwell, Tabitha Kitten, Rose de Fer and many more.&lt;/p&gt;
+        &lt;p&gt;The evening with Mr Alpha in a luxury suite is already intense, but when the hot barman from downstairs is also invited to the private party, the passion enters unchartered territory.&lt;/p&gt;
+        &lt;p&gt;The idea of reviving a spark of romance at an ice hotel, might seem like an instant freeze for a jaded wife, but the thawing power of an unusual and exotic location cannot be underestimated.&lt;/p&gt;
+        &lt;p&gt;Farrah's trip to a swish Honolulu hotel becomes a journey filled with gift-wrapped surprises that come with a single instruction: Use Only With Me&lt;/p&gt;
+    </summary>
+    <updated>2017-08-08T15:24:42Z</updated>
+    <simplified:pwid>9376d9be-47cf-34df-fcbd-2273d3dd9437</simplified:pwid>
+    <link href="https://img1.od-cdn.com/ImageType-100/0292-1/%7B88164472-D816-4969-90AD-0943BC79D97F%7DImg100.jpg" type="image/jpeg" rel="http://opds-spec.org/image"/>
+    <link href="https://img1.od-cdn.com/ImageType-400/0292-1/881/644/72/%7B88164472-D816-4969-90AD-0943BC79D97F%7DImg400.jpg" type="image/jpeg" rel="http://opds-spec.org/image/thumbnail"/>
+    <category term="Adults Only" scheme="http://schema.org/audience" label="Adults Only"/>
+    <category term="18" scheme="http://schema.org/typicalAgeRange" label="18"/>
+    <category term="http://librarysimplified.org/terms/fiction/Fiction" scheme="http://librarysimplified.org/terms/fiction/" label="Fiction"/>
+    <category term="http://librarysimplified.org/terms/genres/Simplified/Erotica" scheme="http://librarysimplified.org/terms/genres/Simplified/" label="Erotica"/>
+    <dcterms:language>en</dcterms:language>
+    <dcterms:publisher>HarperCollins Publishers</dcterms:publisher>
+    <dcterms:created>2013-07-25</dcterms:created>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f" type="application/atom+xml;type=entry;profile=opds-catalog" rel="alternate"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f/report" rel="issues"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f/borrow" rel="http://opds-spec.org/acquisition/borrow" type="application/atom+xml;type=entry;profile=opds-catalog">
+      <opds:indirectAcquisition type="vnd.adobe/adept+xml">
+        <opds:indirectAcquisition type="application/epub+zip"/>
+      </opds:indirectAcquisition>
+      <opds:indirectAcquisition type="application/atom+xml;type=entry;profile=opds-catalog">
+        <opds:indirectAcquisition type="text/html;profile=http://librarysimplified.org/terms/profiles/streaming-media"/>
+      </opds:indirectAcquisition>
+      <opds:availability status="available"/>
+      <opds:holds total="0"/>
+      <opds:copies available="1" total="1"/>
+    </link>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f/recommendations" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="recommendations" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f/related_books" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="related" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/annotations/Overdrive%20ID/88164472-d816-4969-90ad-0943bc79d97f/" type="application/ld+json; profile=&quot;http://www.w3.org/ns/anno.jsonld&quot;" rel="http://www.w3.org/ns/oa#annotationService"/>
+  </entry>
+  <entry schema:additionalType="http://schema.org/Book">
+    <id>urn:librarysimplified.org/terms/id/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985</id>
+    <title>Jack and Kill</title>
+    <schema:alternativeHeadline>The Hunt for Jack Reacher Series, Book 2</schema:alternativeHeadline>
+    <author>
+      <name>Diane Capri</name>
+      <link href="http://localhost:6500/okay/works/contributor/Diane%20Capri/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="contributor" title="Diane Capri"/>
+    </author>
+    <schema:Series name="The Hunt for Jack Reacher">
+      <link href="http://localhost:6500/okay/works/series/The%20Hunt%20for%20Jack%20Reacher/eng/Adult%2CAdults+Only%2CChildren%2CYoung+Adult" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="series" title="The Hunt for Jack Reacher"/>
+    </schema:Series>
+    <summary type="html">&lt;p&gt;New York Times and USA Today Bestselling Author DIANE CAPRI Does It Again! NEW Hunt for Jack Reacher book!&lt;/p&gt; &lt;p&gt;"Full of thrills and tension, but smart and human, too. Kim Otto is a great, great character - I love her." Lee Child, #1 World Wide Bestselling Author of Jack Reacher Thrillers&lt;/p&gt; &lt;p&gt;&lt;strong&gt;Jack Reacher: Friend or Enemy?&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;FBI Agents Kim Otto and Carlos Gaspar get a lead on Jack Reacher. New Hope, Virginia, welcomed him yesterday. Is he there now? Will Otto and Gaspar stand face-to-face with Reacher? Or &lt;strong&gt;Down Deep&lt;/strong&gt;, is Reacher &lt;strong&gt;A Wanted Man&lt;/strong&gt;?&lt;/p&gt;</summary>
+    <updated>2017-08-08T15:24:41Z</updated>
+    <simplified:pwid>17eb6677-6b9a-5d41-054d-63d6acac50c2</simplified:pwid>
+    <link href="https://img1.od-cdn.com/ImageType-100/7168-1/%7BED1084C3-05CE-4CAB-AF27-E27B7D7B5985%7DImg100.jpg" type="image/jpeg" rel="http://opds-spec.org/image"/>
+    <link href="https://img1.od-cdn.com/ImageType-400/7168-1/ED1/084/C3/%7BED1084C3-05CE-4CAB-AF27-E27B7D7B5985%7DImg400.jpg" type="image/jpeg" rel="http://opds-spec.org/image/thumbnail"/>
+    <category term="Adult" scheme="http://schema.org/audience" label="Adult"/>
+    <category term="18" scheme="http://schema.org/typicalAgeRange" label="18"/>
+    <category term="http://librarysimplified.org/terms/fiction/Fiction" scheme="http://librarysimplified.org/terms/fiction/" label="Fiction"/>
+    <category term="http://librarysimplified.org/terms/genres/Simplified/Suspense/Thriller" scheme="http://librarysimplified.org/terms/genres/Simplified/" label="Suspense/Thriller"/>
+    <category term="http://librarysimplified.org/terms/genres/Simplified/Mystery" scheme="http://librarysimplified.org/terms/genres/Simplified/" label="Mystery"/>
+    <dcterms:language>en</dcterms:language>
+    <dcterms:publisher>AugustBooks</dcterms:publisher>
+    <dcterms:created>2012-08-03</dcterms:created>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985" type="application/atom+xml;type=entry;profile=opds-catalog" rel="alternate"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985/report" rel="issues"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985/borrow" rel="http://opds-spec.org/acquisition/borrow" type="application/atom+xml;type=entry;profile=opds-catalog">
+      <opds:indirectAcquisition type="vnd.adobe/adept+xml">
+        <opds:indirectAcquisition type="application/epub+zip"/>
+      </opds:indirectAcquisition>
+      <opds:indirectAcquisition type="application/atom+xml;type=entry;profile=opds-catalog">
+        <opds:indirectAcquisition type="text/html;profile=http://librarysimplified.org/terms/profiles/streaming-media"/>
+      </opds:indirectAcquisition>
+      <opds:availability status="unavailable"/>
+      <opds:holds total="0"/>
+      <opds:copies available="0" total="1"/>
+    </link>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985/recommendations" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="recommendations" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/works/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985/related_books" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="related" title="Recommended Works"/>
+    <link href="http://localhost:6500/okay/annotations/Overdrive%20ID/ed1084c3-05ce-4cab-af27-e27b7d7b5985/" type="application/ld+json; profile=&quot;http://www.w3.org/ns/anno.jsonld&quot;" rel="http://www.w3.org/ns/oa#annotationService"/>
+  </entry>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=author&amp;collection=main" opds:activeFacet="true" opds:facetGroup="Sort by" rel="http://opds-spec.org/facet" title="Author"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=title&amp;collection=main" opds:facetGroup="Sort by" rel="http://opds-spec.org/facet" title="Title"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=added&amp;collection=main" opds:facetGroup="Sort by" rel="http://opds-spec.org/facet" title="Recently Added"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=author&amp;collection=main" opds:activeFacet="true" opds:facetGroup="Availability" rel="http://opds-spec.org/facet" title="All"/>
+  <link href="http://localhost:6500/okay/feed/?available=now&amp;order=author&amp;collection=main" opds:facetGroup="Availability" rel="http://opds-spec.org/facet" title="Available now"/>
+  <link href="http://localhost:6500/okay/feed/?available=always&amp;order=author&amp;collection=main" opds:facetGroup="Availability" rel="http://opds-spec.org/facet" title="Yours to keep"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=author&amp;collection=full" opds:facetGroup="Collection" rel="http://opds-spec.org/facet" title="Everything"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=author&amp;collection=main" opds:activeFacet="true" opds:facetGroup="Collection" rel="http://opds-spec.org/facet" title="Main Collection"/>
+  <link href="http://localhost:6500/okay/feed/?available=all&amp;order=author&amp;collection=featured" opds:facetGroup="Collection" rel="http://opds-spec.org/facet" title="Popular Books"/>
+  <link href="http://localhost:6500/okay/groups/" rel="start" title="All Books"/>
+  <link href="http://localhost:6500/okay/search/" type="application/opensearchdescription+xml" rel="search"/>
+  <link href="http://localhost:6500/okay/loans/" type="application/atom+xml;profile=opds-catalog;kind=acquisition" rel="http://opds-spec.org/shelf"/>
+  <link href="http://localhost:6500/okay/annotations/" type="application/ld+json; profile=&quot;http://www.w3.org/ns/anno.jsonld&quot;" rel="http://www.w3.org/ns/oa#annotationService"/>
+  <link href="http://www.librarysimplified.org/NYPLEULA" type="text/html" rel="terms-of-service"/>
+  <link href="http://www.librarysimplified.org/nyplprivacypolicy.html" type="text/html" rel="privacy-policy"/>
+  <link href="http://www.librarysimplified.org/acknowledgments.html" type="text/html" rel="copyright"/>
+  <link href="https://test.org/okay/authentication_document" type="application/vnd.opds.authentication.v1.0+json" rel="http://opds-spec.org/auth/document"/>
+</feed>

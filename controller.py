@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import request, make_response
 from lxml import etree
 import base64
+import feedparser
 import json
 import logging
 import urllib
@@ -27,6 +28,7 @@ from core.opds import (
     LookupAcquisitionFeed,
     VerboseAnnotator,
 )
+from core.util.authentication_for_opds import AuthenticationForOPDSDocument
 from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
@@ -274,15 +276,34 @@ class CatalogController(object):
         if not opds_url:
             return INVALID_INPUT.detailed('No OPDS URL')
 
-        AUTH_DOCUMENT_REL = "http://opds-spec.org/auth/document"
+        AUTH_DOCUMENT_REL = AuthenticationForOPDSDocument.OPDS_REL
         auth_response = None
+
+        def get_auth_document(opds_feed):
+            links = opds_feed.get('feed', {}).get('links', [])
+            auth_links = [l for l in links if l.rel==AUTH_DOCUMENT_REL]
+            if not auth_links:
+                return None
+
+            auth_link = auth_links[0]
+            response = do_get(auth_link, allowed_response_codes=['2xx', '3xx'])
+            return response.json()
 
         try:
             response = do_get(
                 opds_url, allowed_response_codes=['2xx', '3xx', 401]
             )
+            if response.status_code == 401:
+                # The feed requires authentication. This response should have
+                # the authentication document.
+                auth_response = response.json()
+            else:
+                feed = feedparser.parse(response.content)
+                auth_response = get_auth_document(feed)
         except Exception as e:
             return INVALID_INPUT.detailed('Invalid OPDS feed')
+
+        return auth_response
 
 
 class URNLookupController(CoreURNLookupController):

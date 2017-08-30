@@ -4,7 +4,10 @@ from nose.tools import (
 )
 import os
 
-from . import DatabaseTest
+from . import (
+    DatabaseTest,
+    sample_data
+)
 
 from core.model import (
     Collection,
@@ -80,11 +83,9 @@ class TestLookupClientCoverageProvider(DatabaseTest):
         )
         self.lookup_client = self.provider.lookup_client
         base_path = os.path.split(__file__)[0]
-        self.resource_path = os.path.join(base_path, "files", "opds")
 
     def sample_data(self, filename):
-        path = os.path.join(self.resource_path, filename)
-        return open(path).read()
+        return sample_data(filename, 'opds')
 
     def test_success(self):
         data = self.sample_data("content_server_lookup.opds")
