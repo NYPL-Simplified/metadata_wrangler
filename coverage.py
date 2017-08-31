@@ -136,22 +136,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             LinkedDataCoverageProvider(self._db, viaf_api=self.viaf_client)
         )
         
-        # The ordinary OverdriveBibliographicCoverageProvider
-        # doesn't upload images, so we need to create our own
-        # mirror and scaler.
-        #
-        # TODO: This class would be neater if we were to subclass
-        # OverdriveBibliographicCoverageProvider to do the scaling and
-        # uploading.
-        self.image_mirrors = {
-            DataSource.OVERDRIVE : OverdriveCoverImageMirror(
-                self._db, uploader=uploader
-            )
-        }
-        self.image_scaler = ImageScaler(
-            self._db, self.image_mirrors.values(), uploader=uploader
-        )
-
     def create_overdrive_api(self, overdrive_api_class):
         collection, is_new = Collection.by_name_and_protocol(
             self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
@@ -200,7 +184,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.collection, api_class=self.overdrive_api
+                    self.uploader, self.collection, api_class=self.overdrive_api
+                    
                 )
             )
         return optional, required
@@ -375,7 +360,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             )
         if work:
             self.resolve_viaf(work)
-            self.resolve_cover_image(work)
 
             work.calculate_presentation(
                 policy=self.policy, exclude_search=True
@@ -418,13 +402,3 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names())
-
-    def resolve_cover_image(self, work):
-        """Make sure we have the cover for all editions."""
-
-        for pool in work.license_pools:
-            edition = pool.presentation_edition
-            data_source_name = pool.data_source.name
-            if data_source_name in self.image_mirrors:
-                self.image_mirrors[data_source_name].mirror_edition(edition)
-                self.image_scaler.scale_edition(edition)

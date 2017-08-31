@@ -83,7 +83,6 @@ class ContentCafeAPI(object):
             _db, ExternalIntegration.CONTENT_CAFE,
             ExternalIntegration.METADATA_GOAL
         )
-
         if not integration or not (integration.username and integration.password):
             raise CannotLoadConfiguration('Content Cafe not properly configured')
 
