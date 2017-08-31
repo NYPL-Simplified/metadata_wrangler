@@ -61,6 +61,9 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # the fake S3.
         full, thumbnail = mirror.uploaded
         eq_(test_cover, full.content)
+
+        # The URLs for the Resource objects are our S3 URLs, not Overdrive's
+        # URLs.
         expect = "Overdrive/Overdrive%%20ID/%s" % identifier.identifier
         for url in [full.mirror_url, thumbnail.mirror_url]:
             assert expect in url
