@@ -2,11 +2,14 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 from lxml import etree
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import base64
 import feedparser
 import json
 import logging
 import urllib
+import urlparse
 
 from core.app_server import (
     cdn_url_for,
@@ -32,13 +35,9 @@ from core.util.authentication_for_opds import AuthenticationForOPDSDocument
 from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
-from core.problem_details import (
-    INVALID_CREDENTIALS,
-    INVALID_INPUT,
-    INVALID_URN,
-)
 
 from canonicalize import AuthorNameCanonicalizer
+from problem_details import *
 
 HTTP_OK = 200
 HTTP_CREATED = 201
@@ -257,37 +256,26 @@ class CatalogController(object):
 
         return feed_response(removal_feed)
 
-    def update_client_url(self):
-        """Updates the URL of a IntegrationClient"""
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
-
-        url = request.args.get('client_url')
-        if not url:
-            return INVALID_INPUT.detailed("No 'client_url' provided")
-
-        client.url = IntegrationClient.normalize_url(urllib.unquote(url))
-
-        return make_response("", HTTP_OK)
-
     def register(self, do_get=HTTP.get_with_timeout):
         opds_url = request.form.get('url')
         if not opds_url:
-            return INVALID_INPUT.detailed('No OPDS URL')
+            return NO_OPDS_URL
 
         AUTH_DOCUMENT_REL = AuthenticationForOPDSDocument.OPDS_REL
         auth_response = None
 
         def get_auth_document(opds_feed):
             links = opds_feed.get('feed', {}).get('links', [])
-            auth_links = [l for l in links if l.rel==AUTH_DOCUMENT_REL]
+            auth_links = [l for l in links if l.href and l.rel==AUTH_DOCUMENT_REL]
             if not auth_links:
                 return None
 
-            auth_link = auth_links[0]
+            auth_link = auth_links[0].get('href')
             response = do_get(auth_link, allowed_response_codes=['2xx', '3xx'])
-            return response.json()
+            try:
+                return response.json()
+            except ValueError as e:
+                return None
 
         try:
             response = do_get(
@@ -301,9 +289,66 @@ class CatalogController(object):
                 feed = feedparser.parse(response.content)
                 auth_response = get_auth_document(feed)
         except Exception as e:
-            return INVALID_INPUT.detailed('Invalid OPDS feed')
+            return INVALID_OPDS_FEED
 
-        return auth_response
+        if not auth_response:
+            return AUTH_DOCUMENT_NOT_FOUND
+
+        url = auth_response.get('id')
+        if not url:
+            return INVALID_AUTH_DOCUMENT.detailed(
+                "The OPDS authentication document is missing an id."
+            )
+
+        # Remove any library-specific URL elements.
+        def base_url(full_url):
+            scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(full_url)
+            return '%s://%s' % (scheme, netloc)
+
+        client_url = base_url(url)
+        if not client_url == base_url(opds_url):
+            return INVALID_AUTH_DOCUMENT.detailed(
+                "The OPDS authentication document id doesn't match submitted url"
+            )
+
+        public_key = auth_response.get('public_key')
+        if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
+            return INVALID_AUTH_DOCUMENT.detailed(
+                "The OPDS authentication document is missing an RSA public_key."
+            )
+        public_key = RSA.importKey(public_key.get('value'))
+        encryptor = PKCS1_OAEP.new(public_key)
+
+        submitted_secret = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
+            submitted_secret = auth_header.split(' ')[1]
+
+        try:
+            client, is_new = IntegrationClient.register(
+                self._db, client_url, submitted_secret
+            )
+        except ValueError as e:
+            return INVALID_CREDENTIALS.detailed(repr(e))
+
+        # Encrypt shared secret.
+        encrypted_secret = encryptor.encrypt(str(client.shared_secret))
+        shared_secret = base64.b64encode(encrypted_secret)
+        auth_data = dict(
+            id=url,
+            metadata=dict(shared_secret=shared_secret)
+        )
+
+        content = json.dumps(auth_data)
+        headers = {
+            "Content-Type" : IntegrationClient.OPDS_CATALOG_REGISTRATION_MEDIA_TYPE
+        }
+
+        status_code = 200
+        if is_new:
+            status_code = 201
+
+        return make_response(content, status_code, headers)
 
 
 class URNLookupController(CoreURNLookupController):

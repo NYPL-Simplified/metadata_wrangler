@@ -3,6 +3,8 @@ import base64
 import feedparser
 import json
 import urllib
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 from StringIO import StringIO
 from datetime import datetime, timedelta
 from functools import wraps
@@ -22,10 +24,6 @@ from core.model import (
     get_one,
 )
 from core.opds_import import OPDSXMLParser
-from core.problem_details import (
-    INVALID_CREDENTIALS,
-    INVALID_INPUT,
-)
 from core.testing import (
     DummyHTTPClient,
     MockRequestsResponse,
@@ -44,6 +42,7 @@ from controller import (
     HTTP_INTERNAL_SERVER_ERROR,
     authenticated_client_from_request,
 )
+from problem_details import *
 
 
 class ControllerTest(DatabaseTest):
@@ -54,7 +53,7 @@ class ControllerTest(DatabaseTest):
         from app import app
         self.app = app
 
-        self.client = self._integration_client()
+        # self.client = self._integration_client()
         valid_auth = 'Basic ' + base64.b64encode('abc:def')
         self.valid_auth = dict(Authorization=valid_auth)
 
@@ -110,6 +109,7 @@ class TestCatalogController(ControllerTest):
     def setup(self):
         super(TestCatalogController, self).setup()
         self.controller = CatalogController(self._db)
+        self.http = DummyHTTPClient()
 
         # The collection as it exists on the circulation manager.
         remote_collection = self._collection(username='test_coll', external_account_id=self._url)
@@ -300,33 +300,6 @@ class TestCatalogController(ControllerTest):
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
 
-    def test_update_client_url(self):
-        url = urllib.quote('https://try-me.fake.us/')
-        with self.app.test_request_context('/', method='POST'):
-            # Without authentication a ProblemDetail is returned.
-            response = self.controller.update_client_url()
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_(INVALID_CREDENTIALS, response)
-
-        with self.app.test_request_context('/',
-            method='POST', headers=self.valid_auth
-        ):
-            # When a URL isn't provided, a ProblemDetail is returned.
-            response = self.controller.update_client_url()
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_(400, response.status_code)
-            eq_(INVALID_INPUT.uri, response.uri)
-            assert 'client_url' in response.detail
-
-        with self.app.test_request_context('/?client_url=%s' % url,
-            method='POST', headers=self.valid_auth
-        ):
-            response = self.controller.update_client_url()
-            # The request was successful.
-            eq_(HTTP_OK, response.status_code)
-            # The IntegrationClient's URL has been changed.
-            self.client.url = 'try-me.fake.us'
-
     def test_register_fails_without_url(self):
         # If not URL is given, a ProblemDetail is returned.
         with self.app.test_request_context('/', method='POST'):
@@ -337,67 +310,188 @@ class TestCatalogController(ControllerTest):
         eq_(INVALID_INPUT.uri, response.uri)
         eq_('No OPDS URL', response.detail)
 
+    def create_register_request_args(self, url):
+        return dict(
+            method='POST',
+            data=dict(url=url),
+            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
+        )
+
     def test_register_fails_if_error_is_raised_fetching_document(self):
         def error_get(*args, **kwargs):
             raise RuntimeError('An OPDS Error')
 
         url = "https://test.org/okay/authentication_document"
-        request_args = dict(
-            method='POST',
-            data=dict(url=url),
-            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
-        )
+        request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=error_get)
 
-        assert isinstance(response, ProblemDetail)
-        eq_(400, response.status_code)
-        eq_(INVALID_INPUT.uri, response.uri)
-        eq_('Invalid OPDS feed', response.detail)
+        eq_(INVALID_OPDS_FEED, response)
 
-    def test_register_succeeds_if_authentication_document_is_returned(self):
-        http = DummyHTTPClient()
-
+    def test_register_fails_when_authentication_document_is_invalid(self):
+        document_url = 'https://test.org/okay/authentication_document'
         mock_auth_doc = self.sample_data('auth_document.json')
-        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
-        http.responses.append(mock_doc_response)
 
-        url = "https://test.org/okay/authentication_document"
-        request_args = dict(
-            method='POST',
-            data=dict(url=url),
-            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
+        def assert_invalid_auth_document(response, message=None):
+            eq_(True, isinstance(response, ProblemDetail))
+            eq_(400, response.status_code)
+            eq_('Invalid auth document', str(response.title))
+            assert response.uri.endswith('/invalid-auth-document')
+            if message:
+                assert message in response.detail
+
+        # A ProblemDetail is returned when there is no authentication document.
+        mock_feed_response = MockRequestsResponse(
+            200, content=self.sample_data('circ_feed.opds')
         )
+        mock_doc_response = MockRequestsResponse(200, content='')
+        self.http.responses.extend([mock_feed_response, mock_doc_response])
+        request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
-            response = self.controller.register(do_get=http.do_get)
+            response = self.controller.register(do_get=self.http.do_get)
+        eq_(AUTH_DOCUMENT_NOT_FOUND, response)
 
-        eq_(url, response.get('id'))
-        eq_('Library', response.get('title'))
-        eq_('public_key', response.get('metadata_wrangler_public_key'))
+        # A ProblemDetail is returned when the authentication document doesn't
+        # have an id.
+        no_id_doc = json.loads(self.sample_data('auth_document.json'))
+        del no_id_doc['id']
+        no_id_response = MockRequestsResponse(401, content=json.dumps(no_id_doc))
+        self.http.responses.append(no_id_response)
 
-    def test_register_succeeds_if_authentication_document_is_linked(self):
-        http = DummyHTTPClient()
+        request_args = self.create_register_request_args(document_url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert_invalid_auth_document(response, 'is missing an id')
 
+        # A ProblemDetail is returned when the authentication document id
+        # doesn't match the submitted OPDS url.
+        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
+        self.http.responses.append(mock_doc_response)
+
+        url = 'https://fake.opds/okay/authentication_document'
+        request_args = self.create_register_request_args(url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert_invalid_auth_document(response, "doesn't match submitted url")
+
+        # A ProblemDetail is returned when the authentication document doesn't
+        # have an RSA public key.
+        no_key_json = json.loads(mock_auth_doc)
+        del no_key_json['public_key']
+        no_public_key_response = MockRequestsResponse(
+            401, content=json.dumps(no_key_json)
+        )
+        self.http.responses.append(no_public_key_response)
+
+        request_args = self.create_register_request_args(document_url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert_invalid_auth_document(response, "missing an RSA public_key")
+
+        # There's a key, but the type isn't RSA.
+        no_key_json['public_key'] = dict(type='safe', value='value')
+        no_public_key_response.content = json.dumps(no_key_json)
+        self.http.responses.append(no_public_key_response)
+
+        request_args = self.create_register_request_args(document_url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert_invalid_auth_document(response, "missing an RSA public_key")
+
+        # There's an RSA public_key property, but there's no value there.
+        no_key_json['public_key']['type'] = 'RSA'
+        del no_key_json['public_key']['value']
+        no_public_key_response.content = json.dumps(no_key_json)
+        self.http.responses.append(no_public_key_response)
+
+        request_args = self.create_register_request_args(document_url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert_invalid_auth_document(response, "missing an RSA public_key")
+
+    def test_register_succeeds_with_valid_authentication_document(self):
+        # Create an encryptor so we can compare secrets later. :3
+        key = RSA.generate(1024)
+        encryptor = PKCS1_OAEP.new(key)
+
+        # Put the new key in the mock catalog.
+        mock_auth_json = json.loads(self.sample_data('auth_document.json'))
+        mock_auth_json['public_key']['value'] = key.exportKey()
+        mock_auth_doc = json.dumps(mock_auth_json)
+        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
+        self.http.responses.append(mock_doc_response)
+
+        url = 'https://test.org/okay/authentication_document'
+        request_args = self.create_register_request_args(url)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+
+        # An IntegrationClient has been created for this website.
+        eq_(201, response.status_code)
+        client_qu = self._db.query(IntegrationClient).filter(
+            IntegrationClient.url == 'test.org'
+        )
+        client = client_qu.one()
+
+        # The appropriate login details are in the response.
+        catalog = json.loads(response.data)
+        eq_(url, catalog.get('id'))
+        shared_secret = catalog.get('metadata').get('shared_secret')
+        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
+        eq_(client.shared_secret, shared_secret)
+
+        # If the client already exists, the shared_secret is updated.
+        client.secret = 'secret'
+        bearer_token = 'Bearer '+base64.b64encode('secret')
+        request_args['headers']['Authorization'] = bearer_token
+
+        self.http.responses.append(mock_doc_response)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+
+        eq_(200, response.status_code)
+        catalog = json.loads(response.data)
+        # There's still only one IntegrationClient with this URL.
+        client = client_qu.one()
+        # It has a new shared_secret.
+        assert client.shared_secret != 'secret'
+        shared_secret = catalog.get('metadata').get('shared_secret')
+        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
+        eq_(client.shared_secret, shared_secret)
+
+        # Register also succeeds when the OPDS feed doesn't need authentication.
+        self._db.delete(client)
         mock_feed = self.sample_data('circ_feed.opds')
         mock_feed_response = MockRequestsResponse(200, content=mock_feed)
-
-        mock_auth_doc = self.sample_data('auth_document.json')
         mock_doc_response = MockRequestsResponse(200, content=mock_auth_doc)
 
-        http.responses.extend([mock_feed_response, mock_doc_response])
-
-        url = "https://test.org/okay/authentication_document"
-        request_args = dict(
-            method='POST',
-            data=dict(url=url),
-            headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
-        )
+        self.http.responses.extend([mock_feed_response, mock_doc_response])
+        request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
-            response = self.controller.register(do_get=http.do_get)
+            response = self.controller.register(do_get=self.http.do_get)
 
-        eq_(url, response.get('id'))
-        eq_('Library', response.get('title'))
-        eq_('public_key', response.get('metadata_wrangler_public_key'))
+        eq_(201, response.status_code)
+        client = client_qu.one()
+        catalog = json.loads(response.data)
+        eq_(url, catalog.get('id'))
+        shared_secret = catalog['metadata']['shared_secret']
+        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
+        eq_(client.shared_secret, shared_secret)
+
+        # If the client already exists, the shared_secret is updated.
+        client.secret = 'secret'
+        bearer_token = 'Bearer '+base64.b64encode('secret')
+        request_args['headers']['Authorization'] = bearer_token
+
+        self.http.responses.extend([mock_feed_response, mock_doc_response])
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+
+        eq_(200, response.status_code)
+        assert client.shared_secret != 'secret'
+        shared_secret = json.loads(response.data)['metadata']['shared_secret']
+        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
+        eq_(client.shared_secret, shared_secret)
 
 
 class TestURNLookupController(ControllerTest):
