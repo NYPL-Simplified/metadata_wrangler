@@ -48,10 +48,10 @@ HTTP_INTERNAL_SERVER_ERROR = 500
 
 
 def authenticated_client_from_request(_db, required=True):
-    header = request.authorization
-    if header:
-        key, secret = header.username, header.password
-        client = IntegrationClient.authenticate(_db, key, secret)
+    header = request.headers.get('Authorization')
+    if header and 'bearer' in header.lower():
+        shared_secret = base64.b64decode(header.split(' ')[1])
+        client = IntegrationClient.authenticate(_db, shared_secret)
         if client:
             return client
     if not required and not header:
@@ -94,6 +94,8 @@ class CanonicalizationController(object):
 
 class CatalogController(object):
     """A controller to manage a Collection's catalog"""
+
+    OPDS_CATALOG_REGISTRATION_MEDIA_TYPE = "application/opds+json;profile=https://librarysimplified.org/rel/profile/directory"
 
     def __init__(self, _db):
         self._db = _db
@@ -322,11 +324,12 @@ class CatalogController(object):
         submitted_secret = None
         auth_header = request.headers.get('Authorization')
         if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
-            submitted_secret = auth_header.split(' ')[1]
+            token = auth_header.split(' ')[1]
+            submitted_secret = base64.b64decode(token)
 
         try:
             client, is_new = IntegrationClient.register(
-                self._db, client_url, submitted_secret
+                self._db, client_url, submitted_secret=submitted_secret
             )
         except ValueError as e:
             return INVALID_CREDENTIALS.detailed(repr(e))
@@ -341,7 +344,7 @@ class CatalogController(object):
 
         content = json.dumps(auth_data)
         headers = {
-            "Content-Type" : IntegrationClient.OPDS_CATALOG_REGISTRATION_MEDIA_TYPE
+            "Content-Type" : self.OPDS_CATALOG_REGISTRATION_MEDIA_TYPE
         }
 
         status_code = 200

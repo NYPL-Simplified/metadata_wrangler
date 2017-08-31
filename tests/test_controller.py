@@ -53,8 +53,8 @@ class ControllerTest(DatabaseTest):
         from app import app
         self.app = app
 
-        # self.client = self._integration_client()
-        valid_auth = 'Basic ' + base64.b64encode('abc:def')
+        self.client = self._integration_client()
+        valid_auth = 'Bearer ' + base64.b64encode(self.client.shared_secret)
         self.valid_auth = dict(Authorization=valid_auth)
 
     def sample_data(self, filename):
@@ -70,7 +70,7 @@ class TestIntegrationClientAuthentication(ControllerTest):
             eq_(result, self.client)
         
         # Returns error if authentication is invalid.
-        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
+        invalid_auth = 'Bearer ' + base64.b64encode('wrong_secret')
         with self.app.test_request_context('/',
                 headers=dict(Authorization=invalid_auth)):
             result = authenticated_client_from_request(self._db)
@@ -300,22 +300,20 @@ class TestCatalogController(ControllerTest):
             # The catalogued identifier is still removed.
             assert catalogued_id not in self.collection.catalog
 
-    def test_register_fails_without_url(self):
-        # If not URL is given, a ProblemDetail is returned.
-        with self.app.test_request_context('/', method='POST'):
-            response = self.controller.register()
-
-        eq_(True, isinstance(response, ProblemDetail))
-        eq_(400, response.status_code)
-        eq_(INVALID_INPUT.uri, response.uri)
-        eq_('No OPDS URL', response.detail)
-
     def create_register_request_args(self, url):
         return dict(
             method='POST',
             data=dict(url=url),
             headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
         )
+
+    def test_register_fails_without_url(self):
+        # If not URL is given, a ProblemDetail is returned.
+        request_args = self.create_register_request_args('')
+        request_args['data'] = ''
+        with self.app.test_request_context('/', method='POST'):
+            response = self.controller.register()
+        eq_(NO_OPDS_URL, response)
 
     def test_register_fails_if_error_is_raised_fetching_document(self):
         def error_get(*args, **kwargs):
@@ -441,8 +439,8 @@ class TestCatalogController(ControllerTest):
         eq_(client.shared_secret, shared_secret)
 
         # If the client already exists, the shared_secret is updated.
-        client.secret = 'secret'
-        bearer_token = 'Bearer '+base64.b64encode('secret')
+        client.shared_secret = 'token'
+        bearer_token = 'Bearer '+base64.b64encode('token')
         request_args['headers']['Authorization'] = bearer_token
 
         self.http.responses.append(mock_doc_response)
@@ -454,7 +452,7 @@ class TestCatalogController(ControllerTest):
         # There's still only one IntegrationClient with this URL.
         client = client_qu.one()
         # It has a new shared_secret.
-        assert client.shared_secret != 'secret'
+        assert client.shared_secret != 'token'
         shared_secret = catalog.get('metadata').get('shared_secret')
         shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
         eq_(client.shared_secret, shared_secret)
@@ -479,8 +477,8 @@ class TestCatalogController(ControllerTest):
         eq_(client.shared_secret, shared_secret)
 
         # If the client already exists, the shared_secret is updated.
-        client.secret = 'secret'
-        bearer_token = 'Bearer '+base64.b64encode('secret')
+        client.shared_secret = 'token'
+        bearer_token = 'Bearer '+base64.b64encode('token')
         request_args['headers']['Authorization'] = bearer_token
 
         self.http.responses.extend([mock_feed_response, mock_doc_response])
@@ -488,7 +486,7 @@ class TestCatalogController(ControllerTest):
             response = self.controller.register(do_get=self.http.do_get)
 
         eq_(200, response.status_code)
-        assert client.shared_secret != 'secret'
+        assert client.shared_secret != 'token'
         shared_secret = json.loads(response.data)['metadata']['shared_secret']
         shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
         eq_(client.shared_secret, shared_secret)
