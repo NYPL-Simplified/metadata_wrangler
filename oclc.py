@@ -723,6 +723,7 @@ class OCLCLinkedData(object):
                 internal = self.INTERNAL_PERSON_URI.search(uri)
                 if internal:
                     graphs = self.internal_lookup(subgraph, [uri])
+                    contributor_data = None
                     for person_graph in graphs:
                         contributor_data = self.extract_contributor(person_graph)
                     if contributor_data:
