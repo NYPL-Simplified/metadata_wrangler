@@ -650,5 +650,6 @@ class IntegrationClientGeneratorScript(Script):
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
         print "-" * 40
-        print "CLIENT KEY: %s" % client
+        print "CLIENT KEY: %s" % client.key
         print "CLIENT SECRET: %s" % plaintext_secret
+        self._db.commit()
