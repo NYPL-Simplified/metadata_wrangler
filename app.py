@@ -120,12 +120,6 @@ def remove(collection_metadata_identifier):
         collection_details=collection_metadata_identifier
     )
 
-@app.route('/client/update_url', methods=['POST'])
-@requires_auth
-@returns_problem_detail
-def update_url():
-    return CatalogController(Conf.db).update_client_url()
-
 @app.route("/register", methods=["POST"])
 @returns_problem_detail
 def register():
