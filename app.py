@@ -23,6 +23,7 @@ from controller import (
     authenticated_client_from_request,
     CatalogController,
     CanonicalizationController,
+    IndexController,
     URNLookupController
 )
 
@@ -76,6 +77,10 @@ def shutdown_session(exception):
             Conf.db.rollback()
         else:
             Conf.db.commit()
+
+@app.route('/')
+def index():
+    return IndexController(Conf.db).opds_catalog()
 
 @app.route('/heartbeat')
 def heartbeat():

@@ -2,6 +2,7 @@ import os
 import base64
 import feedparser
 import json
+import re
 import urllib
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -15,12 +16,14 @@ from . import (
     DatabaseTest,
     sample_data
 )
+from core.config import Configuration
 from core.model import (
-    IntegrationClient,
+    ConfigurationSetting,
     CoverageRecord,
     DataSource,
     ExternalIntegration,
     Identifier,
+    IntegrationClient,
     get_one,
 )
 from core.opds_import import OPDSXMLParser
@@ -33,6 +36,7 @@ from core.util.opds_writer import OPDSMessage
 
 from controller import (
     CatalogController,
+    IndexController,
     URNLookupController,
     HTTP_OK,
     HTTP_CREATED,
@@ -100,6 +104,32 @@ class TestIntegrationClientAuthentication(ControllerTest):
         with self.app.test_request_context('/'):
             result = authenticated_client_from_request(self._db, required=False)
             eq_(None, result)
+
+
+class TestIndexController(ControllerTest):
+
+    def test_opds_catalog(self):
+        controller = IndexController(self._db)
+        with self.app.test_request_context('/'):
+            response = controller.opds_catalog()
+
+        eq_(200, response.status_code)
+        catalog = json.loads(response.data)
+
+        app_url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
+        eq_(app_url, catalog.get('id'))
+        urls = [l.get('href') for l in catalog.get('links')]
+
+        # Use flask endpoint syntax for path variables
+        urls = [re.sub('\{', '<', url) for url in urls]
+        urls = [re.sub('\}', '>', url) for url in urls]
+        # Remove arguments from templated urls
+        urls = [re.sub('<\?[\w,_]*\*?>', '', url) for url in urls]
+
+        # Compare the catalogued urls with the app endpoints.
+        endpoints = [r.rule for r in self.app.url_map.iter_rules()]
+        for url in urls:
+            assert url in endpoints
 
 
 class TestCatalogController(ControllerTest):

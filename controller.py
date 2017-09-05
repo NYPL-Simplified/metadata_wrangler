@@ -17,8 +17,10 @@ from core.app_server import (
     load_pagination_from_request,
     URNLookupController as CoreURNLookupController,
 )
+from core.config import Configuration
 from core.model import (
     Collection,
+    ConfigurationSetting,
     CoverageRecord,
     DataSource,
     Identifier,
@@ -59,6 +61,66 @@ def authenticated_client_from_request(_db, required=True):
         # (i.e. URN lookup) return None instead of an error.
         return None
     return INVALID_CREDENTIALS
+
+
+class IndexController(object):
+
+    def __init__(self, _db):
+        self._db = _db
+
+    def opds_catalog(self):
+        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
+        catalog = dict(
+            id=url,
+            title='Library Simplified Metadata Wrangler',
+        )
+
+        catalog['links'] = [
+            {
+                "rel": "register",
+                "href": "/register",
+                "type": "application/opds+json;profile=https://librarysimplified.org/rel/profile/metadata-service",
+                "title": "Register your OPDS server with this metadata service"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/lookup",
+                "href": "/lookup{?urn*}",
+                "type": "application/atom+xml;profile=opds-catalog",
+                "title": "Look up metadata about one or more specific items",
+                "templated": "true"
+            },
+            {
+                "rel": "http://opds-spec.org/sort/new",
+                "href": "/{collection_metadata_identifier}/updates",
+                "type": "application/atom+xml;profile=opds-catalog",
+                "title": "Recent changes to your tracked collection",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-add",
+                "href": "/{collection_metadata_identifier}/add{?urn*}",
+                "title": "Add items to your collection.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
+                "href": "/{collection_metadata_identifier}/remove{?urn*}",
+                "title": "Remove items from your collection.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/resolve-name",
+                "href": "/canonical-author-name{?urn,display_name}",
+                "type": "text/plain",
+                "title": "Look up an author's canonical sort name",
+                "templated": "true"
+            }
+        ]
+
+        return make_response(
+            json.dumps(catalog), HTTP_OK,
+            {'Content-Type' :  'application/opds+json'}
+        )
 
 
 class CanonicalizationController(object):
