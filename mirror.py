@@ -43,7 +43,8 @@ class CoverImageMirror(object):
         # Only mirror images.
         batch_size=100
         now = datetime.datetime.utcnow()
-        q = q.filter(Hyperlink.rel==Hyperlink.IMAGE)
+        q = q.filter(or_(Hyperlink.rel==Hyperlink.IMAGE,
+                         Hyperlink.rel==Hyperlink.THUMBNAIL_IMAGE))
         q = q.join(Hyperlink.resource).outerjoin(Resource.representation)
         # Restrict to resources that are not already mirrored.
         if force:
@@ -109,7 +110,8 @@ class CoverImageMirror(object):
         # Find all resources for this edition's primary identifier.
         q = self._db.query(Hyperlink).filter(
             Hyperlink.identifier==identifier).filter(
-                Hyperlink.rel==Hyperlink.IMAGE)
+                or_(Hyperlink.rel==Hyperlink.IMAGE,
+                    Hyperlink.rel==Hyperlink.THUMBNAIL_IMAGE))
         self.mirror_all_resources(q)
 
 

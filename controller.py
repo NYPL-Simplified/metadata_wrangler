@@ -21,12 +21,25 @@ from core.config import Configuration
 from core.model import (
     Collection,
     ConfigurationSetting,
+    Contributor,
     CoverageRecord,
     DataSource,
+    Edition,
+    Hyperlink,
     Identifier,
     IntegrationClient,
+    LicensePool,
+    PresentationCalculationPolicy,
     create,
     get_one,
+    get_one_or_create,
+)
+from core.metadata_layer import (
+    Metadata,
+    ContributorData,
+    IdentifierData,
+    LinkData,
+    ReplacementPolicy,
 )
 from core.opds import (
     AcquisitionFeed,
@@ -266,6 +279,118 @@ class CatalogController(object):
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = cdn_url_for(
             "add", collection_metadata_identifier=collection.name, urn=urns
+        )
+        addition_feed = AcquisitionFeed(
+            self._db, title, url, [], VerboseAnnotator,
+            precomposed_entries=messages
+        )
+
+        return feed_response(addition_feed)
+
+    def add_with_metadata(self, collection_details):
+        """Adds identifiers with their metadata to a Collection's catalog"""
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection, ignore = Collection.from_metadata_identifier(
+            self._db, collection_details
+        )
+
+        messages = []
+
+        feed = feedparser.parse(request.data)
+        entries = feed.get("entries", [])
+
+        if not client.data_source:
+            client.data_source = DataSource.lookup(self._db, client.key, autocreate=True)
+        data_source = client.data_source
+
+        for entry in entries:
+            urn = entry.get('id')
+            try:
+                identifier, ignore = Identifier.parse_urn(
+                    self._db, urn
+                )
+            except Exception as e:
+                identifier = None
+
+            if not identifier:
+                message = OPDSMessage(
+                    urn, INVALID_URN.status_code, INVALID_URN.detail
+                )
+            else:
+                status = HTTP_OK
+                description = "Already in catalog"
+
+                if identifier not in collection.catalog:
+                    collection.catalog_identifier(self._db, identifier)
+                    status = HTTP_CREATED
+                    description = "Successfully added"
+
+                message = OPDSMessage(urn, status, description)
+
+                # Make sure there's a LicensePool for this Identifier in this
+                # Collection.
+                license_pools = [p for p in identifier.licensed_through
+                                 if collection==p.collection]
+            
+                if license_pools:
+                    # A given Collection may have at most one LicensePool for
+                    # a given identifier.
+                    pool = license_pools[0]
+                else:
+                    # This Collection has no LicensePool for the given Identifier.
+                    # Create one.
+                    pool, ignore = LicensePool.for_foreign_id(
+                        self._db, data_source, identifier.type, 
+                        identifier.identifier, collection=collection
+                    )
+
+
+                # Create an edition to hold the title and author. LicensePool.calculate_work
+                # refuses to create a Work when there's no title, and if we have a title, author
+                # and language we can attempt to look up the edition in OCLC.
+                images = [l for l in entry.get("links", []) if l.get("rel") == Hyperlink.IMAGE or l.get("rel") == Hyperlink.THUMBNAIL_IMAGE]
+                links = [LinkData(image.get("rel"), image.get("href")) for image in images]
+                author = ContributorData(sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
+                                         roles=[Contributor.PRIMARY_AUTHOR_ROLE])
+
+                presentation = PresentationCalculationPolicy(
+                    choose_edition=False,
+                    set_edition_metadata=False,
+                    classify=False,
+                    choose_summary=False,
+                    calculate_quality=False,
+                    choose_cover=False,
+                    regenerate_opds_entries=False,
+                )
+                replace = ReplacementPolicy(presentation_calculation_policy=presentation)
+                metadata = Metadata(
+                    data_source,
+                    primary_identifier=IdentifierData(identifier.type, identifier.identifier),
+                    title=entry.get("title") or "Unknown",
+                    language=entry.get("dcterms_language"),
+                    contributors=[author],
+                    links=links,
+                )
+
+                edition, ignore = metadata.edition(self._db)
+                metadata.apply(edition, collection, replace=replace)
+
+                # Create a transient failure CoverageRecord for this identifier
+                # so it will be processed by the IdentifierResolutionCoverageProvider.
+                internal_processing = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+                CoverageRecord.add_for(edition, internal_processing,
+                                       operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+                                       status=CoverageRecord.TRANSIENT_FAILURE,
+                                       collection=collection)
+
+            messages.append(message)
+
+        title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
+        url = cdn_url_for(
+            "add_with_metadata", collection_metadata_identifier=collection.name
         )
         addition_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
