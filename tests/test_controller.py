@@ -277,7 +277,7 @@ class TestCatalogController(ControllerTest):
         eq_("Mary Gray", edition.title)
         [author] = edition.contributors
         eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
-        eq_("en", edition.language)
+        eq_("eng", edition.language)
 
         # Finally, the identifier has a transient failure CoverageRecord so it will
         # be processed by the identifier resolution script.

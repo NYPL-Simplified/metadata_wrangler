@@ -28,6 +28,12 @@ from core.model import (
     get_one,
     get_one_or_create,
 )
+from core.metadata_layer import (
+    Metadata,
+    ContributorData,
+    IdentifierData,
+    LinkData,
+)
 from core.opds import (
     AcquisitionFeed,
     LookupAcquisitionFeed,
@@ -257,13 +263,6 @@ class CatalogController(object):
 
                 message = OPDSMessage(urn, status, description)
 
-                links = entry.get("links")
-                images = [l for l in links if l.get("rel") == Hyperlink.IMAGE or l.get("rel") == Hyperlink.THUMBNAIL_IMAGE]
-
-                for image in images:
-                    link, is_new  = identifier.add_link(image.get("rel"), image.get("href"),
-                                                        data_source=data_source)
-
                 # Make sure there's a LicensePool for this Identifier in this
                 # Collection.
                 license_pools = [p for p in identifier.licensed_through
@@ -281,17 +280,26 @@ class CatalogController(object):
                         identifier.identifier, collection=collection
                     )
 
+
                 # Create an edition to hold the title and author. LicensePool.calculate_work
                 # refuses to create a Work when there's no title, and if we have a title, author
                 # and language we can attempt to look up the edition in OCLC.
-                edition, ignore = get_one_or_create(
-                    self._db, Edition, data_source=data_source,
-                    primary_identifier=identifier,
+                images = [l for l in entry.get("links", []) if l.get("rel") == Hyperlink.IMAGE or l.get("rel") == Hyperlink.THUMBNAIL_IMAGE]
+                links = [LinkData(image.get("rel"), image.get("href")) for image in images]
+                author = ContributorData(sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
+                                         roles=[Contributor.PRIMARY_AUTHOR_ROLE])
+
+                metadata = Metadata(
+                    data_source,
+                    primary_identifier=IdentifierData(identifier.type, identifier.identifier),
+                    title=entry.get("title") or "Unknown",
+                    language=entry.get("dcterms_language"),
+                    contributors=[author],
+                    links=links,
                 )
-                edition.title = entry.get("title") or "Unknown"
-                author = entry.get("author") or Edition.UNKNOWN_AUTHOR
-                edition.add_contributor(author, Contributor.PRIMARY_AUTHOR_ROLE)
-                edition.language = entry.get('dcterms_language')
+
+                edition, ignore = metadata.edition(self._db)
+                metadata.apply(edition, collection)
 
                 # Create a transient failure CoverageRecord for this identifier
                 # so it will be processed by the IdentifierResolutionCoverageProvider.
