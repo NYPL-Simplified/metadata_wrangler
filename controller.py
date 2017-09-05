@@ -303,7 +303,7 @@ class CatalogController(object):
         entries = feed.get("entries", [])
 
         if not client.data_source:
-            client.data_source = DataSource.lookup(self._db, client.key, autocreate=True)
+            client.data_source = DataSource.lookup(self._db, client.url, autocreate=True)
         data_source = client.data_source
 
         for entry in entries:
