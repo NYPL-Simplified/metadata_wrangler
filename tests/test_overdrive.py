@@ -47,12 +47,12 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         test_cover = self.data_file("covers/test-book-cover.png")
         test_small_cover = self.data_file("covers/tiny-image-cover.png")
 
-        # Overdrive's thumbnail image -- we will not be using this
-        http.queue_response(200, "image/jpeg", {}, test_small_cover)
-
         # Overdrive's full-sized image -- we will be creating our own
         # thumbnail from this.
         http.queue_response(200, "image/jpeg", {}, test_cover)
+
+        # Overdrive's thumbnail image -- we will not be using this
+        http.queue_response(200, "image/jpeg", {}, test_small_cover)
 
         record = provider.ensure_coverage(identifier)
         eq_("success", record.status)
@@ -74,5 +74,3 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # same as the full image or the test cover.
         assert thumbnail.content != test_small_cover
         assert thumbnail.content != test_cover
-
-
