@@ -14,7 +14,9 @@ from core.model import (
     IntegrationClient,
     CoverageRecord,
     DataSource,
+    Edition,
     ExternalIntegration,
+    Hyperlink,
     Identifier,
     get_one,
 )
@@ -225,6 +227,101 @@ class TestCatalogController(ControllerTest):
 
         # Invalid identifier return 400 errors.
         eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+        eq_('400', self.xml_value(invalid, 'simplified:status_code'))
+        eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
+
+    def test_add_with_metadata(self):
+        # Pretend this content server OPDS came from a circulation manager.
+        base_path = os.path.split(__file__)[0]
+        resource_path = os.path.join(base_path, "files", "opds")
+        path = os.path.join(resource_path, "content_server_lookup.opds")
+        opds = open(path).read()
+
+        # And here's some OPDS with an invalid identifier.
+        invalid_opds = "<feed><entry><id>invalid</id></entry></feed>"
+
+        parser = OPDSXMLParser()
+        message_path = '/atom:feed/simplified:message'
+
+        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+            response = self.controller.add_with_metadata(self.collection.name)
+
+        eq_(HTTP_OK, response.status_code)
+
+        # It sends one message.
+        root = etree.parse(StringIO(response.data))
+        [catalogued] = self.XML_PARSE(root, message_path)
+
+        # The identifier in the OPDS feed is now in the catalog.
+        identifier = self._identifier(foreign_id='20201')
+        assert identifier in self.collection.catalog
+
+        # It has an accurate response message.
+        eq_(identifier.urn, self.xml_value(catalogued, 'atom:id'))
+        eq_('201', self.xml_value(catalogued, 'simplified:status_code'))
+        eq_('Successfully added', self.xml_value(catalogued, 'schema:description'))
+
+        # The identifier has links for the cover images from the feed.
+        eq_(set(["http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png",
+                 "http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png"]),
+            set([link.resource.url for link in identifier.links]))
+        eq_(set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE]),
+            set([link.rel for link in identifier.links]))
+
+        # The identifier has a LicensePool.
+        eq_(1, len(identifier.licensed_through))
+        eq_(self.collection, identifier.licensed_through[0].collection)
+
+        # The identifier also has an Edition with title, author, and language.
+        edition = get_one(self._db, Edition, primary_identifier=identifier)
+        eq_("Mary Gray", edition.title)
+        [author] = edition.contributors
+        eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
+        eq_("eng", edition.language)
+
+        # Finally, the identifier has a transient failure CoverageRecord so it will
+        # be processed by the identifier resolution script.
+        data_source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+        record = CoverageRecord.lookup(identifier, data_source,
+                                        CoverageRecord.RESOLVE_IDENTIFIER_OPERATION)
+        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
+        eq_(self.collection, record.collection)
+
+        record.status = CoverageRecord.SUCCESS
+
+        # If we make the same request again, the identifier stays in the catalog.
+        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+            response = self.controller.add_with_metadata(self.collection.name)
+
+        eq_(HTTP_OK, response.status_code)
+
+        # It sends one message.
+        root = etree.parse(StringIO(response.data))
+        [catalogued] = self.XML_PARSE(root, message_path)
+
+        # The identifier in the OPDS feed is still in the catalog.
+        assert identifier in self.collection.catalog
+
+        # And even though it responds 'OK', the message tells you it
+        # was already there.
+        eq_(identifier.urn, self.xml_value(catalogued, 'atom:id'))
+        eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
+        eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
+
+        # The coverage record has been set back to transient failure since
+        # there's new information to process.
+        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
+
+        # The invalid identifier returns a 400 error message.
+        with self.app.test_request_context(headers=self.valid_auth, data=invalid_opds):
+            response = self.controller.add_with_metadata(self.collection.name)
+        eq_(HTTP_OK, response.status_code)
+
+        # It sends one message.
+        root = etree.parse(StringIO(response.data))
+        [invalid] = self.XML_PARSE(root, message_path)
+
+        eq_("invalid", self.xml_value(invalid, 'atom:id'))
         eq_('400', self.xml_value(invalid, 'simplified:status_code'))
         eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
 
