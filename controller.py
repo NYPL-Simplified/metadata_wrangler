@@ -24,6 +24,7 @@ from core.model import (
     Identifier,
     IntegrationClient,
     LicensePool,
+    PresentationCalculationPolicy,
     create,
     get_one,
     get_one_or_create,
@@ -33,6 +34,7 @@ from core.metadata_layer import (
     ContributorData,
     IdentifierData,
     LinkData,
+    ReplacementPolicy,
 )
 from core.opds import (
     AcquisitionFeed,
@@ -289,6 +291,16 @@ class CatalogController(object):
                 author = ContributorData(sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
                                          roles=[Contributor.PRIMARY_AUTHOR_ROLE])
 
+                presentation = PresentationCalculationPolicy(
+                    choose_edition=False,
+                    set_edition_metadata=False,
+                    classify=False,
+                    choose_summary=False,
+                    calculate_quality=False,
+                    choose_cover=False,
+                    regenerate_opds_entries=False,
+                )
+                replace = ReplacementPolicy(presentation_calculation_policy=presentation)
                 metadata = Metadata(
                     data_source,
                     primary_identifier=IdentifierData(identifier.type, identifier.identifier),
@@ -299,7 +311,7 @@ class CatalogController(object):
                 )
 
                 edition, ignore = metadata.edition(self._db)
-                metadata.apply(edition, collection)
+                metadata.apply(edition, collection, replace=replace)
 
                 # Create a transient failure CoverageRecord for this identifier
                 # so it will be processed by the IdentifierResolutionCoverageProvider.
