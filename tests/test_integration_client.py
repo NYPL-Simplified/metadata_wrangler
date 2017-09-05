@@ -4,7 +4,6 @@ from nose.tools import (
     assert_raises,
 )
 
-from core.coverage import CoverageFailure
 from core.s3 import DummyS3Uploader
 
 from . import (
@@ -13,7 +12,6 @@ from . import (
 from integration_client import (
     IntegrationClientCoverageProvider,
 )
-from mirror import CoverImageMirror, ImageScaler
 
 class TestIntegrationClientCoverageProvider(DatabaseTest):
 
@@ -23,7 +21,5 @@ class TestIntegrationClientCoverageProvider(DatabaseTest):
         provider = IntegrationClientCoverageProvider(
             uploader=uploader, collection=self._default_collection
         )
-        assert isinstance(provider.mirror, CoverImageMirror)
-        assert isinstance(provider.scaler, ImageScaler)
-        eq_(self._default_collection.name, provider.mirror.DATA_SOURCE)
+        eq_(self._default_collection.name, provider.data_source.name)
 

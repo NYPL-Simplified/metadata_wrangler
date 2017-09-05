@@ -1,8 +1,10 @@
 from nose.tools import set_trace
-from sqlalchemy.orm.session import Session
 from core.model import DataSource
 from core.coverage import CollectionCoverageProvider
-from mirror import CoverImageMirror, ImageScaler
+from core.metadata_layer import (
+    Metadata,
+    ReplacementPolicy,
+)
 
 class IntegrationClientCoverageProvider(CollectionCoverageProvider):
     """Mirrors and scales cover images we heard about from an IntegrationClient."""
@@ -11,21 +13,18 @@ class IntegrationClientCoverageProvider(CollectionCoverageProvider):
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
 
     def __init__(self, uploader, collection, *args, **kwargs):
-        _db = Session.object_session(collection)
-        data_source_name = collection.name
-        data_source = DataSource.lookup(_db, data_source_name, autocreate=True)
-
-        class IntegrationClientMirror(CoverImageMirror):
-            DATA_SOURCE = data_source.name
-
-        self.mirror = IntegrationClientMirror(_db, uploader=uploader)
-        self.scaler = ImageScaler(_db, [self.mirror], uploader=uploader)
-
+        self.uploader = uploader
         super(IntegrationClientCoverageProvider, self).__init__(
             collection, *args, **kwargs)
 
+    @property
+    def data_source(self):
+        """Use the collection's name as the data source name."""
+        return DataSource.lookup(self._db, self.collection.name, autocreate=True)
+
     def process_item(self, identifier):
         edition = self.edition(identifier)
-        self.mirror.mirror_edition(edition)
-        self.scaler.scale_edition(edition)
+        replace = ReplacementPolicy(mirror=self.uploader, links=True)
+        metadata = Metadata.from_edition(edition)
+        metadata.apply(edition, self.collection, replace=replace)
         return identifier
