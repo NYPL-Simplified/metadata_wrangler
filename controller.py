@@ -325,7 +325,7 @@ class CatalogController(object):
         if not opds_url:
             return NO_OPDS_URL
 
-        AUTH_DOCUMENT_REL = AuthenticationForOPDSDocument.OPDS_REL
+        AUTH_DOCUMENT_REL = AuthenticationForOPDSDocument.LINK_RELATION
         auth_response = None
 
         def get_auth_document(opds_feed):
