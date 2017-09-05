@@ -54,6 +54,9 @@ from oclc import (
 from viaf import (
     VIAFClient, 
 )
+from integration_client import (
+    IntegrationClientCoverageProvider,
+)
 
 
 class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
@@ -166,8 +169,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         )
         oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
-        optional = []
-        required = [content_cafe, oclc_classify]
+        if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
+            # If a book came from an OPDS for distributors collection, it may
+            # not have an identifier that can be looked up elsewhere.
+            optional = [content_cafe, oclc_classify]
+            required = []
+        else:
+            optional = []
+            required = [content_cafe, oclc_classify]
             
         # All books derived from OPDS import against the open-access
         # content server must be looked up in that server.
@@ -188,7 +197,18 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                     
                 )
             )
-        return optional, required
+
+        # We already have metadata for books we heard about from an
+        # IntegrationClient, but we need to make sure the covers get
+        # mirrored.
+        if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
+            required.append(
+                IntegrationClientCoverageProvider(
+                    self.uploader, self.collection
+                )
+            )
+
+        return required, optional
 
     def items_that_need_coverage(self, identifiers=None, **kwargs):
         """Find all identifiers lacking coverage from this CoverageProvider.
@@ -362,7 +382,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             self.resolve_viaf(work)
 
             work.calculate_presentation(
-                policy=self.policy, exclude_search=True
+                policy=self.policy, exclude_search=True,
+                default_fiction=None, default_audience=None,
             )
             work.set_presentation_ready(exclude_search=True)
         else:

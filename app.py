@@ -104,6 +104,14 @@ def add(collection_metadata_identifier):
         collection_details=collection_metadata_identifier
     )
 
+@app.route('/<collection_metadata_identifier>/add_with_metadata', methods=['POST'])
+@requires_auth
+@returns_problem_detail
+def add_with_metadata(collection_metadata_identifier):
+    return CatalogController(Conf.db).add_with_metadata(
+        collection_details=collection_metadata_identifier
+    )
+
 @app.route('/<collection_metadata_identifier>/updates')
 @requires_auth
 @returns_problem_detail

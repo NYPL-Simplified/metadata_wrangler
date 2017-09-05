@@ -10,6 +10,7 @@ from core.model import (
     Collection,
     CoverageRecord, 
     DataSource,
+    ExternalIntegration,
     get_one, 
     Identifier,
     LicensePool,
@@ -32,6 +33,9 @@ from oclc_classify import (
 from oclc import (
     LinkedDataCoverageProvider,
     MockOCLCLinkedData,
+)
+from integration_client import (
+    IntegrationClientCoverageProvider,
 )
 
 from coverage import IdentifierResolutionCoverageProvider
@@ -249,7 +253,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and OPDS Lookup Protocol.
-        optional, [content_cafe, oclc_classify, opds] = resolver.providers()
+        [content_cafe, oclc_classify, opds], optional = resolver.providers()
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
@@ -274,11 +278,33 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # We get three required coverage providers: Content Cafe, OCLC
         # Classify, and Overdrive.
-        optional, [content_cafe, oclc_classify, overdrive] = resolver.providers()
+        [content_cafe, oclc_classify, overdrive], optional = resolver.providers()
         eq_([], optional)
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
+
+    def test_providers_opds_for_distributors(self):
+        # For an OPDS for distributors collection from a circulation manager.
+        self._default_collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+        uploader = object()
+
+        # In lieu of a proper mock API, create one that will crash
+        # if it tries to make a real HTTP request.
+        mock_content_cafe = ContentCafeAPI(
+            self._db, None, object(), object(), self.uploader
+        )
+        resolver = IdentifierResolutionCoverageProvider(
+            self._default_collection,
+            content_cafe_api=mock_content_cafe,
+            uploader=self.uploader
+        )
+
+        # We get one required coverage provider and two optional coverage providers.
+        [integration_client], [content_cafe, oclc_classify] = resolver.providers()
+        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
+        assert isinstance(integration_client, IntegrationClientCoverageProvider)
         
     def test_items_that_need_coverage(self):
         # Only items with an existing transient failure status require coverage.
