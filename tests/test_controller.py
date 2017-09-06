@@ -453,11 +453,11 @@ class TestCatalogController(ControllerTest):
 
         eq_(REMOTE_INTEGRATION_ERROR, response)
 
-    def test_register_fails_when_authentication_document_is_invalid(self):
+    def test_register_fails_when_public_key_document_is_invalid(self):
         document_url = 'https://test.org/'
-        mock_auth_doc = json.loads(self.sample_data('auth_document.json'))
+        mock_public_key_doc = json.loads(self.sample_data('public_key_document.json'))
 
-        def assert_invalid_auth_document(response, message=None):
+        def assert_invalid_key_document(response, message=None):
             eq_(True, isinstance(response, ProblemDetail))
             eq_(400, response.status_code)
             eq_('Invalid integration document', str(response.title))
@@ -477,39 +477,39 @@ class TestCatalogController(ControllerTest):
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response)
+        assert_invalid_key_document(response)
 
         # A ProblemDetail is returned when the public key document doesn't
         # have an id.
-        no_id_doc = mock_auth_doc.copy()
+        no_id_doc = mock_public_key_doc.copy()
         del no_id_doc['id']
         self.http.responses.append(mock_response(no_id_doc))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response, 'is missing an id')
+        assert_invalid_key_document(response, 'is missing an id')
 
-        # A ProblemDetail is returned when the authentication document id
+        # A ProblemDetail is returned when the public key document id
         # doesn't match the submitted OPDS url.
-        self.http.responses.append(mock_response(mock_auth_doc))
+        self.http.responses.append(mock_response(mock_public_key_doc))
         url = 'https://fake.opds/'
 
         request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response, "doesn't match submitted url")
+        assert_invalid_key_document(response, "doesn't match submitted url")
 
-        # A ProblemDetail is returned when the authentication document doesn't
+        # A ProblemDetail is returned when the public key document doesn't
         # have an RSA public key.
-        no_key_json = mock_auth_doc.copy()
+        no_key_json = mock_public_key_doc.copy()
         del no_key_json['public_key']
         self.http.responses.append(mock_response(no_key_json))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response, "missing an RSA public_key")
+        assert_invalid_key_document(response, "missing an RSA public_key")
 
         # There's a key, but the type isn't RSA.
         no_key_json['public_key'] = dict(type='safe', value='value')
@@ -518,7 +518,7 @@ class TestCatalogController(ControllerTest):
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response, "missing an RSA public_key")
+        assert_invalid_key_document(response, "missing an RSA public_key")
 
         # There's an RSA public_key property, but there's no value there.
         no_key_json['public_key']['type'] = 'RSA'
@@ -528,19 +528,19 @@ class TestCatalogController(ControllerTest):
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_auth_document(response, "missing an RSA public_key")
+        assert_invalid_key_document(response, "missing an RSA public_key")
 
-    def test_register_succeeds_with_valid_authentication_document(self):
+    def test_register_succeeds_with_valid_public_key_document(self):
         # Create an encryptor so we can compare secrets later. :3
         key = RSA.generate(1024)
         encryptor = PKCS1_OAEP.new(key)
 
         # Put the new key in the mock catalog.
-        mock_auth_json = json.loads(self.sample_data('auth_document.json'))
+        mock_auth_json = json.loads(self.sample_data('public_key_document.json'))
         mock_auth_json['public_key']['value'] = key.exportKey()
-        mock_auth_doc = json.dumps(mock_auth_json)
+        mock_public_key_doc = json.dumps(mock_auth_json)
         mock_doc_response = MockRequestsResponse(
-            200, content=mock_auth_doc,
+            200, content=mock_public_key_doc,
             headers={ 'Content-Type' : 'application/opds+json' }
         )
         self.http.responses.append(mock_doc_response)

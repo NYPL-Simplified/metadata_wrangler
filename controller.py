@@ -469,7 +469,7 @@ class CatalogController(object):
         url = public_key_response.get('id')
         if not url:
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The OPDS authentication document is missing an id."
+                "The public key integration document is missing an id."
             )
 
         # Remove any library-specific URL elements.
@@ -480,13 +480,13 @@ class CatalogController(object):
         client_url = base_url(url)
         if not client_url == base_url(public_key_url):
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The OPDS authentication document id doesn't match submitted url"
+                "The public key integration document id doesn't match submitted url"
             )
 
         public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The OPDS authentication document is missing an RSA public_key."
+                "The public key integration document is missing an RSA public_key."
             )
         public_key = RSA.importKey(public_key.get('value'))
         encryptor = PKCS1_OAEP.new(public_key)

@@ -6,7 +6,7 @@ NO_AUTH_URL = pd(
       "http://librarysimplified.org/terms/problem/no-auth-url",
       400,
       _("No Authentication URL provided"),
-      _("You must provide a URL to an authentication document to register a server."),
+      _("You must provide a URL to a public key integration document to register a server."),
 )
 
 REMOTE_INTEGRATION_ERROR = pd(
