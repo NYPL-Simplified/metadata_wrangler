@@ -106,19 +106,19 @@ class IndexController(object):
                 "rel": "http://opds-spec.org/sort/new",
                 "href": "/{collection_metadata_identifier}/updates",
                 "type": "application/atom+xml;profile=opds-catalog",
-                "title": "Recent changes to your tracked collection",
+                "title": "Recent changes to one of your tracked collections.",
                 "templated": "true"
             },
             {
                 "rel": "http://librarysimplified.org/rel/metadata/collection-add",
                 "href": "/{collection_metadata_identifier}/add{?urn*}",
-                "title": "Add items to your collection.",
+                "title": "Add items to one of your tracked collections.",
                 "templated": "true"
             },
             {
                 "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
                 "href": "/{collection_metadata_identifier}/remove{?urn*}",
-                "title": "Remove items from your collection.",
+                "title": "Remove items from one of your tracked collections.",
                 "templated": "true"
             },
             {
