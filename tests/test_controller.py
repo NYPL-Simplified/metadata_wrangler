@@ -440,7 +440,7 @@ class TestCatalogController(ControllerTest):
         request_args['data'] = ''
         with self.app.test_request_context('/', method='POST'):
             response = self.controller.register()
-        eq_(NO_OPDS_URL, response)
+        eq_(NO_AUTH_URL, response)
 
     def test_register_fails_if_error_is_raised_fetching_document(self):
         def error_get(*args, **kwargs):
@@ -451,37 +451,39 @@ class TestCatalogController(ControllerTest):
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=error_get)
 
-        eq_(INVALID_OPDS_FEED, response)
+        eq_(REMOTE_INTEGRATION_ERROR, response)
 
     def test_register_fails_when_authentication_document_is_invalid(self):
         document_url = 'https://test.org/'
-        mock_auth_doc = self.sample_data('auth_document.json')
+        mock_auth_doc = json.loads(self.sample_data('auth_document.json'))
 
         def assert_invalid_auth_document(response, message=None):
             eq_(True, isinstance(response, ProblemDetail))
             eq_(400, response.status_code)
-            eq_('Invalid auth document', str(response.title))
-            assert response.uri.endswith('/invalid-auth-document')
+            eq_('Invalid integration document', str(response.title))
+            assert response.uri.endswith('/invalid-integration-document')
             if message:
                 assert message in response.detail
 
-        # A ProblemDetail is returned when there is no authentication document.
-        mock_feed_response = MockRequestsResponse(
-            200, content=self.sample_data('circ_feed.opds')
-        )
-        mock_doc_response = MockRequestsResponse(200, content='')
-        self.http.responses.extend([mock_feed_response, mock_doc_response])
+        def mock_response(content_json, status_code=200):
+            content = json.dumps(content_json)
+            headers = { 'Content-Type' : 'application/opds+json' }
+            return MockRequestsResponse(
+                status_code, headers=headers, content=content
+            )
+
+        # A ProblemDetail is returned when there is no public key document.
+        self.http.responses.append(MockRequestsResponse(200, content=''))
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        eq_(AUTH_DOCUMENT_NOT_FOUND, response)
+        assert_invalid_auth_document(response)
 
-        # A ProblemDetail is returned when the authentication document doesn't
+        # A ProblemDetail is returned when the public key document doesn't
         # have an id.
-        no_id_doc = json.loads(self.sample_data('auth_document.json'))
+        no_id_doc = mock_auth_doc.copy()
         del no_id_doc['id']
-        no_id_response = MockRequestsResponse(401, content=json.dumps(no_id_doc))
-        self.http.responses.append(no_id_response)
+        self.http.responses.append(mock_response(no_id_doc))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
@@ -490,10 +492,9 @@ class TestCatalogController(ControllerTest):
 
         # A ProblemDetail is returned when the authentication document id
         # doesn't match the submitted OPDS url.
-        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
-        self.http.responses.append(mock_doc_response)
-
+        self.http.responses.append(mock_response(mock_auth_doc))
         url = 'https://fake.opds/'
+
         request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
@@ -501,12 +502,9 @@ class TestCatalogController(ControllerTest):
 
         # A ProblemDetail is returned when the authentication document doesn't
         # have an RSA public key.
-        no_key_json = json.loads(mock_auth_doc)
+        no_key_json = mock_auth_doc.copy()
         del no_key_json['public_key']
-        no_public_key_response = MockRequestsResponse(
-            401, content=json.dumps(no_key_json)
-        )
-        self.http.responses.append(no_public_key_response)
+        self.http.responses.append(mock_response(no_key_json))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
@@ -515,8 +513,7 @@ class TestCatalogController(ControllerTest):
 
         # There's a key, but the type isn't RSA.
         no_key_json['public_key'] = dict(type='safe', value='value')
-        no_public_key_response.content = json.dumps(no_key_json)
-        self.http.responses.append(no_public_key_response)
+        self.http.responses.append(mock_response(no_key_json))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
@@ -526,8 +523,7 @@ class TestCatalogController(ControllerTest):
         # There's an RSA public_key property, but there's no value there.
         no_key_json['public_key']['type'] = 'RSA'
         del no_key_json['public_key']['value']
-        no_public_key_response.content = json.dumps(no_key_json)
-        self.http.responses.append(no_public_key_response)
+        self.http.responses.append(mock_response(no_key_json))
 
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
@@ -543,7 +539,10 @@ class TestCatalogController(ControllerTest):
         mock_auth_json = json.loads(self.sample_data('auth_document.json'))
         mock_auth_json['public_key']['value'] = key.exportKey()
         mock_auth_doc = json.dumps(mock_auth_json)
-        mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
+        mock_doc_response = MockRequestsResponse(
+            200, content=mock_auth_doc,
+            headers={ 'Content-Type' : 'application/opds+json' }
+        )
         self.http.responses.append(mock_doc_response)
 
         url = 'https://test.org/'
@@ -581,40 +580,6 @@ class TestCatalogController(ControllerTest):
         # It has a new shared_secret.
         assert client.shared_secret != 'token'
         shared_secret = catalog.get('metadata').get('shared_secret')
-        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
-        eq_(client.shared_secret, shared_secret)
-
-        # Register also succeeds when the OPDS feed doesn't need authentication.
-        self._db.delete(client)
-        mock_feed = self.sample_data('circ_feed.opds')
-        mock_feed_response = MockRequestsResponse(200, content=mock_feed)
-        mock_doc_response = MockRequestsResponse(200, content=mock_auth_doc)
-
-        self.http.responses.extend([mock_feed_response, mock_doc_response])
-        request_args = self.create_register_request_args(url)
-        with self.app.test_request_context('/', **request_args):
-            response = self.controller.register(do_get=self.http.do_get)
-
-        eq_(201, response.status_code)
-        client = client_qu.one()
-        catalog = json.loads(response.data)
-        eq_(url, catalog.get('id'))
-        shared_secret = catalog['metadata']['shared_secret']
-        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
-        eq_(client.shared_secret, shared_secret)
-
-        # If the client already exists, the shared_secret is updated.
-        client.shared_secret = 'token'
-        bearer_token = 'Bearer '+base64.b64encode('token')
-        request_args['headers']['Authorization'] = bearer_token
-
-        self.http.responses.extend([mock_feed_response, mock_doc_response])
-        with self.app.test_request_context('/', **request_args):
-            response = self.controller.register(do_get=self.http.do_get)
-
-        eq_(200, response.status_code)
-        assert client.shared_secret != 'token'
-        shared_secret = json.loads(response.data)['metadata']['shared_secret']
         shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
         eq_(client.shared_secret, shared_secret)
 

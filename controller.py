@@ -61,6 +61,7 @@ HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
 
+OPDS_2_MEDIA_TYPE = 'application/opds+json'
 
 def authenticated_client_from_request(_db, required=True):
     header = request.headers.get('Authorization')
@@ -132,7 +133,7 @@ class IndexController(object):
 
         return make_response(
             json.dumps(catalog), HTTP_OK,
-            {'Content-Type' :  'application/opds+json'}
+            {'Content-Type' : OPDS_2_MEDIA_TYPE }
         )
 
 
@@ -169,8 +170,6 @@ class CanonicalizationController(object):
 
 class CatalogController(object):
     """A controller to manage a Collection's catalog"""
-
-    OPDS_CATALOG_REGISTRATION_MEDIA_TYPE = "application/opds+json;profile=https://librarysimplified.org/rel/profile/directory"
 
     def __init__(self, _db):
         self._db = _db
@@ -446,64 +445,47 @@ class CatalogController(object):
         return feed_response(removal_feed)
 
     def register(self, do_get=HTTP.get_with_timeout):
-        opds_url = request.form.get('url')
-        if not opds_url:
-            return NO_OPDS_URL
-
-        AUTH_DOCUMENT_REL = AuthenticationForOPDSDocument.LINK_RELATION
-        auth_response = None
-
-        def get_auth_document(opds_feed):
-            links = opds_feed.get('feed', {}).get('links', [])
-            auth_links = [l for l in links if l.href and l.rel==AUTH_DOCUMENT_REL]
-            if not auth_links:
-                return None
-
-            auth_link = auth_links[0].get('href')
-            response = do_get(auth_link, allowed_response_codes=['2xx', '3xx'])
-            try:
-                return response.json()
-            except ValueError as e:
-                return None
+        public_key_url = request.form.get('url')
+        if not public_key_url:
+            return NO_AUTH_URL
 
         try:
             response = do_get(
-                opds_url, allowed_response_codes=['2xx', '3xx', 401]
+                public_key_url, allowed_response_codes=['2xx', '3xx']
             )
-            if response.status_code == 401:
-                # The feed requires authentication. This response should have
-                # the authentication document.
-                auth_response = response.json()
-            else:
-                feed = feedparser.parse(response.content)
-                auth_response = get_auth_document(feed)
         except Exception as e:
-            return INVALID_OPDS_FEED
+            return REMOTE_INTEGRATION_ERROR
 
-        if not auth_response:
-            return AUTH_DOCUMENT_NOT_FOUND
+        content_type = None
+        if response.headers:
+            content_type = response.headers.get('Content-Type')
 
-        url = auth_response.get('id')
+        if not (response.content and content_type == OPDS_2_MEDIA_TYPE):
+            # There's no JSON to speak of.
+            return INVALID_INTEGRATION_DOCUMENT
+
+        public_key_response = response.json()
+
+        url = public_key_response.get('id')
         if not url:
-            return INVALID_AUTH_DOCUMENT.detailed(
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
                 "The OPDS authentication document is missing an id."
             )
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
-            while full_url.endswith('/'):
-                full_url = full_url[:-1]
-            return full_url
+            scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(full_url)
+            return '%s://%s' % (scheme, netloc)
 
         client_url = base_url(url)
-        if not client_url == base_url(opds_url):
-            return INVALID_AUTH_DOCUMENT.detailed(
+        if not client_url == base_url(public_key_url):
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
                 "The OPDS authentication document id doesn't match submitted url"
             )
 
-        public_key = auth_response.get('public_key')
+        public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
-            return INVALID_AUTH_DOCUMENT.detailed(
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
                 "The OPDS authentication document is missing an RSA public_key."
             )
         public_key = RSA.importKey(public_key.get('value'))
@@ -517,7 +499,7 @@ class CatalogController(object):
 
         try:
             client, is_new = IntegrationClient.register(
-                self._db, client_url, submitted_secret=submitted_secret
+                self._db, url, submitted_secret=submitted_secret
             )
         except ValueError as e:
             return INVALID_CREDENTIALS.detailed(repr(e))
@@ -529,11 +511,8 @@ class CatalogController(object):
             id=url,
             metadata=dict(shared_secret=shared_secret)
         )
-
         content = json.dumps(auth_data)
-        headers = {
-            "Content-Type" : self.OPDS_CATALOG_REGISTRATION_MEDIA_TYPE
-        }
+        headers = { 'Content-Type' : OPDS_2_MEDIA_TYPE }
 
         status_code = 200
         if is_new:
