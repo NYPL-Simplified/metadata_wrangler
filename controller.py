@@ -491,8 +491,9 @@ class CatalogController(object):
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
-            scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(full_url)
-            return '%s://%s' % (scheme, netloc)
+            while full_url.endswith('/'):
+                full_url = full_url[:-1]
+            return full_url
 
         client_url = base_url(url)
         if not client_url == base_url(opds_url):

@@ -446,7 +446,7 @@ class TestCatalogController(ControllerTest):
         def error_get(*args, **kwargs):
             raise RuntimeError('An OPDS Error')
 
-        url = "https://test.org/okay/authentication_document"
+        url = "https://test.org/okay/"
         request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=error_get)
@@ -454,7 +454,7 @@ class TestCatalogController(ControllerTest):
         eq_(INVALID_OPDS_FEED, response)
 
     def test_register_fails_when_authentication_document_is_invalid(self):
-        document_url = 'https://test.org/okay/authentication_document'
+        document_url = 'https://test.org/'
         mock_auth_doc = self.sample_data('auth_document.json')
 
         def assert_invalid_auth_document(response, message=None):
@@ -493,7 +493,7 @@ class TestCatalogController(ControllerTest):
         mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
         self.http.responses.append(mock_doc_response)
 
-        url = 'https://fake.opds/okay/authentication_document'
+        url = 'https://fake.opds/'
         request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
@@ -546,7 +546,7 @@ class TestCatalogController(ControllerTest):
         mock_doc_response = MockRequestsResponse(401, content=mock_auth_doc)
         self.http.responses.append(mock_doc_response)
 
-        url = 'https://test.org/okay/authentication_document'
+        url = 'https://test.org/'
         request_args = self.create_register_request_args(url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
