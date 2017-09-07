@@ -2,11 +2,14 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 from lxml import etree
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import base64
+import feedparser
 import json
 import logging
 import urllib
-import feedparser
+import urlparse
 
 from core.app_server import (
     cdn_url_for,
@@ -14,8 +17,10 @@ from core.app_server import (
     load_pagination_from_request,
     URNLookupController as CoreURNLookupController,
 )
+from core.config import Configuration
 from core.model import (
     Collection,
+    ConfigurationSetting,
     Contributor,
     CoverageRecord,
     DataSource,
@@ -41,15 +46,13 @@ from core.opds import (
     LookupAcquisitionFeed,
     VerboseAnnotator,
 )
+from core.util.authentication_for_opds import AuthenticationForOPDSDocument
+from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
-from core.problem_details import (
-    INVALID_CREDENTIALS,
-    INVALID_INPUT,
-    INVALID_URN,
-)
 
 from canonicalize import AuthorNameCanonicalizer
+from problem_details import *
 
 HTTP_OK = 200
 HTTP_CREATED = 201
@@ -58,12 +61,13 @@ HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
 
+OPDS_2_MEDIA_TYPE = 'application/opds+json'
 
 def authenticated_client_from_request(_db, required=True):
-    header = request.authorization
-    if header:
-        key, secret = header.username, header.password
-        client = IntegrationClient.authenticate(_db, key, secret)
+    header = request.headers.get('Authorization')
+    if header and 'bearer' in header.lower():
+        shared_secret = base64.b64decode(header.split(' ')[1])
+        client = IntegrationClient.authenticate(_db, shared_secret)
         if client:
             return client
     if not required and not header:
@@ -71,6 +75,66 @@ def authenticated_client_from_request(_db, required=True):
         # (i.e. URN lookup) return None instead of an error.
         return None
     return INVALID_CREDENTIALS
+
+
+class IndexController(object):
+
+    def __init__(self, _db):
+        self._db = _db
+
+    def opds_catalog(self):
+        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
+        catalog = dict(
+            id=url,
+            title='Library Simplified Metadata Wrangler',
+        )
+
+        catalog['links'] = [
+            {
+                "rel": "register",
+                "href": "/register",
+                "type": "application/opds+json;profile=https://librarysimplified.org/rel/profile/metadata-service",
+                "title": "Register your OPDS server with this metadata service"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/lookup",
+                "href": "/lookup{?urn*}",
+                "type": "application/atom+xml;profile=opds-catalog",
+                "title": "Look up metadata about one or more specific items",
+                "templated": "true"
+            },
+            {
+                "rel": "http://opds-spec.org/sort/new",
+                "href": "/{collection_metadata_identifier}/updates",
+                "type": "application/atom+xml;profile=opds-catalog",
+                "title": "Recent changes to one of your tracked collections.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-add",
+                "href": "/{collection_metadata_identifier}/add{?urn*}",
+                "title": "Add items to one of your tracked collections.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
+                "href": "/{collection_metadata_identifier}/remove{?urn*}",
+                "title": "Remove items from one of your tracked collections.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/resolve-name",
+                "href": "/canonical-author-name{?urn,display_name}",
+                "type": "text/plain",
+                "title": "Look up an author's canonical sort name",
+                "templated": "true"
+            }
+        ]
+
+        return make_response(
+            json.dumps(catalog), HTTP_OK,
+            {'Content-Type' : OPDS_2_MEDIA_TYPE }
+        )
 
 
 class CanonicalizationController(object):
@@ -238,7 +302,7 @@ class CatalogController(object):
         entries = feed.get("entries", [])
 
         if not client.data_source:
-            client.data_source = DataSource.lookup(self._db, client.key, autocreate=True)
+            client.data_source = DataSource.lookup(self._db, client.url, autocreate=True)
         data_source = client.data_source
 
         for entry in entries:
@@ -380,19 +444,81 @@ class CatalogController(object):
 
         return feed_response(removal_feed)
 
-    def update_client_url(self):
-        """Updates the URL of a IntegrationClient"""
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
+    def register(self, do_get=HTTP.get_with_timeout):
+        public_key_url = request.form.get('url')
+        if not public_key_url:
+            return NO_AUTH_URL
 
-        url = request.args.get('client_url')
+        try:
+            response = do_get(
+                public_key_url, allowed_response_codes=['2xx', '3xx']
+            )
+        except Exception as e:
+            return REMOTE_INTEGRATION_ERROR
+
+        content_type = None
+        if response.headers:
+            content_type = response.headers.get('Content-Type')
+
+        if not (response.content and content_type == OPDS_2_MEDIA_TYPE):
+            # There's no JSON to speak of.
+            return INVALID_INTEGRATION_DOCUMENT
+
+        public_key_response = response.json()
+
+        url = public_key_response.get('id')
         if not url:
-            return INVALID_INPUT.detailed("No 'client_url' provided")
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
+                "The public key integration document is missing an id."
+            )
 
-        client.url = IntegrationClient.normalize_url(urllib.unquote(url))
+        # Remove any library-specific URL elements.
+        def base_url(full_url):
+            scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(full_url)
+            return '%s://%s' % (scheme, netloc)
 
-        return make_response("", HTTP_OK)
+        client_url = base_url(url)
+        if not client_url == base_url(public_key_url):
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
+                "The public key integration document id doesn't match submitted url"
+            )
+
+        public_key = public_key_response.get('public_key')
+        if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
+                "The public key integration document is missing an RSA public_key."
+            )
+        public_key = RSA.importKey(public_key.get('value'))
+        encryptor = PKCS1_OAEP.new(public_key)
+
+        submitted_secret = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
+            token = auth_header.split(' ')[1]
+            submitted_secret = base64.b64decode(token)
+
+        try:
+            client, is_new = IntegrationClient.register(
+                self._db, url, submitted_secret=submitted_secret
+            )
+        except ValueError as e:
+            return INVALID_CREDENTIALS.detailed(repr(e))
+
+        # Encrypt shared secret.
+        encrypted_secret = encryptor.encrypt(str(client.shared_secret))
+        shared_secret = base64.b64encode(encrypted_secret)
+        auth_data = dict(
+            id=url,
+            metadata=dict(shared_secret=shared_secret)
+        )
+        content = json.dumps(auth_data)
+        headers = { 'Content-Type' : OPDS_2_MEDIA_TYPE }
+
+        status_code = 200
+        if is_new:
+            status_code = 201
+
+        return make_response(content, status_code, headers)
 
 
 class URNLookupController(CoreURNLookupController):

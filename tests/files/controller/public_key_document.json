@@ -1,0 +1,7 @@
+{
+  "id": "https://test.org/",
+  "public_key": {
+    "type" : "RSA",
+    "value" : "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDciBGh+zJYQQiKdtzfloxNpdnY\n9xFMniUXWifP1/9X5gV9qnBKy7jRFqKib/5lBkM+YAbn71k3F5uKQhrJ2HuloGh/\nZFEcw86eJjfGXjck48KCsn/LTW68csAc1knA/JX/AjuP+4rr9qeXpXPivUAnFWAV\nnP+PpVGb2IoKcfhUzwIDAQAB\n-----END PUBLIC KEY-----"
+  }
+}

@@ -12,6 +12,7 @@ tinys3==0.1.11
 feedparser
 elasticsearch
 uwsgi
+pycrypto
 python-dateutil
 loggly-python-handler
 mock
@@ -31,4 +32,3 @@ py-bcrypt
 # for author name matching
 nameparser
 fuzzywuzzy
-

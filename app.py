@@ -23,6 +23,7 @@ from controller import (
     authenticated_client_from_request,
     CatalogController,
     CanonicalizationController,
+    IndexController,
     URNLookupController
 )
 
@@ -77,6 +78,10 @@ def shutdown_session(exception):
         else:
             Conf.db.commit()
 
+@app.route('/')
+def index():
+    return IndexController(Conf.db).opds_catalog()
+
 @app.route('/heartbeat')
 def heartbeat():
     return HeartbeatController().heartbeat()
@@ -128,11 +133,11 @@ def remove(collection_metadata_identifier):
         collection_details=collection_metadata_identifier
     )
 
-@app.route('/client/update_url', methods=['POST'])
-@requires_auth
+@app.route("/register", methods=["POST"])
 @returns_problem_detail
-def update_url():
-    return CatalogController(Conf.db).update_client_url()
+def register():
+    return CatalogController(Conf.db).register()
+
 
 if __name__ == '__main__':
 
