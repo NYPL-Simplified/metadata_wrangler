@@ -237,6 +237,21 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.never_successful = NeverSuccessfulCoverageProvider(self._db)
         self.broken = BrokenCoverageProvider(self._db)
 
+    def test_unaffiliated_collection(self):
+        """A special collection exists to track Identifiers not affiliated
+        with any collection associated with a particular library.
+        """
+        m = IdentifierResolutionCoverageProvider.unaffiliated_collection
+        unaffiliated, is_new = m(self._db)
+        eq_(True, is_new)
+        eq_("Unaffiliated Identifiers", unaffiliated.name)
+        eq_(DataSource.INTERNAL_PROCESSING, unaffiliated.protocol)
+
+        unaffiliated2, is_new = m(self._db)
+        eq_(unaffiliated, unaffiliated2)
+        eq_(False, is_new)
+
+
     def test_all(self):
         # We have 2 collections created during setup, plus 3 more
         # created here, plus the 'unaffiliated' collection.
