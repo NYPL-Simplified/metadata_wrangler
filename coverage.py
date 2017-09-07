@@ -86,6 +86,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     DEFAULT_OVERDRIVE_COLLECTION_NAME = u'Default Overdrive'
 
+    # We cover all Collections, regardless of their protocol.
+    PROTOCOL = None
+
     def __init__(
         self, collection, uploader=None, viaf_client=None,
         linked_data_coverage_provider=None, content_cafe_api=None,
@@ -147,6 +150,34 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if is_new:
             raise ValueError('Default Overdrive collection has not been configured.')
         return overdrive_api_class(self._db, collection)
+
+    @classmethod
+    def unaffiliated_collection(cls, _db):
+        """Find a special metadata-wrangler-specific Collection whose catalog
+        contains identifiers that came in through anonymous lookup.
+        """
+        return Collection.by_name_and_protocol(
+            _db, "Unaffiliated Identifiers", DataSource.INTERNAL_PROCESSING
+        )
+
+    @classmethod
+    def all(cls, _db, **kwargs):
+        """Yield a sequence of IdentifierResolutionCoverageProvider instances,
+        one for every collection.
+
+        The 'unaffiliated' collection is always last in the list.
+        """
+        unaffiliated, ignore = cls.unaffiliated_collection(_db)
+        instances = list(super(IdentifierResolutionCoverageProvider, cls).all(
+            _db, **kwargs
+        ))
+        collections = [x.collection for x in instances]
+        if unaffiliated in collections:
+            i = collections.index(unaffiliated)
+            unaffiliated_instance = instances[i]
+            instances.remove(unaffiliated_instance)
+            instances.append(unaffiliated_instance)
+        return instances
 
     def providers(self):
         """Instantiate required and optional CoverageProviders.
