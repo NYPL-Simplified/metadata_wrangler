@@ -463,7 +463,6 @@ class URNLookupController(CoreURNLookupController):
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
         client = authenticated_client_from_request(self._db, required=False)
-        collection = None
         if client and collection_details:
             collection, ignore = Collection.from_metadata_identifier(
                 self._db, collection_details
