@@ -485,7 +485,7 @@ class URNLookupController(CoreURNLookupController):
             return self.add_work(identifier, work)
 
         # Work remains to be done.
-        return self.register_identifier_as_unresolved(urn, identifier, collection)
+        return self.register_identifier_as_unresolved(urn, identifier)
 
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
