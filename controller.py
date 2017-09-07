@@ -463,6 +463,7 @@ class URNLookupController(CoreURNLookupController):
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
         client = authenticated_client_from_request(self._db, required=False)
+        collection = None
         if client and collection_details:
             collection, ignore = Collection.from_metadata_identifier(
                 self._db, collection_details
@@ -484,7 +485,7 @@ class URNLookupController(CoreURNLookupController):
             return self.add_work(identifier, work)
 
         # Work remains to be done.
-        return self.register_identifier_as_unresolved(urn, identifier)
+        return self.register_identifier_as_unresolved(urn, identifier, collection)
 
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
@@ -493,14 +494,15 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        # Add this Identifier to the 'unaffiliated' collection to make
-        # sure it gets covered eventually by the identifier resolution
-        # script, which only covers Identifiers that are in some
-        # collection.
-        collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
-            self._db
-        )
-        collection.catalog.append(identifier)
+        if not identifier.collections:
+            # This Identifier is not in any collections. Add it to the
+            # 'unaffiliated' collection to make sure it gets covered
+            # eventually by the identifier resolution script, which only
+            # covers Identifiers that are in some collection.
+            collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
+                self._db
+            )
+            collection.catalog.append(identifier)
         
         record = CoverageRecord.lookup(identifier, source, self.OPERATION)
         is_new = False
