@@ -289,7 +289,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(opds, LookupClientCoverageProvider)
-        eq_(mock_content_cafe, content_cafe.content_cafe)
+        eq_(self.mock_content_cafe, content_cafe.content_cafe)
         eq_(self._default_collection, opds.collection)
         
     def test_providers_overdrive(self):
