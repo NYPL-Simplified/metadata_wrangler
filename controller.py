@@ -500,8 +500,7 @@ class URNLookupController(CoreURNLookupController):
         collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
             self._db
         )
-        if identifier not in collection.catalog:
-            collection.catalog.append(identifier)
+        collection.catalog.append(identifier)
         
         record = CoverageRecord.lookup(identifier, source, self.OPERATION)
         is_new = False
