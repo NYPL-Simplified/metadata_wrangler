@@ -51,6 +51,7 @@ from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 
+from coverage import IdentifierResolutionCoverageProvider
 from canonicalize import AuthorNameCanonicalizer
 from problem_details import *
 
@@ -245,7 +246,6 @@ class CatalogController(object):
         collection, ignore = Collection.from_metadata_identifier(
             self._db, collection_details
         )
-
         urns = request.args.getlist('urn')
         messages = []
         for urn in urns:
@@ -531,7 +531,6 @@ class URNLookupController(CoreURNLookupController):
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     NO_WORK_DONE_EXCEPTION = u'No work done yet'
 
-
     log = logging.getLogger("URN lookup controller")
     
     def presentation_ready_work_for(self, identifier):
@@ -619,6 +618,16 @@ class URNLookupController(CoreURNLookupController):
         # work gets done eventually by creating a CoverageRecord
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+
+        if not identifier.collections:
+            # This Identifier is not in any collections. Add it to the
+            # 'unaffiliated' collection to make sure it gets covered
+            # eventually by the identifier resolution script, which only
+            # covers Identifiers that are in some collection.
+            collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
+                self._db
+            )
+            collection.catalog.append(identifier)
         
         record = CoverageRecord.lookup(identifier, source, self.OPERATION)
         is_new = False

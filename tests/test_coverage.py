@@ -213,6 +213,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             self._db, None, self.viaf, api=self.linked_data_client
         )
         self.uploader = DummyS3Uploader()
+        self.mock_content_cafe = ContentCafeAPI(
+            self._db, None, object(), object(), self.uploader
+        )
 
         # Make the constructor arguments available in case a test
         # needs to create a different type of resolver.
@@ -235,6 +238,37 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.never_successful = NeverSuccessfulCoverageProvider(self._db)
         self.broken = BrokenCoverageProvider(self._db)
 
+    def test_unaffiliated_collection(self):
+        """A special collection exists to track Identifiers not affiliated
+        with any collection associated with a particular library.
+        """
+        m = IdentifierResolutionCoverageProvider.unaffiliated_collection
+        unaffiliated, is_new = m(self._db)
+        eq_(True, is_new)
+        eq_("Unaffiliated Identifiers", unaffiliated.name)
+        eq_(DataSource.INTERNAL_PROCESSING, unaffiliated.protocol)
+
+        unaffiliated2, is_new = m(self._db)
+        eq_(unaffiliated, unaffiliated2)
+        eq_(False, is_new)
+
+
+    def test_all(self):
+        # We have 2 collections created during setup, plus 3 more
+        # created here, plus the 'unaffiliated' collection.
+        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+        for i in range(3):
+            collection = self._collection()
+
+        # all() puts them in random order (not tested), but
+        # the unaffiliated collection is always last.
+        providers = IdentifierResolutionCoverageProvider.all(
+            self._db, uploader=self.uploader, 
+            content_cafe_api=self.mock_content_cafe,
+        )
+        eq_(6, len(providers))
+        eq_(unaffiliated, providers[-1].collection)
+
     def test_providers_opds(self):
         # For an OPDS collection that goes against the open-access content
         # server...
@@ -244,11 +278,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         uploader = object()
         # In lieu of a proper mock API, create one that will crash
         # if it tries to make a real HTTP request.
-        mock_content_cafe = ContentCafeAPI(
-            self._db, None, object(), object(), self.uploader
-        )
         resolver = IdentifierResolutionCoverageProvider(
-            self._default_collection, content_cafe_api=mock_content_cafe,
+            self._default_collection, content_cafe_api=self.mock_content_cafe,
             uploader=uploader
         )
 
@@ -259,7 +290,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(opds, LookupClientCoverageProvider)
-        eq_(mock_content_cafe, content_cafe.content_cafe)
+        eq_(self.mock_content_cafe, content_cafe.content_cafe)
         eq_(self._default_collection, opds.collection)
         
     def test_providers_overdrive(self):
