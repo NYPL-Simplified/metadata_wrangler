@@ -2,6 +2,7 @@ from nose.tools import set_trace
 import os
 import logging
 import flask
+import sys
 import urlparse
 
 from functools import wraps
@@ -142,7 +143,11 @@ def register():
 if __name__ == '__main__':
 
     debug = True
-    url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY).value
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
+    else:
+        url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY).value
+    base_url = url or u'http://localhost:5500/'
     scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
     if ':' in netloc:
         host, port = netloc.split(':')
