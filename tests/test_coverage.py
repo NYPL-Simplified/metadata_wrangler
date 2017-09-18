@@ -9,6 +9,7 @@ from . import (
     sample_data
 )
 
+from core.coverage import CoverageFailure
 from core.model import (
     Collection,
     CoverageRecord, 
@@ -18,17 +19,31 @@ from core.model import (
     Identifier,
     LicensePool,
 )
-from core.coverage import CoverageFailure
 from core.opds_import import (
     MockSimplifiedOPDSLookup,
     OPDSImporter,
 )
+from core.overdrive import (
+    MockOverdriveAPI,
+    OverdriveBibliographicCoverageProvider,
+)
 from core.s3 import DummyS3Uploader
+from core.testing import (
+    AlwaysSuccessfulCoverageProvider,
+    NeverSuccessfulCoverageProvider,
+    BrokenCoverageProvider,
+)
 
 from content_server import LookupClientCoverageProvider
 from content_cafe import (
     ContentCafeAPI,
     ContentCafeCoverageProvider, 
+)
+from coverage import (
+    IdentifierResolutionCoverageProvider,
+)
+from integration_client import (
+    IntegrationClientCoverageProvider,
 )
 from oclc_classify import (
     OCLCClassifyCoverageProvider, 
@@ -37,23 +52,7 @@ from oclc import (
     LinkedDataCoverageProvider,
     MockOCLCLinkedData,
 )
-from integration_client import (
-    IntegrationClientCoverageProvider,
-)
-
-from coverage import IdentifierResolutionCoverageProvider
-from oclc import LinkedDataCoverageProvider
 from viaf import MockVIAFClient
-from core.overdrive import (
-    MockOverdriveAPI,
-    OverdriveBibliographicCoverageProvider,
-)
-
-from core.testing import (
-    AlwaysSuccessfulCoverageProvider,
-    NeverSuccessfulCoverageProvider,
-    BrokenCoverageProvider,
-)
 
 
 class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
