@@ -11,6 +11,7 @@ from core.metadata_layer import (
 
 from core.model import (
     Collection,
+    ConfigurationSetting,
     CoverageRecord,
     DataSource,
     Edition,
@@ -209,14 +210,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             optional = []
             required = [content_cafe, oclc_classify]
             
-        # All books derived from OPDS import against the open-access
+        # All books derived from OPDS import against an open-access
         # content server must be looked up in that server.
-        #
-        # TODO: This could stand some generalization. Any OPDS server
-        # that also supports the lookup protocol can be used here.
-        if (self.collection.protocol == ExternalIntegration.OPDS_IMPORT
+        if (self.collection.protocol==ExternalIntegration.OPDS_IMPORT
             and self.collection.data_source
-            and self.collection.data_source.name == DataSource.OA_CONTENT_SERVER):
+        ):
             required.append(LookupClientCoverageProvider(self.collection))
 
         # All books obtained from Overdrive must be looked up via the
@@ -225,7 +223,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             required.append(
                 OverdriveBibliographicCoverageProvider(
                     self.uploader, self.collection, api_class=self.overdrive_api
-                    
                 )
             )
 
@@ -454,3 +451,112 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names())
+
+
+class IdentifierResolutionRegistrar(object):
+
+    # All of the providers used to resolve an Identifier for the
+    # Metadata Wrangler.
+    RESOLVER = IdentifierResolutionCoverageProvider
+
+    IDENTIFIER_PROVIDERS = [
+        ContentCafeCoverageProvider,
+        LinkedDataCoverageProvider,
+        OCLCClassifyCoverageProvider,
+        OverdriveBibliographicCoverageProvider,
+    ]
+
+    COLLECTION_PROVIDERS = [
+        IntegrationClientCoverageProvider,
+        LookupClientCoverageProvider,
+    ]
+
+    NO_WORK_DONE_EXCEPTION = u'No work done yet'
+
+    def __init__(self, _db):
+        self._db = _db
+
+    def register(self, identifier):
+        """Creates a transient failure CoverageRecord for each provider
+        that the identifier eligible for coverage from.
+
+        :return: (CoverageRecord, bool) tuple with a CoverageRecord
+        for the IdentifierResolutionCoverageProvider and a boolean representing
+        whether or not the CoverageRecord is new
+        """
+        record = self.resolution_coverage(identifier)
+        if record:
+            return record, False
+
+        if not identifier.collections:
+            # This Identifier is not in any collections. Add it to the
+            # 'unaffiliated' collection to make sure it gets covered
+            # eventually by the identifier resolution script, which only
+            # covers Identifiers that are in some collection.
+            collection, ignore = self.RESOLVER.unaffiliated_collection(
+                self._db
+            )
+            collection.catalog.append(identifier)
+
+        providers = list()
+
+        # Every identifier gets the resolver.
+        providers.append(self.RESOLVER)
+
+        # Filter Identifier-typed CoverageProviders.
+        for provider in self.IDENTIFIER_PROVIDERS:
+            if (not provider.INPUT_IDENTIFIER_TYPES
+                or identifier.type in provider.INPUT_IDENTIFIER_TYPES
+            ):
+                providers.append(provider)
+
+        for provider in self.COLLECTION_PROVIDERS:
+            if not provider.PROTOCOL:
+                providers.append(provider)
+                break
+
+            covered_collections = filter(
+                lambda c: c.protocol==provider.PROTOCOL, identifier.collections
+            )
+            if covered_collections:
+                if provider==LookupClientCoverageProvider:
+                    # The LookupClientCoverageProvider doesn't have an obvious
+                    # data source. It uses the collection's data source instead.
+                    for collection in covered_collections:
+                        self.find_or_create_coverage_record(
+                            identifier, provider, collection=collection
+                        )
+                else:
+                    providers.append(provider)
+
+        for provider_class in providers:
+            self.find_or_create_coverage_record(identifier, provider_class)
+
+        record = self.resolution_coverage(identifier)
+        return record, True
+
+    def resolution_coverage(self, identifier):
+        """Returns a CoverageRecord if the given identifier has been registered
+        for resolution with the IdentifierResolutionCoverageProvider
+
+        :return: CoverageRecord or None
+        """
+        source = DataSource.lookup(self._db, self.RESOLVER.DATA_SOURCE_NAME)
+        operation = self.RESOLVER.OPERATION
+        return CoverageRecord.lookup(identifier, source, operation)
+
+    def find_or_create_coverage_record(self, identifier, provider_class,
+        collection=None
+    ):
+        source = DataSource.lookup(self._db, provider_class.DATA_SOURCE_NAME)
+        if collection and not source:
+            source = collection.data_source
+        operation = provider_class.OPERATION
+        existing_record = CoverageRecord.lookup(identifier, source, operation)
+
+        if not existing_record:
+            coverage_record, is_new = CoverageRecord.add_for(
+                identifier, source, operation=operation,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            coverage_record.exception = self.NO_WORK_DONE_EXCEPTION

@@ -638,20 +638,6 @@ class TestURNLookupController(ControllerTest):
         eq_([identifier], unaffiliated.catalog)
 
     @basic_request_context
-    def test_register_identifier_as_unresolved_does_not_catalog_already_cataloged_identifier(self):
-        # This identifier is already in a Collection's catalog.
-        identifier = self._identifier()
-        collection = self._collection()
-        collection.catalog.append(identifier)
-
-        # Registering it as unresolved doesn't also add it to the
-        # 'unaffiliated' Collection.
-        self.controller.register_identifier_as_unresolved(
-            identifier.urn, identifier
-        )
-        eq_([collection], identifier.collections)
-
-    @basic_request_context
     def test_process_urn_pending_resolve_attempt(self):
         # Simulate calling process_urn twice, and make sure the 
         # second call results in an "I'm working on it, hold your horses" message.

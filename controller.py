@@ -51,7 +51,10 @@ from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 
-from coverage import IdentifierResolutionCoverageProvider
+from coverage import (
+    IdentifierResolutionCoverageProvider,
+    IdentifierResolutionRegistrar,
+)
 from canonicalize import AuthorNameCanonicalizer
 from problem_details import *
 
@@ -527,12 +530,13 @@ class URNLookupController(CoreURNLookupController):
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
     SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK = "Something's wrong. I have a record of covering this identifier but there's no presentation-ready work to show you."
-    
-    OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
-    NO_WORK_DONE_EXCEPTION = u'No work done yet'
 
     log = logging.getLogger("URN lookup controller")
-    
+
+    def __init__(self, _db):
+        self.registrar = IdentifierResolutionRegistrar(_db)
+        super(URNLookupController, self).__init__(_db)
+
     def presentation_ready_work_for(self, identifier):
         """Either return a presentation-ready work associated with the 
         given `identifier`, or return None.
@@ -590,8 +594,9 @@ class URNLookupController(CoreURNLookupController):
         # this Identifier is part of the Collection's catalog.
         client = authenticated_client_from_request(self._db, required=False)
         if client and collection_details:
+            data_source_name = request.args.get('data_source')
             collection, ignore = Collection.from_metadata_identifier(
-                self._db, collection_details
+                self._db, collection_details, data_source=source_name
             )
             collection.catalog_identifier(self._db, identifier)
 
@@ -619,28 +624,7 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        if not identifier.collections:
-            # This Identifier is not in any collections. Add it to the
-            # 'unaffiliated' collection to make sure it gets covered
-            # eventually by the identifier resolution script, which only
-            # covers Identifiers that are in some collection.
-            collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
-                self._db
-            )
-            collection.catalog.append(identifier)
-        
-        record = CoverageRecord.lookup(identifier, source, self.OPERATION)
-        is_new = False
-        if not record:
-            # There is no existing CoverageRecord for this Identifier.
-            # Create one, but put it in a state of transient failure
-            # to represent the fact that work needs to be done.
-            record, is_new = CoverageRecord.add_for(
-                identifier, source, self.OPERATION,
-                status=CoverageRecord.TRANSIENT_FAILURE
-            )
-            record.exception = self.NO_WORK_DONE_EXCEPTION
-
+        record, is_new = self.registrar.register(identifier)
         if is_new:
             # The CoverageRecord was just created. Tell the client to
             # come back later.
@@ -651,7 +635,7 @@ class URNLookupController(CoreURNLookupController):
             # pending attempt resulted in an exception,
             # tell the client about the exception.
             message = record.exception
-            if not message or message == self.NO_WORK_DONE_EXCEPTION:
+            if not message or message == self.registrar.NO_WORK_DONE_EXCEPTION:
                 message = self.WORKING_TO_RESOLVE_IDENTIFIER
             status = HTTP_ACCEPTED
             if record.status == record.PERSISTENT_FAILURE:

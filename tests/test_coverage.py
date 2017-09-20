@@ -41,6 +41,7 @@ from content_cafe import (
 )
 from coverage import (
     IdentifierResolutionCoverageProvider,
+    IdentifierResolutionRegistrar,
 )
 from integration_client import (
     IntegrationClientCoverageProvider,
@@ -549,3 +550,143 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         self.resolver.generate_edition(identifier)
         eq_(number_ed_info, presentation_edition_info())
+
+
+class TestIdentifierResolutionRegistrar(DatabaseTest):
+
+    PROVIDER = IdentifierResolutionCoverageProvider
+
+    def setup(self):
+        super(TestIdentifierResolutionRegistrar, self).setup()
+        self.registrar = IdentifierResolutionRegistrar(self._db)
+        self.identifier = self._identifier()
+
+    def test_resolution_coverage(self):
+        # Returns None if the identifier doesn't have a coverage record
+        # for the IdentifierResolutionCoverageProvider.
+        source = DataSource.lookup(self._db, DataSource.OVERDRIVE)
+        cr = self._coverage_record(self.identifier, source)
+        result = self.registrar.resolution_coverage(self.identifier)
+        eq_(None, result)
+
+        # Returns an IdentifierResolutionCoverageProvider record if it exists.
+        source = DataSource.lookup(self._db, self.PROVIDER.DATA_SOURCE_NAME)
+        cr = self._coverage_record(
+            self.identifier, source, operation=self.PROVIDER.OPERATION
+        )
+        result = self.registrar.resolution_coverage(self.identifier)
+        eq_(cr, result)
+
+    def test_find_or_create_coverage_record(self):
+        # The identifier has no coverage.
+        eq_(0, len(self.identifier.coverage_records))
+
+        # If a CoverageRecord doesn't exist for a given CoverageProvider,
+        # a transient failure record is created.
+        self.registrar.find_or_create_coverage_record(
+            self.identifier, OverdriveBibliographicCoverageProvider
+        )
+
+        [record] = self.identifier.coverage_records
+        eq_(DataSource.OVERDRIVE, record.data_source.name)
+        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
+        eq_(self.registrar.NO_WORK_DONE_EXCEPTION, record.exception)
+
+        # If a CoverageRecord exists already, it's returned.
+        overdrive = record
+        overdrive.status = CoverageRecord.SUCCESS
+        overdrive.exception = None
+
+        self.registrar.find_or_create_coverage_record(
+            self.identifier, OverdriveBibliographicCoverageProvider
+        )
+        [record] = self.identifier.coverage_records
+        eq_(overdrive, record)
+        # Its details haven't been changed in any way.
+        eq_(CoverageRecord.SUCCESS, record.status)
+        eq_(None, record.exception)
+
+    def test_register_does_not_catalog_already_cataloged_identifier(self):
+        # This identifier is already in a Collection's catalog.
+        collection = self._collection()
+        collection.catalog.append(self.identifier)
+
+        # Registering it as unresolved doesn't also add it to the
+        # 'unaffiliated' Collection.
+        self.registrar.register(self.identifier)
+        eq_([collection], self.identifier.collections)
+
+    def test_register_catalogs_unaffiliated_identifiers(self):
+        # This identifier has no collection.
+        eq_(0, len(self.identifier.collections))
+
+        unaffiliated_collection, ignore = self.PROVIDER.unaffiliated_collection(self._db)
+        self.registrar.register(self.identifier)
+        eq_([unaffiliated_collection], self.identifier.collections)
+
+    def test_register_creates_expected_initial_coverage_records(self):
+
+        def assert_initial_coverage_record(record):
+            eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
+            eq_(self.registrar.NO_WORK_DONE_EXCEPTION, record.exception)
+
+        def assert_expected_coverage_records_created(
+            records, expected_source_names
+        ):
+            # The expected number of CoverageRecords was created.
+            eq_(len(expected_source_names), len(records))
+            resulting_sources = list()
+            for cr in records:
+                # Each CoverageRecord has the expected error details.
+                assert_initial_coverage_record(cr)
+                resulting_sources.append(cr.data_source.name)
+            # The CoverageRecords created are for the metadata we would expect.
+            eq_(sorted(expected_source_names), sorted(resulting_sources))
+
+        test_cases = {
+            Identifier.OVERDRIVE_ID : [
+                DataSource.INTERNAL_PROCESSING,
+                DataSource.OCLC_LINKED_DATA,
+                DataSource.OVERDRIVE,
+            ],
+            Identifier.ISBN : [
+                DataSource.INTERNAL_PROCESSING,
+                DataSource.CONTENT_CAFE,
+                DataSource.OCLC_LINKED_DATA,
+            ],
+            Identifier.GUTENBERG_ID : [
+                DataSource.INTERNAL_PROCESSING,
+                DataSource.OCLC,
+            ]
+        }
+
+        for identifier_type, expected_source_names in test_cases.items():
+            # Confirm the identifier begins without coverage records.
+            eq_(0, len(self.identifier.coverage_records))
+
+            self.identifier.type = identifier_type
+            self.registrar.register(self.identifier)
+
+            assert_expected_coverage_records_created(
+                self.identifier.coverage_records, expected_source_names
+            )
+            for cr in self.identifier.coverage_records:
+                # Delete the CoverageRecords so the next tests can run.
+                self._db.delete(cr)
+            self._db.commit()
+
+        # If the identifier is associated with a collection, the appropriate
+        # CoverageRecords are added.
+        opds_distrib = self._collection(
+            protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+        )
+        opds_import = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
+        self.identifier.collections.extend([opds_distrib, opds_import])
+        self.registrar.register(self.identifier)
+
+        source_names = [cr.data_source.name
+                        for cr in self.identifier.coverage_records]
+        assert DataSource.OA_CONTENT_SERVER in source_names
+        # There should now be an additional DataSource.INTERNAL_PROCESSING
+        # record for the OPDS_FOR_DISTRIBUTORS coverage.
+        eq_(2, source_names.count(DataSource.INTERNAL_PROCESSING))
