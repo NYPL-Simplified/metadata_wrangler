@@ -17,6 +17,7 @@ class OverdriveBibliographicCoverageProvider(
     def __init__(self, uploader, collection, *args, **kwargs):
         _db = Session.object_session(collection)
         self.mirror = uploader
+        kwargs['preregistered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
             collection, *args, **kwargs
         )

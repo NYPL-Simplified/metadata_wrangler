@@ -97,7 +97,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     ):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, **kwargs
+            collection, preregistered_only=True, **kwargs
         )
 
         # Since we are the metadata wrangler, any resources we find,
@@ -237,20 +237,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             )
 
         return required, optional
-
-    def items_that_need_coverage(self, identifiers=None, **kwargs):
-        """Find all identifiers lacking coverage from this CoverageProvider.
-
-        Only identifiers that have CoverageRecords in the 'transient
-        failure' state will be returned. Unlike with other
-        CoverageProviders, Identifiers that have no CoverageRecord at
-        all will not be processed.
-        """
-        qu = super(IdentifierResolutionCoverageProvider, self).items_that_need_coverage(
-            identifiers=identifiers, **kwargs
-        )
-        qu = qu.filter(CoverageRecord.id != None)
-        return qu
             
     def process_item(self, identifier):
         """For this identifier, checks that it has all of the available

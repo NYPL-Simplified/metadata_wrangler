@@ -21,6 +21,7 @@ class IntegrationClientCoverageProvider(CatalogCoverageProvider):
 
     def __init__(self, uploader, collection, *args, **kwargs):
         self.uploader = uploader
+        kwargs['preregistered_only'] = True
         super(IntegrationClientCoverageProvider, self).__init__(
             collection, *args, **kwargs)
 

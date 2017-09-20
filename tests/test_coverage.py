@@ -337,30 +337,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
         assert isinstance(integration_client, IntegrationClientCoverageProvider)
-        
-    def test_items_that_need_coverage(self):
-        # Only items with an existing transient failure status require coverage.
-        self._coverage_record(
-            self.identifier, self.resolver.data_source,
-            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.TRANSIENT_FAILURE
-        )
-
-        # Identifiers without coverage will be ignored.
-        no_coverage = self._identifier(identifier_type=Identifier.ISBN)
-        self._default_collection.catalog_identifier(self._db, no_coverage)
-
-        # Identifiers with successful coverage will also be ignored.
-        success = self._identifier(identifier_type=Identifier.ISBN)
-        self._default_collection.catalog_identifier(self._db, success)
-        self._coverage_record(
-            success, self.resolver.data_source,
-            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.SUCCESS
-        )
-
-        items = self.resolver.items_that_need_coverage().all()
-        eq_([self.identifier], items)
 
     def test_process_item_creates_license_pool(self):
         self.resolver.required_coverage_providers = [
