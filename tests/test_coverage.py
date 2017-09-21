@@ -575,7 +575,7 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
 
     def test_register_does_not_catalog_already_cataloged_identifier(self):
         # This identifier is already in a Collection's catalog.
-        collection = self._collection()
+        collection = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
         collection.catalog.append(self.identifier)
 
         # Registering it as unresolved doesn't also add it to the
