@@ -92,8 +92,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     def __init__(
         self, collection, uploader=None, viaf_client=None,
-        linked_data_coverage_provider=None, content_cafe_api=None,
-        overdrive_api_class=OverdriveAPI, **kwargs
+        content_cafe_api=None, overdrive_api_class=OverdriveAPI, **kwargs
     ):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
@@ -125,24 +124,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # When we need to look up a contributor via VIAF we will use this
         # client.
         self.viaf_client = viaf_client or VIAFClient(self._db)
-                
-        # Books are not looked up in OCLC Linked Data directly, since
-        # there is no Collection that identifies a book by its OCLC Number.
-        # However, when a book is looked up through OCLC Classify, some
-        # OCLC Numbers may be associated with it, and _those_ numbers
-        # can be run through OCLC Linked Data.
-        #
-        # TODO: We get many books identified by ISBN, and those books
-        # _could_ be run through a LinkedDataCoverageProvider if it
-        # worked a little differently. However, I don't think this
-        # would be very useful, since those books will get looked up
-        # through OCLC Classify, which will probably result in us
-        # finding that same ISBN via OCLC Number.
-        self.oclc_linked_data = (
-            linked_data_coverage_provider or
-            LinkedDataCoverageProvider(self._db, viaf_api=self.viaf_client)
-        )
-        
+
     def create_overdrive_api(self, overdrive_api_class):
         collection, is_new = Collection.by_name_and_protocol(
             self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
@@ -335,7 +317,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     def finalize(self, identifier):
         """Sets equivalent identifiers from OCLC and processes the work."""
 
-        self.resolve_equivalent_oclc_identifiers(identifier)
         if identifier.type==Identifier.ISBN:
             # In order to create Works for ISBNs, we first have to
             # create an edition associated with the ISBN as a primary
@@ -403,27 +384,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         else:
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
             raise RuntimeError(error_msg)
-
-    def resolve_equivalent_oclc_identifiers(self, identifier):
-        """Ensures OCLC coverage for an identifier.
-
-        This has to be called after the OCLCClassify coverage is run to confirm
-        that equivalent OCLC identifiers are available.
-        """
-        oclc_ids = set()
-        if identifier.type == Identifier.ISBN:
-            # ISBNs won't have editions, so they should be run through OCLC
-            # to retrieve basic edition data (title, author).
-            oclc_ids.add(identifier)
-
-        types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
-        for edition in identifier.primarily_identifies:
-            oclc_ids = oclc_ids.union(
-                edition.equivalent_identifiers(type=types)
-            )
-        for oclc_id in oclc_ids:
-            self.log.info("Currently processing equivalent identifier: %r", oclc_id)
-            self.oclc_linked_data.ensure_coverage(oclc_id)
 
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""

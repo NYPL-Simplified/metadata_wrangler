@@ -49,10 +49,6 @@ from integration_client import (
 from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
-from oclc import (
-    LinkedDataCoverageProvider,
-    MockOCLCLinkedData,
-)
 from viaf import MockVIAFClient
 
 
@@ -208,10 +204,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
         )
         self.viaf = MockVIAFClient(self._db)
-        self.linked_data_client = MockOCLCLinkedData(self._db)
-        self.linked_data_coverage_provider = LinkedDataCoverageProvider(
-            self._db, None, self.viaf, api=self.linked_data_client
-        )
         self.uploader = DummyS3Uploader()
         self.mock_content_cafe = ContentCafeAPI(
             self._db, None, object(), object(), self.uploader
@@ -223,7 +215,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             uploader=self.uploader,
             viaf_client=self.viaf,
             overdrive_api_class=MockOverdriveAPI,
-            linked_data_coverage_provider=self.linked_data_coverage_provider,
         )
 
         # But most tests will use this resolver.

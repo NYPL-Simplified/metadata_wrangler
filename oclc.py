@@ -822,7 +822,6 @@ class OCLCLinkedData(object):
         self.log.debug("END GRAPHS FOR %r", identifier)
 
 
-
 class MockOCLCLinkedData(OCLCLinkedData):    
     def __init__(self, _db):
         super(MockOCLCLinkedData, self).__init__(_db)
@@ -870,7 +869,6 @@ class MockOCLCLinkedData(OCLCLinkedData):
         names = []
         uris = []
         return names, uris
-
 
 
 class LinkedDataURLLister:
@@ -934,6 +932,11 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)
             
     def process_item(self, identifier):
+        # Books are not looked up in OCLC Linked Data directly, since
+        # there is no Collection that identifies a book by its OCLC Number.
+        # However, when a book is looked up through OCLC Classify, some
+        # OCLC Numbers may be associated with it, and _those_ numbers
+        # can be run through OCLC Linked Data.
         try:
             new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
