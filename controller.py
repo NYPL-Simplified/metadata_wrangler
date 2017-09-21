@@ -81,6 +81,24 @@ def authenticated_client_from_request(_db, required=True):
     return INVALID_CREDENTIALS
 
 
+def collection_from_details(_db, client, collection_details):
+    if not (client and isinstance(client, IntegrationClient)):
+        return None
+
+    if collection_details:
+        # A DataSource may be sent for collections with the
+        # ExternalIntegration.OPDS_IMPORT protocol.
+        data_source_name = request.args.get('data_source')
+        if data_source_name:
+            data_source_name = urllib.unquote(data_source_name)
+
+        collection, ignore = Collection.from_metadata_identifier(
+            _db, collection_details, data_source=data_source_name
+        )
+        return collection
+    return None
+
+
 class IndexController(object):
 
     def __init__(self, _db):
@@ -183,8 +201,8 @@ class CatalogController(object):
         if isinstance(client, ProblemDetail):
             return client
 
-        collection, ignore = Collection.from_metadata_identifier(
-            self._db, collection_details
+        collection = collection_from_details(
+            self._db, client, collection_details
         )
 
         last_update_time = request.args.get('last_update_time', None)
@@ -246,8 +264,8 @@ class CatalogController(object):
         if isinstance(client, ProblemDetail):
             return client
 
-        collection, ignore = Collection.from_metadata_identifier(
-            self._db, collection_details
+        collection = collection_from_details(
+            self._db, client, collection_details
         )
         urns = request.args.getlist('urn')
         messages = []
@@ -295,8 +313,8 @@ class CatalogController(object):
         if isinstance(client, ProblemDetail):
             return client
 
-        collection, ignore = Collection.from_metadata_identifier(
-            self._db, collection_details
+        collection = collection_from_details(
+            self._db, client, collection_details
         )
 
         messages = []
@@ -407,8 +425,8 @@ class CatalogController(object):
         if isinstance(client, ProblemDetail):
             return client
 
-        collection, ignore = Collection.from_metadata_identifier(
-            self._db, collection_details
+        collection = collection_from_details(
+            self._db, client, collection_details
         )
 
         urns = request.args.getlist('urn')
@@ -593,11 +611,13 @@ class URNLookupController(CoreURNLookupController):
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
         client = authenticated_client_from_request(self._db, required=False)
-        if client and collection_details:
-            data_source_name = request.args.get('data_source')
-            collection, ignore = Collection.from_metadata_identifier(
-                self._db, collection_details, data_source=source_name
-            )
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection = collection_from_details(
+            self._db, client, collection_details
+        )
+        if collection:
             collection.catalog_identifier(self._db, identifier)
 
         if (identifier.type == Identifier.ISBN and not identifier.work):

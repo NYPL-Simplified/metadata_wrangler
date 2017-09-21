@@ -18,6 +18,7 @@ from . import (
 )
 from core.config import Configuration
 from core.model import (
+    Collection,
     ConfigurationSetting,
     CoverageRecord,
     DataSource,
@@ -47,6 +48,7 @@ from controller import (
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
     authenticated_client_from_request,
+    collection_from_details,
 )
 from problem_details import *
 
@@ -107,6 +109,42 @@ class TestIntegrationClientAuthentication(ControllerTest):
         with self.app.test_request_context('/'):
             result = authenticated_client_from_request(self._db, required=False)
             eq_(None, result)
+
+
+class TestCollectionHandling(ControllerTest):
+
+    def test_collection_from_details(self):
+        mirrored_collection = self._collection(external_account_id=self._url)
+        details = mirrored_collection.metadata_identifier
+
+        collection = None
+        with self.app.test_request_context('/'):
+            # Without a information, nothing is returned.
+            result = collection_from_details(self._db, None, None)
+            eq_(None, result)
+
+            result = collection_from_details(self._db, self.client, None)
+            eq_(None, result)
+
+            result = collection_from_details(self._db, None, details)
+            eq_(None, result)
+
+            # It creates a collection if it doesn't exist.
+            result = collection_from_details(self._db, self.client, details)
+            assert isinstance(result, Collection)
+            collection = result
+
+        # The DataSource can also be set via arguments.
+        eq_(None, collection.data_source)
+        source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
+        with self.app.test_request_context('/?%s' % source):
+            result = collection_from_details(self._db, self.client, details)
+
+            # The previously-created collection is returned.
+            eq_(collection, result)
+
+            # It has a DataSource.
+            eq_(DataSource.OA_CONTENT_SERVER, collection.data_source.name)
 
 
 class TestIndexController(ControllerTest):
