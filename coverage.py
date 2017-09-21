@@ -390,7 +390,7 @@ class IdentifierResolutionRegistrar(object):
     def __init__(self, _db):
         self._db = _db
 
-    def register(self, identifier):
+    def register(self, identifier, force=False):
         """Creates a transient failure CoverageRecord for each provider
         that the identifier eligible for coverage from.
 
