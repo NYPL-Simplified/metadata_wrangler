@@ -683,9 +683,8 @@ class URNLookupController(CoreURNLookupController):
         q = self._db.query(CoverageRecord).filter(
                 CoverageRecord.identifier==identifier
         ).filter(
-            CoverageRecord.data_source_id.in_(
-                [x.id for x in metadata_sources]
-            )
+            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
+            CoverageRecord.status==CoverageRecord.SUCCESS
         )
 
         coverage_records = q.all()

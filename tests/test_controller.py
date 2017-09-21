@@ -665,8 +665,9 @@ class TestURNLookupController(ControllerTest):
             Identifier.type==Identifier.OVERDRIVE_ID
         ).all()
         eq_("nosuchidentifier", identifier.identifier)
-        [coverage] = identifier.coverage_records
-        eq_(CoverageRecord.TRANSIENT_FAILURE, coverage.status)
+        assert identifier.coverage_records
+        for cr in identifier.coverage_records:
+            eq_(CoverageRecord.TRANSIENT_FAILURE, cr.status)
 
         # The Identifier has been added to the catalog of the
         # "Unaffiliated" collection.
@@ -682,10 +683,10 @@ class TestURNLookupController(ControllerTest):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
-        record.exception = self.controller.NO_WORK_DONE_EXCEPTION
+        record.exception = self.controller.registrar.NO_WORK_DONE_EXCEPTION
 
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
@@ -704,7 +705,7 @@ class TestURNLookupController(ControllerTest):
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.PERSISTENT_FAILURE
         )
         record.exception = "foo"
@@ -719,7 +720,7 @@ class TestURNLookupController(ControllerTest):
 
         # There's a record of success, but no presentation-ready work.
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.SUCCESS
         )
 
@@ -755,10 +756,17 @@ class TestURNLookupController(ControllerTest):
         eq_([(identifier, work)], self.controller.works)
 
     def test_process_urn_with_collection(self):
-        name = base64.b64encode((ExternalIntegration.OPDS_IMPORT+':'+self._url), '-_')
+        circ_manager_opds_collection = self._collection(
+            protocol=ExternalIntegration.OPDS_IMPORT,
+            external_account_id=self._url,
+        )
+        name = circ_manager_opds_collection.metadata_identifier
         collection = self._collection(name=name, url=self._url)
 
-        with self.app.test_request_context('/', headers=self.valid_auth):
+        data_source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
+        with self.app.test_request_context('/?%s' % data_source,
+            headers=self.valid_auth
+        ):
             i1 = self._identifier()
             i2 = self._identifier()
 
@@ -803,9 +811,10 @@ class TestURNLookupController(ControllerTest):
         self.assert_one_message(
             isbn.urn, HTTP_CREATED, self.controller.IDENTIFIER_REGISTERED
         )
-        [record] = isbn.coverage_records
-        eq_(record.exception, self.controller.NO_WORK_DONE_EXCEPTION)
-        eq_(record.status, CoverageRecord.TRANSIENT_FAILURE)
+        assert isbn.coverage_records
+        for cr in isbn.coverage_records:
+            eq_(cr.exception, self.controller.registrar.NO_WORK_DONE_EXCEPTION)
+            eq_(cr.status, CoverageRecord.TRANSIENT_FAILURE)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
