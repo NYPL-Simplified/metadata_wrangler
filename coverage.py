@@ -1,3 +1,4 @@
+import logging
 from nose.tools import set_trace
 
 from core.coverage import (
@@ -390,6 +391,12 @@ class IdentifierResolutionRegistrar(object):
     def __init__(self, _db):
         self._db = _db
 
+    @property
+    def log(self):
+        if not hasattr(self, '_log'):
+            self._log = logging.getLogger(self.__class__.__name__)
+        return self._log
+
     def register(self, identifier, force=False):
         """Creates a transient failure CoverageRecord for each provider
         that the identifier eligible for coverage from.
@@ -478,9 +485,18 @@ class IdentifierResolutionRegistrar(object):
     ):
         source = DataSource.lookup(self._db, provider_class.DATA_SOURCE_NAME)
         if collection and not source:
+            # LookupClientCoverageProvider has a DataSource specific to the
+            # Collection, so OPDS_IMPORT collections should have their
+            # DataSource set via request.
             source = collection.data_source
         operation = provider_class.OPERATION
+
         existing_record = CoverageRecord.lookup(identifier, source, operation)
+        if existing_record:
+            self.log.info(
+                '[%s] FOUND %r' % (provider_class.__name__, existing_record)
+            )
+            return
 
         if not existing_record:
             coverage_record, is_new = CoverageRecord.add_for(
@@ -488,3 +504,7 @@ class IdentifierResolutionRegistrar(object):
                 status=CoverageRecord.TRANSIENT_FAILURE
             )
             coverage_record.exception = self.NO_WORK_DONE_EXCEPTION
+
+            self.log.info(
+                '[%s] CREATED %r' % (provider_class.__name__, coverage_record)
+            )
