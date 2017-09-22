@@ -476,48 +476,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             CoverageRecord.operation==self.never_successful.OPERATION).one()
         eq_("What did you expect?", r.exception)
 
-    def test_generate_edition(self):
-        # Create an ISBN with a LicensePool.
-        identifier = self._identifier(identifier_type=Identifier.ISBN)
-        lp = LicensePool.for_foreign_id(
-            self._db, self.resolver.data_source, identifier.type,
-            identifier.identifier, collection=self._default_collection
-        )[0]
-
-        # Create editions and equivalencies for some OCLC equivalent identifiers.
-        number_ed = self._edition(identifier_type=Identifier.OCLC_NUMBER)
-        work_id_ed = self._edition(identifier_type=Identifier.OCLC_WORK)
-        identifier.equivalent_to(self.source, number_ed.primary_identifier, 1)
-        identifier.equivalent_to(self.source, work_id_ed.primary_identifier, 1)
-        self._db.commit()
-
-        number_ed_info = (number_ed.title, number_ed.author)
-        work_id_ed_info = (work_id_ed.title, work_id_ed.author)
-
-        def presentation_edition_info():
-            return (lp.presentation_edition.title, lp.presentation_edition.author)
-
-        # generate_edition sets a presentation_edition
-        self.resolver.generate_edition(identifier)
-        assert presentation_edition_info() in [number_ed_info, work_id_ed_info]
-
-        # (Remove the generated presentation_edition for next portion of the test.)
-        combined_edition = lp.presentation_edition
-        lp.presentation_edition = None
-        for contribution in combined_edition.contributions:
-            self._db.delete(contribution)
-        self._db.delete(combined_edition)
-
-        # When only one edition has title and author, that edition becomes the
-        # the presentation edition.
-        for contribution in work_id_ed.contributions:
-            work_id_ed.author = None
-            self._db.delete(contribution)
-        self._db.commit()
-
-        self.resolver.generate_edition(identifier)
-        eq_(number_ed_info, presentation_edition_info())
-
 
 class TestIdentifierResolutionRegistrar(DatabaseTest):
 
@@ -657,3 +615,31 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         # There should now be an additional DataSource.INTERNAL_PROCESSING
         # record for the OPDS_FOR_DISTRIBUTORS coverage.
         eq_(2, source_names.count(DataSource.INTERNAL_PROCESSING))
+
+    def test_register_creates_an_active_license_pool(self):
+        # Confirm the identifier has no LicensePool.
+        eq_([], self.identifier.licensed_through)
+
+        # After registration, there's a LicensePool.
+        self.registrar.register(self.identifier)
+
+        [lp] = self.identifier.licensed_through
+        eq_(lp.data_source.name, DataSource.INTERNAL_PROCESSING)
+        eq_(1, lp.licenses_owned)
+        eq_(1, lp.licenses_available)
+
+        # If the Identifier already has a LicensePool (highly unlikely!),
+        # no new LicensePool is created.
+        pool = self._licensepool(None)
+        identifier = pool.identifier
+        pool.licenses_owned = 4
+        pool.licenses_available = 2
+
+        # Registration does not create a new LicensePool.
+        self.registrar.register(identifier)
+        [lp] = identifier.licensed_through
+        eq_(pool, lp)
+
+        # It also doesn't adjust the available licenses.
+        eq_(4, lp.licenses_owned)
+        eq_(2, lp.licenses_available)

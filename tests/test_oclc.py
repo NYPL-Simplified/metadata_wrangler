@@ -5,10 +5,11 @@ from nose.tools import set_trace, eq_
 
 from core.model import (
     Contributor,
-    Identifier,
-    Subject,
     DataSource,
     Equivalency,
+    Identifier,
+    LicensePool,
+    Subject,
 )
 from core.metadata_layer import (
     ContributorData,
@@ -309,3 +310,91 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         # The author without VIAF data didn't request a VIAF lookup.
         # Instead, that result is still in the mock VIAF queue.
         eq_(viaf.results, ["Unrequested lookup"])
+
+    def test_calculate_work_for_isbn(self):
+        identifier = self._identifier()
+
+        # With a non-ISBN identifier, nothing happens
+        self.provider.calculate_work_for_isbn(identifier)
+        eq_(None, identifier.work)
+
+        # With an ISBN identifier without a LicensePool, nothing happens.
+        identifier.type = Identifier.ISBN
+        self.provider.calculate_work_for_isbn(identifier)
+        eq_(None, identifier.work)
+
+        # If there's a LicensePool and an edition, a work is created.
+        edition, pool = self._edition(
+            identifier_type=Identifier.ISBN, with_license_pool=True
+        )
+        identifier = edition.primary_identifier
+        self.provider.calculate_work_for_isbn(identifier)
+
+        work = identifier.work
+        assert work
+        eq_(edition.title, work.title)
+        eq_(edition.author, work.author)
+
+        # If there are two LicensePools, all of them get the same work.
+        edition, pool = self._edition(
+            identifier_type=Identifier.ISBN, with_license_pool=True
+        )
+        identifier = edition.primary_identifier
+
+        ignore, other_pool = self._edition(
+            data_source_name=DataSource.OCLC, with_license_pool=True
+        )
+        other_pool.identifier = identifier
+        self.provider.calculate_work_for_isbn(identifier)
+
+        work = identifier.work
+        assert work
+        eq_(work, pool.work)
+        eq_(work, other_pool.work)
+
+    def test_generate_edition(self):
+        # Create an ISBN with a LicensePool.
+        identifier = self._identifier(identifier_type=Identifier.ISBN)
+        lp = LicensePool.for_foreign_id(
+            self._db, self.provider.data_source, identifier.type,
+            identifier.identifier, collection=self._default_collection
+        )[0]
+
+        # Create editions and equivalencies for some OCLC equivalent identifiers.
+        number_ed = self._edition(identifier_type=Identifier.OCLC_NUMBER)
+        work_id_ed = self._edition(identifier_type=Identifier.OCLC_WORK)
+
+        identifier.equivalent_to(
+            self.provider.data_source, number_ed.primary_identifier, 1
+        )
+        identifier.equivalent_to(
+            self.provider.data_source, work_id_ed.primary_identifier, 1
+        )
+        self._db.commit()
+
+        number_ed_info = (number_ed.title, number_ed.author)
+        work_id_ed_info = (work_id_ed.title, work_id_ed.author)
+
+        def presentation_edition_info():
+            return (lp.presentation_edition.title, lp.presentation_edition.author)
+
+        # generate_edition sets a presentation_edition
+        self.provider.generate_edition(identifier)
+        assert presentation_edition_info() in [number_ed_info, work_id_ed_info]
+
+        # (Remove the generated presentation_edition for next portion of the test.)
+        combined_edition = lp.presentation_edition
+        lp.presentation_edition = None
+        for contribution in combined_edition.contributions:
+            self._db.delete(contribution)
+        self._db.delete(combined_edition)
+
+        # When only one edition has title and author, that edition becomes the
+        # the presentation edition.
+        for contribution in work_id_ed.contributions:
+            work_id_ed.author = None
+            self._db.delete(contribution)
+        self._db.commit()
+
+        self.provider.generate_edition(identifier)
+        eq_(number_ed_info, presentation_edition_info())

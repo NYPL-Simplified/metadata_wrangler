@@ -1031,7 +1031,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         # With ISBNs, that higher-quality metadata is not available, so we
         # depend on OCLC for title and author information.
         if identifier.type == Identifier.ISBN:
-            self.calculate_work(identifier)
+            self.calculate_work_for_isbn(identifier)
 
         return identifier
 
@@ -1107,7 +1107,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                 self.data_source, primary_identifier, strength
             )
 
-    def calculate_work(self, identifier):
+    def calculate_work_for_isbn(self, identifier):
         """Uses recently-acquired OCLC metadata to try to create a work.
 
         This is of primary significance for ISBN identifiers, which will

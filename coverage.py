@@ -472,13 +472,17 @@ class IdentifierResolutionRegistrar(object):
         """Creates a LicensePool in the unaffiliated_collection for
         otherwise unlicensed identifiers.
         """
+        license_pool = None
         if not identifier.licensed_through:
             license_pool, ignore = LicensePool.for_foreign_id(
                 self._db, self.RESOLVER.DATA_SOURCE_NAME, identifier.type,
                 identifier.identifier, collection=collection
             )
-            if not license_pool.licenses_owned:
-                license_pool.update_availability(1, 1, 0, 0)
+
+        license_pool = license_pool or identifier.licensed_through[0]
+
+        if not license_pool.licenses_owned:
+            license_pool.update_availability(1, 1, 0, 0)
 
     def find_or_create_coverage_record(self, identifier, provider_class,
         collection=None
