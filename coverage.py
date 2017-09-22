@@ -16,9 +16,10 @@ from core.model import (
     DataSource,
     Edition,
     ExternalIntegration,
-    get_one_or_create,
     Identifier,
+    LicensePool,
     PresentationCalculationPolicy,
+    get_one_or_create,
 )
 
 from core.overdrive import OverdriveAPI
@@ -325,39 +326,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             self.generate_edition(identifier)
         self.process_work(identifier)
 
-    def generate_edition(self, identifier):
-        """Utilizes an ISBN's equivalent identifiers (OCLC Number or Work IDs)
-        to set an appropriate LicensePool presentation edition so a Work can
-        later be created.
-        """
-        equivalent_ids = identifier.equivalent_identifier_ids()[identifier.id]
-
-        # Get the editions of equivalent identifiers (OCLC Number or Work IDs)
-        # to set as a presentation edition. These editions can be lower quality,
-        # and it's important that they have a title.
-        titled_equivalent_editions = self._db.query(Edition).\
-            join(Edition.primary_identifier).\
-            filter(Identifier.id.in_(equivalent_ids)).\
-            filter(Edition.title!=None)
-
-        # It's preferable that they have an author, too.
-        authored_equivalent_editions = titled_equivalent_editions.filter(
-            Edition.author!=None, Edition.author!=Edition.UNKNOWN_AUTHOR
-        )
-
-        if fast_query_count(authored_equivalent_editions):
-            # Prioritize editions with both a title and an author if available.
-            equivalent_editions = authored_equivalent_editions.all()
-        else:
-            equivalent_editions = titled_equivalent_editions.all()
-
-        if equivalent_editions:
-            # Set the presentation edition.
-            pool = identifier.licensed_through[0]
-            pool.set_presentation_edition(
-                equivalent_editions=equivalent_editions
-            )
-
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
         a previously-unresolved identifier's work as presentation ready.
@@ -430,20 +398,22 @@ class IdentifierResolutionRegistrar(object):
         for the IdentifierResolutionCoverageProvider and a boolean representing
         whether or not the CoverageRecord is new
         """
-        record = self.resolution_coverage(identifier)
-        if record:
-            return record, False
-
+        collection, ignore = self.RESOLVER.unaffiliated_collection(self._db)
         if not identifier.collections:
             # This Identifier is not in any collections. Add it to the
             # 'unaffiliated' collection to make sure it gets covered
             # eventually by the identifier resolution script, which only
             # covers Identifiers that are in some collection.
-            collection, ignore = self.RESOLVER.unaffiliated_collection(
-                self._db
-            )
             collection.catalog.append(identifier)
 
+        # Give the identifier a mock LicensePool if it doesn't have one.
+        self.license_pool(identifier, collection)
+
+        record = self.resolution_coverage(identifier)
+        if record and not force:
+            return record, False
+
+        self.log.info('Identifying required coverage for %r' % identifier)
         providers = list()
 
         # Every identifier gets the resolver.
@@ -490,6 +460,18 @@ class IdentifierResolutionRegistrar(object):
         source = DataSource.lookup(self._db, self.RESOLVER.DATA_SOURCE_NAME)
         operation = self.RESOLVER.OPERATION
         return CoverageRecord.lookup(identifier, source, operation)
+
+    def license_pool(self, identifier, collection):
+        """Creates a LicensePool in the unaffiliated_collection for
+        otherwise unlicensed identifiers.
+        """
+        if not identifier.licensed_through:
+            license_pool, ignore = LicensePool.for_foreign_id(
+                self._db, self.RESOLVER.DATA_SOURCE_NAME, identifier.type,
+                identifier.identifier, collection=collection
+            )
+            if not license_pool.licenses_owned:
+                license_pool.update_availability(1, 1, 0, 0)
 
     def find_or_create_coverage_record(self, identifier, provider_class,
         collection=None
