@@ -436,7 +436,7 @@ class IdentifierResolutionRegistrar(object):
         for provider in self.COLLECTION_PROVIDERS:
             if not provider.PROTOCOL:
                 providers.append(provider)
-                break
+                continue
 
             covered_collections = filter(
                 lambda c: c.protocol==provider.PROTOCOL, identifier.collections
