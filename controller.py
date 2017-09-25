@@ -120,27 +120,27 @@ class IndexController(object):
             },
             {
                 "rel": "http://librarysimplified.org/rel/metadata/lookup",
-                "href": "/lookup{?urn*}",
+                "href": "/lookup{?data_source,urn*}",
                 "type": "application/atom+xml;profile=opds-catalog",
                 "title": "Look up metadata about one or more specific items",
                 "templated": "true"
             },
             {
                 "rel": "http://opds-spec.org/sort/new",
-                "href": "/{collection_metadata_identifier}/updates",
+                "href": "/{collection_metadata_identifier}/updates{?data_source}",
                 "type": "application/atom+xml;profile=opds-catalog",
                 "title": "Recent changes to one of your tracked collections.",
                 "templated": "true"
             },
             {
                 "rel": "http://librarysimplified.org/rel/metadata/collection-add",
-                "href": "/{collection_metadata_identifier}/add{?urn*}",
+                "href": "/{collection_metadata_identifier}/add{?data_source,urn*}",
                 "title": "Add items to one of your tracked collections.",
                 "templated": "true"
             },
             {
                 "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
-                "href": "/{collection_metadata_identifier}/remove{?urn*}",
+                "href": "/{collection_metadata_identifier}/remove{?data_source,urn*}",
                 "title": "Remove items from one of your tracked collections.",
                 "templated": "true"
             },
