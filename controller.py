@@ -449,11 +449,16 @@ class CatalogController(object):
         if not public_key_url:
             return NO_AUTH_URL
 
+        log = logging.getLogger(
+            "Public key integration document (%s)" % public_key_url
+        )
+
         try:
             response = do_get(
                 public_key_url, allowed_response_codes=['2xx', '3xx']
             )
         except Exception as e:
+            log.error("Error retrieving URL", exc_info=e)
             return REMOTE_INTEGRATION_ERROR
 
         content_type = None
@@ -462,15 +467,17 @@ class CatalogController(object):
 
         if not (response.content and content_type == OPDS_2_MEDIA_TYPE):
             # There's no JSON to speak of.
+            log.error("Could not find OPDS 2 document: %s/%s",
+                      response.content, content_type)
             return INVALID_INTEGRATION_DOCUMENT
 
         public_key_response = response.json()
 
         url = public_key_response.get('id')
         if not url:
-            return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The public key integration document is missing an id."
-            )
+            message = "The public key integration document is missing an id."
+            log.error(message)
+            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
@@ -478,16 +485,21 @@ class CatalogController(object):
             return '%s://%s' % (scheme, netloc)
 
         client_url = base_url(url)
-        if not client_url == base_url(public_key_url):
+        base_public_key_url = base_url(public_key_url) 
+        if not client_url == base_public_key_url:
+            log.error(
+                "ID of OPDS 2 document (%s) doesn't match submitted URL (%s)", 
+                client_url, base_public_key_url
+            )
             return INVALID_INTEGRATION_DOCUMENT.detailed(
                 "The public key integration document id doesn't match submitted url"
             )
 
         public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
-            return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The public key integration document is missing an RSA public_key."
-            )
+            message = "The public key integration document is missing an RSA public_key."
+            log.error(message)
+            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
         public_key = RSA.importKey(public_key.get('value'))
         encryptor = PKCS1_OAEP.new(public_key)
 
@@ -502,6 +514,7 @@ class CatalogController(object):
                 self._db, url, submitted_secret=submitted_secret
             )
         except ValueError as e:
+            log.error("Error in IntegrationClient.register", exc_info=e)
             return INVALID_CREDENTIALS.detailed(repr(e))
 
         # Encrypt shared secret.
