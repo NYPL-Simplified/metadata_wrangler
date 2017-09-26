@@ -18,6 +18,7 @@ from . import (
 )
 from core.config import Configuration
 from core.model import (
+    Collection,
     ConfigurationSetting,
     CoverageRecord,
     DataSource,
@@ -47,6 +48,7 @@ from controller import (
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
     authenticated_client_from_request,
+    collection_from_details,
 )
 from problem_details import *
 
@@ -107,6 +109,42 @@ class TestIntegrationClientAuthentication(ControllerTest):
         with self.app.test_request_context('/'):
             result = authenticated_client_from_request(self._db, required=False)
             eq_(None, result)
+
+
+class TestCollectionHandling(ControllerTest):
+
+    def test_collection_from_details(self):
+        mirrored_collection = self._collection(external_account_id=self._url)
+        details = mirrored_collection.metadata_identifier
+
+        collection = None
+        with self.app.test_request_context('/'):
+            # Without a information, nothing is returned.
+            result = collection_from_details(self._db, None, None)
+            eq_(None, result)
+
+            result = collection_from_details(self._db, self.client, None)
+            eq_(None, result)
+
+            result = collection_from_details(self._db, None, details)
+            eq_(None, result)
+
+            # It creates a collection if it doesn't exist.
+            result = collection_from_details(self._db, self.client, details)
+            assert isinstance(result, Collection)
+            collection = result
+
+        # The DataSource can also be set via arguments.
+        eq_(None, collection.data_source)
+        source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
+        with self.app.test_request_context('/?%s' % source):
+            result = collection_from_details(self._db, self.client, details)
+
+            # The previously-created collection is returned.
+            eq_(collection, result)
+
+            # It has a DataSource.
+            eq_(DataSource.OA_CONTENT_SERVER, collection.data_source.name)
 
 
 class TestIndexController(ControllerTest):
@@ -627,8 +665,9 @@ class TestURNLookupController(ControllerTest):
             Identifier.type==Identifier.OVERDRIVE_ID
         ).all()
         eq_("nosuchidentifier", identifier.identifier)
-        [coverage] = identifier.coverage_records
-        eq_(CoverageRecord.TRANSIENT_FAILURE, coverage.status)
+        assert identifier.coverage_records
+        for cr in identifier.coverage_records:
+            eq_(CoverageRecord.TRANSIENT_FAILURE, cr.status)
 
         # The Identifier has been added to the catalog of the
         # "Unaffiliated" collection.
@@ -638,30 +677,16 @@ class TestURNLookupController(ControllerTest):
         eq_([identifier], unaffiliated.catalog)
 
     @basic_request_context
-    def test_register_identifier_as_unresolved_does_not_catalog_already_cataloged_identifier(self):
-        # This identifier is already in a Collection's catalog.
-        identifier = self._identifier()
-        collection = self._collection()
-        collection.catalog.append(identifier)
-
-        # Registering it as unresolved doesn't also add it to the
-        # 'unaffiliated' Collection.
-        self.controller.register_identifier_as_unresolved(
-            identifier.urn, identifier
-        )
-        eq_([collection], identifier.collections)
-
-    @basic_request_context
     def test_process_urn_pending_resolve_attempt(self):
         # Simulate calling process_urn twice, and make sure the 
         # second call results in an "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.TRANSIENT_FAILURE
         )
-        record.exception = self.controller.NO_WORK_DONE_EXCEPTION
+        record.exception = self.controller.registrar.NO_WORK_DONE_EXCEPTION
 
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
@@ -680,7 +705,7 @@ class TestURNLookupController(ControllerTest):
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.PERSISTENT_FAILURE
         )
         record.exception = "foo"
@@ -695,7 +720,7 @@ class TestURNLookupController(ControllerTest):
 
         # There's a record of success, but no presentation-ready work.
         record, is_new = CoverageRecord.add_for(
-            identifier, self.source, self.controller.OPERATION,
+            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
             status=CoverageRecord.SUCCESS
         )
 
@@ -731,10 +756,17 @@ class TestURNLookupController(ControllerTest):
         eq_([(identifier, work)], self.controller.works)
 
     def test_process_urn_with_collection(self):
-        name = base64.b64encode((ExternalIntegration.OPDS_IMPORT+':'+self._url), '-_')
+        circ_manager_opds_collection = self._collection(
+            protocol=ExternalIntegration.OPDS_IMPORT,
+            external_account_id=self._url,
+        )
+        name = circ_manager_opds_collection.metadata_identifier
         collection = self._collection(name=name, url=self._url)
 
-        with self.app.test_request_context('/', headers=self.valid_auth):
+        data_source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
+        with self.app.test_request_context('/?%s' % data_source,
+            headers=self.valid_auth
+        ):
             i1 = self._identifier()
             i2 = self._identifier()
 
@@ -779,9 +811,10 @@ class TestURNLookupController(ControllerTest):
         self.assert_one_message(
             isbn.urn, HTTP_CREATED, self.controller.IDENTIFIER_REGISTERED
         )
-        [record] = isbn.coverage_records
-        eq_(record.exception, self.controller.NO_WORK_DONE_EXCEPTION)
-        eq_(record.status, CoverageRecord.TRANSIENT_FAILURE)
+        assert isbn.coverage_records
+        for cr in isbn.coverage_records:
+            eq_(cr.exception, self.controller.registrar.NO_WORK_DONE_EXCEPTION)
+            eq_(cr.status, CoverageRecord.TRANSIENT_FAILURE)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information

@@ -1,19 +1,27 @@
 from nose.tools import set_trace
-from core.model import DataSource
-from core.coverage import CollectionCoverageProvider
+from core.model import (
+    CoverageRecord,
+    DataSource,
+    ExternalIntegration,
+)
+from core.coverage import CatalogCoverageProvider
 from core.metadata_layer import (
     Metadata,
     ReplacementPolicy,
 )
 
-class IntegrationClientCoverageProvider(CollectionCoverageProvider):
+class IntegrationClientCoverageProvider(CatalogCoverageProvider):
     """Mirrors and scales cover images we heard about from an IntegrationClient."""
 
     SERVICE_NAME = "Integration Client Coverage Provider"
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
 
+    OPERATION = CoverageRecord.IMPORT_OPERATION
+    PROTOCOL = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+
     def __init__(self, uploader, collection, *args, **kwargs):
         self.uploader = uploader
+        kwargs['preregistered_only'] = True
         super(IntegrationClientCoverageProvider, self).__init__(
             collection, *args, **kwargs)
 

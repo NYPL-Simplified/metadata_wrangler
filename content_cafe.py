@@ -36,7 +36,9 @@ class ContentCafeCoverageProvider(IdentifierCoverageProvider):
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
     def __init__(self, _db, api=None, uploader=None, **kwargs):
-        super(ContentCafeCoverageProvider, self).__init__(_db, **kwargs)
+        super(ContentCafeCoverageProvider, self).__init__(
+            _db, preregistered_only=True, **kwargs
+        )
         if api:
             self.content_cafe = api
             self.mirror = api.mirror

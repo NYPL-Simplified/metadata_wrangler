@@ -31,7 +31,10 @@ from core.metadata_layer import (
     IdentifierData,
     SubjectData,
 )
-from core.util import MetadataSimilarity
+from core.util import (
+    MetadataSimilarity,
+    fast_query_count,
+)
 
 from viaf import VIAFClient
 
@@ -822,7 +825,6 @@ class OCLCLinkedData(object):
         self.log.debug("END GRAPHS FOR %r", identifier)
 
 
-
 class MockOCLCLinkedData(OCLCLinkedData):    
     def __init__(self, _db):
         super(MockOCLCLinkedData, self).__init__(_db)
@@ -870,7 +872,6 @@ class MockOCLCLinkedData(OCLCLinkedData):
         names = []
         uris = []
         return names, uris
-
 
 
 class LinkedDataURLLister:
@@ -929,9 +930,16 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
             del kwargs['viaf_api']
         else:
             self.viaf = VIAFClient(_db)
+
+        kwargs['preregistered_only'] = True
         super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)
             
     def process_item(self, identifier):
+        # Books are not looked up in OCLC Linked Data directly, since
+        # there is no Collection that identifies a book by its OCLC Number.
+        # However, when a book is looked up through OCLC Classify, some
+        # OCLC Numbers may be associated with it, and _those_ numbers
+        # can be run through OCLC Linked Data.
         try:
             new_info_counter = Counter()
             self.log.info("Processing identifier %r", identifier)
@@ -1015,6 +1023,16 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
                 exception = "OCLC raised an error: %r" % e
                 transient = True
             return self.failure(identifier, exception, transient=transient)
+
+        # Try to calculate or recalculate a work for ISBNs.
+        #
+        # We won't do this for other Identifier types because we don't want
+        # to overwrite the high-quality metadata direct from the source.
+        # With ISBNs, that higher-quality metadata is not available, so we
+        # depend on OCLC for title and author information.
+        if identifier.type == Identifier.ISBN:
+            self.calculate_work_for_isbn(identifier)
+
         return identifier
 
     def apply_viaf_to_contributor_data(self, metadata):
@@ -1087,4 +1105,62 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
             )
             identifier.equivalent_to(
                 self.data_source, primary_identifier, strength
+            )
+
+    def calculate_work_for_isbn(self, identifier):
+        """Uses recently-acquired OCLC metadata to try to create a work.
+
+        This is of primary significance for ISBN identifiers, which will
+        likely have no Work otherwise.
+        """
+        if identifier.type != Identifier.ISBN:
+            return
+
+        work = None
+        license_pools = identifier.licensed_through
+        if not license_pools:
+            return
+
+        self.generate_edition(identifier)
+
+        license_pool = license_pools[0]
+        license_pools = license_pools[1:]
+        work, is_new = license_pool.calculate_work(
+            even_if_no_author=True, exclude_search=True
+        )
+        if work and license_pools:
+            for lp in license_pools:
+                lp.work = work
+
+    def generate_edition(self, identifier):
+        """Utilizes an ISBN's equivalent identifiers (OCLC Number or Work IDs)
+        to set an appropriate LicensePool presentation edition so a Work can
+        later be created.
+        """
+        equivalent_ids = identifier.equivalent_identifier_ids()[identifier.id]
+
+        # Get the editions of equivalent identifiers (OCLC Number or Work IDs)
+        # to set as a presentation edition. These editions can be lower quality,
+        # and it's important that they have a title.
+        titled_equivalent_editions = self._db.query(Edition).\
+            join(Edition.primary_identifier).\
+            filter(Identifier.id.in_(equivalent_ids)).\
+            filter(Edition.title!=None)
+
+        # It's preferable that they have an author, too.
+        authored_equivalent_editions = titled_equivalent_editions.filter(
+            Edition.author!=None, Edition.author!=Edition.UNKNOWN_AUTHOR
+        )
+
+        if fast_query_count(authored_equivalent_editions):
+            # Prioritize editions with both a title and an author if available.
+            equivalent_editions = authored_equivalent_editions.all()
+        else:
+            equivalent_editions = titled_equivalent_editions.all()
+
+        if equivalent_editions:
+            # Set the presentation edition.
+            pool = identifier.licensed_through[0]
+            pool.set_presentation_edition(
+                equivalent_editions=equivalent_editions
             )

@@ -1,3 +1,4 @@
+import logging
 from nose.tools import set_trace
 
 from core.coverage import (
@@ -11,13 +12,15 @@ from core.metadata_layer import (
 
 from core.model import (
     Collection,
+    ConfigurationSetting,
     CoverageRecord,
     DataSource,
     Edition,
     ExternalIntegration,
-    get_one_or_create,
     Identifier,
+    LicensePool,
     PresentationCalculationPolicy,
+    get_one_or_create,
 )
 
 from core.overdrive import OverdriveAPI
@@ -91,12 +94,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     def __init__(
         self, collection, uploader=None, viaf_client=None,
-        linked_data_coverage_provider=None, content_cafe_api=None,
-        overdrive_api_class=OverdriveAPI, **kwargs
+        content_cafe_api=None, overdrive_api_class=OverdriveAPI, **kwargs
     ):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, **kwargs
+            collection, preregistered_only=True, **kwargs
         )
 
         # Since we are the metadata wrangler, any resources we find,
@@ -124,24 +126,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # When we need to look up a contributor via VIAF we will use this
         # client.
         self.viaf_client = viaf_client or VIAFClient(self._db)
-                
-        # Books are not looked up in OCLC Linked Data directly, since
-        # there is no Collection that identifies a book by its OCLC Number.
-        # However, when a book is looked up through OCLC Classify, some
-        # OCLC Numbers may be associated with it, and _those_ numbers
-        # can be run through OCLC Linked Data.
-        #
-        # TODO: We get many books identified by ISBN, and those books
-        # _could_ be run through a LinkedDataCoverageProvider if it
-        # worked a little differently. However, I don't think this
-        # would be very useful, since those books will get looked up
-        # through OCLC Classify, which will probably result in us
-        # finding that same ISBN via OCLC Number.
-        self.oclc_linked_data = (
-            linked_data_coverage_provider or
-            LinkedDataCoverageProvider(self._db, viaf_api=self.viaf_client)
-        )
-        
+
     def create_overdrive_api(self, overdrive_api_class):
         collection, is_new = Collection.by_name_and_protocol(
             self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
@@ -209,14 +194,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             optional = []
             required = [content_cafe, oclc_classify]
             
-        # All books derived from OPDS import against the open-access
+        # All books derived from OPDS import against an open-access
         # content server must be looked up in that server.
-        #
-        # TODO: This could stand some generalization. Any OPDS server
-        # that also supports the lookup protocol can be used here.
-        if (self.collection.protocol == ExternalIntegration.OPDS_IMPORT
+        if (self.collection.protocol==ExternalIntegration.OPDS_IMPORT
             and self.collection.data_source
-            and self.collection.data_source.name == DataSource.OA_CONTENT_SERVER):
+        ):
             required.append(LookupClientCoverageProvider(self.collection))
 
         # All books obtained from Overdrive must be looked up via the
@@ -225,7 +207,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             required.append(
                 OverdriveBibliographicCoverageProvider(
                     self.uploader, self.collection, api_class=self.overdrive_api
-                    
                 )
             )
 
@@ -240,20 +221,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             )
 
         return required, optional
-
-    def items_that_need_coverage(self, identifiers=None, **kwargs):
-        """Find all identifiers lacking coverage from this CoverageProvider.
-
-        Only identifiers that have CoverageRecords in the 'transient
-        failure' state will be returned. Unlike with other
-        CoverageProviders, Identifiers that have no CoverageRecord at
-        all will not be processed.
-        """
-        qu = super(IdentifierResolutionCoverageProvider, self).items_that_need_coverage(
-            identifiers=identifiers, **kwargs
-        )
-        qu = qu.filter(CoverageRecord.id != None)
-        return qu
             
     def process_item(self, identifier):
         """For this identifier, checks that it has all of the available
@@ -352,7 +319,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     def finalize(self, identifier):
         """Sets equivalent identifiers from OCLC and processes the work."""
 
-        self.resolve_equivalent_oclc_identifiers(identifier)
         if identifier.type==Identifier.ISBN:
             # In order to create Works for ISBNs, we first have to
             # create an edition associated with the ISBN as a primary
@@ -360,39 +326,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             # Linked Data.
             self.generate_edition(identifier)
         self.process_work(identifier)
-
-    def generate_edition(self, identifier):
-        """Utilizes an ISBN's equivalent identifiers (OCLC Number or Work IDs)
-        to set an appropriate LicensePool presentation edition so a Work can
-        later be created.
-        """
-        equivalent_ids = identifier.equivalent_identifier_ids()[identifier.id]
-
-        # Get the editions of equivalent identifiers (OCLC Number or Work IDs)
-        # to set as a presentation edition. These editions can be lower quality,
-        # and it's important that they have a title.
-        titled_equivalent_editions = self._db.query(Edition).\
-            join(Edition.primary_identifier).\
-            filter(Identifier.id.in_(equivalent_ids)).\
-            filter(Edition.title!=None)
-
-        # It's preferable that they have an author, too.
-        authored_equivalent_editions = titled_equivalent_editions.filter(
-            Edition.author!=None, Edition.author!=Edition.UNKNOWN_AUTHOR
-        )
-
-        if fast_query_count(authored_equivalent_editions):
-            # Prioritize editions with both a title and an author if available.
-            equivalent_editions = authored_equivalent_editions.all()
-        else:
-            equivalent_editions = titled_equivalent_editions.all()
-
-        if equivalent_editions:
-            # Set the presentation edition.
-            pool = identifier.licensed_through[0]
-            pool.set_presentation_edition(
-                equivalent_editions=equivalent_editions
-            )
 
     def process_work(self, identifier):
         """Fill in VIAF data and cover images where possible before setting
@@ -421,27 +354,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             error_msg = "500; " + "Work could not be calculated for %r" % identifier
             raise RuntimeError(error_msg)
 
-    def resolve_equivalent_oclc_identifiers(self, identifier):
-        """Ensures OCLC coverage for an identifier.
-
-        This has to be called after the OCLCClassify coverage is run to confirm
-        that equivalent OCLC identifiers are available.
-        """
-        oclc_ids = set()
-        if identifier.type == Identifier.ISBN:
-            # ISBNs won't have editions, so they should be run through OCLC
-            # to retrieve basic edition data (title, author).
-            oclc_ids.add(identifier)
-
-        types = [Identifier.OCLC_WORK, Identifier.OCLC_NUMBER, Identifier.ISBN]
-        for edition in identifier.primarily_identifies:
-            oclc_ids = oclc_ids.union(
-                edition.equivalent_identifiers(type=types)
-            )
-        for oclc_id in oclc_ids:
-            self.log.info("Currently processing equivalent identifier: %r", oclc_id)
-            self.oclc_linked_data.ensure_coverage(oclc_id)
-
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""
 
@@ -454,3 +366,149 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names())
+
+
+class IdentifierResolutionRegistrar(object):
+
+    # All of the providers used to resolve an Identifier for the
+    # Metadata Wrangler.
+    RESOLVER = IdentifierResolutionCoverageProvider
+
+    IDENTIFIER_PROVIDERS = [
+        ContentCafeCoverageProvider,
+        LinkedDataCoverageProvider,
+        OCLCClassifyCoverageProvider,
+        OverdriveBibliographicCoverageProvider,
+    ]
+
+    COLLECTION_PROVIDERS = [
+        IntegrationClientCoverageProvider,
+        LookupClientCoverageProvider,
+    ]
+
+    NO_WORK_DONE_EXCEPTION = u'No work done yet'
+
+    def __init__(self, _db):
+        self._db = _db
+
+    @property
+    def log(self):
+        if not hasattr(self, '_log'):
+            self._log = logging.getLogger(self.__class__.__name__)
+        return self._log
+
+    def register(self, identifier, force=False):
+        """Creates a transient failure CoverageRecord for each provider
+        that the identifier eligible for coverage from.
+
+        :return: (CoverageRecord, bool) tuple with a CoverageRecord
+        for the IdentifierResolutionCoverageProvider and a boolean representing
+        whether or not the CoverageRecord is new
+        """
+        collection, ignore = self.RESOLVER.unaffiliated_collection(self._db)
+        if not identifier.collections:
+            # This Identifier is not in any collections. Add it to the
+            # 'unaffiliated' collection to make sure it gets covered
+            # eventually by the identifier resolution script, which only
+            # covers Identifiers that are in some collection.
+            collection.catalog.append(identifier)
+
+        # Give the identifier a mock LicensePool if it doesn't have one.
+        self.license_pool(identifier, collection)
+
+        record = self.resolution_coverage(identifier)
+        if record and not force:
+            return record, False
+
+        self.log.info('Identifying required coverage for %r' % identifier)
+        providers = list()
+
+        # Every identifier gets the resolver.
+        providers.append(self.RESOLVER)
+
+        # Filter Identifier-typed CoverageProviders.
+        for provider in self.IDENTIFIER_PROVIDERS:
+            if (not provider.INPUT_IDENTIFIER_TYPES
+                or identifier.type in provider.INPUT_IDENTIFIER_TYPES
+            ):
+                providers.append(provider)
+
+        for provider in self.COLLECTION_PROVIDERS:
+            if not provider.PROTOCOL:
+                providers.append(provider)
+                continue
+
+            covered_collections = filter(
+                lambda c: c.protocol==provider.PROTOCOL, identifier.collections
+            )
+            if covered_collections:
+                if provider==LookupClientCoverageProvider:
+                    # The LookupClientCoverageProvider doesn't have an obvious
+                    # data source. It uses the collection's data source instead.
+                    for collection in covered_collections:
+                        self.find_or_create_coverage_record(
+                            identifier, provider, collection=collection
+                        )
+                else:
+                    providers.append(provider)
+
+        for provider_class in providers:
+            self.find_or_create_coverage_record(identifier, provider_class)
+
+        record = self.resolution_coverage(identifier)
+        return record, True
+
+    def resolution_coverage(self, identifier):
+        """Returns a CoverageRecord if the given identifier has been registered
+        for resolution with the IdentifierResolutionCoverageProvider
+
+        :return: CoverageRecord or None
+        """
+        source = DataSource.lookup(self._db, self.RESOLVER.DATA_SOURCE_NAME)
+        operation = self.RESOLVER.OPERATION
+        return CoverageRecord.lookup(identifier, source, operation)
+
+    def license_pool(self, identifier, collection):
+        """Creates a LicensePool in the unaffiliated_collection for
+        otherwise unlicensed identifiers.
+        """
+        license_pool = None
+        if not identifier.licensed_through:
+            license_pool, ignore = LicensePool.for_foreign_id(
+                self._db, self.RESOLVER.DATA_SOURCE_NAME, identifier.type,
+                identifier.identifier, collection=collection
+            )
+
+        license_pool = license_pool or identifier.licensed_through[0]
+
+        if not license_pool.licenses_owned:
+            license_pool.update_availability(1, 1, 0, 0)
+
+    def find_or_create_coverage_record(self, identifier, provider_class,
+        collection=None
+    ):
+        source = DataSource.lookup(self._db, provider_class.DATA_SOURCE_NAME)
+        if collection and not source:
+            # LookupClientCoverageProvider has a DataSource specific to the
+            # Collection, so OPDS_IMPORT collections should have their
+            # DataSource set via request.
+            source = collection.data_source
+        operation = provider_class.OPERATION
+
+        existing_record = CoverageRecord.lookup(identifier, source, operation)
+        if existing_record:
+            self.log.info(
+                '[%s] FOUND %r' % (provider_class.__name__, existing_record)
+            )
+            return
+
+        if not existing_record:
+            coverage_record, is_new = CoverageRecord.add_for(
+                identifier, source, operation=operation,
+                status=CoverageRecord.TRANSIENT_FAILURE
+            )
+            coverage_record.exception = self.NO_WORK_DONE_EXCEPTION
+
+            self.log.info(
+                '[%s] CREATED %r' % (provider_class.__name__, coverage_record)
+            )

@@ -608,7 +608,9 @@ class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
     DATA_SOURCE_NAME = DataSource.OCLC
     
     def __init__(self, _db, api=None, **kwargs):
-        super(OCLCClassifyCoverageProvider, self).__init__(_db, **kwargs)
+        super(OCLCClassifyCoverageProvider, self).__init__(
+            _db, preregistered_only=True, **kwargs
+        )
         self.api = api or OCLCClassifyAPI(self._db)
 
     def oclc_safe_title(self, title):
