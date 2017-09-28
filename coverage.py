@@ -446,14 +446,12 @@ class IdentifierResolutionRegistrar(object):
                     # The LookupClientCoverageProvider doesn't have an obvious
                     # data source. It uses the collection's data source instead.
                     for collection in covered_collections:
-                        self.find_or_create_coverage_record(
-                            identifier, provider, collection=collection
-                        )
+                        provider.register(identifier, collection=collection)
                 else:
                     providers.append(provider)
 
         for provider_class in providers:
-            self.find_or_create_coverage_record(identifier, provider_class)
+            provider_class.register(identifier)
 
         record = self.resolution_coverage(identifier)
         return record, True
@@ -483,32 +481,3 @@ class IdentifierResolutionRegistrar(object):
 
         if not license_pool.licenses_owned:
             license_pool.update_availability(1, 1, 0, 0)
-
-    def find_or_create_coverage_record(self, identifier, provider_class,
-        collection=None
-    ):
-        source = DataSource.lookup(self._db, provider_class.DATA_SOURCE_NAME)
-        if collection and not source:
-            # LookupClientCoverageProvider has a DataSource specific to the
-            # Collection, so OPDS_IMPORT collections should have their
-            # DataSource set via request.
-            source = collection.data_source
-        operation = provider_class.OPERATION
-
-        existing_record = CoverageRecord.lookup(identifier, source, operation)
-        if existing_record:
-            self.log.info(
-                '[%s] FOUND %r' % (provider_class.__name__, existing_record)
-            )
-            return
-
-        if not existing_record:
-            coverage_record, is_new = CoverageRecord.add_for(
-                identifier, source, operation=operation,
-                status=CoverageRecord.TRANSIENT_FAILURE
-            )
-            coverage_record.exception = self.NO_WORK_DONE_EXCEPTION
-
-            self.log.info(
-                '[%s] CREATED %r' % (provider_class.__name__, coverage_record)
-            )

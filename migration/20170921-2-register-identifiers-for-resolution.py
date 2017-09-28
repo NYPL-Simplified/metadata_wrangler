@@ -20,14 +20,13 @@ from core.model import (
     collections_identifiers,
     production_session,
 )
-from core.s3 import DummyS3Uploader
 
 from coverage import (
     IdentifierResolutionCoverageProvider,
     IdentifierResolutionRegistrar,
 )
 
-log = logging.getLogger(name="Metadata Wrangler configuration import")
+log = logging.getLogger(name="Metadata Wrangler identifier registration migration")
 
 class MockResolver(IdentifierResolutionCoverageProvider):
     """This Mock ResolutionCoverageProvider avoids creating all of the APIs,
@@ -41,8 +40,8 @@ class MockResolver(IdentifierResolutionCoverageProvider):
 try:
     _db = production_session()
     registrar = IdentifierResolutionRegistrar(_db)
-    
-    # Get all unresolved Identifiers that haven't been covered.
+
+    log.info('Finding unresolved identifiers')
     data_source = DataSource.lookup(_db, DataSource.INTERNAL_PROCESSING)
     unresolved_qu = Identifier.missing_coverage_from(
         _db, [], data_source,
@@ -50,23 +49,25 @@ try:
         count_as_covered=CoverageRecord.SUCCESS
     ).filter(CoverageRecord.id != None)
 
-    # Find all of the unresolved identifiers that aren't in a collection.
+    log.info('Finding unaffiliated identifiers without a collection')
     unresolved_and_unaffiliated = unresolved_qu.outerjoin(Identifier.collections)\
         .group_by(Identifier.id).having(func.count(Collection.id)==0)\
         .options(lazyload(Identifier.licensed_through)).distinct()
 
-    # Use a bulk insert to add them all to the unaffiliated_collection.
-    unaffiliated_collection, ignore = MockResolver.unaffiliated_collection(_db)
-    _db.execute(
-        collections_identifiers.insert(),
-        [
-            dict(
-                collection_id=unaffiliated_collection.id,
-                identifier_id=identifier.id
-            ) for identifier in unresolved_and_unaffiliated
-        ]
-    )
-    _db.commit()
+    if unresolved_and_unaffiliated.count() > 1:
+        # Use a bulk insert to add them all to the unaffiliated_collection.
+        log.info('Giving all unaffiliated identifiers a collection')
+        unaffiliated_collection, ignore = MockResolver.unaffiliated_collection(_db)
+        _db.execute(
+            collections_identifiers.insert(),
+            [
+                dict(
+                    collection_id=unaffiliated_collection.id,
+                    identifier_id=identifier.id
+                ) for identifier in unresolved_and_unaffiliated
+            ]
+        )
+        _db.commit()
 
     # Get an IdentifierResolutionCoverageProvider for each collection.
     resolvers = MockResolver.all(_db)
