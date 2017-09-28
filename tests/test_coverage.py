@@ -502,35 +502,6 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         result = self.registrar.resolution_coverage(self.identifier)
         eq_(cr, result)
 
-    def test_find_or_create_coverage_record(self):
-        # The identifier has no coverage.
-        eq_(0, len(self.identifier.coverage_records))
-
-        # If a CoverageRecord doesn't exist for a given CoverageProvider,
-        # a transient failure record is created.
-        self.registrar.find_or_create_coverage_record(
-            self.identifier, OverdriveBibliographicCoverageProvider
-        )
-
-        [record] = self.identifier.coverage_records
-        eq_(DataSource.OVERDRIVE, record.data_source.name)
-        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
-        eq_(self.registrar.NO_WORK_DONE_EXCEPTION, record.exception)
-
-        # If a CoverageRecord exists already, it's returned.
-        overdrive = record
-        overdrive.status = CoverageRecord.SUCCESS
-        overdrive.exception = None
-
-        self.registrar.find_or_create_coverage_record(
-            self.identifier, OverdriveBibliographicCoverageProvider
-        )
-        [record] = self.identifier.coverage_records
-        eq_(overdrive, record)
-        # Its details haven't been changed in any way.
-        eq_(CoverageRecord.SUCCESS, record.status)
-        eq_(None, record.exception)
-
     def test_register_does_not_catalog_already_cataloged_identifier(self):
         # This identifier is already in a Collection's catalog.
         collection = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
@@ -552,8 +523,8 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
     def test_register_creates_expected_initial_coverage_records(self):
 
         def assert_initial_coverage_record(record):
-            eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
-            eq_(self.registrar.NO_WORK_DONE_EXCEPTION, record.exception)
+            eq_(CoverageRecord.REGISTERED, record.status)
+            eq_(None, record.exception)
 
         def assert_expected_coverage_records_created(
             records, expected_source_names

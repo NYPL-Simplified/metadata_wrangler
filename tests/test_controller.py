@@ -667,7 +667,7 @@ class TestURNLookupController(ControllerTest):
         eq_("nosuchidentifier", identifier.identifier)
         assert identifier.coverage_records
         for cr in identifier.coverage_records:
-            eq_(CoverageRecord.TRANSIENT_FAILURE, cr.status)
+            eq_(CoverageRecord.REGISTERED, cr.status)
 
         # The Identifier has been added to the catalog of the
         # "Unaffiliated" collection.
@@ -813,8 +813,7 @@ class TestURNLookupController(ControllerTest):
         )
         assert isbn.coverage_records
         for cr in isbn.coverage_records:
-            eq_(cr.exception, self.controller.registrar.NO_WORK_DONE_EXCEPTION)
-            eq_(cr.status, CoverageRecord.TRANSIENT_FAILURE)
+            eq_(cr.status, CoverageRecord.REGISTERED)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
