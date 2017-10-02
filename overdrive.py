@@ -7,6 +7,7 @@ from core.metadata_layer import ReplacementPolicy
 from core.overdrive import (
     OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider
 )
+from core.s3 import S3Uploader
 
 from mirror import CoverImageMirror
 
@@ -16,12 +17,12 @@ class OverdriveBibliographicCoverageProvider(
 
     EXCLUDE_SEARCH_INDEX = True
 
-    def __init__(self, uploader, collection, *args, **kwargs):
+    def __init__(self, collection, uploader=None, **kwargs):
         _db = Session.object_session(collection)
-        self.mirror = uploader
+        self.mirror = uploader or S3Uploader.from_config(_db)
         kwargs['preregistered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
-            collection, *args, **kwargs
+            collection, **kwargs
         )
 
     def _default_replacement_policy(self, _db):

@@ -206,7 +206,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.uploader, self.collection, api_class=self.overdrive_api
+                    self.collection, uploader=self.uploader,
+                    api_class=self.overdrive_api
                 )
             )
 
