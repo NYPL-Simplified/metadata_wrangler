@@ -25,7 +25,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         collection = MockOverdriveAPI.mock_collection(self._db)
         mirror = DummyS3Uploader()
         provider = OverdriveBibliographicCoverageProvider(
-            mirror, collection, MockOverdriveAPI
+                collection, uploader=mirror, api_class=MockOverdriveAPI
         )
         
         # Any resources discovered by Overdrive will be

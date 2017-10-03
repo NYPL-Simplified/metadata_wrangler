@@ -206,7 +206,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.uploader, self.collection, api_class=self.overdrive_api
+                    self.collection, uploader=self.uploader,
+                    api_class=self.overdrive_api
                 )
             )
 
@@ -318,13 +319,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     def finalize(self, identifier):
         """Sets equivalent identifiers from OCLC and processes the work."""
-
-        if identifier.type==Identifier.ISBN:
-            # In order to create Works for ISBNs, we first have to
-            # create an edition associated with the ISBN as a primary
-            # identifier. At the moment, this is achieved via OCLC
-            # Linked Data.
-            self.generate_edition(identifier)
         self.process_work(identifier)
 
     def process_work(self, identifier):

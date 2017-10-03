@@ -66,7 +66,7 @@ class ldq(object):
         for v in values:
             if isinstance(v, basestring):
                 yield v
-            elif not '@language' in v or v['@language'] == code_2:
+            elif v and (not '@language' in v or v['@language'] == code_2):
                 yield v
 
     @classmethod
