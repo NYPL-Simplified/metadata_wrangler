@@ -319,13 +319,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     def finalize(self, identifier):
         """Sets equivalent identifiers from OCLC and processes the work."""
-
-        if identifier.type==Identifier.ISBN:
-            # In order to create Works for ISBNs, we first have to
-            # create an edition associated with the ISBN as a primary
-            # identifier. At the moment, this is achieved via OCLC
-            # Linked Data.
-            self.generate_edition(identifier)
         self.process_work(identifier)
 
     def process_work(self, identifier):
