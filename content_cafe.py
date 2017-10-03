@@ -55,6 +55,7 @@ class ContentCafeCoverageProvider(IdentifierCoverageProvider):
             self.content_cafe.mirror_resources(identifier)
             return identifier
         except Exception as e:
+            self.log.error('Coverage error for %r', identifier, exc_info=e)
             return self.failure(identifier, repr(e), transient=True)
 
 
