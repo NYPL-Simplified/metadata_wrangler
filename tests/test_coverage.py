@@ -502,25 +502,25 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         result = self.registrar.resolution_coverage(self.identifier)
         eq_(cr, result)
 
-    def test_register_does_not_catalog_already_cataloged_identifier(self):
+    def test_process_item_does_not_catalog_already_cataloged_identifier(self):
         # This identifier is already in a Collection's catalog.
         collection = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
         collection.catalog.append(self.identifier)
 
         # Registering it as unresolved doesn't also add it to the
         # 'unaffiliated' Collection.
-        self.registrar.register(self.identifier)
+        self.registrar.process_item(self.identifier)
         eq_([collection], self.identifier.collections)
 
-    def test_register_catalogs_unaffiliated_identifiers(self):
+    def test_process_item_catalogs_unaffiliated_identifiers(self):
         # This identifier has no collection.
         eq_(0, len(self.identifier.collections))
 
         unaffiliated_collection, ignore = self.PROVIDER.unaffiliated_collection(self._db)
-        self.registrar.register(self.identifier)
+        self.registrar.process_item(self.identifier)
         eq_([unaffiliated_collection], self.identifier.collections)
 
-    def test_register_creates_expected_initial_coverage_records(self):
+    def test_process_item_creates_expected_initial_coverage_records(self):
 
         def assert_initial_coverage_record(record):
             eq_(CoverageRecord.REGISTERED, record.status)
@@ -561,7 +561,7 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
             eq_(0, len(self.identifier.coverage_records))
 
             self.identifier.type = identifier_type
-            self.registrar.register(self.identifier)
+            self.registrar.process_item(self.identifier)
 
             assert_expected_coverage_records_created(
                 self.identifier.coverage_records, expected_source_names
@@ -578,7 +578,7 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         )
         opds_import = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
         self.identifier.collections.extend([opds_distrib, opds_import])
-        self.registrar.register(self.identifier)
+        self.registrar.process_item(self.identifier)
 
         source_names = [cr.data_source.name
                         for cr in self.identifier.coverage_records]
@@ -587,12 +587,12 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         # record for the OPDS_FOR_DISTRIBUTORS coverage.
         eq_(2, source_names.count(DataSource.INTERNAL_PROCESSING))
 
-    def test_register_creates_an_active_license_pool(self):
+    def test_process_item_creates_an_active_license_pool(self):
         # Confirm the identifier has no LicensePool.
         eq_([], self.identifier.licensed_through)
 
         # After registration, there's a LicensePool.
-        self.registrar.register(self.identifier)
+        self.registrar.process_item(self.identifier)
 
         [lp] = self.identifier.licensed_through
         eq_(lp.data_source.name, DataSource.INTERNAL_PROCESSING)
@@ -607,7 +607,7 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         pool.licenses_available = 2
 
         # Registration does not create a new LicensePool.
-        self.registrar.register(identifier)
+        self.registrar.process_item(identifier)
         [lp] = identifier.licensed_through
         eq_(pool, lp)
 
