@@ -657,31 +657,41 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        record, is_new = self.registrar.register(identifier)
-        if is_new:
-            # The CoverageRecord was just created. Tell the client to
-            # come back later.
+        registration_record, is_new = self.registrar.register(identifier)
+        resolution_record = self.registrar.resolution_coverage(identifier)
+
+        if is_new and not resolution_record:
+            # The CoverageRecord for registration was just created. Tell the
+            # client to come back later.
             return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
-        else:
-            # There is a pending attempt to resolve this identifier.
-            # Tell the client we're working on it, or if the
-            # pending attempt resulted in an exception,
-            # tell the client about the exception.
-            message = record.exception
-            if not message or message == self.registrar.NO_WORK_DONE_EXCEPTION:
-                message = self.WORKING_TO_RESOLVE_IDENTIFIER
-            status = HTTP_ACCEPTED
-            if record.status == record.PERSISTENT_FAILURE:
-                # Apparently we just can't provide coverage of this
-                # identifier.
-                status = HTTP_INTERNAL_SERVER_ERROR
-            elif record.status == record.SUCCESS:
-                # This shouldn't happen, since success in providing
-                # this sort of coverage means creating a presentation
-                # ready work. Something weird is going on.
-                status = HTTP_INTERNAL_SERVER_ERROR
-                message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
-            return self.add_message(urn, status, message)
+
+        # There is a pending attempt to resolve this identifier.
+        # Tell the client we're working on it, or if the
+        # pending attempt resulted in an exception,
+        # tell the client about the exception.
+        status = HTTP_ACCEPTED
+        if (not resolution_record or resolution_record.status in
+            (CoverageRecord.REGISTERED, CoverageRecord.TRANSIENT_FAILURE)
+        ):
+            return self.add_message(
+                urn, status, self.WORKING_TO_RESOLVE_IDENTIFIER
+            )
+
+        # There is a pending attempt to resolve this identifier. Tell the
+        # client we're working on it, or if the pending attempt resulted
+        # in an exception, tell the client about the exception.
+        message = resolution_record.exception
+        if resolution_record.status == CoverageRecord.PERSISTENT_FAILURE:
+            # Apparently we just can't provide coverage of this
+            # identifier.
+            status = HTTP_INTERNAL_SERVER_ERROR
+        elif resolution_record.status == CoverageRecord.SUCCESS:
+            # This shouldn't happen, since success in providing
+            # this sort of coverage means creating a presentation
+            # ready work. Something weird is going on.
+            status = HTTP_INTERNAL_SERVER_ERROR
+            message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
+        return self.add_message(urn, status, message)
 
     def make_opds_entry_from_metadata_lookups(self, identifier):
         """This identifier cannot be turned into a presentation-ready Work,
