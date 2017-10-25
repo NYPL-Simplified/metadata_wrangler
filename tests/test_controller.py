@@ -659,22 +659,16 @@ class TestURNLookupController(ControllerTest):
             urn, 201, URNLookupController.IDENTIFIER_REGISTERED
         )
 
-        # The Identifier has been created and given a CoverageRecord
-        # with a transient failure.
+        # The Identifier has been registered with the
+        # IdentiferResolutionRegistrar.
         [identifier] = self._db.query(Identifier).filter(
             Identifier.type==Identifier.OVERDRIVE_ID
         ).all()
         eq_("nosuchidentifier", identifier.identifier)
-        assert identifier.coverage_records
-        for cr in identifier.coverage_records:
-            eq_(CoverageRecord.REGISTERED, cr.status)
-
-        # The Identifier has been added to the catalog of the
-        # "Unaffiliated" collection.
-        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
-            self._db
-        )
-        eq_([identifier], unaffiliated.catalog)
+        [record] = identifier.coverage_records
+        eq_(CoverageRecord.REGISTERED, record.status)
+        eq_(self.controller.registrar.OPERATION, record.operation)
+        eq_(DataSource.INTERNAL_PROCESSING, record.data_source.name)
 
     @basic_request_context
     def test_process_urn_pending_resolve_attempt(self):
@@ -682,11 +676,7 @@ class TestURNLookupController(ControllerTest):
         # second call results in an "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
-        record, is_new = CoverageRecord.add_for(
-            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.TRANSIENT_FAILURE
-        )
-        record.exception = self.controller.registrar.NO_WORK_DONE_EXCEPTION
+        record, is_new = self.controller.registrar.register(identifier)
 
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
@@ -694,21 +684,25 @@ class TestURNLookupController(ControllerTest):
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
-        # The Identifier is only present once in the catalog of the
-        # "Unaffiliated" collection.
-        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(
-            self._db
-        )
-        eq_([identifier], unaffiliated.catalog)
-
     @basic_request_context
     def test_process_urn_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
             identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.PERSISTENT_FAILURE
+            status=CoverageRecord.TRANSIENT_FAILURE
         )
         record.exception = "foo"
+
+        # A transient failure results in an "accepted" 201 status code.
+        self.controller.process_urn(identifier.urn)
+        self.assert_one_message(
+            identifier.urn, HTTP_ACCEPTED,
+            self.controller.WORKING_TO_RESOLVE_IDENTIFIER
+        )
+
+        # A persistent failure results in a "server error" 500 status code.
+        self.controller.precomposed_entries = []
+        record.status = CoverageRecord.PERSISTENT_FAILURE
         self.controller.process_urn(identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"

@@ -4,6 +4,7 @@ from nose.tools import set_trace
 from core.coverage import (
     CoverageFailure, 
     CatalogCoverageProvider, 
+    IdentifierCoverageProvider,
 )
 
 from core.metadata_layer import (
@@ -362,7 +363,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                         contributor.default_names())
 
 
-class IdentifierResolutionRegistrar(object):
+class IdentifierResolutionRegistrar(IdentifierCoverageProvider):
 
     # All of the providers used to resolve an Identifier for the
     # Metadata Wrangler.
@@ -380,18 +381,18 @@ class IdentifierResolutionRegistrar(object):
         LookupClientCoverageProvider,
     ]
 
-    NO_WORK_DONE_EXCEPTION = u'No work done yet'
+    SERVICE_NAME = 'Identifier Resolution Registrar'
+    DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
+    OPERATION = 'register-for-metadata'
 
-    def __init__(self, _db):
-        self._db = _db
+    # Any kind of identifier can be registered.
+    INPUT_IDENTIFIER_TYPES = None
 
-    @property
-    def log(self):
-        if not hasattr(self, '_log'):
-            self._log = logging.getLogger(self.__class__.__name__)
-        return self._log
+    def __init__(self, *args, **kwargs):
+        kwargs['preregistered_only'] = kwargs.get('preregistered_only', True)
+        super(IdentifierResolutionRegistrar, self).__init__(*args, **kwargs)
 
-    def register(self, identifier, force=False):
+    def process_item(self, identifier, force=False):
         """Creates a transient failure CoverageRecord for each provider
         that the identifier eligible for coverage from.
 
@@ -412,7 +413,7 @@ class IdentifierResolutionRegistrar(object):
 
         record = self.resolution_coverage(identifier)
         if record and not force:
-            return record, False
+            return identifier
 
         self.log.info('Identifying required coverage for %r' % identifier)
         providers = list()
@@ -448,7 +449,7 @@ class IdentifierResolutionRegistrar(object):
             provider_class.register(identifier)
 
         record = self.resolution_coverage(identifier)
-        return record, True
+        return identifier
 
     def resolution_coverage(self, identifier):
         """Returns a CoverageRecord if the given identifier has been registered
