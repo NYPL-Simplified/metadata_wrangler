@@ -194,7 +194,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
     def setup(self):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
         self.identifier = self._identifier(Identifier.OVERDRIVE_ID)
-        self._default_collection.catalog_identifier(self._db, self.identifier)
+        self._default_collection.catalog_identifier(self.identifier)
         self.source = DataSource.license_source_for(self._db, self.identifier)
 
         # Create mocks for the different collections and APIs used by
@@ -483,7 +483,7 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
 
     def setup(self):
         super(TestIdentifierResolutionRegistrar, self).setup()
-        self.registrar = IdentifierResolutionRegistrar(self._db)
+        self.registrar = IdentifierResolutionRegistrar(self._default_collection)
         self.identifier = self._identifier()
 
     def test_resolution_coverage(self):
