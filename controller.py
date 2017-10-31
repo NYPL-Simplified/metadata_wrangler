@@ -30,6 +30,7 @@ from core.model import (
     IntegrationClient,
     LicensePool,
     PresentationCalculationPolicy,
+    Representation,
     create,
     get_one,
     get_one_or_create,
@@ -553,8 +554,15 @@ class URNLookupController(CoreURNLookupController):
     log = logging.getLogger("URN lookup controller")
 
     def __init__(self, _db):
-        self.registrar = IdentifierResolutionRegistrar(_db)
+        self.default_collection_id = None
         super(URNLookupController, self).__init__(_db)
+
+    @property
+    def default_collection(self):
+        if not self._default_collection_id:
+            default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+            self._default_collection_id = default_collection.id
+        return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
         """Either return a presentation-ready work associated with the 
@@ -592,22 +600,28 @@ class URNLookupController(CoreURNLookupController):
         if work is None:
             return False
         return True
-  
-    def process_urn(self, urn, collection_details=None, **kwargs):
-        """Turn a URN into a Work suitable for use in an OPDS feed.
+
+    def work_lookup(self, annotator, route_name='lookup', urns=[],
+                    **process_urn_kwargs
+    ):
+        """Returns a ProblemDetail if an error is raised. Otherwise, returns an
+        empty 200 response.
+
+        TODO: Return to using the BaseURNLookupController.work_lookup
+        once the Metadata Wranger load has improved.
         """
-        try:
-            identifier, is_new = Identifier.parse_urn(self._db, urn)
-        except ValueError, e:
-            identifier = None
+        urns = urns or flask.request.args.getlist('urn')
+        response = self.process_urns(urns, **process_urn_kwargs)
+        self.post_lookup_hook()
 
-        if not identifier:
-            # Not a well-formed URN.
-            return self.add_message(urn, 400, INVALID_URN.detail)
+        if response:
+            return response
+        else:
+            # Temporarily return an empty OPDS feed.
+            headers = { 'Content-Type' : Representation.TEXT_XML_MEDIA_TYPE }
+            return make_response("<feed></feed>", HTTP_ACCEPTED, {})
 
-        if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
-
+    def process_urns(self, urns, collection_details=None, **kwargs):
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
@@ -618,8 +632,27 @@ class URNLookupController(CoreURNLookupController):
         collection = collection_from_details(
             self._db, client, collection_details
         )
-        if collection:
-            collection.catalog_identifier(self._db, identifier)
+
+        # TODO: uncomment the segment adding the default collection once
+        # the Metadata Wrangler can handle its existing load. This will add
+        # unaffiliated identifiers to the Unaffiliated Identifier collection.
+        collection = collection # or self.default_collection
+        if not collection:
+            return INVALID_INPUT.detailed("No collection provided.")
+
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+        self.add_urn_failure_messages(failures)
+
+        collection.catalog_identifiers(identifiers_by_urn.values())
+
+        for urn, identifier in identifiers_by_urn.items():
+            self.process_identifier(identifier, urn, **kwargs)
+
+    def process_identifier(self, identifier, urn, **kwargs):
+        """Turn an Identifier into a Work suitable for use in an OPDS feed.
+        """
+        if not self.can_resolve_identifier(identifier):
+            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         if (identifier.type == Identifier.ISBN and not identifier.work):
             # There's not always enough information about an ISBN to
@@ -645,13 +678,22 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        registration_record, is_new = self.registrar.register(identifier)
-        resolution_record = self.registrar.resolution_coverage(identifier)
-
-        if is_new and not resolution_record:
-            # The CoverageRecord for registration was just created. Tell the
-            # client to come back later.
+        registration_records = filter(
+            lambda c: c.operation==IdentifierResolutionRegistrar.OPERATION,
+            identifier.coverage_records
+        )
+        if not (identifier.coverage_records or registration_records):
+            # This identifier hasn't been registered for coverage yet.
+            # Tell the client to come back later.
             return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
+
+        resolution_records = filter(
+            lambda c: c.operation==IdentifierResolutionCoverageProvider.OPERATION,
+            identifier.coverage_records
+        )
+        resolution_record = None
+        if resolution_records:
+            resolution_record = resolution_records[0]
 
         # There is a pending attempt to resolve this identifier.
         # Tell the client we're working on it, or if the

@@ -52,7 +52,7 @@ from controller import (
 )
 from problem_details import *
 
-from coverage import IdentifierResolutionCoverageProvider
+from coverage import IdentifierResolutionRegistrar
 
 class ControllerTest(DatabaseTest):
 
@@ -77,7 +77,7 @@ class TestIntegrationClientAuthentication(ControllerTest):
         with self.app.test_request_context('/', headers=self.valid_auth):
             result = authenticated_client_from_request(self._db)
             eq_(result, self.client)
-        
+
         # Returns error if authentication is invalid.
         invalid_auth = 'Bearer ' + base64.b64encode('wrong_secret')
         with self.app.test_request_context('/',
@@ -96,7 +96,7 @@ class TestIntegrationClientAuthentication(ControllerTest):
         with self.app.test_request_context('/', headers=self.valid_auth):
             result = authenticated_client_from_request(self._db, required=False)
             eq_(result, self.client)
-        
+
         # Returns error if attempted authentication is invalid.
         invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
         with self.app.test_request_context('/',
@@ -646,7 +646,18 @@ class TestURNLookupController(ControllerTest):
                 return f(*args, **kwargs)
         return decorated
 
-    @basic_request_context
+    def authenticated_request_context(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            from app import app
+
+            secret = args[0].client.shared_secret.encode('utf8')
+            valid_auth = 'Bearer '+ base64.urlsafe_b64encode(secret)
+            headers = { 'Authorization' : valid_auth }
+            with app.test_request_context('/', headers=headers):
+                return f(*args, **kwargs)
+        return decorated
+
     def assert_one_message(self, urn, code, message):
         """Assert that the given message is the only thing
         in the feed.
@@ -659,41 +670,41 @@ class TestURNLookupController(ControllerTest):
         eq_(message, obj.message)
         eq_([], self.controller.works)
 
-    @basic_request_context
+    @authenticated_request_context
     def test_process_urn_initial_registration(self):
         urn = Identifier.URN_SCHEME_PREFIX + "Overdrive ID/nosuchidentifier"
-        self.controller.process_urn(urn)
+        remote_collection = self._collection(external_account_id='banana')
+        name = remote_collection.metadata_identifier
+
+        self.controller.process_urns([urn], collection_details=name)
         self.assert_one_message(
             urn, 201, URNLookupController.IDENTIFIER_REGISTERED
         )
 
-        # The Identifier has been registered with the
-        # IdentiferResolutionRegistrar.
-        [identifier] = self._db.query(Identifier).filter(
-            Identifier.type==Identifier.OVERDRIVE_ID
-        ).all()
-        eq_("nosuchidentifier", identifier.identifier)
-        [record] = identifier.coverage_records
-        eq_(CoverageRecord.REGISTERED, record.status)
-        eq_(self.controller.registrar.OPERATION, record.operation)
-        eq_(DataSource.INTERNAL_PROCESSING, record.data_source.name)
+        # The Identifier has been added to the collection to await registration
+        collection = self._db.query(Collection).filter(Collection.name==name).one()
+        identifier = Identifier.parse_urn(self._db, urn)[0]
+        assert identifier in collection.catalog
 
     @basic_request_context
-    def test_process_urn_pending_resolve_attempt(self):
-        # Simulate calling process_urn twice, and make sure the
-        # second call results in an "I'm working on it, hold your horses" message.
+    def test_process_identifier_pending_resolve_attempt(self):
+        # Simulate calling process_identifier after the identifier has been
+        # registered and make sure the second call results in an
+        # "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
-        record, is_new = self.controller.registrar.register(identifier)
+        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+        operation = IdentifierResolutionRegistrar.OPERATION
+        self._coverage_record(identifier, source, operation=operation)
 
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_ACCEPTED,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
     @basic_request_context
-    def test_process_urn_exception_during_resolve_attempt(self):
+    def test_process_identifier_exception_during_resolve_attempt(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
         record, is_new = CoverageRecord.add_for(
             identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
@@ -702,7 +713,7 @@ class TestURNLookupController(ControllerTest):
         record.exception = "foo"
 
         # A transient failure results in an "accepted" 201 status code.
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_ACCEPTED,
             self.controller.WORKING_TO_RESOLVE_IDENTIFIER
@@ -711,13 +722,13 @@ class TestURNLookupController(ControllerTest):
         # A persistent failure results in a "server error" 500 status code.
         self.controller.precomposed_entries = []
         record.status = CoverageRecord.PERSISTENT_FAILURE
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"
         )
 
     @basic_request_context
-    def test_process_urn_no_presentation_ready_work(self):
+    def test_process_identifier_no_presentation_ready_work(self):
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
         # There's a record of success, but no presentation-ready work.
@@ -726,18 +737,18 @@ class TestURNLookupController(ControllerTest):
             status=CoverageRecord.SUCCESS
         )
 
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_INTERNAL_SERVER_ERROR,
             self.controller.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
         )
 
     @basic_request_context
-    def test_process_urn_unresolvable_type(self):
+    def test_process_identifier_unresolvable_type(self):
         # We can't resolve a 3M identifier because we don't have the
         # appropriate access to the bibliographic API.
         identifier = self._identifier(Identifier.THREEM_ID)
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         self.assert_one_message(
             identifier.urn, HTTP_NOT_FOUND, self.controller.UNRESOLVABLE_IDENTIFIER
         )
@@ -754,10 +765,10 @@ class TestURNLookupController(ControllerTest):
         work, is_new = pool.calculate_work()
         work.presentation_ready = True
         identifier = edition.primary_identifier
-        self.controller.process_urn(identifier.urn)
+        self.controller.process_identifier(identifier, identifier.urn)
         eq_([(identifier, work)], self.controller.works)
 
-    def test_process_urn_with_collection(self):
+    def test_process_urns_with_collection(self):
         circ_manager_opds_collection = self._collection(
             protocol=ExternalIntegration.OPDS_IMPORT,
             external_account_id=self._url,
@@ -773,17 +784,17 @@ class TestURNLookupController(ControllerTest):
             i2 = self._identifier()
 
             eq_([], collection.catalog)
-            self.controller.process_urn(i1.urn, collection_details=name)
+            self.controller.process_urns([i1.urn], collection_details=name)
             eq_(1, len(collection.catalog))
             eq_([i1], collection.catalog)
 
             # Adds new identifiers to an existing collection's catalog
-            self.controller.process_urn(i2.urn, collection_details=name)
+            self.controller.process_urns([i2.urn], collection_details=name)
             eq_(2, len(collection.catalog))
             eq_(sorted([i1, i2]), sorted(collection.catalog))
 
             # Does not duplicate identifiers in the collection's catalog
-            self.controller.process_urn(i1.urn, collection_details=name)
+            self.controller.process_urns([i1.urn], collection_details=name)
             eq_(2, len(collection.catalog))
             eq_(sorted([i1, i2]), sorted(collection.catalog))
 
@@ -792,11 +803,11 @@ class TestURNLookupController(ControllerTest):
             # sent by an authenticated client, even if there's a
             # collection attached.
             i3 = self._identifier()
-            self.controller.process_urn(i3.urn, collection_details=name)
+            self.controller.process_urns([i3.urn], collection_details=name)
             assert i3 not in collection.catalog
 
     @basic_request_context
-    def test_process_urn_isbn(self):
+    def test_process_identifier_isbn(self):
         # Create a new ISBN identifier.
         # Ask online providers for metadata to turn into an opds feed about this identifier.
         # Make sure a coverage record was created, and a 201 status obtained from provider.
@@ -807,20 +818,19 @@ class TestURNLookupController(ControllerTest):
             self._db, Identifier.ISBN, self._isbn
         )
 
-        # The first time we look up an ISBN a CoverageRecord is created
-        # representing the work to be done.
-        self.controller.process_urn(isbn.urn)
+        # The first time we look up an ISBN
+        self.controller.process_identifier(isbn, isbn.urn)
         self.assert_one_message(
             isbn.urn, HTTP_CREATED, self.controller.IDENTIFIER_REGISTERED
         )
-        assert isbn.coverage_records
-        for cr in isbn.coverage_records:
-            eq_(cr.status, CoverageRecord.REGISTERED)
 
         # So long as the necessary coverage is not provided,
         # future lookups will not provide useful information
+        source = DataSource.lookup(self._db, DataSource.OCLC)
+        self._coverage_record(isbn, source)
+
         self.controller.precomposed_entries = []
-        self.controller.process_urn(isbn.urn)
+        self.controller.process_identifier(isbn, isbn.urn)
         self.assert_one_message(
             isbn.urn, HTTP_ACCEPTED, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
         )
@@ -835,7 +845,7 @@ class TestURNLookupController(ControllerTest):
         # Process the ISBN again, and we get an <entry> tag with the
         # information.
         self.controller.precomposed_entries = []
-        self.controller.process_urn(isbn.urn)
+        self.controller.process_identifier(isbn, isbn.urn)
         expect = isbn.opds_entry()
         [actual] = self.controller.precomposed_entries
         eq_(etree.tostring(expect), etree.tostring(actual))
