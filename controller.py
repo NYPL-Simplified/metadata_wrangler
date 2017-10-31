@@ -269,32 +269,24 @@ class CatalogController(object):
         )
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
-            message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(
-                    self._db, urn
-                )
-            except Exception as e:
-                identifier = None
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                status = HTTP_OK
-                description = "Already in catalog"
-
-                if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
-                    status = HTTP_CREATED
-                    description = "Successfully added"
-
-                message = OPDSMessage(urn, status, description)
-
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
             messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
+            status = HTTP_OK
+            description = "Already in catalog"
+
+            if identifier not in collection.catalog:
+                collection.catalog_identifier(identifier)
+                status = HTTP_CREATED
+                description = "Successfully added"
+
+            messages.append(OPDSMessage(urn, status, description))
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = cdn_url_for(
@@ -344,7 +336,7 @@ class CatalogController(object):
                 description = "Already in catalog"
 
                 if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
+                    collection.catalog_identifier(identifier)
                     status = HTTP_CREATED
                     description = "Successfully added"
 
@@ -354,7 +346,7 @@ class CatalogController(object):
                 # Collection.
                 license_pools = [p for p in identifier.licensed_through
                                  if collection==p.collection]
-            
+
                 if license_pools:
                     # A given Collection may have at most one LicensePool for
                     # a given identifier.
@@ -363,7 +355,7 @@ class CatalogController(object):
                     # This Collection has no LicensePool for the given Identifier.
                     # Create one.
                     pool, ignore = LicensePool.for_foreign_id(
-                        self._db, data_source, identifier.type, 
+                        self._db, data_source, identifier.type,
                         identifier.identifier, collection=collection
                     )
 
@@ -431,29 +423,25 @@ class CatalogController(object):
 
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
+            messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
             message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(self._db, urn)
-            except Exception as e:
-                identifier = None
+            status = HTTP_NOT_FOUND
+            description = "Not in catalog"
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                if identifier in collection.catalog:
-                    collection.catalog.remove(identifier)
-                    message = OPDSMessage(
-                        urn, HTTP_OK, "Successfully removed"
-                    )
-                else:
-                    message = OPDSMessage(
-                        urn, HTTP_NOT_FOUND, "Not in catalog"
-                    )
+            if identifier in collection.catalog:
+                collection.catalog.remove(identifier)
+                status = HTTP_OK
+                description = "Successfully removed"
 
+            message = OPDSMessage(urn, status, description)
             messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)

@@ -198,7 +198,7 @@ class TestCatalogController(ControllerTest):
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
-        self.collection.catalog_identifier(self._db, identifier)
+        self.collection.catalog_identifier(identifier)
 
         with self.app.test_request_context('/', headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
@@ -247,9 +247,7 @@ class TestCatalogController(ControllerTest):
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
-            self.collection.catalog_identifier(
-                self._db, work.license_pools[0].identifier
-            )
+            self.collection.catalog_identifier(work.license_pools[0].identifier)
         with self.app.test_request_context('/?size=1',
             headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
@@ -270,7 +268,7 @@ class TestCatalogController(ControllerTest):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         uncatalogued_id = self._identifier()
-        self.collection.catalog_identifier(self._db, catalogued_id)
+        self.collection.catalog_identifier(catalogued_id)
 
         parser = OPDSXMLParser()
         message_path = '/atom:feed/simplified:message'
@@ -287,11 +285,13 @@ class TestCatalogController(ControllerTest):
 
         # It sends three messages.
         root = etree.parse(StringIO(response.data))
-        catalogued, uncatalogued, invalid = self.XML_PARSE(root, message_path)
+        messages = self.XML_PARSE(root, message_path)
 
         # The uncatalogued identifier is now in the catalog.
         assert uncatalogued_id in self.collection.catalog
         # It has an accurate response message.
+        [uncatalogued] = [m for m in messages
+                          if self.xml_value(m, 'atom:id')==uncatalogued_id.urn]
         eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
         eq_('201', self.xml_value(uncatalogued, 'simplified:status_code'))
         eq_('Successfully added', self.xml_value(uncatalogued, 'schema:description'))
@@ -300,12 +300,14 @@ class TestCatalogController(ControllerTest):
         assert catalogued_id in self.collection.catalog
         # And even though it responds 'OK', the message tells you it
         # was already there.
-        eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+        [catalogued] = [m for m in messages
+                        if self.xml_value(m, 'atom:id')==catalogued_id.urn]
         eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
         eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
 
         # Invalid identifier return 400 errors.
-        eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+        [invalid] = [m for m in messages
+                     if self.xml_value(m, 'atom:id')==invalid_urn]
         eq_('400', self.xml_value(invalid, 'simplified:status_code'))
         eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
 
@@ -408,63 +410,69 @@ class TestCatalogController(ControllerTest):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         uncatalogued_id = self._identifier()
-        self.collection.catalog_identifier(self._db, catalogued_id)
+        self.collection.catalog_identifier(catalogued_id)
 
         message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
-                method='POST', headers=self.valid_auth):
-
+                method='POST', headers=self.valid_auth
+        ):
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
-            eq_(HTTP_OK, response.status_code)            
+            eq_(HTTP_OK, response.status_code)
 
-            # It sends two <simplified:message> tags.
-            root = etree.parse(StringIO(response.data))
-            catalogued, uncatalogued = self.XML_PARSE(root, message_path)
+        # It sends two <simplified:message> tags.
+        root = etree.parse(StringIO(response.data))
+        messages = self.XML_PARSE(root, message_path)
 
-            eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
-            eq_(str(HTTP_OK), self.xml_value(catalogued, 'simplified:status_code'))
-            eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
+        # The catalogued Identifier has been removed.
+        assert catalogued_id not in self.collection.catalog
+        [catalogued] = [m for m in messages
+                        if self.xml_value(m, 'atom:id')==catalogued_id.urn]
+        eq_(str(HTTP_OK), self.xml_value(catalogued, 'simplified:status_code'))
+        eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
 
-            eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
-            eq_(str(HTTP_NOT_FOUND), self.xml_value(uncatalogued, 'simplified:status_code'))
-            eq_("Not in catalog", self.xml_value(uncatalogued, 'schema:description'))
+        assert uncatalogued_id not in self.collection.catalog
+        [uncatalogued] = [m for m in messages
+                          if self.xml_value(m, 'atom:id')==uncatalogued_id.urn]
+        eq_(str(HTTP_NOT_FOUND), self.xml_value(uncatalogued, 'simplified:status_code'))
+        eq_("Not in catalog", self.xml_value(uncatalogued, 'schema:description'))
 
-            # It sends no <entry> tags.
-            eq_([], self.XML_PARSE(root, "//atom:entry"))
+        # It sends no <entry> tags.
+        eq_([], self.XML_PARSE(root, "//atom:entry"))
 
-            # The catalogued identifier isn't in the catalog.
-            assert catalogued_id not in self.collection.catalog
-            # But it's still in the database.
-            eq_(catalogued_id, self._db.query(Identifier).filter_by(
-                id=catalogued_id.id).one())
+        # The catalogued identifier isn't in the catalog.
+        assert catalogued_id not in self.collection.catalog
+        # But it's still in the database.
+        eq_(catalogued_id, self._db.query(Identifier).filter_by(
+            id=catalogued_id.id).one())
 
         # Try again, this time including an invalid URN.
-        self.collection.catalog_identifier(self._db, catalogued_id)
+        self.collection.catalog_identifier(catalogued_id)
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
-                method='POST', headers=self.valid_auth):
+                method='POST', headers=self.valid_auth
+        ):
             response = self.controller.remove_items(self.collection.name)
             eq_(HTTP_OK, int(response.status_code))
 
-            # Once again we get two <simplified:message> tags.
-            root = etree.parse(StringIO(response.data))
-            invalid, catalogued = self.XML_PARSE(root, message_path)
+        # Once again we get two <simplified:message> tags.
+        root = etree.parse(StringIO(response.data))
+        invalid, catalogued = self.XML_PARSE(root, message_path)
 
-            eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
-            eq_("400", self.xml_value(invalid, 'simplified:status_code'))
-            eq_("Could not parse identifier.", self.xml_value(invalid, 'schema:description'))
+        eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+        eq_("400", self.xml_value(invalid, 'simplified:status_code'))
+        eq_("Could not parse identifier.", self.xml_value(invalid, 'schema:description'))
 
-            eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
-            eq_("200", self.xml_value(catalogued, 'simplified:status_code'))
-            eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
+        eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+        eq_("200", self.xml_value(catalogued, 'simplified:status_code'))
+        eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
 
-            # We have no <entry> tags.
-            eq_([], self.XML_PARSE(root, "//atom:entry"))
-            
-            # The catalogued identifier is still removed.
-            assert catalogued_id not in self.collection.catalog
+        # We have no <entry> tags.
+        eq_([], self.XML_PARSE(root, "//atom:entry"))
+
+        # The catalogued identifier is still removed.
+        assert catalogued_id not in self.collection.catalog
 
     def create_register_request_args(self, url):
         return dict(
@@ -672,7 +680,7 @@ class TestURNLookupController(ControllerTest):
 
     @basic_request_context
     def test_process_urn_pending_resolve_attempt(self):
-        # Simulate calling process_urn twice, and make sure the 
+        # Simulate calling process_urn twice, and make sure the
         # second call results in an "I'm working on it, hold your horses" message.
         identifier = self._identifier(Identifier.GUTENBERG_ID)
 
