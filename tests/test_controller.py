@@ -768,44 +768,6 @@ class TestURNLookupController(ControllerTest):
         self.controller.process_identifier(identifier, identifier.urn)
         eq_([(identifier, work)], self.controller.works)
 
-    def test_process_urns_with_collection(self):
-        circ_manager_opds_collection = self._collection(
-            protocol=ExternalIntegration.OPDS_IMPORT,
-            external_account_id=self._url,
-        )
-        name = circ_manager_opds_collection.metadata_identifier
-        collection = self._collection(name=name, url=self._url)
-
-        data_source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
-        with self.app.test_request_context('/?%s' % data_source,
-            headers=self.valid_auth
-        ):
-            i1 = self._identifier()
-            i2 = self._identifier()
-
-            eq_([], collection.catalog)
-            self.controller.process_urns([i1.urn], collection_details=name)
-            eq_(1, len(collection.catalog))
-            eq_([i1], collection.catalog)
-
-            # Adds new identifiers to an existing collection's catalog
-            self.controller.process_urns([i2.urn], collection_details=name)
-            eq_(2, len(collection.catalog))
-            eq_(sorted([i1, i2]), sorted(collection.catalog))
-
-            # Does not duplicate identifiers in the collection's catalog
-            self.controller.process_urns([i1.urn], collection_details=name)
-            eq_(2, len(collection.catalog))
-            eq_(sorted([i1, i2]), sorted(collection.catalog))
-
-        with self.app.test_request_context('/'):
-            # Does not add identifiers to a collection if it isn't
-            # sent by an authenticated client, even if there's a
-            # collection attached.
-            i3 = self._identifier()
-            self.controller.process_urns([i3.urn], collection_details=name)
-            assert i3 not in collection.catalog
-
     @basic_request_context
     def test_process_identifier_isbn(self):
         # Create a new ISBN identifier.
