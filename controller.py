@@ -2,6 +2,7 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 from lxml import etree
+from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import base64
@@ -644,6 +645,7 @@ class URNLookupController(CoreURNLookupController):
         self.add_urn_failure_messages(failures)
 
         collection.catalog_identifiers(identifiers_by_urn.values())
+        self.bulk_load_coverage_records(identifiers_by_urn.values())
 
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(identifier, urn, **kwargs)
@@ -670,6 +672,15 @@ class URNLookupController(CoreURNLookupController):
 
         # Work remains to be done.
         return self.register_identifier_as_unresolved(urn, identifier)
+
+    def bulk_load_coverage_records(self, identifiers):
+        """Loads CoverageRecords for a list of identifiers into the database
+        session in a single query before individual identifier processing
+        begins.
+        """
+        identifier_ids = [i.id for i in identifiers]
+        self._db.query(Identifier).filter(Identifier.id.in_(identifier_ids))\
+            .options(joinedload(Identifier.coverage_records)).all()
 
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
