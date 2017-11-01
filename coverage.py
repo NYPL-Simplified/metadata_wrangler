@@ -447,17 +447,17 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
         for provider_class in providers:
             provider_class.register(identifier)
 
-        self.resolution_coverage(identifier)
         return identifier
 
-    def resolution_coverage(self, identifier):
+    @classmethod
+    def resolution_coverage(cls, identifier):
         """Returns a CoverageRecord if the given identifier has been registered
         for resolution with the IdentifierResolutionCoverageProvider
 
         :return: CoverageRecord or None
         """
-        source = DataSource.lookup(self._db, self.RESOLVER.DATA_SOURCE_NAME)
-        operation = self.RESOLVER.OPERATION
+        source = cls.RESOLVER.DATA_SOURCE_NAME
+        operation = cls.RESOLVER.OPERATION
         return CoverageRecord.lookup(identifier, source, operation)
 
     def license_pool(self, identifier, collection):
