@@ -611,7 +611,7 @@ class URNLookupController(CoreURNLookupController):
         TODO: Return to using the BaseURNLookupController.work_lookup
         once the Metadata Wranger load has improved.
         """
-        urns = urns or flask.request.args.getlist('urn')
+        urns = urns or request.args.getlist('urn')
         response = self.process_urns(urns, **process_urn_kwargs)
         self.post_lookup_hook()
 
