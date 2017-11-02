@@ -2,6 +2,7 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 from lxml import etree
+from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import base64
@@ -30,6 +31,7 @@ from core.model import (
     IntegrationClient,
     LicensePool,
     PresentationCalculationPolicy,
+    Representation,
     create,
     get_one,
     get_one_or_create,
@@ -269,32 +271,24 @@ class CatalogController(object):
         )
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
-            message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(
-                    self._db, urn
-                )
-            except Exception as e:
-                identifier = None
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                status = HTTP_OK
-                description = "Already in catalog"
-
-                if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
-                    status = HTTP_CREATED
-                    description = "Successfully added"
-
-                message = OPDSMessage(urn, status, description)
-
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
             messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
+            status = HTTP_OK
+            description = "Already in catalog"
+
+            if identifier not in collection.catalog:
+                collection.catalog_identifier(identifier)
+                status = HTTP_CREATED
+                description = "Successfully added"
+
+            messages.append(OPDSMessage(urn, status, description))
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = cdn_url_for(
@@ -344,7 +338,7 @@ class CatalogController(object):
                 description = "Already in catalog"
 
                 if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
+                    collection.catalog_identifier(identifier)
                     status = HTTP_CREATED
                     description = "Successfully added"
 
@@ -354,7 +348,7 @@ class CatalogController(object):
                 # Collection.
                 license_pools = [p for p in identifier.licensed_through
                                  if collection==p.collection]
-            
+
                 if license_pools:
                     # A given Collection may have at most one LicensePool for
                     # a given identifier.
@@ -363,7 +357,7 @@ class CatalogController(object):
                     # This Collection has no LicensePool for the given Identifier.
                     # Create one.
                     pool, ignore = LicensePool.for_foreign_id(
-                        self._db, data_source, identifier.type, 
+                        self._db, data_source, identifier.type,
                         identifier.identifier, collection=collection
                     )
 
@@ -431,29 +425,25 @@ class CatalogController(object):
 
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
+            messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
             message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(self._db, urn)
-            except Exception as e:
-                identifier = None
+            status = HTTP_NOT_FOUND
+            description = "Not in catalog"
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                if identifier in collection.catalog:
-                    collection.catalog.remove(identifier)
-                    message = OPDSMessage(
-                        urn, HTTP_OK, "Successfully removed"
-                    )
-                else:
-                    message = OPDSMessage(
-                        urn, HTTP_NOT_FOUND, "Not in catalog"
-                    )
+            if identifier in collection.catalog:
+                collection.catalog.remove(identifier)
+                status = HTTP_OK
+                description = "Successfully removed"
 
+            message = OPDSMessage(urn, status, description)
             messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
@@ -565,8 +555,15 @@ class URNLookupController(CoreURNLookupController):
     log = logging.getLogger("URN lookup controller")
 
     def __init__(self, _db):
-        self.registrar = IdentifierResolutionRegistrar(_db)
+        self.default_collection_id = None
         super(URNLookupController, self).__init__(_db)
+
+    @property
+    def default_collection(self):
+        if not self._default_collection_id:
+            default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+            self._default_collection_id = default_collection.id
+        return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
         """Either return a presentation-ready work associated with the 
@@ -604,22 +601,28 @@ class URNLookupController(CoreURNLookupController):
         if work is None:
             return False
         return True
-  
-    def process_urn(self, urn, collection_details=None, **kwargs):
-        """Turn a URN into a Work suitable for use in an OPDS feed.
+
+    def work_lookup(self, annotator, route_name='lookup', urns=[],
+                    **process_urn_kwargs
+    ):
+        """Returns a ProblemDetail if an error is raised. Otherwise, returns an
+        empty 200 response.
+
+        TODO: Return to using the BaseURNLookupController.work_lookup
+        once the Metadata Wranger load has improved.
         """
-        try:
-            identifier, is_new = Identifier.parse_urn(self._db, urn)
-        except ValueError, e:
-            identifier = None
+        urns = urns or request.args.getlist('urn')
+        response = self.process_urns(urns, **process_urn_kwargs)
+        self.post_lookup_hook()
 
-        if not identifier:
-            # Not a well-formed URN.
-            return self.add_message(urn, 400, INVALID_URN.detail)
+        if response:
+            return response
+        else:
+            # Temporarily return an empty OPDS feed.
+            headers = { 'Content-Type' : Representation.TEXT_XML_MEDIA_TYPE }
+            return make_response("<feed></feed>", HTTP_ACCEPTED, {})
 
-        if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
-
+    def process_urns(self, urns, collection_details=None, **kwargs):
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
@@ -630,8 +633,28 @@ class URNLookupController(CoreURNLookupController):
         collection = collection_from_details(
             self._db, client, collection_details
         )
-        if collection:
-            collection.catalog_identifier(self._db, identifier)
+
+        # TODO: uncomment the segment adding the default collection once
+        # the Metadata Wrangler can handle its existing load. This will add
+        # unaffiliated identifiers to the Unaffiliated Identifier collection.
+        collection = collection # or self.default_collection
+        if not collection:
+            return INVALID_INPUT.detailed("No collection provided.")
+
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+        self.add_urn_failure_messages(failures)
+
+        collection.catalog_identifiers(identifiers_by_urn.values())
+        self.bulk_load_coverage_records(identifiers_by_urn.values())
+
+        for urn, identifier in identifiers_by_urn.items():
+            self.process_identifier(identifier, urn, **kwargs)
+
+    def process_identifier(self, identifier, urn, **kwargs):
+        """Turn an Identifier into a Work suitable for use in an OPDS feed.
+        """
+        if not self.can_resolve_identifier(identifier):
+            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         if (identifier.type == Identifier.ISBN and not identifier.work):
             # There's not always enough information about an ISBN to
@@ -650,6 +673,15 @@ class URNLookupController(CoreURNLookupController):
         # Work remains to be done.
         return self.register_identifier_as_unresolved(urn, identifier)
 
+    def bulk_load_coverage_records(self, identifiers):
+        """Loads CoverageRecords for a list of identifiers into the database
+        session in a single query before individual identifier processing
+        begins.
+        """
+        identifier_ids = [i.id for i in identifiers]
+        self._db.query(Identifier).filter(Identifier.id.in_(identifier_ids))\
+            .options(joinedload(Identifier.coverage_records)).all()
+
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
         # associated with it, but it doesn't. We need to make sure the
@@ -657,13 +689,22 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        registration_record, is_new = self.registrar.register(identifier)
-        resolution_record = self.registrar.resolution_coverage(identifier)
-
-        if is_new and not resolution_record:
-            # The CoverageRecord for registration was just created. Tell the
-            # client to come back later.
+        registration_records = filter(
+            lambda c: c.operation==IdentifierResolutionRegistrar.OPERATION,
+            identifier.coverage_records
+        )
+        if not (identifier.coverage_records or registration_records):
+            # This identifier hasn't been registered for coverage yet.
+            # Tell the client to come back later.
             return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
+
+        resolution_records = filter(
+            lambda c: c.operation==IdentifierResolutionCoverageProvider.OPERATION,
+            identifier.coverage_records
+        )
+        resolution_record = None
+        if resolution_records:
+            resolution_record = resolution_records[0]
 
         # There is a pending attempt to resolve this identifier.
         # Tell the client we're working on it, or if the

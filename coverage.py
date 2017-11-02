@@ -363,7 +363,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                         contributor.default_names())
 
 
-class IdentifierResolutionRegistrar(IdentifierCoverageProvider):
+class IdentifierResolutionRegistrar(CatalogCoverageProvider):
 
     # All of the providers used to resolve an Identifier for the
     # Metadata Wrangler.
@@ -388,9 +388,8 @@ class IdentifierResolutionRegistrar(IdentifierCoverageProvider):
     # Any kind of identifier can be registered.
     INPUT_IDENTIFIER_TYPES = None
 
-    def __init__(self, *args, **kwargs):
-        kwargs['preregistered_only'] = kwargs.get('preregistered_only', True)
-        super(IdentifierResolutionRegistrar, self).__init__(*args, **kwargs)
+    # An identifier can be catalogued with any type of Collection.
+    PROTOCOL = None
 
     def process_item(self, identifier, force=False):
         """Creates a transient failure CoverageRecord for each provider
@@ -448,17 +447,17 @@ class IdentifierResolutionRegistrar(IdentifierCoverageProvider):
         for provider_class in providers:
             provider_class.register(identifier)
 
-        record = self.resolution_coverage(identifier)
         return identifier
 
-    def resolution_coverage(self, identifier):
+    @classmethod
+    def resolution_coverage(cls, identifier):
         """Returns a CoverageRecord if the given identifier has been registered
         for resolution with the IdentifierResolutionCoverageProvider
 
         :return: CoverageRecord or None
         """
-        source = DataSource.lookup(self._db, self.RESOLVER.DATA_SOURCE_NAME)
-        operation = self.RESOLVER.OPERATION
+        source = cls.RESOLVER.DATA_SOURCE_NAME
+        operation = cls.RESOLVER.OPERATION
         return CoverageRecord.lookup(identifier, source, operation)
 
     def license_pool(self, identifier, collection):
