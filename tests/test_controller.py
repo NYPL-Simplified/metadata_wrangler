@@ -458,13 +458,15 @@ class TestCatalogController(ControllerTest):
 
         # Once again we get two <simplified:message> tags.
         root = etree.parse(StringIO(response.data))
-        invalid, catalogued = self.XML_PARSE(root, message_path)
+        messages = self.XML_PARSE(root, message_path)
 
-        eq_(invalid_urn, self.xml_value(invalid, 'atom:id'))
+        [invalid] = [m for m in messages
+                     if self.xml_value(m, 'atom:id')==invalid_urn]
         eq_("400", self.xml_value(invalid, 'simplified:status_code'))
         eq_("Could not parse identifier.", self.xml_value(invalid, 'schema:description'))
 
-        eq_(catalogued_id.urn, self.xml_value(catalogued, 'atom:id'))
+        [catalogued] == [m for m in messages
+                         if self.xml_value(m, 'atom:id')==catalogued_id.urn]
         eq_("200", self.xml_value(catalogued, 'simplified:status_code'))
         eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
 
@@ -672,7 +674,7 @@ class TestURNLookupController(ControllerTest):
 
     @authenticated_request_context
     def test_process_urn_initial_registration(self):
-        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive ID/nosuchidentifier"
+        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier"
         remote_collection = self._collection(external_account_id='banana')
         name = remote_collection.metadata_identifier
 
