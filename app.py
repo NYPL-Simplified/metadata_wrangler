@@ -46,6 +46,7 @@ def initialize_database(autoinitialize=True):
     if autoinitialize:
         SessionManager.initialize_data(_db)
 
+    Configuration.load(_db)
     log_level = LogConfiguration.initialize(_db, testing=testing)
     if app.debug is None:
         debug = log_level == 'DEBUG'
