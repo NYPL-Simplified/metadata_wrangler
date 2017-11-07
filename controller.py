@@ -32,6 +32,7 @@ from core.model import (
     LicensePool,
     PresentationCalculationPolicy,
     Representation,
+    Work,
     create,
     get_one,
     get_one_or_create,
@@ -192,8 +193,62 @@ class CanonicalizationController(object):
         return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
-class CatalogController(object):
+class ISBNEntryMixin(object):
+
+    def make_opds_entry_from_metadata_lookups(self, identifier):
+        """This identifier cannot be turned into a presentation-ready Work,
+        but maybe we can make an OPDS entry based on metadata lookups.
+        """
+
+        # We can only create an OPDS entry if all the lookups have
+        # in fact been done.
+        metadata_sources = DataSource.metadata_sources_for(
+            self._db, identifier
+        )
+        q = self._db.query(CoverageRecord).filter(
+                CoverageRecord.identifier==identifier
+        ).filter(
+            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
+            CoverageRecord.status==CoverageRecord.SUCCESS
+        )
+
+        coverage_records = q.all()
+        unaccounted_for = set(metadata_sources)
+        for r in coverage_records:
+            if r.data_source in unaccounted_for:
+                unaccounted_for.remove(r.data_source)
+
+        if unaccounted_for:
+            # At least one metadata lookup has not successfully
+            # completed.
+            names = [x.name for x in unaccounted_for]
+            self.log.info(
+                "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
+                identifier,
+                ", ".join(names)
+            )
+            return None
+        else:
+            # All metadata lookups have completed. Create that OPDS
+            # entry!
+            entry = identifier.opds_entry()
+
+        if entry is None:
+            # We can't do lookups on an identifier of this type, so
+            # the best thing to do is to treat this identifier as a
+            # 404 error.
+            return OPDSMessage(
+                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
+            )
+
+        # We made it!
+        return entry
+
+
+class CatalogController(ISBNEntryMixin):
     """A controller to manage a Collection's catalog"""
+
+    log = logging.getLogger("Catalog Controller")
 
     def __init__(self, _db):
         self._db = _db
@@ -235,6 +290,24 @@ class CatalogController(object):
                 works.remove(work)
 
         works = [(work.identifier, work) for work in works]
+
+        # Add ISBN entries.
+        isbn_ids = [i.id for i in collection.catalog if i.type==Identifier.ISBN]
+        if isbn_ids:
+            isbn_identifiers = self._db.query(Identifier)\
+                .join(Identifier.coverage_records)\
+                .outerjoin(Identifier.licensed_through)\
+                .outerjoin(LicensePool.work)\
+                .filter(
+                    Work.id==None,
+                    Identifier.id.in_(isbn_ids),
+                    CoverageRecord.status==CoverageRecord.SUCCESS,
+                    CoverageRecord.timestamp > last_update_time,
+                ).distinct()
+            for isbn in isbn_identifiers:
+                entry = self.make_opds_entry_from_metadata_lookups(isbn)
+                if entry:
+                    entries.append(entry)
 
         update_feed = LookupAcquisitionFeed(
             self._db, title, update_url(), works, VerboseAnnotator,
@@ -545,7 +618,7 @@ class CatalogController(object):
         return make_response(content, status_code, headers)
 
 
-class URNLookupController(CoreURNLookupController):
+class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
     UNRESOLVABLE_IDENTIFIER = "I can't gather information about an identifier of this type."
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
@@ -660,7 +733,12 @@ class URNLookupController(CoreURNLookupController):
             # There's not always enough information about an ISBN to
             # create a full Work. If not, we scrape together the cover
             # and description information and force the entry.
-            return self.make_opds_entry_from_metadata_lookups(identifier)
+            entry = self.make_opds_entry_from_metadata_lookups(identifier)
+            if not entry:
+                return self.register_identifier_as_unresolved(
+                    identifier.urn, identifier
+                )
+            return self.add_entry(entry)
 
         # All other identifiers need to be associated with a
         # presentation-ready Work for the lookup to succeed. If there
@@ -733,57 +811,6 @@ class URNLookupController(CoreURNLookupController):
             status = HTTP_INTERNAL_SERVER_ERROR
             message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
         return self.add_message(urn, status, message)
-
-    def make_opds_entry_from_metadata_lookups(self, identifier):
-        """This identifier cannot be turned into a presentation-ready Work,
-        but maybe we can make an OPDS entry based on metadata lookups.
-        """
-
-        # We can only create an OPDS entry if all the lookups have
-        # in fact been done.
-        metadata_sources = DataSource.metadata_sources_for(
-            self._db, identifier
-        )
-        q = self._db.query(CoverageRecord).filter(
-                CoverageRecord.identifier==identifier
-        ).filter(
-            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
-            CoverageRecord.status==CoverageRecord.SUCCESS
-        )
-
-        coverage_records = q.all()
-        unaccounted_for = set(metadata_sources)
-        for r in coverage_records:
-            if r.data_source in unaccounted_for:
-                unaccounted_for.remove(r.data_source)
-
-        if unaccounted_for:
-            # At least one metadata lookup has not successfully
-            # completed.
-            names = [x.name for x in unaccounted_for]
-            self.log.info(
-                "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
-                identifier,
-                ", ".join(names)
-            )
-            return self.register_identifier_as_unresolved(
-                identifier.urn, identifier
-            )
-        else:
-            # All metadata lookups have completed. Create that OPDS
-            # entry!
-            entry = identifier.opds_entry()
-
-        if entry is None:
-            # We can't do lookups on an identifier of this type, so
-            # the best thing to do is to treat this identifier as a
-            # 404 error.
-            return self.add_message(
-                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
-            )
-
-        # We made it!
-        return self.add_entry(entry)
 
     def post_lookup_hook(self):
         """Run after looking up a number of Identifiers.

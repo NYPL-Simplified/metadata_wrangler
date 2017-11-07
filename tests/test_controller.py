@@ -237,13 +237,35 @@ class TestCatalogController(ControllerTest):
         # Works updated since the timestamp are returned
         self.work1.coverage_records[0].timestamp = datetime.utcnow()
         with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-            headers=self.valid_auth):
+            headers=self.valid_auth
+        ):
             response = self.controller.updates_feed(self.collection.name)
             feed = feedparser.parse(response.get_data())
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
             eq_(self.work1.title, entry['title'])
             eq_(identifier.urn, entry['id'])
+
+        # ISBNs updated since the timestamp are also included in the feed.
+        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        isbn = self._identifier(identifier_type=Identifier.ISBN, foreign_id=self._isbn)
+        self.collection.catalog_identifier(isbn)
+
+        # Let's provide the coverage.
+        metadata_sources = DataSource.metadata_sources_for(self._db, isbn)
+        for source in metadata_sources:
+            CoverageRecord.add_for(isbn, source)
+
+        # Set back the work timestamp to simplify the test.
+        self.work1.coverage_records[0].timestamp = datetime.utcnow() - timedelta(days=1)
+
+        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
+            headers=self.valid_auth
+        ):
+            response = self.controller.updates_feed(self.collection.name)
+            feed = feedparser.parse(response.get_data())
+            [entry] = feed.entries
+            eq_(isbn.urn, entry.id)
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
