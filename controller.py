@@ -229,8 +229,8 @@ class CatalogController(object):
         entries = []
         for work in works[:]:
             entry = work.verbose_opds_entry or work.simple_opds_entry
-            entry = etree.fromstring(entry)
             if entry:
+                entry = etree.fromstring(entry)
                 entries.append(entry)
                 works.remove(work)
 
