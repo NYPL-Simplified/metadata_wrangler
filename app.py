@@ -1,26 +1,22 @@
 from nose.tools import set_trace
 import os
 import logging
-import flask
 import sys
 import urlparse
 
 from functools import wraps
 from flask import Flask
 from flask.ext.babel import Babel
-from core.util.problem_detail import ProblemDetail
-from core.opds import VerboseAnnotator
+
 from core.app_server import (
     HeartbeatController,
     returns_problem_detail,
 )
-from core.model import (
-    ConfigurationSetting,
-    production_session,
-    SessionManager,
-)
 from core.config import Configuration
 from core.log import LogConfiguration
+from core.model import SessionManager
+from core.opds import VerboseAnnotator
+from core.util.problem_detail import ProblemDetail
 
 from controller import (
     authenticated_client_from_request,
