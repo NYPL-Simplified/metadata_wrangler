@@ -55,9 +55,9 @@ def initialize_database(autoinitialize=True):
     app.config['DEBUG'] = debug
     _db.commit()
     app.log = logging.getLogger("Metadata web app")
-    app.log.info("Application debug mode==%r" % app.debug)
+    app.log.info("Application debug mode: %r", app.debug)
     for logger in logging.getLogger().handlers:
-        app.log.info("Logs are going to %r" % logger)
+        app.log.info("Logs are going to %r", logger)
 
     # Workaround for a "Resource temporarily unavailable" error when
     # running in debug mode with the global socket timeout set by isbnlib
