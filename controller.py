@@ -289,7 +289,11 @@ class CatalogController(ISBNEntryMixin):
                 entries.append(entry)
                 works.remove(work)
 
-        works = [(work.identifier, work) for work in works]
+        works_for_feed = list()
+        for work in works:
+            identifiers = [lp.identifier for lp in work.license_pools]
+            identifiers = [i for i in identifiers if i in collection.catalog]
+            works_for_feed.append((identifiers[0], work))
 
         # Add ISBN entries.
         isbn_ids = [i.id for i in collection.catalog if i.type==Identifier.ISBN]
@@ -302,15 +306,18 @@ class CatalogController(ISBNEntryMixin):
                     Work.id==None,
                     Identifier.id.in_(isbn_ids),
                     CoverageRecord.status==CoverageRecord.SUCCESS,
-                    CoverageRecord.timestamp > last_update_time,
-                ).distinct()
-            for isbn in isbn_identifiers:
+                )
+            if last_update_time:
+                isbn_identifiers = isbn_identifiers.filter(
+                    CoverageRecord.timestamp > last_update_time
+                )
+            for isbn in isbn_identifiers.distinct():
                 entry = self.make_opds_entry_from_metadata_lookups(isbn)
                 if entry:
                     entries.append(entry)
 
         update_feed = LookupAcquisitionFeed(
-            self._db, title, update_url(), works, VerboseAnnotator,
+            self._db, title, update_url(), works_for_feed, VerboseAnnotator,
             precomposed_entries=entries
         )
 
