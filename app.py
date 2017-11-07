@@ -1,24 +1,22 @@
 from nose.tools import set_trace
 import os
 import logging
-import flask
 import sys
 import urlparse
 
 from functools import wraps
 from flask import Flask
 from flask.ext.babel import Babel
-from core.util.problem_detail import ProblemDetail
-from core.opds import VerboseAnnotator
+
 from core.app_server import (
     HeartbeatController,
     returns_problem_detail,
 )
-from core.model import (
-    ConfigurationSetting,
-    production_session,
-)
 from core.config import Configuration
+from core.log import LogConfiguration
+from core.model import SessionManager
+from core.opds import VerboseAnnotator
+from core.util.problem_detail import ProblemDetail
 
 from controller import (
     authenticated_client_from_request,
@@ -30,32 +28,47 @@ from controller import (
 
 
 app = Flask(__name__)
-app.config['DEBUG'] = True
-app.debug = True
+app._db = None
+app.debug = None
 babel = Babel(app)
 
-class Conf:
-    db = None
-    log = None
+@app.before_first_request
+def initialize_database(autoinitialize=True):
+    testing = 'TESTING' in os.environ
+    db_url = Configuration.database_url(testing)
+    if autoinitialize:
+        SessionManager.initialize(db_url)
+    session_factory = SessionManager.sessionmaker(db_url)
+    # This is where we would create a scoped session.
+    # _db = flask_scoped_session(session_factory, app)
+    _db = session_factory()
+    app._db = _db
+    if autoinitialize:
+        SessionManager.initialize_data(_db)
 
-    @classmethod
-    def initialize(cls, _db):
-        cls.db = _db
-        Configuration.load(cls.db)
-        cls.log = logging.getLogger("Metadata web app")
+    log_level = LogConfiguration.initialize(_db, testing=testing)
+    if app.debug is None:
+        debug = log_level == 'DEBUG'
+        app.debug = debug
+    else:
+        debug = app.debug
+    app.config['DEBUG'] = debug
+    _db.commit()
+    app.log = logging.getLogger("Metadata web app")
+    app.log.info("Application debug mode: %r", app.debug)
+    for logger in logging.getLogger().handlers:
+        app.log.info("Logs are going to %r", logger)
 
-if os.environ.get('TESTING') == "true":
-    Conf.testing = True
-else:
-    Conf.testing = False
-    _db = production_session()
-    Conf.initialize(_db)
-
+    # Workaround for a "Resource temporarily unavailable" error when
+    # running in debug mode with the global socket timeout set by isbnlib
+    if app.debug:
+        import socket
+        socket.setdefaulttimeout(None)
 
 def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        client = authenticated_client_from_request(Conf.db, required=False)
+        client = authenticated_client_from_request(app._db, required=False)
         if isinstance(client, ProblemDetail):
             return client.response
         return f(*args, **kwargs)
@@ -64,7 +77,7 @@ def accepts_auth(f):
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        client = authenticated_client_from_request(Conf.db)
+        client = authenticated_client_from_request(app._db)
         if isinstance(client, ProblemDetail):
             return client.response
         return f(*args, **kwargs)
@@ -72,16 +85,16 @@ def requires_auth(f):
 
 @app.teardown_request
 def shutdown_session(exception):
-    if (hasattr(Conf, 'db')
-        and Conf.db):
+    if (hasattr(app, '_db')
+        and app._db):
         if exception:
-            Conf.db.rollback()
+            app._db.rollback()
         else:
-            Conf.db.commit()
+            app._db.commit()
 
 @app.route('/')
 def index():
-    return IndexController(Conf.db).opds_catalog()
+    return IndexController(app._db).opds_catalog()
 
 @app.route('/heartbeat')
 def heartbeat():
@@ -90,14 +103,14 @@ def heartbeat():
 @app.route('/canonical-author-name')
 @returns_problem_detail
 def canonical_author_name():
-    return CanonicalizationController(Conf.db).canonicalize_author_name()
+    return CanonicalizationController(app._db).canonicalize_author_name()
 
 @app.route('/lookup')
 @app.route('/<collection_metadata_identifier>/lookup')
 @accepts_auth
 @returns_problem_detail
 def lookup(collection_metadata_identifier=None):
-    return URNLookupController(Conf.db).work_lookup(
+    return URNLookupController(app._db).work_lookup(
         VerboseAnnotator, require_active_licensepool=False,
         collection_details=collection_metadata_identifier
     )
@@ -106,7 +119,7 @@ def lookup(collection_metadata_identifier=None):
 @requires_auth
 @returns_problem_detail
 def add(collection_metadata_identifier):
-    return CatalogController(Conf.db).add_items(
+    return CatalogController(app._db).add_items(
         collection_details=collection_metadata_identifier
     )
 
@@ -114,7 +127,7 @@ def add(collection_metadata_identifier):
 @requires_auth
 @returns_problem_detail
 def add_with_metadata(collection_metadata_identifier):
-    return CatalogController(Conf.db).add_with_metadata(
+    return CatalogController(app._db).add_with_metadata(
         collection_details=collection_metadata_identifier
     )
 
@@ -122,7 +135,7 @@ def add_with_metadata(collection_metadata_identifier):
 @requires_auth
 @returns_problem_detail
 def updates(collection_metadata_identifier):
-    return CatalogController(Conf.db).updates_feed(
+    return CatalogController(app._db).updates_feed(
         collection_details=collection_metadata_identifier
     )
 
@@ -130,25 +143,18 @@ def updates(collection_metadata_identifier):
 @requires_auth
 @returns_problem_detail
 def remove(collection_metadata_identifier):
-    return CatalogController(Conf.db).remove_items(
+    return CatalogController(app._db).remove_items(
         collection_details=collection_metadata_identifier
     )
 
 @app.route("/register", methods=["POST"])
 @returns_problem_detail
 def register():
-    return CatalogController(Conf.db).register()
+    return CatalogController(app._db).register()
 
-
-if __name__ == '__main__':
-
-    debug = True
-    if len(sys.argv) > 1:
-        url = sys.argv[1]
-    else:
-        url = ConfigurationSetting.sitewide(Conf.db, Configuration.BASE_URL_KEY).value
+def run(self, url=None, debug=False):
     base_url = url or u'http://localhost:5500/'
-    scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(url)
+    scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(base_url)
     if ':' in netloc:
         host, port = netloc.split(':')
         port = int(port)
@@ -156,11 +162,12 @@ if __name__ == '__main__':
         host = netloc
         port = 80
 
-    # Workaround for a "Resource temporarily unavailable" error when
-    # running in debug mode with the global socket timeout set by isbnlib
-    if debug:
-        import socket
-        socket.setdefaulttimeout(None)
-
-    Conf.log.info("Starting app on %s:%s", host, port)
+    app.debug = debug
+    logging.info("Starting app on %s:%s", host, port)
     app.run(debug=debug, host=host, port=port)
+
+if __name__ == '__main__':
+    url = None
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
+    run(url, debug=True)

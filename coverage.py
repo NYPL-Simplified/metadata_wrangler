@@ -1,6 +1,8 @@
 import logging
 from nose.tools import set_trace
 
+from core.config import CannotLoadConfiguration
+
 from core.coverage import (
     CoverageFailure, 
     CatalogCoverageProvider, 
@@ -133,9 +135,13 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
             ExternalIntegration.OVERDRIVE
         )
-        if is_new:
-            raise ValueError('Default Overdrive collection has not been configured.')
-        return overdrive_api_class(self._db, collection)
+        try:
+            return overdrive_api_class(self._db, collection)
+        except CannotLoadConfiguration, e:
+            self.log.error(
+                'Default Overdrive collection is not properly configured. No Overdrive work will be done.'
+            )
+            return
 
     @classmethod
     def unaffiliated_collection(cls, _db):
@@ -204,7 +210,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # All books obtained from Overdrive must be looked up via the
         # Overdrive API.
-        if self.collection.protocol == ExternalIntegration.OVERDRIVE:
+        if self.overdrive_api and self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
                     self.collection, uploader=self.uploader,
