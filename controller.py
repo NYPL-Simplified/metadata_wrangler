@@ -2,6 +2,7 @@ from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
 from lxml import etree
+from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import base64
@@ -30,6 +31,8 @@ from core.model import (
     IntegrationClient,
     LicensePool,
     PresentationCalculationPolicy,
+    Representation,
+    Work,
     create,
     get_one,
     get_one_or_create,
@@ -190,8 +193,62 @@ class CanonicalizationController(object):
         return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
-class CatalogController(object):
+class ISBNEntryMixin(object):
+
+    def make_opds_entry_from_metadata_lookups(self, identifier):
+        """This identifier cannot be turned into a presentation-ready Work,
+        but maybe we can make an OPDS entry based on metadata lookups.
+        """
+
+        # We can only create an OPDS entry if all the lookups have
+        # in fact been done.
+        metadata_sources = DataSource.metadata_sources_for(
+            self._db, identifier
+        )
+        q = self._db.query(CoverageRecord).filter(
+                CoverageRecord.identifier==identifier
+        ).filter(
+            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
+            CoverageRecord.status==CoverageRecord.SUCCESS
+        )
+
+        coverage_records = q.all()
+        unaccounted_for = set(metadata_sources)
+        for r in coverage_records:
+            if r.data_source in unaccounted_for:
+                unaccounted_for.remove(r.data_source)
+
+        if unaccounted_for:
+            # At least one metadata lookup has not successfully
+            # completed.
+            names = [x.name for x in unaccounted_for]
+            self.log.info(
+                "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
+                identifier,
+                ", ".join(names)
+            )
+            return None
+        else:
+            # All metadata lookups have completed. Create that OPDS
+            # entry!
+            entry = identifier.opds_entry()
+
+        if entry is None:
+            # We can't do lookups on an identifier of this type, so
+            # the best thing to do is to treat this identifier as a
+            # 404 error.
+            return OPDSMessage(
+                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
+            )
+
+        # We made it!
+        return entry
+
+
+class CatalogController(ISBNEntryMixin):
     """A controller to manage a Collection's catalog"""
+
+    log = logging.getLogger("Catalog Controller")
 
     def __init__(self, _db):
         self._db = _db
@@ -227,15 +284,40 @@ class CatalogController(object):
         entries = []
         for work in works[:]:
             entry = work.verbose_opds_entry or work.simple_opds_entry
-            entry = etree.fromstring(entry)
             if entry:
+                entry = etree.fromstring(entry)
                 entries.append(entry)
                 works.remove(work)
 
-        works = [(work.identifier, work) for work in works]
+        works_for_feed = list()
+        for work in works:
+            identifiers = [lp.identifier for lp in work.license_pools]
+            identifiers = [i for i in identifiers if i in collection.catalog]
+            works_for_feed.append((identifiers[0], work))
+
+        # Add ISBN entries.
+        isbn_ids = [i.id for i in collection.catalog if i.type==Identifier.ISBN]
+        if isbn_ids:
+            isbn_identifiers = self._db.query(Identifier)\
+                .join(Identifier.coverage_records)\
+                .outerjoin(Identifier.licensed_through)\
+                .outerjoin(LicensePool.work)\
+                .filter(
+                    Work.id==None,
+                    Identifier.id.in_(isbn_ids),
+                    CoverageRecord.status==CoverageRecord.SUCCESS,
+                )
+            if last_update_time:
+                isbn_identifiers = isbn_identifiers.filter(
+                    CoverageRecord.timestamp > last_update_time
+                )
+            for isbn in isbn_identifiers.distinct():
+                entry = self.make_opds_entry_from_metadata_lookups(isbn)
+                if entry:
+                    entries.append(entry)
 
         update_feed = LookupAcquisitionFeed(
-            self._db, title, update_url(), works, VerboseAnnotator,
+            self._db, title, update_url(), works_for_feed, VerboseAnnotator,
             precomposed_entries=entries
         )
 
@@ -269,32 +351,24 @@ class CatalogController(object):
         )
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
-            message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(
-                    self._db, urn
-                )
-            except Exception as e:
-                identifier = None
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                status = HTTP_OK
-                description = "Already in catalog"
-
-                if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
-                    status = HTTP_CREATED
-                    description = "Successfully added"
-
-                message = OPDSMessage(urn, status, description)
-
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
             messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
+            status = HTTP_OK
+            description = "Already in catalog"
+
+            if identifier not in collection.catalog:
+                collection.catalog_identifier(identifier)
+                status = HTTP_CREATED
+                description = "Successfully added"
+
+            messages.append(OPDSMessage(urn, status, description))
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = cdn_url_for(
@@ -344,7 +418,7 @@ class CatalogController(object):
                 description = "Already in catalog"
 
                 if identifier not in collection.catalog:
-                    collection.catalog_identifier(self._db, identifier)
+                    collection.catalog_identifier(identifier)
                     status = HTTP_CREATED
                     description = "Successfully added"
 
@@ -354,7 +428,7 @@ class CatalogController(object):
                 # Collection.
                 license_pools = [p for p in identifier.licensed_through
                                  if collection==p.collection]
-            
+
                 if license_pools:
                     # A given Collection may have at most one LicensePool for
                     # a given identifier.
@@ -363,7 +437,7 @@ class CatalogController(object):
                     # This Collection has no LicensePool for the given Identifier.
                     # Create one.
                     pool, ignore = LicensePool.for_foreign_id(
-                        self._db, data_source, identifier.type, 
+                        self._db, data_source, identifier.type,
                         identifier.identifier, collection=collection
                     )
 
@@ -431,29 +505,25 @@ class CatalogController(object):
 
         urns = request.args.getlist('urn')
         messages = []
-        for urn in urns:
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+
+        for urn in failures:
+            message = OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            )
+            messages.append(message)
+
+        for urn, identifier in identifiers_by_urn.items():
             message = None
-            identifier = None
-            try:
-                identifier, ignore = Identifier.parse_urn(self._db, urn)
-            except Exception as e:
-                identifier = None
+            status = HTTP_NOT_FOUND
+            description = "Not in catalog"
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                if identifier in collection.catalog:
-                    collection.catalog.remove(identifier)
-                    message = OPDSMessage(
-                        urn, HTTP_OK, "Successfully removed"
-                    )
-                else:
-                    message = OPDSMessage(
-                        urn, HTTP_NOT_FOUND, "Not in catalog"
-                    )
+            if identifier in collection.catalog:
+                collection.catalog.remove(identifier)
+                status = HTTP_OK
+                description = "Successfully removed"
 
+            message = OPDSMessage(urn, status, description)
             messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
@@ -555,7 +625,7 @@ class CatalogController(object):
         return make_response(content, status_code, headers)
 
 
-class URNLookupController(CoreURNLookupController):
+class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
     UNRESOLVABLE_IDENTIFIER = "I can't gather information about an identifier of this type."
     IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
@@ -565,8 +635,15 @@ class URNLookupController(CoreURNLookupController):
     log = logging.getLogger("URN lookup controller")
 
     def __init__(self, _db):
-        self.registrar = IdentifierResolutionRegistrar(_db)
+        self.default_collection_id = None
         super(URNLookupController, self).__init__(_db)
+
+    @property
+    def default_collection(self):
+        if not self._default_collection_id:
+            default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+            self._default_collection_id = default_collection.id
+        return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
         """Either return a presentation-ready work associated with the 
@@ -604,22 +681,28 @@ class URNLookupController(CoreURNLookupController):
         if work is None:
             return False
         return True
-  
-    def process_urn(self, urn, collection_details=None, **kwargs):
-        """Turn a URN into a Work suitable for use in an OPDS feed.
+
+    def work_lookup(self, annotator, route_name='lookup', urns=[],
+                    **process_urn_kwargs
+    ):
+        """Returns a ProblemDetail if an error is raised. Otherwise, returns an
+        empty 200 response.
+
+        TODO: Return to using the BaseURNLookupController.work_lookup
+        once the Metadata Wranger load has improved.
         """
-        try:
-            identifier, is_new = Identifier.parse_urn(self._db, urn)
-        except ValueError, e:
-            identifier = None
+        urns = urns or request.args.getlist('urn')
+        response = self.process_urns(urns, **process_urn_kwargs)
+        self.post_lookup_hook()
 
-        if not identifier:
-            # Not a well-formed URN.
-            return self.add_message(urn, 400, INVALID_URN.detail)
+        if response:
+            return response
+        else:
+            # Temporarily return an empty OPDS feed.
+            headers = { 'Content-Type' : Representation.TEXT_XML_MEDIA_TYPE }
+            return make_response("<feed></feed>", HTTP_ACCEPTED, {})
 
-        if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
-
+    def process_urns(self, urns, collection_details=None, **kwargs):
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
@@ -630,14 +713,39 @@ class URNLookupController(CoreURNLookupController):
         collection = collection_from_details(
             self._db, client, collection_details
         )
-        if collection:
-            collection.catalog_identifier(self._db, identifier)
+
+        # TODO: uncomment the segment adding the default collection once
+        # the Metadata Wrangler can handle its existing load. This will add
+        # unaffiliated identifiers to the Unaffiliated Identifier collection.
+        collection = collection # or self.default_collection
+        if not collection:
+            return INVALID_INPUT.detailed("No collection provided.")
+
+        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+        self.add_urn_failure_messages(failures)
+
+        collection.catalog_identifiers(identifiers_by_urn.values())
+        self.bulk_load_coverage_records(identifiers_by_urn.values())
+
+        for urn, identifier in identifiers_by_urn.items():
+            self.process_identifier(identifier, urn, **kwargs)
+
+    def process_identifier(self, identifier, urn, **kwargs):
+        """Turn an Identifier into a Work suitable for use in an OPDS feed.
+        """
+        if not self.can_resolve_identifier(identifier):
+            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
 
         if (identifier.type == Identifier.ISBN and not identifier.work):
             # There's not always enough information about an ISBN to
             # create a full Work. If not, we scrape together the cover
             # and description information and force the entry.
-            return self.make_opds_entry_from_metadata_lookups(identifier)
+            entry = self.make_opds_entry_from_metadata_lookups(identifier)
+            if not entry:
+                return self.register_identifier_as_unresolved(
+                    identifier.urn, identifier
+                )
+            return self.add_entry(entry)
 
         # All other identifiers need to be associated with a
         # presentation-ready Work for the lookup to succeed. If there
@@ -650,6 +758,15 @@ class URNLookupController(CoreURNLookupController):
         # Work remains to be done.
         return self.register_identifier_as_unresolved(urn, identifier)
 
+    def bulk_load_coverage_records(self, identifiers):
+        """Loads CoverageRecords for a list of identifiers into the database
+        session in a single query before individual identifier processing
+        begins.
+        """
+        identifier_ids = [i.id for i in identifiers]
+        self._db.query(Identifier).filter(Identifier.id.in_(identifier_ids))\
+            .options(joinedload(Identifier.coverage_records)).all()
+
     def register_identifier_as_unresolved(self, urn, identifier):
         # This identifier could have a presentation-ready Work
         # associated with it, but it doesn't. We need to make sure the
@@ -657,13 +774,22 @@ class URNLookupController(CoreURNLookupController):
         # representing the work that needs to be done.
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-        registration_record, is_new = self.registrar.register(identifier)
-        resolution_record = self.registrar.resolution_coverage(identifier)
-
-        if is_new and not resolution_record:
-            # The CoverageRecord for registration was just created. Tell the
-            # client to come back later.
+        registration_records = filter(
+            lambda c: c.operation==IdentifierResolutionRegistrar.OPERATION,
+            identifier.coverage_records
+        )
+        if not (identifier.coverage_records or registration_records):
+            # This identifier hasn't been registered for coverage yet.
+            # Tell the client to come back later.
             return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
+
+        resolution_records = filter(
+            lambda c: c.operation==IdentifierResolutionCoverageProvider.OPERATION,
+            identifier.coverage_records
+        )
+        resolution_record = None
+        if resolution_records:
+            resolution_record = resolution_records[0]
 
         # There is a pending attempt to resolve this identifier.
         # Tell the client we're working on it, or if the
@@ -692,57 +818,6 @@ class URNLookupController(CoreURNLookupController):
             status = HTTP_INTERNAL_SERVER_ERROR
             message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
         return self.add_message(urn, status, message)
-
-    def make_opds_entry_from_metadata_lookups(self, identifier):
-        """This identifier cannot be turned into a presentation-ready Work,
-        but maybe we can make an OPDS entry based on metadata lookups.
-        """
-
-        # We can only create an OPDS entry if all the lookups have
-        # in fact been done.
-        metadata_sources = DataSource.metadata_sources_for(
-            self._db, identifier
-        )
-        q = self._db.query(CoverageRecord).filter(
-                CoverageRecord.identifier==identifier
-        ).filter(
-            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
-            CoverageRecord.status==CoverageRecord.SUCCESS
-        )
-
-        coverage_records = q.all()
-        unaccounted_for = set(metadata_sources)
-        for r in coverage_records:
-            if r.data_source in unaccounted_for:
-                unaccounted_for.remove(r.data_source)
-
-        if unaccounted_for:
-            # At least one metadata lookup has not successfully
-            # completed.
-            names = [x.name for x in unaccounted_for]
-            self.log.info(
-                "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
-                identifier,
-                ", ".join(names)
-            )
-            return self.register_identifier_as_unresolved(
-                identifier.urn, identifier
-            )
-        else:
-            # All metadata lookups have completed. Create that OPDS
-            # entry!
-            entry = identifier.opds_entry()
-
-        if entry is None:
-            # We can't do lookups on an identifier of this type, so
-            # the best thing to do is to treat this identifier as a
-            # 404 error.
-            return self.add_message(
-                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
-            )
-
-        # We made it!
-        return self.add_entry(entry)
 
     def post_lookup_hook(self):
         """Run after looking up a number of Identifiers.

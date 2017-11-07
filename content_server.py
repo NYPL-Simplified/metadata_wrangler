@@ -30,9 +30,7 @@ class LookupClientCoverageProvider(CatalogCoverageProvider):
    
     def __init__(self, collection, **kwargs):
         self.DATA_SOURCE_NAME = collection.data_source.name
-        super(LookupClientCoverageProvider, self).__init__(
-            collection, preregistered_only=True, **kwargs
-        )
+        super(LookupClientCoverageProvider, self).__init__(collection, **kwargs)
 
         # Assume that this collection's OPDS server also implements
         # the lookup protocol.
