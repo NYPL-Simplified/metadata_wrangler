@@ -16,6 +16,7 @@ from core.app_server import (
     cdn_url_for,
     feed_response,
     load_pagination_from_request,
+    Pagination,
     URNLookupController as CoreURNLookupController,
 )
 from core.config import Configuration
@@ -69,6 +70,7 @@ HTTP_NOT_FOUND = 404
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 OPDS_2_MEDIA_TYPE = 'application/opds+json'
+
 
 def authenticated_client_from_request(_db, required=True):
     header = request.headers.get('Authorization')
@@ -205,12 +207,12 @@ class ISBNEntryMixin(object):
         metadata_sources = DataSource.metadata_sources_for(
             self._db, identifier
         )
-        q = self._db.query(CoverageRecord).filter(
-                CoverageRecord.identifier==identifier
-        ).filter(
-            CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
-            CoverageRecord.status==CoverageRecord.SUCCESS
-        )
+        q = self._db.query(CoverageRecord)\
+            .filter(CoverageRecord.identifier==identifier)\
+            .filter(
+                CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
+                CoverageRecord.status==CoverageRecord.SUCCESS
+            )
 
         coverage_records = q.all()
         unaccounted_for = set(metadata_sources)
@@ -228,11 +230,10 @@ class ISBNEntryMixin(object):
                 ", ".join(names)
             )
             return None
-        else:
-            # All metadata lookups have completed. Create that OPDS
-            # entry!
-            entry = identifier.opds_entry()
 
+        # All metadata lookups have completed. Create that OPDS
+        # entry!
+        entry = identifier.opds_entry()
         if entry is None:
             # We can't do lookups on an identifier of this type, so
             # the best thing to do is to treat this identifier as a
@@ -250,6 +251,12 @@ class CatalogController(ISBNEntryMixin):
 
     log = logging.getLogger("Catalog Controller")
 
+    # Setting a default updates feed size lower than the Pagination.DEFAULT_SIZE
+    # of 50. Because the updates feed paginates works and isbns separately,
+    # this not-quite-half should keep the feed at about the expected size
+    # overall without impacting non-ISBN collections too much.
+    UPDATES_SIZE = 35
+
     def __init__(self, _db):
         self._db = _db
 
@@ -265,10 +272,37 @@ class CatalogController(ISBNEntryMixin):
         last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
             last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
-        updated_works = collection.works_updated_since(self._db, last_update_time)
 
-        pagination = load_pagination_from_request()
+        pagination = load_pagination_from_request(default_size=self.UPDATES_SIZE)
+
+        entries = []
+        # Add entries for Works associated with the collection's catalog.
+        updated_works = collection.works_updated_since(self._db, last_update_time)
         works = pagination.apply(updated_works).all()
+        for work in works[:]:
+            # Get the cached entry if it already exists.
+            entry = work.verbose_opds_entry or work.simple_opds_entry
+            if entry:
+                entry = etree.fromstring(entry)
+                entries.append(entry)
+                works.remove(work)
+
+        works_for_feed = list()
+        for work in works:
+            # Let the feed try to calculate OPDS entries for Works without one.
+            identifiers = [lp.identifier for lp in work.license_pools]
+            identifiers = [i for i in identifiers if i in collection.catalog]
+            works_for_feed.append((identifiers[0], work))
+
+        # Add entries for ISBNs associated with the collection's catalog.
+        isbns = collection.isbns_updated_since(self._db, last_update_time)
+        if isbns:
+            isbns = pagination.apply(isbns).all()
+            for isbn in isbns:
+                entry = self.make_opds_entry_from_metadata_lookups(isbn)
+                if entry:
+                    entries.append(entry)
+
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         def update_url(time=last_update_time, page=None):
             kw = dict(
@@ -281,41 +315,6 @@ class CatalogController(ISBNEntryMixin):
                 kw.update(page.items())
             return cdn_url_for("updates", **kw)
 
-        entries = []
-        for work in works[:]:
-            entry = work.verbose_opds_entry or work.simple_opds_entry
-            if entry:
-                entry = etree.fromstring(entry)
-                entries.append(entry)
-                works.remove(work)
-
-        works_for_feed = list()
-        for work in works:
-            identifiers = [lp.identifier for lp in work.license_pools]
-            identifiers = [i for i in identifiers if i in collection.catalog]
-            works_for_feed.append((identifiers[0], work))
-
-        # Add ISBN entries.
-        isbn_ids = [i.id for i in collection.catalog if i.type==Identifier.ISBN]
-        if isbn_ids:
-            isbn_identifiers = self._db.query(Identifier)\
-                .join(Identifier.coverage_records)\
-                .outerjoin(Identifier.licensed_through)\
-                .outerjoin(LicensePool.work)\
-                .filter(
-                    Work.id==None,
-                    Identifier.id.in_(isbn_ids),
-                    CoverageRecord.status==CoverageRecord.SUCCESS,
-                )
-            if last_update_time:
-                isbn_identifiers = isbn_identifiers.filter(
-                    CoverageRecord.timestamp > last_update_time
-                )
-            for isbn in isbn_identifiers.distinct():
-                entry = self.make_opds_entry_from_metadata_lookups(isbn)
-                if entry:
-                    entries.append(entry)
-
         update_feed = LookupAcquisitionFeed(
             self._db, title, update_url(), works_for_feed, VerboseAnnotator,
             precomposed_entries=entries
@@ -323,12 +322,12 @@ class CatalogController(ISBNEntryMixin):
 
         if len(updated_works.all()) > pagination.size + pagination.offset:
             update_feed.add_link_to_feed(
-                update_feed.feed, rel="next", 
+                update_feed.feed, rel="next",
                 href=update_url(page=pagination.next_page)
             )
         if pagination.offset > 0:
             update_feed.add_link_to_feed(
-                update_feed.feed, rel="first", 
+                update_feed.feed, rel="first",
                 href=update_url(page=pagination.first_page)
             )
         previous_page = pagination.previous_page

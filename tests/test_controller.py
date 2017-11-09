@@ -248,14 +248,18 @@ class TestCatalogController(ControllerTest):
 
         # ISBNs updated since the timestamp are also included in the feed.
         timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        isbn = self._identifier(identifier_type=Identifier.ISBN, foreign_id=self._isbn)
+        isbn = self._identifier(
+            identifier_type=Identifier.ISBN, foreign_id=self._isbn
+        )
         self.collection.catalog_identifier(isbn)
 
         # Let's provide the coverage.
-        metadata_sources = DataSource.metadata_sources_for(self._db, isbn)
-        for source in metadata_sources:
-            CoverageRecord.add_for(isbn, source)
+        def cover_isbn(isbn):
+            metadata_sources = DataSource.metadata_sources_for(self._db, isbn)
+            for source in metadata_sources:
+                CoverageRecord.add_for(isbn, source)
 
+        cover_isbn(isbn)
         # Set back the work timestamp to simplify the test.
         self.work1.coverage_records[0].timestamp = datetime.utcnow() - timedelta(days=1)
 
@@ -266,6 +270,39 @@ class TestCatalogController(ControllerTest):
             feed = feedparser.parse(response.get_data())
             [entry] = feed.entries
             eq_(isbn.urn, entry.id)
+
+        # Pagination is applied to both works and isbns (each).
+
+        # Create another work and ISBN to test.
+        i2 = self.work2.license_pools[0].identifier
+        isbn2 = self._identifier(
+            identifier_type=Identifier.ISBN, foreign_id=self._isbn
+        )
+        cover_isbn(isbn2)
+        self.collection.catalog_identifiers([i2, isbn2])
+
+        with self.app.test_request_context('/?size=1', headers=self.valid_auth):
+            response = self.controller.updates_feed(self.collection.name)
+            feed = feedparser.parse(response.get_data())
+
+            # The feed size has been applied to both works and isbns.
+            eq_(2, len(feed.entries))
+
+            # The earlier updated items are represented.
+            resulting_urns = [e.id for e in feed.entries]
+            eq_(sorted([identifier.urn, isbn.urn]), sorted(resulting_urns))
+
+        with self.app.test_request_context('/?after=1&size=1',
+            headers=self.valid_auth
+        ):
+            response = self.controller.updates_feed(self.collection.name)
+            feed = feedparser.parse(response.get_data())
+
+            eq_(2, len(feed.entries))
+
+            # The later items are included.
+            resulting_urns = [e.id for e in feed.entries]
+            eq_(sorted([i2.urn, isbn2.urn]), sorted(resulting_urns))
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
@@ -279,7 +316,8 @@ class TestCatalogController(ControllerTest):
             assert not any([link['rel'] == 'first' for l in links])
 
         with self.app.test_request_context('/?size=1&after=1',
-            headers=self.valid_auth):
+            headers=self.valid_auth
+        ):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'previous' for link in links])
