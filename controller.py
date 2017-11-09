@@ -296,12 +296,11 @@ class CatalogController(ISBNEntryMixin):
 
         # Add entries for ISBNs associated with the collection's catalog.
         isbns = collection.isbns_updated_since(self._db, last_update_time)
-        if isbns:
-            isbns = pagination.apply(isbns).all()
-            for isbn in isbns:
-                entry = self.make_opds_entry_from_metadata_lookups(isbn)
-                if entry:
-                    entries.append(entry)
+        isbns = pagination.apply(isbns).all()
+        for isbn, _latest_timestamp in isbns:
+            entry = self.make_opds_entry_from_metadata_lookups(isbn)
+            if entry:
+                entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         def update_url(time=last_update_time, page=None):
