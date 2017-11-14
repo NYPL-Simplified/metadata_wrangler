@@ -50,6 +50,7 @@ from core.opds import (
     LookupAcquisitionFeed,
     VerboseAnnotator,
 )
+from core.util import fast_query_count
 from core.util.authentication_for_opds import AuthenticationForOPDSDocument
 from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
@@ -319,7 +320,9 @@ class CatalogController(ISBNEntryMixin):
             precomposed_entries=entries
         )
 
-        if len(updated_works.all()) > pagination.size + pagination.offset:
+        if fast_query_count(updated_works) > (
+                pagination.size + pagination.offset
+        ):
             update_feed.add_link_to_feed(
                 update_feed.feed, rel="next",
                 href=update_url(page=pagination.next_page)
