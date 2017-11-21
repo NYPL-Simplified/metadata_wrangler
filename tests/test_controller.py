@@ -420,15 +420,14 @@ class TestCatalogController(ControllerTest):
         eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
         eq_("eng", edition.language)
 
-        # Finally, the identifier has a transient failure CoverageRecord so it will
-        # be processed by the identifier resolution script.
+        # Create a successful CoverageRecord for the  ResolutionCoverageProvider
         data_source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-        record = CoverageRecord.lookup(identifier, data_source,
-                                        CoverageRecord.RESOLVE_IDENTIFIER_OPERATION)
-        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
-        eq_(self.collection, record.collection)
-
-        record.status = CoverageRecord.SUCCESS
+        record, _ignore = CoverageRecord.add_for(
+            identifier, data_source,
+            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+            status=CoverageRecord.SUCCESS,
+            collection=self.collection
+        )
 
         # If we make the same request again, the identifier stays in the catalog.
         with self.app.test_request_context(headers=self.valid_auth, data=opds):
