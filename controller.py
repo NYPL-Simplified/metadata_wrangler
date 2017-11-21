@@ -683,26 +683,6 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             return False
         return True
 
-    def work_lookup(self, annotator, route_name='lookup', urns=[],
-                    **process_urn_kwargs
-    ):
-        """Returns a ProblemDetail if an error is raised. Otherwise, returns an
-        empty 200 response.
-
-        TODO: Return to using the BaseURNLookupController.work_lookup
-        once the Metadata Wranger load has improved.
-        """
-        urns = urns or request.args.getlist('urn')
-        response = self.process_urns(urns, **process_urn_kwargs)
-        self.post_lookup_hook()
-
-        if response:
-            return response
-        else:
-            # Temporarily return an empty OPDS feed.
-            headers = { 'Content-Type' : Representation.TEXT_XML_MEDIA_TYPE }
-            return make_response("<feed></feed>", HTTP_ACCEPTED, {})
-
     def process_urns(self, urns, collection_details=None, **kwargs):
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
