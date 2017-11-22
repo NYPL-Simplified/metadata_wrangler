@@ -442,7 +442,6 @@ class CatalogController(ISBNEntryMixin):
                         identifier.identifier, collection=collection
                     )
 
-
                 # Create an edition to hold the title and author. LicensePool.calculate_work
                 # refuses to create a Work when there's no title, and if we have a title, author
                 # and language we can attempt to look up the edition in OCLC.
@@ -476,10 +475,12 @@ class CatalogController(ISBNEntryMixin):
                 # Create a transient failure CoverageRecord for this identifier
                 # so it will be processed by the IdentifierResolutionCoverageProvider.
                 internal_processing = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-                CoverageRecord.add_for(edition, internal_processing,
-                                       operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-                                       status=CoverageRecord.TRANSIENT_FAILURE,
-                                       collection=collection)
+                CoverageRecord.add_for(
+                    edition, internal_processing,
+                    operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+                    status=CoverageRecord.TRANSIENT_FAILURE,
+                    collection=collection,
+                )
 
             messages.append(message)
 
@@ -684,6 +685,10 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         return True
 
     def process_urns(self, urns, collection_details=None, **kwargs):
+        """Processes URNs submitted via lookup request
+
+        :return: None or ProblemDetail
+        """
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.

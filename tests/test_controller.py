@@ -422,12 +422,14 @@ class TestCatalogController(ControllerTest):
 
         # Create a successful CoverageRecord for the  ResolutionCoverageProvider
         data_source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-        record, _ignore = CoverageRecord.add_for(
+        record = CoverageRecord.lookup(
             identifier, data_source,
             operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.SUCCESS,
-            collection=self.collection
+            collection=self.collection,
         )
+        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
+
+        record.status = CoverageRecord.SUCCESS
 
         # If we make the same request again, the identifier stays in the catalog.
         with self.app.test_request_context(headers=self.valid_auth, data=opds):
