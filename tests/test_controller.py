@@ -420,12 +420,15 @@ class TestCatalogController(ControllerTest):
         eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
         eq_("eng", edition.language)
 
-        # Create a successful CoverageRecord for the  ResolutionCoverageProvider
-        data_source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+        # A DataSource was created for the collection.
+        data_source = DataSource.lookup(self._db, self.collection.name)
+        assert isinstance(data_source, DataSource)
+
+        # A failing import CoverageRecord was created for the identifier with
+        # this collection DataSource
         record = CoverageRecord.lookup(
             identifier, data_source,
-            operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            collection=self.collection,
+            operation=CoverageRecord.IMPORT_OPERATION,
         )
         eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
 

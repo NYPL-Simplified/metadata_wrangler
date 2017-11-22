@@ -473,13 +473,14 @@ class CatalogController(ISBNEntryMixin):
                 metadata.apply(edition, collection, replace=replace)
 
                 # Create a transient failure CoverageRecord for this identifier
-                # so it will be processed by the IdentifierResolutionCoverageProvider.
-                internal_processing = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+                # so it will be processed by the IntegrationClientCoverageProvider.
+                collection_source = DataSource.lookup(
+                    self._db, collection.name, autocreate=True
+                )
                 CoverageRecord.add_for(
-                    edition, internal_processing,
-                    operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
+                    edition, collection_source,
+                    operation=CoverageRecord.IMPORT_OPERATION,
                     status=CoverageRecord.TRANSIENT_FAILURE,
-                    collection=collection,
                 )
 
             messages.append(message)
