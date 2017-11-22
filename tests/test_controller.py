@@ -420,13 +420,17 @@ class TestCatalogController(ControllerTest):
         eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
         eq_("eng", edition.language)
 
-        # Finally, the identifier has a transient failure CoverageRecord so it will
-        # be processed by the identifier resolution script.
-        data_source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-        record = CoverageRecord.lookup(identifier, data_source,
-                                        CoverageRecord.RESOLVE_IDENTIFIER_OPERATION)
+        # A DataSource was created for the collection.
+        data_source = DataSource.lookup(self._db, self.collection.name)
+        assert isinstance(data_source, DataSource)
+
+        # A failing import CoverageRecord was created for the identifier with
+        # this collection DataSource
+        record = CoverageRecord.lookup(
+            identifier, data_source,
+            operation=CoverageRecord.IMPORT_OPERATION,
+        )
         eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
-        eq_(self.collection, record.collection)
 
         record.status = CoverageRecord.SUCCESS
 

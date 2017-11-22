@@ -442,7 +442,6 @@ class CatalogController(ISBNEntryMixin):
                         identifier.identifier, collection=collection
                     )
 
-
                 # Create an edition to hold the title and author. LicensePool.calculate_work
                 # refuses to create a Work when there's no title, and if we have a title, author
                 # and language we can attempt to look up the edition in OCLC.
@@ -474,12 +473,15 @@ class CatalogController(ISBNEntryMixin):
                 metadata.apply(edition, collection, replace=replace)
 
                 # Create a transient failure CoverageRecord for this identifier
-                # so it will be processed by the IdentifierResolutionCoverageProvider.
-                internal_processing = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-                CoverageRecord.add_for(edition, internal_processing,
-                                       operation=CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-                                       status=CoverageRecord.TRANSIENT_FAILURE,
-                                       collection=collection)
+                # so it will be processed by the IntegrationClientCoverageProvider.
+                collection_source = DataSource.lookup(
+                    self._db, collection.name, autocreate=True
+                )
+                CoverageRecord.add_for(
+                    edition, collection_source,
+                    operation=CoverageRecord.IMPORT_OPERATION,
+                    status=CoverageRecord.TRANSIENT_FAILURE,
+                )
 
             messages.append(message)
 
@@ -683,27 +685,11 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             return False
         return True
 
-    def work_lookup(self, annotator, route_name='lookup', urns=[],
-                    **process_urn_kwargs
-    ):
-        """Returns a ProblemDetail if an error is raised. Otherwise, returns an
-        empty 200 response.
-
-        TODO: Return to using the BaseURNLookupController.work_lookup
-        once the Metadata Wranger load has improved.
-        """
-        urns = urns or request.args.getlist('urn')
-        response = self.process_urns(urns, **process_urn_kwargs)
-        self.post_lookup_hook()
-
-        if response:
-            return response
-        else:
-            # Temporarily return an empty OPDS feed.
-            headers = { 'Content-Type' : Representation.TEXT_XML_MEDIA_TYPE }
-            return make_response("<feed></feed>", HTTP_ACCEPTED, {})
-
     def process_urns(self, urns, collection_details=None, **kwargs):
+        """Processes URNs submitted via lookup request
+
+        :return: None or ProblemDetail
+        """
         # We are at least willing to try to resolve this Identifier.
         # If a Collection was provided by an authenticated IntegrationClient,
         # this Identifier is part of the Collection's catalog.
