@@ -1,14 +1,14 @@
 # Core requirements
 pillow
 psycopg2
-requests
-sqlalchemy>=1.0.6
+requests==2.18.4
+sqlalchemy==1.1.15
 nose
 lxml
 flask
 textblob
 isbnlib
-tinys3==0.1.11
+tinys3==0.1.12
 feedparser
 elasticsearch
 uwsgi
