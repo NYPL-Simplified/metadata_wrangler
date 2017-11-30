@@ -78,6 +78,7 @@ class TestLookupClientCoverageProvider(DatabaseTest):
         self._default_collection.external_integration.set_setting(
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
+        self._default_collection.external_account_id = self._url
         self.provider = MockLookupClientCoverageProvider(
             self._default_collection
         )
@@ -199,6 +200,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # Create mocks for the different collections and APIs used by
         # IdentifierResolutionCoverageProvider.
+        self._default_collection.external_account_id = self._url
         overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
         overdrive_collection.name = (
             IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
