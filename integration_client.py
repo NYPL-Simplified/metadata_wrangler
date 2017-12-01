@@ -18,6 +18,7 @@ class IntegrationClientCoverageProvider(CatalogCoverageProvider):
 
     OPERATION = CoverageRecord.IMPORT_OPERATION
     PROTOCOL = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+    COVERAGE_COUNTS_FOR_EVERY_COLLECTION = False
 
     def __init__(self, uploader, collection, *args, **kwargs):
         self.uploader = uploader

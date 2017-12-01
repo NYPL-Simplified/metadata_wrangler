@@ -78,6 +78,7 @@ class TestLookupClientCoverageProvider(DatabaseTest):
         self._default_collection.external_integration.set_setting(
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
+        self._default_collection.external_account_id = self._url
         self.provider = MockLookupClientCoverageProvider(
             self._default_collection
         )
@@ -199,6 +200,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # Create mocks for the different collections and APIs used by
         # IdentifierResolutionCoverageProvider.
+        self._default_collection.external_account_id = self._url
         overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
         overdrive_collection.name = (
             IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
@@ -580,11 +582,17 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         self.identifier.collections.extend([opds_distrib, opds_import])
         self.registrar.process_item(self.identifier)
 
+        # A CoverageRecord is created for the OA content server.
+        [oa_content] = [cr for cr in self.identifier.coverage_records
+                        if cr.data_source.name==DataSource.OA_CONTENT_SERVER]
+        # It doesn't have a collection, even though it used a collection
+        # to provide a DataSource.
+        eq_(None, oa_content.collection)
+
+        # There should be an additional DataSource.INTERNAL_PROCESSING
+        # record for the OPDS_FOR_DISTRIBUTORS coverage.
         source_names = [cr.data_source.name
                         for cr in self.identifier.coverage_records]
-        assert DataSource.OA_CONTENT_SERVER in source_names
-        # There should now be an additional DataSource.INTERNAL_PROCESSING
-        # record for the OPDS_FOR_DISTRIBUTORS coverage.
         eq_(2, source_names.count(DataSource.INTERNAL_PROCESSING))
 
     def test_process_item_creates_an_active_license_pool(self):
