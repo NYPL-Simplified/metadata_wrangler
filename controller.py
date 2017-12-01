@@ -1,6 +1,7 @@
 from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
+from flask_babel import lazy_gettext as _
 from lxml import etree
 from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
@@ -571,7 +572,7 @@ class CatalogController(ISBNEntryMixin):
         if not url:
             message = "The public key integration document is missing an id."
             log.error(message)
-            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
+            return INVALID_INTEGRATION_DOCUMENT.detailed(_(message))
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
@@ -586,14 +587,14 @@ class CatalogController(ISBNEntryMixin):
                 client_url, base_public_key_url
             )
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                "The public key integration document id doesn't match submitted url"
+                _("The public key integration document id doesn't match submitted url")
             )
 
         public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
             message = "The public key integration document is missing an RSA public_key."
             log.error(message)
-            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
+            return INVALID_INTEGRATION_DOCUMENT.detailed(_(message))
         public_key = RSA.importKey(public_key.get('value'))
         encryptor = PKCS1_OAEP.new(public_key)
 
@@ -609,7 +610,7 @@ class CatalogController(ISBNEntryMixin):
             )
         except ValueError as e:
             log.error("Error in IntegrationClient.register", exc_info=e)
-            return INVALID_CREDENTIALS.detailed(repr(e))
+            return INVALID_CREDENTIALS.detailed(_(repr(e)))
 
         # Encrypt shared secret.
         encrypted_secret = encryptor.encrypt(str(client.shared_secret))
@@ -706,7 +707,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         # unaffiliated identifiers to the Unaffiliated Identifier collection.
         collection = collection # or self.default_collection
         if not collection:
-            return INVALID_INPUT.detailed("No collection provided.")
+            return INVALID_INPUT.detailed(_("No collection provided."))
 
         identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
         self.add_urn_failure_messages(failures)
