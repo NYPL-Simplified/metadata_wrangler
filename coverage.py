@@ -442,7 +442,9 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
                 lambda c: c.protocol==provider.PROTOCOL, identifier.collections
             )
             if covered_collections:
-                if provider==LookupClientCoverageProvider:
+                if (provider==LookupClientCoverageProvider or
+                    not provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION
+                ):
                     # The LookupClientCoverageProvider doesn't have an obvious
                     # data source. It uses the collection's data source instead.
                     for collection in covered_collections:

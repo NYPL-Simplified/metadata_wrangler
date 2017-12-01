@@ -22,10 +22,13 @@ class LookupClientCoverageProvider(CatalogCoverageProvider):
     """
 
     # TODO: We should rename this because in theory it can be used
-    # other places, but in practice this is it.
+    # other places, but in practice this is it. If this every changes in
+    # practice, COVERAGE_COUNTS_FOR_EVERY_COLLECTION should also be set to
+    # False.
     SERVICE_NAME = "OA Content Server Coverage Provider"
+    COVERAGE_COUNTS_FOR_EVERY_COLLECTION = True
     PROTOCOL = ExternalIntegration.OPDS_IMPORT
-    
+
     OPDS_SERVER_RETURNED_WRONG_CONTENT_TYPE = "OPDS Server served unhandleable media type: %s"
    
     def __init__(self, collection, **kwargs):
