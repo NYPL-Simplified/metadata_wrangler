@@ -32,3 +32,4 @@ py-bcrypt
 # for author name matching
 nameparser
 fuzzywuzzy
+python-Levenshtein
