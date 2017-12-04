@@ -6,7 +6,8 @@ import urlparse
 
 from functools import wraps
 from flask import Flask
-from flask.ext.babel import Babel
+from flask_babel import Babel
+from flask_sqlalchemy_session import flask_scoped_session
 
 from core.app_server import (
     HeartbeatController,
@@ -39,9 +40,7 @@ def initialize_database(autoinitialize=True):
     if autoinitialize:
         SessionManager.initialize(db_url)
     session_factory = SessionManager.sessionmaker(db_url)
-    # This is where we would create a scoped session.
-    # _db = flask_scoped_session(session_factory, app)
-    _db = session_factory()
+    _db = flask_scoped_session(session_factory, app)
     app._db = _db
     if autoinitialize:
         SessionManager.initialize_data(_db)
@@ -59,12 +58,6 @@ def initialize_database(autoinitialize=True):
     app.log.info("Application debug mode: %r", app.debug)
     for logger in logging.getLogger().handlers:
         app.log.info("Logs are going to %r", logger)
-
-    # Workaround for a "Resource temporarily unavailable" error when
-    # running in debug mode with the global socket timeout set by isbnlib
-    if app.debug:
-        import socket
-        socket.setdefaulttimeout(None)
 
 def accepts_auth(f):
     @wraps(f)
@@ -164,6 +157,12 @@ def run(self, url=None, debug=False):
         port = 80
 
     app.debug = debug
+    # Workaround for a "Resource temporarily unavailable" error when
+    # running in debug mode with the global socket timeout set by isbnlib
+    if app.debug:
+        import socket
+        socket.setdefaulttimeout(None)
+
     logging.info("Starting app on %s:%s", host, port)
     app.run(debug=debug, host=host, port=port)
 
