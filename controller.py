@@ -570,9 +570,9 @@ class CatalogController(ISBNEntryMixin):
 
         url = public_key_response.get('id')
         if not url:
-            message = "The public key integration document is missing an id."
-            log.error(message)
-            return INVALID_INTEGRATION_DOCUMENT.detailed(_(message))
+            message = _("The public key integration document is missing an id.")
+            log.error(unicode(message))
+            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
@@ -592,9 +592,9 @@ class CatalogController(ISBNEntryMixin):
 
         public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
-            message = "The public key integration document is missing an RSA public_key."
-            log.error(message)
-            return INVALID_INTEGRATION_DOCUMENT.detailed(_(message))
+            message = _("The public key integration document is missing an RSA public_key.")
+            log.error(unicode(message))
+            return INVALID_INTEGRATION_DOCUMENT.detailed(message)
         public_key = RSA.importKey(public_key.get('value'))
         encryptor = PKCS1_OAEP.new(public_key)
 
@@ -610,7 +610,7 @@ class CatalogController(ISBNEntryMixin):
             )
         except ValueError as e:
             log.error("Error in IntegrationClient.register", exc_info=e)
-            return INVALID_CREDENTIALS.detailed(_(repr(e)))
+            return INVALID_CREDENTIALS.detailed(repr(e))
 
         # Encrypt shared secret.
         encrypted_secret = encryptor.encrypt(str(client.shared_secret))
