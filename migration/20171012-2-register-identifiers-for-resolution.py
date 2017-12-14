@@ -34,7 +34,7 @@ class MockResolver(IdentifierResolutionCoverageProvider):
     """
     def __init__(self, collection):
         super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, preregistered_only=True
+            collection, registered_only=True
         )
 
 try:

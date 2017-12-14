@@ -101,7 +101,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     ):
 
         super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, preregistered_only=True, **kwargs
+            collection, registered_only=True, **kwargs
         )
 
         # Since we are the metadata wrangler, any resources we find,
