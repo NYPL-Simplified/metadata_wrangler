@@ -392,12 +392,21 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
         # Give the identifier a mock LicensePool if it doesn't have one.
         self.license_pool(identifier, collection)
 
+        self.log.info('Identifying required coverage for %r' % identifier)
+
+        # Get Collection coverage before resolution coverage, to make sure
+        # that an identifier that's been added to a new collection is
+        # registered for any relevant coverage -- even if its resolution has
+        # already been completed.
+        #
+        # This is extremely important for coverage providers with
+        # COVERAGE_COUNTS_FOR_EVERY_COLLECTION set to False.
+        providers = self.collection_coverage_providers(identifier)
+
+        # Find an resolution CoverageRecord if it exists.
         resolution_record = self.resolution_coverage(identifier)
         if resolution_record and not force:
             return identifier
-
-        self.log.info('Identifying required coverage for %r' % identifier)
-        providers = list()
 
         # Every identifier gets the resolver.
         providers.append(self.RESOLVER)
@@ -408,25 +417,6 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
                 or identifier.type in provider.INPUT_IDENTIFIER_TYPES
             ):
                 providers.append(provider)
-
-        for provider in self.COLLECTION_PROVIDERS:
-            if not provider.PROTOCOL:
-                providers.append(provider)
-                continue
-
-            covered_collections = filter(
-                lambda c: c.protocol==provider.PROTOCOL, identifier.collections
-            )
-            if covered_collections:
-                if (provider==LookupClientCoverageProvider or
-                    not provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION
-                ):
-                    # The LookupClientCoverageProvider doesn't have an obvious
-                    # data source. It uses the collection's data source instead.
-                    for collection in covered_collections:
-                        provider.register(identifier, collection=collection)
-                else:
-                    providers.append(provider)
 
         for provider_class in providers:
             provider_class.register(identifier)
@@ -443,6 +433,37 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
         source = cls.RESOLVER.DATA_SOURCE_NAME
         operation = cls.RESOLVER.OPERATION
         return CoverageRecord.lookup(identifier, source, operation)
+
+    @classmethod
+    def collection_coverage_providers(cls, identifier):
+        """Determines the required catalog-based coverage an identifier needs.
+
+        :return: A list of Collection- and CatalogCoverageProviders
+        """
+        providers = list()
+        for provider in cls.COLLECTION_PROVIDERS:
+            if not provider.PROTOCOL:
+                providers.append(provider)
+                continue
+
+            covered_collections = filter(
+                lambda c: c.protocol==provider.PROTOCOL, identifier.collections
+            )
+            if not covered_collections:
+                continue
+
+            if (provider==LookupClientCoverageProvider or
+                not provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION
+            ):
+                # The LookupClientCoverageProvider doesn't have an obvious
+                # data source. It uses the collection's data source instead.
+                for collection in covered_collections:
+                    _record, newly_registered = provider.register(
+                        identifier, collection=collection
+                    )
+            else:
+                providers.append(provider)
+        return providers
 
     def license_pool(self, identifier, collection):
         """Creates a LicensePool in the unaffiliated_collection for

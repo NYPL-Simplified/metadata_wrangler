@@ -519,6 +519,32 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         result = self.registrar.resolution_coverage(self.identifier)
         eq_(cr, result)
 
+    def test_process_item_prioritizes_collection_specific_coverage(self):
+        # The identifier has already been registered for coverage.
+        self.registrar.process_item(self.identifier)
+        original_num = len(self.identifier.coverage_records)
+
+        # Catalog the identifier in a collection eligible for collection-
+        # specific coverage.
+        c1 = self._collection(protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS)
+        c1.catalog_identifier(self.identifier)
+
+        # Reprocessing the identifier results in a new coverage record.
+        self.registrar.process_item(self.identifier)
+        expected_record_count = original_num + 1
+        eq_(expected_record_count, len(self.identifier.coverage_records))
+
+        # Even if resolution was successful, new collections result in
+        # registrations.
+        record = self.registrar.resolution_coverage(self.identifier)
+        record.status = CoverageRecord.SUCCESS
+        c2 = self._collection(protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS)
+        c2.catalog_identifier(self.identifier)
+
+        self.registrar.process_item(self.identifier)
+        expected_record_count = expected_record_count + 1
+        eq_(expected_record_count, len(self.identifier.coverage_records))
+
     def test_process_item_does_not_catalog_already_cataloged_identifier(self):
         # This identifier is already in a Collection's catalog.
         collection = self._collection(data_source_name=DataSource.OA_CONTENT_SERVER)
