@@ -393,14 +393,14 @@ class CatalogController(ISBNEntryMixin):
             self._db, client, collection_details
         )
 
+        data_source = DataSource.lookup(
+            self._db, collection.name, autocreate=True
+        )
+
         messages = []
 
         feed = feedparser.parse(request.data)
         entries = feed.get("entries", [])
-
-        if not client.data_source:
-            client.data_source = DataSource.lookup(self._db, client.url, autocreate=True)
-        data_source = client.data_source
 
         for entry in entries:
             urn = entry.get('id')
