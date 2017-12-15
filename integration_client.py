@@ -27,6 +27,11 @@ class WorkPresentationCoverageProvider(WorkCoverageProvider):
 
     _policy = None
 
+    def __init__(self, *args, **kwargs):
+        if not 'registered_only' in kwargs:
+            kwargs['registered_only'] = True
+        super(WorkPresentationCoverageProvider, self).__init__(*args, **kwargs)
+
     @property
     def policy(self):
         # We're going to be aggressive about recalculating the presentation
