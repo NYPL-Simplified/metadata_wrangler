@@ -61,11 +61,14 @@ from viaf import (
     VIAFClient, 
 )
 from integration_client import (
+    CalculatesWorkPresentation,
     IntegrationClientCoverageProvider,
 )
 
 
-class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
+class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
+    CalculatesWorkPresentation
+):
     """Make sure all Identifiers registered as needing coverage by this
     CoverageProvider become Works with Editions and (probably dummy)
     LicensePools.
@@ -265,12 +268,12 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             return failure
 
         # We got coverage from all the required coverage providers,
-        # and none of the optional coverage providers raised an exception,
-        # so we're ready.
-        try:
-            self.finalize(identifier)
-        except Exception as e:
-            return self.transform_exception_into_failure(e, identifier)
+        # and none of the optional coverage providers raised an exception.
+        #
+        # Register the identifier's work for presentation calculation.
+        failure = self.register_work_for_calculation(identifier)
+        if failure:
+            return failure
 
         return identifier
 
@@ -324,36 +327,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         )
         return self.failure(identifier, repr(error), transient=True)
 
-    def finalize(self, identifier):
-        """Sets equivalent identifiers from OCLC and processes the work."""
-        self.process_work(identifier)
-
-    def process_work(self, identifier):
-        """Fill in VIAF data and cover images where possible before setting
-        a previously-unresolved identifier's work as presentation ready.
-
-        TODO: I think this should be split into a separate
-        WorkCoverageProvider which runs last. That way we have a record
-        of which Works have had this service.
-        """
-        work = None
-        license_pools = identifier.licensed_through
-        if license_pools:
-            pool = license_pools[0]
-            work, created = pool.calculate_work(
-                even_if_no_author=True, exclude_search=True
-            )
-        if work:
-            self.resolve_viaf(work)
-
-            work.calculate_presentation(
-                policy=self.policy, exclude_search=True,
-                default_fiction=None, default_audience=None,
-            )
-            work.set_presentation_ready(exclude_search=True)
-        else:
-            error_msg = "500; " + "Work could not be calculated for %r" % identifier
-            raise RuntimeError(error_msg)
+    def presentation_calculation_pre_hook(self, work):
+        """A hook method for the CalculatesWorkPresentation mixin"""
+        self.resolve_viaf(work)
 
     def resolve_viaf(self, work):
         """Get VIAF data on all contributors."""
@@ -416,8 +392,8 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
         # Give the identifier a mock LicensePool if it doesn't have one.
         self.license_pool(identifier, collection)
 
-        record = self.resolution_coverage(identifier)
-        if record and not force:
+        resolution_record = self.resolution_coverage(identifier)
+        if resolution_record and not force:
             return identifier
 
         self.log.info('Identifying required coverage for %r' % identifier)

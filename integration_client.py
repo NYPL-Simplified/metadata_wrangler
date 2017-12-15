@@ -115,7 +115,9 @@ class CalculatesWorkPresentation(object):
         pass
 
 
-class IntegrationClientCoverageProvider(CatalogCoverageProvider):
+class IntegrationClientCoverageProvider(CatalogCoverageProvider,
+    CalculatesWorkPresentation
+):
     """Mirrors and scales cover images we heard about from an IntegrationClient."""
 
     SERVICE_NAME = "Integration Client Coverage Provider"
@@ -140,4 +142,9 @@ class IntegrationClientCoverageProvider(CatalogCoverageProvider):
         replace = ReplacementPolicy(mirror=self.uploader, links=True)
         metadata = Metadata.from_edition(edition)
         metadata.apply(edition, self.collection, replace=replace)
+
+        failure = self.register_work_for_calculation(identifier)
+        if failure:
+            return failure
+
         return identifier

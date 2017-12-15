@@ -148,14 +148,26 @@ class TestCalculatesWorkPresentation(DatabaseTest):
 
 class TestIntegrationClientCoverageProvider(DatabaseTest):
 
-    def test_constructor(self):
-        """Just test that we can create the object."""
+    def setup(self):
+        super(TestIntegrationClientCoverageProvider, self).setup()
         uploader = DummyS3Uploader()
-        collection = self._collection(
+        self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         )
 
-        provider = IntegrationClientCoverageProvider(
-            uploader=uploader, collection=collection
+        self.provider = IntegrationClientCoverageProvider(
+            uploader=uploader, collection=self.collection
         )
-        eq_(collection.name, provider.data_source.name)
+
+    def test_data_source_is_collection_specific(self):
+        eq_(self.collection.name, self.provider.data_source.name)
+
+    def test_process_item_registers_work_for_calculation(self):
+        edition, lp = self._edition(with_license_pool=True)
+        identifier = edition.primary_identifier
+        self.provider.process_item(identifier)
+
+        work = identifier.work
+        [record] = [r for r in work.coverage_records if (
+                    r.operation==WorkPresentationCoverageProvider.OPERATION
+                    and r.status==CoverageRecord.REGISTERED)]
