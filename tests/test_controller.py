@@ -409,10 +409,6 @@ class TestCatalogController(ControllerTest):
         eq_(set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE]),
             set([link.rel for link in identifier.links]))
 
-        # The identifier has a LicensePool.
-        eq_(1, len(identifier.licensed_through))
-        eq_(self.collection, identifier.licensed_through[0].collection)
-
         # The identifier also has an Edition with title, author, and language.
         edition = get_one(self._db, Edition, primary_identifier=identifier)
         eq_("Mary Gray", edition.title)
@@ -423,16 +419,6 @@ class TestCatalogController(ControllerTest):
         # A DataSource was created for the collection.
         data_source = DataSource.lookup(self._db, self.collection.name)
         assert isinstance(data_source, DataSource)
-
-        # A failing import CoverageRecord was created for the identifier with
-        # this collection DataSource
-        record = CoverageRecord.lookup(
-            identifier, data_source,
-            operation=CoverageRecord.IMPORT_OPERATION,
-        )
-        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
-
-        record.status = CoverageRecord.SUCCESS
 
         # If we make the same request again, the identifier stays in the catalog.
         with self.app.test_request_context(headers=self.valid_auth, data=opds):
@@ -452,10 +438,6 @@ class TestCatalogController(ControllerTest):
         eq_(identifier.urn, self.xml_value(catalogued, 'atom:id'))
         eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
         eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
-
-        # The coverage record has been set back to transient failure since
-        # there's new information to process.
-        eq_(CoverageRecord.TRANSIENT_FAILURE, record.status)
 
         # The invalid identifier returns a 400 error message.
         with self.app.test_request_context(headers=self.valid_auth, data=invalid_opds):

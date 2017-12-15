@@ -426,23 +426,6 @@ class CatalogController(ISBNEntryMixin):
 
                 message = OPDSMessage(urn, status, description)
 
-                # Make sure there's a LicensePool for this Identifier in this
-                # Collection.
-                license_pools = [p for p in identifier.licensed_through
-                                 if collection==p.collection]
-
-                if license_pools:
-                    # A given Collection may have at most one LicensePool for
-                    # a given identifier.
-                    pool = license_pools[0]
-                else:
-                    # This Collection has no LicensePool for the given Identifier.
-                    # Create one.
-                    pool, ignore = LicensePool.for_foreign_id(
-                        self._db, data_source, identifier.type,
-                        identifier.identifier, collection=collection
-                    )
-
                 # Create an edition to hold the title and author. LicensePool.calculate_work
                 # refuses to create a Work when there's no title, and if we have a title, author
                 # and language we can attempt to look up the edition in OCLC.
@@ -472,17 +455,6 @@ class CatalogController(ISBNEntryMixin):
 
                 edition, ignore = metadata.edition(self._db)
                 metadata.apply(edition, collection, replace=replace)
-
-                # Create a transient failure CoverageRecord for this identifier
-                # so it will be processed by the IntegrationClientCoverageProvider.
-                collection_source = DataSource.lookup(
-                    self._db, collection.name, autocreate=True
-                )
-                CoverageRecord.add_for(
-                    edition, collection_source,
-                    operation=CoverageRecord.IMPORT_OPERATION,
-                    status=CoverageRecord.TRANSIENT_FAILURE,
-                )
 
             messages.append(message)
 
