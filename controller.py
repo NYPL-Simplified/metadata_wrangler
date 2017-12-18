@@ -401,60 +401,68 @@ class CatalogController(ISBNEntryMixin):
 
         feed = feedparser.parse(request.data)
         entries = feed.get("entries", [])
+        entries_by_urn = { entry.get('id') : entry for entry in entries }
 
-        for entry in entries:
-            urn = entry.get('id')
-            try:
-                identifier, ignore = Identifier.parse_urn(
-                    self._db, urn
-                )
-            except Exception as e:
-                identifier = None
+        identifiers_by_urn, invalid_urns = Identifier.parse_urns(
+            self._db, entries_by_urn.keys()
+        )
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                status = HTTP_OK
-                description = "Already in catalog"
+        messages = list()
 
-                if identifier not in collection.catalog:
-                    collection.catalog_identifier(identifier)
-                    status = HTTP_CREATED
-                    description = "Successfully added"
+        for urn in invalid_urns:
+            messages.append(OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            ))
 
-                message = OPDSMessage(urn, status, description)
 
-                # Create an edition to hold the title and author. LicensePool.calculate_work
-                # refuses to create a Work when there's no title, and if we have a title, author
-                # and language we can attempt to look up the edition in OCLC.
-                images = [l for l in entry.get("links", []) if l.get("rel") == Hyperlink.IMAGE or l.get("rel") == Hyperlink.THUMBNAIL_IMAGE]
-                links = [LinkData(image.get("rel"), image.get("href")) for image in images]
-                author = ContributorData(sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
-                                         roles=[Contributor.PRIMARY_AUTHOR_ROLE])
+        for urn, identifier in identifiers_by_urn.items():
+            entry = entries_by_urn[urn]
+            status = HTTP_OK
+            description = "Already in catalog"
 
-                presentation = PresentationCalculationPolicy(
-                    choose_edition=False,
-                    set_edition_metadata=False,
-                    classify=False,
-                    choose_summary=False,
-                    calculate_quality=False,
-                    choose_cover=False,
-                    regenerate_opds_entries=False,
-                )
-                replace = ReplacementPolicy(presentation_calculation_policy=presentation)
-                metadata = Metadata(
-                    data_source,
-                    primary_identifier=IdentifierData(identifier.type, identifier.identifier),
-                    title=entry.get("title") or "Unknown",
-                    language=entry.get("dcterms_language"),
-                    contributors=[author],
-                    links=links,
-                )
+            if identifier not in collection.catalog:
+                collection.catalog_identifier(identifier)
+                status = HTTP_CREATED
+                description = "Successfully added"
 
-                edition, ignore = metadata.edition(self._db)
-                metadata.apply(edition, collection, replace=replace)
+            message = OPDSMessage(urn, status, description)
+
+            # Get a cover if it exists.
+            image_types = set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE])
+            images = [l for l in entry.get("links", []) if l.get("rel") in image_types]
+            links = [LinkData(image.get("rel"), image.get("href")) for image in images]
+
+            # Create an edition to hold the title and author. LicensePool.calculate_work
+            # refuses to create a Work when there's no title, and if we have a title, author
+            # and language we can attempt to look up the edition in OCLC.
+            title = entry.get("title") or "Unknown Title"
+            author = ContributorData(
+                sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
+                roles=[Contributor.PRIMARY_AUTHOR_ROLE]
+            )
+            language = entry.get("dcterms_language")
+
+            presentation = PresentationCalculationPolicy(
+                choose_edition=False,
+                set_edition_metadata=False,
+                classify=False,
+                choose_summary=False,
+                calculate_quality=False,
+                choose_cover=False,
+                regenerate_opds_entries=False,
+            )
+            replace = ReplacementPolicy(presentation_calculation_policy=presentation)
+            metadata = Metadata(
+                data_source,
+                primary_identifier=IdentifierData(identifier.type, identifier.identifier),
+                title=title,
+                language=language,
+                contributors=[author],
+                links=links,
+            )
+
+            edition, ignore = metadata.edition(self._db)
+            metadata.apply(edition, collection, replace=replace)
 
             messages.append(message)
 
