@@ -20,7 +20,7 @@ class OverdriveBibliographicCoverageProvider(
     def __init__(self, collection, uploader=None, **kwargs):
         _db = Session.object_session(collection)
         self.mirror = uploader or S3Uploader.from_config(_db)
-        kwargs['preregistered_only'] = True
+        kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
             collection, **kwargs
         )

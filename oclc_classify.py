@@ -609,7 +609,7 @@ class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
     
     def __init__(self, _db, api=None, **kwargs):
         super(OCLCClassifyCoverageProvider, self).__init__(
-            _db, preregistered_only=True, **kwargs
+            _db, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)
 
