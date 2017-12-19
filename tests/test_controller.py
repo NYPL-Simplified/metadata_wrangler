@@ -53,9 +53,13 @@ from controller import (
     authenticated_client_from_request,
     collection_from_details,
 )
+from coverage import (
+    IdentifierResolutionCoverageProvider,
+    IdentifierResolutionRegistrar,
+)
+from integration_client import IntegrationClientCoverageProvider
 from problem_details import *
 
-from coverage import IdentifierResolutionRegistrar
 
 class ControllerTest(DatabaseTest):
 
@@ -535,6 +539,57 @@ class TestCatalogController(ControllerTest):
             invalid, 'invalid', 400, 'Could not parse identifier.'
         )
 
+    def test_metadata_requests_for(self):
+        # A regular schmegular identifier: untouched, pure.
+        pure_id = self._identifier()
+
+        # A 'resolved' identifier that doesn't have a work yet.
+        # (This isn't supposed to happen, but jic.)
+        resolver = IdentifierResolutionCoverageProvider
+        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
+        resolved_id = self._identifier()
+        self._coverage_record(resolved_id, source, operation=resolver.OPERATION)
+
+        # An unresolved identifier--we tried to resolve it, but
+        # it all fell apart.
+        unresolved_id = self._identifier()
+        self._coverage_record(
+            unresolved_id, source, operation=resolver.OPERATION,
+            status=CoverageRecord.TRANSIENT_FAILURE,
+        )
+
+        # An unresolved identifier that already has metadata waiting
+        # for the IntegrationClientCoverageRecord.
+        metadata_already_id = self._identifier()
+        collection_source = DataSource.lookup(
+            self._db, self.collection.name, autocreate=True
+        )
+        self._coverage_record(
+            metadata_already_id, source, operation=resolver.OPERATION,
+            status=CoverageRecord.TRANSIENT_FAILURE,
+        )
+        self._coverage_record(
+            metadata_already_id, collection_source,
+            operation=IntegrationClientCoverageProvider.OPERATION,
+            status=CoverageRecord.REGISTERED,
+        )
+
+        # An identifier with a Work already.
+        id_with_work = self._work().presentation_edition.primary_identifier
+
+        self.collection.catalog_identifiers([
+            pure_id, resolved_id, unresolved_id, id_with_work,
+            metadata_already_id,
+        ])
+
+        with self.app.test_request_context(headers=self.valid_auth):
+            response = self.controller.metadata_requests_for(self.collection.name)
+
+        m = messages = self.get_messages(response.get_data())
+
+        # Only the failing identifier that doesn't have metadata submitted yet
+        # is in the feed.
+        self.assert_message(m, unresolved_id, 422, 'Metadata needed.')
 
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"

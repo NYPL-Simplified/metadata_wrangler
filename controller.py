@@ -3,6 +3,10 @@ from datetime import datetime
 from flask import request, make_response
 from flask_babel import lazy_gettext as _
 from lxml import etree
+from sqlalchemy import (
+    and_,
+    not_,
+)
 from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
@@ -62,6 +66,7 @@ from coverage import (
     IdentifierResolutionRegistrar,
 )
 from canonicalize import AuthorNameCanonicalizer
+from integration_client import IntegrationClientCoverageProvider
 from problem_details import *
 
 HTTP_OK = 200
@@ -69,6 +74,7 @@ HTTP_CREATED = 201
 HTTP_ACCEPTED = 202
 HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
+HTTP_UNPROCESSIBLE_ENTITY = 422
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 OPDS_2_MEDIA_TYPE = 'application/opds+json'
@@ -149,6 +155,12 @@ class IndexController(object):
                 "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
                 "href": "/{collection_metadata_identifier}/remove{?data_source,urn*}",
                 "title": "Remove items from one of your tracked collections.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-metadata-requests",
+                "href": "/{collection_metadata_identifier}/metadata_requests",
+                "title": "Get items in your collection for which the metadata wrangler needs more information to process.",
                 "templated": "true"
             },
             {
@@ -492,6 +504,65 @@ class CatalogController(ISBNEntryMixin):
         )
 
         return feed_response(addition_feed)
+
+    def metadata_requests_for(self, collection_details):
+        """Returns identifiers in the collection that could benefit from
+        distributor metadata on the circulation manager.
+        """
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection = collection_from_details(
+            self._db, client, collection_details
+        )
+
+        resolver = IdentifierResolutionCoverageProvider
+        unresolved_identifiers = collection.unresolved_catalog(
+            self._db, resolver.DATA_SOURCE_NAME, resolver.OPERATION
+        )
+
+        # Omit identifiers that currently have metadata pending for
+        # the IntegrationClientCoverageProvider.
+        data_source = DataSource.lookup(
+            self._db, collection.name, autocreate=True
+        )
+        is_awaiting_metadata = self._db.query(Identifier.id)\
+            .join(Identifier.coverage_records).filter(
+                CoverageRecord.data_source_id==data_source.id,
+                CoverageRecord.status==CoverageRecord.REGISTERED,
+                CoverageRecord.operation==IntegrationClientCoverageProvider.OPERATION,
+            ).subquery()
+
+        unresolved_identifiers = unresolved_identifiers.filter(
+            not_(Identifier.id.in_(is_awaiting_metadata))
+        )
+
+        # Add a message for each unresolved identifier
+        pagination = load_pagination_from_request(default_size=25)
+        feed_identifiers = pagination.apply(unresolved_identifiers).all()
+        messages = list()
+        for identifier in feed_identifiers:
+            messages.append(OPDSMessage(
+                identifier.urn, HTTP_UNPROCESSIBLE_ENTITY, "Metadata needed."
+            ))
+
+        title = "%s Metadata Requests for %s" % (collection.protocol, client.url)
+        metadata_request_url = self.collection_feed_url(
+            'metadata_requests_for', collection
+        )
+
+        request_feed = AcquisitionFeed(
+            self._db, title, metadata_request_url, [], VerboseAnnotator,
+            precomposed_entries=messages
+        )
+
+        self.add_pagination_links_to_feed(
+            pagination, unresolved_identifiers, request_feed,
+            'metadata_requests_for', collection
+        )
+
+        return feed_response(request_feed)
 
     def remove_items(self, collection_details):
         """Removes identifiers from a Collection's catalog"""
