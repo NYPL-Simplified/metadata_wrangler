@@ -193,8 +193,37 @@ class TestCatalogController(ControllerTest):
         self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
         self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
 
-    def xml_value(self, message, tag):
-        return self.XML_PARSE(message, tag)[0].text
+    @classmethod
+    def get_root(cls, raw_feed):
+        """Returns the root tag of an OPDS or XML feed."""
+        return etree.parse(StringIO(raw_feed))
+
+    @classmethod
+    def get_messages(cls, root):
+        """Returns the OPDSMessages from a feed, given its root tag."""
+        message_path = '/atom:feed/simplified:message'
+        if isinstance(root, basestring):
+            root = cls.get_root(root)
+        return cls.XML_PARSE(root, message_path)
+
+    @classmethod
+    def xml_value(cls, message, tag):
+        return cls.XML_PARSE(message, tag)[0].text
+
+    @classmethod
+    def get_message_for(cls, identifier, messages):
+        if not isinstance(identifier, basestring):
+            identifier = identifier.urn
+        [message] = [m for m in messages
+                     if cls.xml_value(m, 'atom:id')==identifier]
+        return message
+
+    @classmethod
+    def assert_message(cls, message, identifier, status_code, description):
+        if isinstance(message, list):
+            message = cls.get_message_for(identifier, message)
+        eq_(str(status_code), cls.xml_value(message, 'simplified:status_code'))
+        eq_(description, cls.xml_value(message, 'schema:description'))
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
@@ -330,46 +359,33 @@ class TestCatalogController(ControllerTest):
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(catalogued_id)
 
-        parser = OPDSXMLParser()
-        message_path = '/atom:feed/simplified:message'
-
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
-                method='POST', headers=self.valid_auth):
-
+                method='POST', headers=self.valid_auth
+        ):
             response = self.controller.add_items(self.collection.name)
 
         # None of the identifiers raise or return an error.
         eq_(HTTP_OK, response.status_code)
 
         # It sends three messages.
-        root = etree.parse(StringIO(response.data))
-        messages = self.XML_PARSE(root, message_path)
+        m = messages = self.get_messages(response.get_data())
+        eq_(3, len(messages))
 
         # The uncatalogued identifier is now in the catalog.
         assert uncatalogued_id in self.collection.catalog
         # It has an accurate response message.
-        [uncatalogued] = [m for m in messages
-                          if self.xml_value(m, 'atom:id')==uncatalogued_id.urn]
-        eq_(uncatalogued_id.urn, self.xml_value(uncatalogued, 'atom:id'))
-        eq_('201', self.xml_value(uncatalogued, 'simplified:status_code'))
-        eq_('Successfully added', self.xml_value(uncatalogued, 'schema:description'))
+        self.assert_message(m, uncatalogued_id, 201, 'Successfully added')
 
         # The catalogued identifier is still in the catalog.
         assert catalogued_id in self.collection.catalog
         # And even though it responds 'OK', the message tells you it
         # was already there.
-        [catalogued] = [m for m in messages
-                        if self.xml_value(m, 'atom:id')==catalogued_id.urn]
-        eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
-        eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
+        self.assert_message(m, catalogued_id, 200, 'Already in catalog')
 
         # Invalid identifier return 400 errors.
-        [invalid] = [m for m in messages
-                     if self.xml_value(m, 'atom:id')==invalid_urn]
-        eq_('400', self.xml_value(invalid, 'simplified:status_code'))
-        eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
+        self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
 
     def test_add_with_metadata(self):
         # Pretend this content server OPDS came from a circulation manager.
@@ -381,26 +397,20 @@ class TestCatalogController(ControllerTest):
         # And here's some OPDS with an invalid identifier.
         invalid_opds = "<feed><entry><id>invalid</id></entry></feed>"
 
-        parser = OPDSXMLParser()
-        message_path = '/atom:feed/simplified:message'
-
         with self.app.test_request_context(headers=self.valid_auth, data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
         eq_(HTTP_OK, response.status_code)
 
         # It sends one message.
-        root = etree.parse(StringIO(response.data))
-        [catalogued] = self.XML_PARSE(root, message_path)
+        [catalogued] = self.get_messages(response.get_data())
 
         # The identifier in the OPDS feed is now in the catalog.
         identifier = self._identifier(foreign_id='20201')
         assert identifier in self.collection.catalog
 
         # It has an accurate response message.
-        eq_(identifier.urn, self.xml_value(catalogued, 'atom:id'))
-        eq_('201', self.xml_value(catalogued, 'simplified:status_code'))
-        eq_('Successfully added', self.xml_value(catalogued, 'schema:description'))
+        self.assert_message(catalogued, identifier, '201', 'Successfully added')
 
         # The identifier has links for the cover images from the feed.
         eq_(set(["http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png",
@@ -428,16 +438,14 @@ class TestCatalogController(ControllerTest):
 
         # It sends one message.
         root = etree.parse(StringIO(response.data))
-        [catalogued] = self.XML_PARSE(root, message_path)
+        [catalogued] = self.get_messages(response.get_data())
 
         # The identifier in the OPDS feed is still in the catalog.
         assert identifier in self.collection.catalog
 
         # And even though it responds 'OK', the message tells you it
         # was already there.
-        eq_(identifier.urn, self.xml_value(catalogued, 'atom:id'))
-        eq_('200', self.xml_value(catalogued, 'simplified:status_code'))
-        eq_('Already in catalog', self.xml_value(catalogued, 'schema:description'))
+        self.assert_message(catalogued, identifier, '200', 'Already in catalog')
 
         # The invalid identifier returns a 400 error message.
         with self.app.test_request_context(headers=self.valid_auth, data=invalid_opds):
@@ -445,12 +453,11 @@ class TestCatalogController(ControllerTest):
         eq_(HTTP_OK, response.status_code)
 
         # It sends one message.
-        root = etree.parse(StringIO(response.data))
-        [invalid] = self.XML_PARSE(root, message_path)
+        [invalid] = self.get_messages(response.get_data())
+        self.assert_message(
+            invalid, 'invalid', 400, 'Could not parse identifier.'
+        )
 
-        eq_("invalid", self.xml_value(invalid, 'atom:id'))
-        eq_('400', self.xml_value(invalid, 'simplified:status_code'))
-        eq_('Could not parse identifier.', self.xml_value(invalid, 'schema:description'))
 
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
@@ -458,7 +465,6 @@ class TestCatalogController(ControllerTest):
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(catalogued_id)
 
-        message_path = '/atom:feed/simplified:message'
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
                 method='POST', headers=self.valid_auth
@@ -468,21 +474,16 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, response.status_code)
 
         # It sends two <simplified:message> tags.
-        root = etree.parse(StringIO(response.data))
-        messages = self.XML_PARSE(root, message_path)
+        root = self.get_root(response.get_data())
+        m = messages = self.get_messages(root)
+        eq_(2, len(messages))
 
         # The catalogued Identifier has been removed.
         assert catalogued_id not in self.collection.catalog
-        [catalogued] = [m for m in messages
-                        if self.xml_value(m, 'atom:id')==catalogued_id.urn]
-        eq_(str(HTTP_OK), self.xml_value(catalogued, 'simplified:status_code'))
-        eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
+        self.assert_message(m, catalogued_id, 200, 'Successfully removed')
 
         assert uncatalogued_id not in self.collection.catalog
-        [uncatalogued] = [m for m in messages
-                          if self.xml_value(m, 'atom:id')==uncatalogued_id.urn]
-        eq_(str(HTTP_NOT_FOUND), self.xml_value(uncatalogued, 'simplified:status_code'))
-        eq_("Not in catalog", self.xml_value(uncatalogued, 'schema:description'))
+        self.assert_message(m, uncatalogued_id, 404, 'Not in catalog')
 
         # It sends no <entry> tags.
         eq_([], self.XML_PARSE(root, "//atom:entry"))
@@ -503,18 +504,12 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, int(response.status_code))
 
         # Once again we get two <simplified:message> tags.
-        root = etree.parse(StringIO(response.data))
-        messages = self.XML_PARSE(root, message_path)
+        root = self.get_root(response.get_data())
+        m = messages = self.get_messages(root)
+        eq_(2, len(messages))
 
-        [invalid] = [m for m in messages
-                     if self.xml_value(m, 'atom:id')==invalid_urn]
-        eq_("400", self.xml_value(invalid, 'simplified:status_code'))
-        eq_("Could not parse identifier.", self.xml_value(invalid, 'schema:description'))
-
-        [catalogued] == [m for m in messages
-                         if self.xml_value(m, 'atom:id')==catalogued_id.urn]
-        eq_("200", self.xml_value(catalogued, 'simplified:status_code'))
-        eq_("Successfully removed", self.xml_value(catalogued, 'schema:description'))
+        self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
+        self.assert_message(m, catalogued_id, 200, 'Successfully removed')
 
         # We have no <entry> tags.
         eq_([], self.XML_PARSE(root, "//atom:entry"))
