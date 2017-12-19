@@ -262,6 +262,45 @@ class CatalogController(ISBNEntryMixin):
     def __init__(self, _db):
         self._db = _db
 
+    @classmethod
+    def collection_feed_url(cls, endpoint, collection, page=None,
+        **param_kwargs
+    ):
+        kw = dict(
+            _external=True,
+            collection_metadata_identifier=collection.name
+        )
+        kw.update(param_kwargs)
+        if page:
+            kw.update(page.items())
+        return cdn_url_for(endpoint, **kw)
+
+    @classmethod
+    def add_pagination_links_to_feed(cls, pagination, query, feed, endpoint,
+        collection, **url_param_kwargs
+    ):
+        """Adds links for pagination to a given collection's feed."""
+        def href_for(page):
+            return cls.collection_feed_url(
+                endpoint, collection, page=page, **url_param_kwargs
+            )
+
+        if fast_query_count(query) > (pagination.size + pagination.offset):
+            feed.add_link_to_feed(
+                feed.feed, rel="next", href=href_for(pagination.next_page)
+            )
+
+        if pagination.offset > 0:
+            feed.add_link_to_feed(
+                feed.feed, rel="first", href=href_for(pagination.first_page)
+            )
+
+        previous_page = pagination.previous_page
+        if previous_page:
+            feed.add_link_to_feed(
+                feed.feed, rel="previous", href=href_for(previous_page)
+            )
+
     def updates_feed(self, collection_details):
         client = authenticated_client_from_request(self._db)
         if isinstance(client, ProblemDetail):
@@ -305,40 +344,21 @@ class CatalogController(ISBNEntryMixin):
                 entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
-        def update_url(time=last_update_time, page=None):
-            kw = dict(
-                _external=True,
-                collection_metadata_identifier=collection_details
-            )
-            if time:
-                kw.update({'last_update_time' : last_update_time})
-            if page:
-                kw.update(page.items())
-            return cdn_url_for("updates", **kw)
+
+        url_params = dict()
+        if last_update_time:
+            url_params = dict(last_update_time=last_update_time)
+        url = self.collection_feed_url('updates', collection, **url_params)
 
         update_feed = LookupAcquisitionFeed(
-            self._db, title, update_url(), works_for_feed, VerboseAnnotator,
+            self._db, title, url, works_for_feed, VerboseAnnotator,
             precomposed_entries=entries
         )
 
-        if fast_query_count(updated_works) > (
-                pagination.size + pagination.offset
-        ):
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="next",
-                href=update_url(page=pagination.next_page)
-            )
-        if pagination.offset > 0:
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="first",
-                href=update_url(page=pagination.first_page)
-            )
-        previous_page = pagination.previous_page
-        if previous_page:
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="previous", 
-                href=update_url(page=previous_page)
-            )
+        self.add_pagination_links_to_feed(
+            pagination, updated_works, update_feed, 'updates', collection,
+            **url_params
+        )
 
         return feed_response(update_feed)
 
@@ -373,9 +393,7 @@ class CatalogController(ISBNEntryMixin):
             messages.append(OPDSMessage(urn, status, description))
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
-        url = cdn_url_for(
-            "add", collection_metadata_identifier=collection.name, urn=urns
-        )
+        url = self.collection_feed_url('add', collection, urn=urns)
         addition_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages
@@ -467,9 +485,7 @@ class CatalogController(ISBNEntryMixin):
             messages.append(message)
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
-        url = cdn_url_for(
-            "add_with_metadata", collection_metadata_identifier=collection.name
-        )
+        url = self.collection_feed_url("add_with_metadata", collection)
         addition_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages
@@ -511,7 +527,7 @@ class CatalogController(ISBNEntryMixin):
             messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
-        url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
+        url = self.collection_feed_url("remove", collection, urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages

@@ -17,6 +17,7 @@ from . import (
     sample_data
 )
 from core.config import Configuration
+from core.lane import Pagination
 from core.model import (
     Collection,
     ConfigurationSetting,
@@ -27,8 +28,10 @@ from core.model import (
     Hyperlink,
     Identifier,
     IntegrationClient,
+    Work,
     get_one,
 )
+from core.opds import AcquisitionFeed
 from core.opds_import import OPDSXMLParser
 from core.testing import (
     DummyHTTPClient,
@@ -190,8 +193,8 @@ class TestCatalogController(ControllerTest):
             protocol=remote_collection.protocol
         )
 
-        self.work1 = self._work(with_license_pool=True, with_open_access_download=True)
-        self.work2 = self._work(with_license_pool=True, with_open_access_download=True)
+        self.work1 = self._work(with_open_access_download=True)
+        self.work2 = self._work(with_open_access_download=True)
 
     @classmethod
     def get_root(cls, raw_feed):
@@ -224,6 +227,80 @@ class TestCatalogController(ControllerTest):
             message = cls.get_message_for(identifier, message)
         eq_(str(status_code), cls.xml_value(message, 'simplified:status_code'))
         eq_(description, cls.xml_value(message, 'schema:description'))
+
+    def test_collection_feed_url(self):
+        # A basic url can be created with the collection details.
+        with self.app.test_request_context('/'):
+            result = self.controller.collection_feed_url(
+                'add', self.collection
+            )
+        assert result.endswith('/%s/add' % self.collection.name)
+
+        # A url with parameters includes them in the url.
+        with self.app.test_request_context('/'):
+            result = self.controller.collection_feed_url(
+                'add', self.collection, urn=['bananas', 'lol'],
+                last_update_time='what'
+            )
+        assert '/%s/add?' % self.collection.name in result
+        assert 'urn=bananas' in result
+        assert 'urn=lol' in result
+        assert 'last_update_time=what' in result
+
+        # If a Pagination object is provided, its details are included.
+        page = Pagination(offset=3, size=25)
+        with self.app.test_request_context('/'):
+            result = self.controller.collection_feed_url(
+                'remove', self.collection, page=page, urn='unicorn',
+            )
+        assert '/%s/remove?' % self.collection.name in result
+        assert 'urn=unicorn' in result
+        assert 'after=3' in result
+        assert 'size=25' in result
+
+    def test_add_pagination_links_to_feed(self):
+        query = self._db.query(Work).limit(2)
+        page = Pagination(offset=0, size=1)
+        feed = AcquisitionFeed(self._db, 'Hi', self._url, [])
+
+        # The first page has the 'next' link.
+        with self.app.test_request_context('/'):
+            self.controller.add_pagination_links_to_feed(
+                page, query, feed, 'add', self.collection
+            )
+
+        # The feed has the expected links.
+        links = feedparser.parse(unicode(feed)).feed.links
+        eq_(2, len(links))
+        eq_(['next', 'self'], sorted([l.rel for l in links]))
+        [next_href] = [l.href for l in links if l.rel=='next']
+        assert 'after=1' in next_href
+        assert 'size=1' in next_href
+
+        # The url is collection-specific.
+        assert self.collection.name+'/add' in next_href
+
+        # The second page has the 'previous' and 'first' links.
+        page = Pagination(offset=1, size=1)
+        feed = AcquisitionFeed(self._db, 'Hi', self._url, [])
+        with self.app.test_request_context('/'):
+            self.controller.add_pagination_links_to_feed(
+                page, query, feed, 'remove', self.collection,
+                thing='whatever'
+            )
+
+        links = feedparser.parse(unicode(feed)).feed.links
+        eq_(3, len(links))
+        eq_(['first', 'previous', 'self'], sorted([l.rel for l in links]))
+
+        [first_href] = [l.href for l in links if l.rel=='first']
+        [previous_href] = [l.href for l in links if l.rel=='previous']
+
+        for href in [first_href, previous_href]:
+            assert 'after=0' in href
+            assert 'size=1' in href
+            # The urls are collection-specific.
+            assert self.collection.name+'/remove' in href
 
     def test_updates_feed(self):
         identifier = self.work1.license_pools[0].identifier
