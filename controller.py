@@ -158,8 +158,8 @@ class IndexController(object):
                 "templated": "true"
             },
             {
-                "rel": "http://librarysimplified.org/rel/metadata/collection-metadata-requests",
-                "href": "/{collection_metadata_identifier}/metadata_requests",
+                "rel": "http://librarysimplified.org/rel/metadata/collection-metadata-needed",
+                "href": "/{collection_metadata_identifier}/metadata_needed",
                 "title": "Get items in your collection for which the metadata wrangler needs more information to process.",
                 "templated": "true"
             },
@@ -505,7 +505,7 @@ class CatalogController(ISBNEntryMixin):
 
         return feed_response(addition_feed)
 
-    def metadata_requests_for(self, collection_details):
+    def metadata_needed_for(self, collection_details):
         """Returns identifiers in the collection that could benefit from
         distributor metadata on the circulation manager.
         """
@@ -549,7 +549,7 @@ class CatalogController(ISBNEntryMixin):
 
         title = "%s Metadata Requests for %s" % (collection.protocol, client.url)
         metadata_request_url = self.collection_feed_url(
-            'metadata_requests_for', collection
+            'metadata_needed_for', collection
         )
 
         request_feed = AcquisitionFeed(
@@ -559,7 +559,7 @@ class CatalogController(ISBNEntryMixin):
 
         self.add_pagination_links_to_feed(
             pagination, unresolved_identifiers, request_feed,
-            'metadata_requests_for', collection
+            'metadata_needed_for', collection
         )
 
         return feed_response(request_feed)

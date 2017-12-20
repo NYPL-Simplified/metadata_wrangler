@@ -539,7 +539,7 @@ class TestCatalogController(ControllerTest):
             invalid, 'invalid', 400, 'Could not parse identifier.'
         )
 
-    def test_metadata_requests_for(self):
+    def test_metadata_needed_for(self):
         # A regular schmegular identifier: untouched, pure.
         pure_id = self._identifier()
 
@@ -583,7 +583,7 @@ class TestCatalogController(ControllerTest):
         ])
 
         with self.app.test_request_context(headers=self.valid_auth):
-            response = self.controller.metadata_requests_for(self.collection.name)
+            response = self.controller.metadata_needed_for(self.collection.name)
 
         m = messages = self.get_messages(response.get_data())
 
