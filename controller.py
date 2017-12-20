@@ -74,7 +74,6 @@ HTTP_CREATED = 201
 HTTP_ACCEPTED = 202
 HTTP_UNAUTHORIZED = 401
 HTTP_NOT_FOUND = 404
-HTTP_UNPROCESSIBLE_ENTITY = 422
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 OPDS_2_MEDIA_TYPE = 'application/opds+json'
@@ -544,7 +543,7 @@ class CatalogController(ISBNEntryMixin):
         messages = list()
         for identifier in feed_identifiers:
             messages.append(OPDSMessage(
-                identifier.urn, HTTP_UNPROCESSIBLE_ENTITY, "Metadata needed."
+                identifier.urn, HTTP_ACCEPTED, "Metadata needed."
             ))
 
         title = "%s Metadata Requests for %s" % (collection.protocol, client.url)

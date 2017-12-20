@@ -589,7 +589,7 @@ class TestCatalogController(ControllerTest):
 
         # Only the failing identifier that doesn't have metadata submitted yet
         # is in the feed.
-        self.assert_message(m, unresolved_id, 422, 'Metadata needed.')
+        self.assert_message(m, unresolved_id, 202, 'Metadata needed.')
 
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
