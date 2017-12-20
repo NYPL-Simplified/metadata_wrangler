@@ -526,16 +526,18 @@ class CatalogController(ISBNEntryMixin):
         data_source = DataSource.lookup(
             self._db, collection.name, autocreate=True
         )
-        is_awaiting_metadata = self._db.query(Identifier.id)\
-            .join(Identifier.coverage_records).filter(
-                CoverageRecord.data_source_id==data_source.id,
-                CoverageRecord.status==CoverageRecord.REGISTERED,
-                CoverageRecord.operation==IntegrationClientCoverageProvider.OPERATION,
-            ).subquery()
+        is_awaiting_metadata = self._db.query(
+            CoverageRecord.id, CoverageRecord.identifier_id
+        ).filter(
+            CoverageRecord.data_source_id==data_source.id,
+            CoverageRecord.status==CoverageRecord.REGISTERED,
+            CoverageRecord.operation==IntegrationClientCoverageProvider.OPERATION,
+        ).subquery()
 
-        unresolved_identifiers = unresolved_identifiers.filter(
-            not_(Identifier.id.in_(is_awaiting_metadata))
-        )
+        unresolved_identifiers = unresolved_identifiers.outerjoin(
+            is_awaiting_metadata,
+            Identifier.id==is_awaiting_metadata.c.identifier_id
+        ).filter(is_awaiting_metadata.c.id==None)
 
         # Add a message for each unresolved identifier
         pagination = load_pagination_from_request(default_size=25)
