@@ -3,6 +3,10 @@ from datetime import datetime
 from flask import request, make_response
 from flask_babel import lazy_gettext as _
 from lxml import etree
+from sqlalchemy import (
+    and_,
+    not_,
+)
 from sqlalchemy.orm import joinedload
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
@@ -62,6 +66,7 @@ from coverage import (
     IdentifierResolutionRegistrar,
 )
 from canonicalize import AuthorNameCanonicalizer
+from integration_client import IntegrationClientCoverageProvider
 from problem_details import *
 
 HTTP_OK = 200
@@ -149,6 +154,12 @@ class IndexController(object):
                 "rel": "http://librarysimplified.org/rel/metadata/collection-remove",
                 "href": "/{collection_metadata_identifier}/remove{?data_source,urn*}",
                 "title": "Remove items from one of your tracked collections.",
+                "templated": "true"
+            },
+            {
+                "rel": "http://librarysimplified.org/rel/metadata/collection-metadata-needed",
+                "href": "/{collection_metadata_identifier}/metadata_needed",
+                "title": "Get items in your collection for which the metadata wrangler needs more information to process.",
                 "templated": "true"
             },
             {
@@ -262,6 +273,45 @@ class CatalogController(ISBNEntryMixin):
     def __init__(self, _db):
         self._db = _db
 
+    @classmethod
+    def collection_feed_url(cls, endpoint, collection, page=None,
+        **param_kwargs
+    ):
+        kw = dict(
+            _external=True,
+            collection_metadata_identifier=collection.name
+        )
+        kw.update(param_kwargs)
+        if page:
+            kw.update(page.items())
+        return cdn_url_for(endpoint, **kw)
+
+    @classmethod
+    def add_pagination_links_to_feed(cls, pagination, query, feed, endpoint,
+        collection, **url_param_kwargs
+    ):
+        """Adds links for pagination to a given collection's feed."""
+        def href_for(page):
+            return cls.collection_feed_url(
+                endpoint, collection, page=page, **url_param_kwargs
+            )
+
+        if fast_query_count(query) > (pagination.size + pagination.offset):
+            feed.add_link_to_feed(
+                feed.feed, rel="next", href=href_for(pagination.next_page)
+            )
+
+        if pagination.offset > 0:
+            feed.add_link_to_feed(
+                feed.feed, rel="first", href=href_for(pagination.first_page)
+            )
+
+        previous_page = pagination.previous_page
+        if previous_page:
+            feed.add_link_to_feed(
+                feed.feed, rel="previous", href=href_for(previous_page)
+            )
+
     def updates_feed(self, collection_details):
         client = authenticated_client_from_request(self._db)
         if isinstance(client, ProblemDetail):
@@ -305,40 +355,21 @@ class CatalogController(ISBNEntryMixin):
                 entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
-        def update_url(time=last_update_time, page=None):
-            kw = dict(
-                _external=True,
-                collection_metadata_identifier=collection_details
-            )
-            if time:
-                kw.update({'last_update_time' : last_update_time})
-            if page:
-                kw.update(page.items())
-            return cdn_url_for("updates", **kw)
+
+        url_params = dict()
+        if last_update_time:
+            url_params = dict(last_update_time=last_update_time)
+        url = self.collection_feed_url('updates', collection, **url_params)
 
         update_feed = LookupAcquisitionFeed(
-            self._db, title, update_url(), works_for_feed, VerboseAnnotator,
+            self._db, title, url, works_for_feed, VerboseAnnotator,
             precomposed_entries=entries
         )
 
-        if fast_query_count(updated_works) > (
-                pagination.size + pagination.offset
-        ):
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="next",
-                href=update_url(page=pagination.next_page)
-            )
-        if pagination.offset > 0:
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="first",
-                href=update_url(page=pagination.first_page)
-            )
-        previous_page = pagination.previous_page
-        if previous_page:
-            update_feed.add_link_to_feed(
-                update_feed.feed, rel="previous", 
-                href=update_url(page=previous_page)
-            )
+        self.add_pagination_links_to_feed(
+            pagination, updated_works, update_feed, 'updates', collection,
+            **url_params
+        )
 
         return feed_response(update_feed)
 
@@ -373,9 +404,7 @@ class CatalogController(ISBNEntryMixin):
             messages.append(OPDSMessage(urn, status, description))
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
-        url = cdn_url_for(
-            "add", collection_metadata_identifier=collection.name, urn=urns
-        )
+        url = self.collection_feed_url('add', collection, urn=urns)
         addition_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages
@@ -401,73 +430,140 @@ class CatalogController(ISBNEntryMixin):
 
         feed = feedparser.parse(request.data)
         entries = feed.get("entries", [])
+        entries_by_urn = { entry.get('id') : entry for entry in entries }
 
-        for entry in entries:
-            urn = entry.get('id')
-            try:
-                identifier, ignore = Identifier.parse_urn(
-                    self._db, urn
-                )
-            except Exception as e:
-                identifier = None
+        identifiers_by_urn, invalid_urns = Identifier.parse_urns(
+            self._db, entries_by_urn.keys()
+        )
 
-            if not identifier:
-                message = OPDSMessage(
-                    urn, INVALID_URN.status_code, INVALID_URN.detail
-                )
-            else:
-                status = HTTP_OK
-                description = "Already in catalog"
+        messages = list()
 
-                if identifier not in collection.catalog:
-                    collection.catalog_identifier(identifier)
-                    status = HTTP_CREATED
-                    description = "Successfully added"
+        for urn in invalid_urns:
+            messages.append(OPDSMessage(
+                urn, INVALID_URN.status_code, INVALID_URN.detail
+            ))
 
-                message = OPDSMessage(urn, status, description)
 
-                # Create an edition to hold the title and author. LicensePool.calculate_work
-                # refuses to create a Work when there's no title, and if we have a title, author
-                # and language we can attempt to look up the edition in OCLC.
-                images = [l for l in entry.get("links", []) if l.get("rel") == Hyperlink.IMAGE or l.get("rel") == Hyperlink.THUMBNAIL_IMAGE]
-                links = [LinkData(image.get("rel"), image.get("href")) for image in images]
-                author = ContributorData(sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
-                                         roles=[Contributor.PRIMARY_AUTHOR_ROLE])
+        for urn, identifier in identifiers_by_urn.items():
+            entry = entries_by_urn[urn]
+            status = HTTP_OK
+            description = "Already in catalog"
 
-                presentation = PresentationCalculationPolicy(
-                    choose_edition=False,
-                    set_edition_metadata=False,
-                    classify=False,
-                    choose_summary=False,
-                    calculate_quality=False,
-                    choose_cover=False,
-                    regenerate_opds_entries=False,
-                )
-                replace = ReplacementPolicy(presentation_calculation_policy=presentation)
-                metadata = Metadata(
-                    data_source,
-                    primary_identifier=IdentifierData(identifier.type, identifier.identifier),
-                    title=entry.get("title") or "Unknown",
-                    language=entry.get("dcterms_language"),
-                    contributors=[author],
-                    links=links,
-                )
+            if identifier not in collection.catalog:
+                collection.catalog_identifier(identifier)
+                status = HTTP_CREATED
+                description = "Successfully added"
 
-                edition, ignore = metadata.edition(self._db)
-                metadata.apply(edition, collection, replace=replace)
+            message = OPDSMessage(urn, status, description)
+
+            # Get a cover if it exists.
+            image_types = set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE])
+            images = [l for l in entry.get("links", []) if l.get("rel") in image_types]
+            links = [LinkData(image.get("rel"), image.get("href")) for image in images]
+
+            # Create an edition to hold the title and author. LicensePool.calculate_work
+            # refuses to create a Work when there's no title, and if we have a title, author
+            # and language we can attempt to look up the edition in OCLC.
+            title = entry.get("title") or "Unknown Title"
+            author = ContributorData(
+                sort_name=(entry.get("author") or Edition.UNKNOWN_AUTHOR),
+                roles=[Contributor.PRIMARY_AUTHOR_ROLE]
+            )
+            language = entry.get("dcterms_language")
+
+            presentation = PresentationCalculationPolicy(
+                choose_edition=False,
+                set_edition_metadata=False,
+                classify=False,
+                choose_summary=False,
+                calculate_quality=False,
+                choose_cover=False,
+                regenerate_opds_entries=False,
+            )
+            replace = ReplacementPolicy(presentation_calculation_policy=presentation)
+            metadata = Metadata(
+                data_source,
+                primary_identifier=IdentifierData(identifier.type, identifier.identifier),
+                title=title,
+                language=language,
+                contributors=[author],
+                links=links,
+            )
+
+            edition, ignore = metadata.edition(self._db)
+            metadata.apply(edition, collection, replace=replace)
 
             messages.append(message)
 
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
-        url = cdn_url_for(
-            "add_with_metadata", collection_metadata_identifier=collection.name
-        )
+        url = self.collection_feed_url("add_with_metadata", collection)
         addition_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages
         )
 
         return feed_response(addition_feed)
+
+    def metadata_needed_for(self, collection_details):
+        """Returns identifiers in the collection that could benefit from
+        distributor metadata on the circulation manager.
+        """
+        client = authenticated_client_from_request(self._db)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        collection = collection_from_details(
+            self._db, client, collection_details
+        )
+
+        resolver = IdentifierResolutionCoverageProvider
+        unresolved_identifiers = collection.unresolved_catalog(
+            self._db, resolver.DATA_SOURCE_NAME, resolver.OPERATION
+        )
+
+        # Omit identifiers that currently have metadata pending for
+        # the IntegrationClientCoverageProvider.
+        data_source = DataSource.lookup(
+            self._db, collection.name, autocreate=True
+        )
+        is_awaiting_metadata = self._db.query(
+            CoverageRecord.id, CoverageRecord.identifier_id
+        ).filter(
+            CoverageRecord.data_source_id==data_source.id,
+            CoverageRecord.status==CoverageRecord.REGISTERED,
+            CoverageRecord.operation==IntegrationClientCoverageProvider.OPERATION,
+        ).subquery()
+
+        unresolved_identifiers = unresolved_identifiers.outerjoin(
+            is_awaiting_metadata,
+            Identifier.id==is_awaiting_metadata.c.identifier_id
+        ).filter(is_awaiting_metadata.c.id==None)
+
+        # Add a message for each unresolved identifier
+        pagination = load_pagination_from_request(default_size=25)
+        feed_identifiers = pagination.apply(unresolved_identifiers).all()
+        messages = list()
+        for identifier in feed_identifiers:
+            messages.append(OPDSMessage(
+                identifier.urn, HTTP_ACCEPTED, "Metadata needed."
+            ))
+
+        title = "%s Metadata Requests for %s" % (collection.protocol, client.url)
+        metadata_request_url = self.collection_feed_url(
+            'metadata_needed_for', collection
+        )
+
+        request_feed = AcquisitionFeed(
+            self._db, title, metadata_request_url, [], VerboseAnnotator,
+            precomposed_entries=messages
+        )
+
+        self.add_pagination_links_to_feed(
+            pagination, unresolved_identifiers, request_feed,
+            'metadata_needed_for', collection
+        )
+
+        return feed_response(request_feed)
 
     def remove_items(self, collection_details):
         """Removes identifiers from a Collection's catalog"""
@@ -503,7 +599,7 @@ class CatalogController(ISBNEntryMixin):
             messages.append(message)
 
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
-        url = cdn_url_for("remove", collection_metadata_identifier=collection.name, urn=urns)
+        url = self.collection_feed_url("remove", collection, urn=urns)
         removal_feed = AcquisitionFeed(
             self._db, title, url, [], VerboseAnnotator,
             precomposed_entries=messages

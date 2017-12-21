@@ -125,6 +125,14 @@ def add_with_metadata(collection_metadata_identifier):
         collection_details=collection_metadata_identifier
     )
 
+@app.route('/<collection_metadata_identifier>/metadata_needed', methods=['GET'])
+@requires_auth
+@returns_problem_detail
+def metadata_needed_for(collection_metadata_identifier):
+    return CatalogController(app._db).metadata_needed_for(
+        collection_details=collection_metadata_identifier
+    )
+
 @app.route('/<collection_metadata_identifier>/updates')
 @requires_auth
 @returns_problem_detail
