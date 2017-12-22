@@ -931,7 +931,7 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         else:
             self.viaf = VIAFClient(_db)
 
-        kwargs['preregistered_only'] = True
+        kwargs['registered_only'] = True
         super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)
             
     def process_item(self, identifier):

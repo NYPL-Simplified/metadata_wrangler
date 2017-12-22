@@ -18,6 +18,7 @@ from core.model import (
     get_one, 
     Identifier,
     LicensePool,
+    Work,
 )
 from core.opds_import import (
     MockSimplifiedOPDSLookup,
@@ -45,6 +46,7 @@ from coverage import (
 )
 from integration_client import (
     IntegrationClientCoverageProvider,
+    WorkPresentationCoverageProvider,
 )
 from oclc_classify import (
     OCLCClassifyCoverageProvider, 
@@ -78,6 +80,7 @@ class TestLookupClientCoverageProvider(DatabaseTest):
         self._default_collection.external_integration.set_setting(
             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
         )
+        self._default_collection.external_account_id = self._url
         self.provider = MockLookupClientCoverageProvider(
             self._default_collection
         )
@@ -199,6 +202,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # Create mocks for the different collections and APIs used by
         # IdentifierResolutionCoverageProvider.
+        self._default_collection.external_account_id = self._url
         overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
         overdrive_collection.name = (
             IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
@@ -352,7 +356,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         self.resolver.process_item(licensed)
         eq_([lp], licensed.licensed_through)
 
-    def test_process_item_may_create_work(self):
+    def test_process_item_uses_viaf_to_determine_author_name(self):
         self.resolver.required_coverage_providers = [
             self.always_successful
         ]
@@ -361,19 +365,26 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             identifier_id=self.identifier.identifier,
             authors=['Mindy K']
         )
-        
+        [original_contributor] = edition.contributors
+        eq_('K, Mindy', original_contributor.sort_name)
+
         self.resolver.process_item(self.identifier)
         [lp] = self.identifier.licensed_through
         eq_(True, isinstance(lp, LicensePool))
         eq_(lp.collection, self.resolver.collection)
         eq_(lp.data_source, self.resolver.data_source)
 
-        # Because this book had a presentation Edition, we were able
-        # to create a Work.
-        eq_(edition.title, lp.work.title)
+        # Because this book had a presentation edition, a work was
+        # generated.
+        work = self.identifier.work
+        assert isinstance(work, Work)
+        eq_(edition, work.presentation_edition)
+        eq_(edition.title, work.title)
 
-        # VIAF improved the name of the author.
-        eq_("Mindy Kaling", lp.work.author)
+        # VIAF updated the same contributor object with better name data.
+        eq_([original_contributor], list(edition.contributors))
+        eq_("Kaling, Mindy", original_contributor.sort_name)
+        eq_("Mindy Kaling", original_contributor.display_name)
 
     def test_run_through_relevant_providers(self):
         providers = [self.always_successful, self.never_successful]
@@ -435,20 +446,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(True, isinstance(result, CoverageFailure))
         eq_(True, result.transient)
 
-    def test_process_item_fails_when_finalize_raises_exception(self):
-        class FinalizeAlwaysFails(MockIdentifierResolutionCoverageProvider):
-            def finalize(self, unresolved_identifier):
-                raise Exception("Oh no!")
-
-        provider = FinalizeAlwaysFails(
-            self._default_collection, **self.provider_kwargs
-        )
-        result = provider.process_item(self.identifier)
-
-        eq_(True, isinstance(result, CoverageFailure))
-        assert "Oh no!" in result.exception
-        eq_(True, result.transient)
-
     def test_process_item_succeeds_when_optional_provider_fails(self):
         # Give the identifier an edition so a work can be created.
         edition = self._edition(
@@ -476,6 +473,26 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             CoverageRecord.operation==self.never_successful.OPERATION).one()
         eq_("What did you expect?", r.exception)
 
+    def test_process_item_registers_work_for_calculation(self):
+        # Give the identifier an edition so a work can be created.
+        edition = self._edition(
+            identifier_type=self.identifier.type,
+            identifier_id=self.identifier.identifier
+        )
+
+        self.resolver.required_coverage_providers = [self.always_successful]
+        result = self.resolver.process_item(self.identifier)
+
+        eq_(result, self.identifier)
+
+        # The identifier has been given a work.
+        work = self.identifier.work
+        assert isinstance(work, Work)
+
+        # The work has a WorkCoverageRecord for presentation calculation.
+        [record] = [r for r in work.coverage_records
+                    if r.operation==WorkPresentationCoverageProvider.OPERATION]
+
 
 class TestIdentifierResolutionRegistrar(DatabaseTest):
 
@@ -501,6 +518,32 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         )
         result = self.registrar.resolution_coverage(self.identifier)
         eq_(cr, result)
+
+    def test_process_item_prioritizes_collection_specific_coverage(self):
+        # The identifier has already been registered for coverage.
+        self.registrar.process_item(self.identifier)
+        original_num = len(self.identifier.coverage_records)
+
+        # Catalog the identifier in a collection eligible for collection-
+        # specific coverage.
+        c1 = self._collection(protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS)
+        c1.catalog_identifier(self.identifier)
+
+        # Reprocessing the identifier results in a new coverage record.
+        self.registrar.process_item(self.identifier)
+        expected_record_count = original_num + 1
+        eq_(expected_record_count, len(self.identifier.coverage_records))
+
+        # Even if resolution was successful, new collections result in
+        # registrations.
+        record = self.registrar.resolution_coverage(self.identifier)
+        record.status = CoverageRecord.SUCCESS
+        c2 = self._collection(protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS)
+        c2.catalog_identifier(self.identifier)
+
+        self.registrar.process_item(self.identifier)
+        expected_record_count = expected_record_count + 1
+        eq_(expected_record_count, len(self.identifier.coverage_records))
 
     def test_process_item_does_not_catalog_already_cataloged_identifier(self):
         # This identifier is already in a Collection's catalog.
@@ -580,11 +623,17 @@ class TestIdentifierResolutionRegistrar(DatabaseTest):
         self.identifier.collections.extend([opds_distrib, opds_import])
         self.registrar.process_item(self.identifier)
 
+        # A CoverageRecord is created for the OA content server.
+        [oa_content] = [cr for cr in self.identifier.coverage_records
+                        if cr.data_source.name==DataSource.OA_CONTENT_SERVER]
+        # It doesn't have a collection, even though it used a collection
+        # to provide a DataSource.
+        eq_(None, oa_content.collection)
+
+        # There should be an additional DataSource.INTERNAL_PROCESSING
+        # record for the OPDS_FOR_DISTRIBUTORS coverage.
         source_names = [cr.data_source.name
                         for cr in self.identifier.coverage_records]
-        assert DataSource.OA_CONTENT_SERVER in source_names
-        # There should now be an additional DataSource.INTERNAL_PROCESSING
-        # record for the OPDS_FOR_DISTRIBUTORS coverage.
         eq_(2, source_names.count(DataSource.INTERNAL_PROCESSING))
 
     def test_process_item_creates_an_active_license_pool(self):
