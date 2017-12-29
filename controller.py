@@ -270,6 +270,8 @@ class CatalogController(ISBNEntryMixin):
     # overall without impacting non-ISBN collections too much.
     UPDATES_SIZE = 35
 
+    TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
     def __init__(self, _db):
         self._db = _db
 
@@ -323,7 +325,15 @@ class CatalogController(ISBNEntryMixin):
 
         last_update_time = request.args.get('last_update_time', None)
         if last_update_time:
-            last_update_time = datetime.strptime(last_update_time, "%Y-%m-%dT%H:%M:%SZ")
+            try:
+                last_update_time = datetime.strptime(
+                    last_update_time, self.TIMESTAMP_FORMAT
+                )
+            except ValueError, e:
+                message = 'The timestamp "%s" is not in the expected format (%s)'
+                return INVALID_INPUT.detailed(
+                    message % (last_update_time, self.TIMESTAMP_FORMAT)
+                )
 
         pagination = load_pagination_from_request(default_size=self.UPDATES_SIZE)
 
@@ -355,10 +365,13 @@ class CatalogController(ISBNEntryMixin):
                 entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
-
         url_params = dict()
         if last_update_time:
-            url_params = dict(last_update_time=last_update_time)
+            url_params = dict(
+                last_update_time=last_update_time.strftime(
+                    self.TIMESTAMP_FORMAT
+                )
+            )
         url = self.collection_feed_url('updates', collection, **url_params)
 
         update_feed = LookupAcquisitionFeed(

@@ -326,7 +326,7 @@ class TestCatalogController(ControllerTest):
 
         # A time can be passed.
         time = datetime.utcnow()
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = time.strftime(self.controller.TIMESTAMP_FORMAT)
         for record in self.work1.coverage_records:
             # Set back the clock on all of work1's time records
             record.timestamp = time - timedelta(days=1)
@@ -339,7 +339,7 @@ class TestCatalogController(ControllerTest):
                 u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The timestamp is included in the url.
-            linkified_timestamp = time.strftime("%Y-%m-%d+%H:%M:%S").replace(":", "%3A")
+            linkified_timestamp = time.strftime(self.controller.TIMESTAMP_FORMAT).replace(":", "%3A")
             assert feed['feed']['id'].endswith(linkified_timestamp)
             # And only works updated since the timestamp are returned.
             eq_(0, len(feed['entries']))
@@ -357,7 +357,7 @@ class TestCatalogController(ControllerTest):
             eq_(identifier.urn, entry['id'])
 
         # ISBNs updated since the timestamp are also included in the feed.
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.utcnow().strftime(self.controller.TIMESTAMP_FORMAT)
         isbn = self._identifier(
             identifier_type=Identifier.ISBN, foreign_id=self._isbn
         )
@@ -433,6 +433,19 @@ class TestCatalogController(ControllerTest):
             assert any([link['rel'] == 'previous' for link in links])
             assert any([link['rel'] == 'first' for link in links])
             assert not any([link['rel'] == 'next'for link in links])
+
+    def test_updates_feed_bad_last_update_time(self):
+        """Passing in a malformed timestamp for last_update_time
+        results in a problem detail document.
+        """
+        with self.app.test_request_context(
+                '/?last_update_time=wrong format', headers=self.valid_auth
+        ):
+            response = self.controller.updates_feed(self.collection.name)
+            assert isinstance(response, ProblemDetail)
+            eq_(400, response.status_code)
+            expect_error = 'The timestamp "wrong format" is not in the expected format (%s)' % self.controller.TIMESTAMP_FORMAT
+            eq_(expect_error, response.detail)
 
     def test_add_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
