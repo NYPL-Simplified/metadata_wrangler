@@ -32,6 +32,7 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Edition,
+    ExternalIntegration,
     Hyperlink,
     Identifier,
     IntegrationClient,

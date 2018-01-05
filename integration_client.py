@@ -134,6 +134,9 @@ class IntegrationClientCoverageProvider(CatalogCoverageProvider,
 
     def __init__(self, uploader, collection, *args, **kwargs):
         self.uploader = uploader
+
+        # Only process identifiers that have been registered for coverage.
+        kwargs['registered_only'] = kwargs.get('registered_only', True)
         super(IntegrationClientCoverageProvider, self).__init__(
             collection, *args, **kwargs)
 
