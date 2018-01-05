@@ -467,7 +467,7 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
 
                     _record, newly_registered = provider.register(
                         identifier, data_source=data_source,
-                        collection=collection
+                        collection=collection, autocreate=True
                     )
             else:
                 providers.append(provider)
