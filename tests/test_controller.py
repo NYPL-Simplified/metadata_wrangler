@@ -545,37 +545,6 @@ class TestCatalogController(ControllerTest):
             invalid, 'invalid', 400, 'Could not parse identifier.'
         )
 
-    def test_add_with_metadata_only_registers_opds_for_distributors_protocol(self):
-        # Pretend this content server OPDS came from a circulation manager.
-        base_path = os.path.split(__file__)[0]
-        resource_path = os.path.join(base_path, "files", "opds")
-        path = os.path.join(resource_path, "content_server_lookup.opds")
-        opds = open(path).read()
-
-        # Give the collection a non-OPDS-IMPORT data_source.
-        self.collection.protocol = ExternalIntegration.BIBLIOTHECA
-
-        with self.app.test_request_context(headers=self.valid_auth, data=opds):
-            response = self.controller.add_with_metadata(self.collection.name)
-
-        # The identifier in the OPDS feed is now in the catalog.
-        identifier = self._identifier(foreign_id='20201')
-        assert identifier in self.collection.catalog
-
-        # It has an edition with the appropriate metadata.
-        edition = get_one(self._db, Edition, primary_identifier=identifier)
-        eq_('Mary Gray', edition.title)
-        [author] = edition.contributors
-        eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
-        eq_("eng", edition.language)
-
-        # It isn't registered for cover mirroring.
-        cover_mirror_record = [r for r in identifier.coverage_records if (
-            r.operation == CoverageRecord.IMPORT_OPERATION and
-            r.collection == self.collection
-        )]
-        eq_([], cover_mirror_record)
-
     def test_metadata_needed_for(self):
         # A regular schmegular identifier: untouched, pure.
         pure_id = self._identifier()
