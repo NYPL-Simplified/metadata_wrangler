@@ -20,7 +20,7 @@ from core.testing import AlwaysSuccessfulCoverageProvider
 
 from integration_client import (
     CalculatesWorkPresentation,
-    IntegrationClientCoverageProvider,
+    IntegrationClientCoverImageCoverageProvider,
     WorkPresentationCoverageProvider,
 )
 
@@ -146,16 +146,16 @@ class TestCalculatesWorkPresentation(DatabaseTest):
         assert "Ack!" in result.exception
 
 
-class TestIntegrationClientCoverageProvider(DatabaseTest):
+class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
 
     def setup(self):
-        super(TestIntegrationClientCoverageProvider, self).setup()
+        super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
         uploader = DummyS3Uploader()
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         )
 
-        self.provider = IntegrationClientCoverageProvider(
+        self.provider = IntegrationClientCoverImageCoverageProvider(
             uploader=uploader, collection=self.collection
         )
 

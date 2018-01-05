@@ -32,7 +32,6 @@ from core.model import (
     CoverageRecord,
     DataSource,
     Edition,
-    ExternalIntegration,
     Hyperlink,
     Identifier,
     IntegrationClient,
@@ -67,7 +66,7 @@ from coverage import (
     IdentifierResolutionRegistrar,
 )
 from canonicalize import AuthorNameCanonicalizer
-from integration_client import IntegrationClientCoverageProvider
+from integration_client import IntegrationClientCoverImageCoverageProvider
 from problem_details import *
 
 HTTP_OK = 200
@@ -523,7 +522,7 @@ class CatalogController(ISBNEntryMixin):
         )
 
         # Omit identifiers that currently have metadata pending for
-        # the IntegrationClientCoverageProvider.
+        # the IntegrationClientCoverImageCoverageProvider.
         data_source = DataSource.lookup(
             self._db, collection.name, autocreate=True
         )
@@ -532,7 +531,7 @@ class CatalogController(ISBNEntryMixin):
         ).filter(
             CoverageRecord.data_source_id==data_source.id,
             CoverageRecord.status==CoverageRecord.REGISTERED,
-            CoverageRecord.operation==IntegrationClientCoverageProvider.OPERATION,
+            CoverageRecord.operation==IntegrationClientCoverImageCoverageProvider.OPERATION,
         ).subquery()
 
         unresolved_identifiers = unresolved_identifiers.outerjoin(

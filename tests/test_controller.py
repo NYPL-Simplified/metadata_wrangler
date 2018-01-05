@@ -57,7 +57,7 @@ from coverage import (
     IdentifierResolutionCoverageProvider,
     IdentifierResolutionRegistrar,
 )
-from integration_client import IntegrationClientCoverageProvider
+from integration_client import IntegrationClientCoverImageCoverageProvider
 from problem_details import *
 
 
@@ -607,7 +607,7 @@ class TestCatalogController(ControllerTest):
         )
         self._coverage_record(
             metadata_already_id, collection_source,
-            operation=IntegrationClientCoverageProvider.OPERATION,
+            operation=IntegrationClientCoverImageCoverageProvider.OPERATION,
             status=CoverageRecord.REGISTERED,
         )
 

@@ -120,7 +120,7 @@ class CalculatesWorkPresentation(object):
         pass
 
 
-class IntegrationClientCoverageProvider(CatalogCoverageProvider,
+class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
     CalculatesWorkPresentation
 ):
     """Mirrors and scales cover images we heard about from an IntegrationClient."""
@@ -137,8 +137,9 @@ class IntegrationClientCoverageProvider(CatalogCoverageProvider,
 
         # Only process identifiers that have been registered for coverage.
         kwargs['registered_only'] = kwargs.get('registered_only', True)
-        super(IntegrationClientCoverageProvider, self).__init__(
-            collection, *args, **kwargs)
+        super(IntegrationClientCoverImageCoverageProvider, self).__init__(
+            collection, *args, **kwargs
+        )
 
     @property
     def data_source(self):

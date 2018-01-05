@@ -62,7 +62,7 @@ from viaf import (
 )
 from integration_client import (
     CalculatesWorkPresentation,
-    IntegrationClientCoverageProvider,
+    IntegrationClientCoverImageCoverageProvider,
 )
 
 
@@ -226,7 +226,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         # mirrored.
         if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
             required.append(
-                IntegrationClientCoverageProvider(
+                IntegrationClientCoverImageCoverageProvider(
                     self.uploader, self.collection
                 )
             )
@@ -359,7 +359,7 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
     ]
 
     COLLECTION_PROVIDERS = [
-        IntegrationClientCoverageProvider,
+        IntegrationClientCoverImageCoverageProvider,
         LookupClientCoverageProvider,
     ]
 
