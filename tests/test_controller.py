@@ -57,7 +57,7 @@ from coverage import (
     IdentifierResolutionCoverageProvider,
     IdentifierResolutionRegistrar,
 )
-from integration_client import IntegrationClientCoverageProvider
+from integration_client import IntegrationClientCoverImageCoverageProvider
 from problem_details import *
 
 
@@ -190,7 +190,9 @@ class TestCatalogController(ControllerTest):
         self.http = DummyHTTPClient()
 
         # The collection as it exists on the circulation manager.
-        remote_collection = self._collection(username='test_coll', external_account_id=self._url)
+        remote_collection = self._collection(
+            username='test_coll', external_account_id=self._url,
+        )
         # The collection as it is recorded / catalogued here.
         self.collection = self._collection(
             name=remote_collection.metadata_identifier,
@@ -488,6 +490,10 @@ class TestCatalogController(ControllerTest):
         path = os.path.join(resource_path, "content_server_lookup.opds")
         opds = open(path).read()
 
+        # Give the collection an OPDS_FOR_DISTRIBUTORS protocol to test
+        # registration for cover mirroring.
+        self.collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+
         # And here's some OPDS with an invalid identifier.
         invalid_opds = "<feed><entry><id>invalid</id></entry></feed>"
 
@@ -583,7 +589,7 @@ class TestCatalogController(ControllerTest):
         )
         self._coverage_record(
             metadata_already_id, collection_source,
-            operation=IntegrationClientCoverageProvider.OPERATION,
+            operation=IntegrationClientCoverImageCoverageProvider.OPERATION,
             status=CoverageRecord.REGISTERED,
         )
 

@@ -62,7 +62,7 @@ from viaf import (
 )
 from integration_client import (
     CalculatesWorkPresentation,
-    IntegrationClientCoverageProvider,
+    IntegrationClientCoverImageCoverageProvider,
 )
 
 
@@ -226,7 +226,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         # mirrored.
         if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
             required.append(
-                IntegrationClientCoverageProvider(
+                IntegrationClientCoverImageCoverageProvider(
                     self.uploader, self.collection
                 )
             )
@@ -359,7 +359,7 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
     ]
 
     COLLECTION_PROVIDERS = [
-        IntegrationClientCoverageProvider,
+        IntegrationClientCoverImageCoverageProvider,
         LookupClientCoverageProvider,
     ]
 
@@ -449,17 +449,25 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
             covered_collections = filter(
                 lambda c: c.protocol==provider.PROTOCOL, identifier.collections
             )
+
             if not covered_collections:
                 continue
 
-            if (provider==LookupClientCoverageProvider or
+            is_lookup_client_provider = provider==LookupClientCoverageProvider
+            if (is_lookup_client_provider or
                 not provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION
             ):
-                # The LookupClientCoverageProvider doesn't have an obvious
-                # data source. It uses the collection's data source instead.
                 for collection in covered_collections:
+                    data_source = None
+                    if is_lookup_client_provider:
+                        # The LookupClientCoverageProvider doesn't have an
+                        # obvious data source. It uses the collection's data.
+                        # source instead.
+                        data_source = collection.data_source
+
                     _record, newly_registered = provider.register(
-                        identifier, collection=collection
+                        identifier, data_source=data_source,
+                        collection=collection, autocreate=True
                     )
             else:
                 providers.append(provider)

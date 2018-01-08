@@ -45,7 +45,7 @@ from coverage import (
     IdentifierResolutionRegistrar,
 )
 from integration_client import (
-    IntegrationClientCoverageProvider,
+    IntegrationClientCoverImageCoverageProvider,
     WorkPresentationCoverageProvider,
 )
 from oclc_classify import (
@@ -331,7 +331,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         [integration_client], [content_cafe, oclc_classify] = resolver.providers()
         assert isinstance(content_cafe, ContentCafeCoverageProvider)
         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
-        assert isinstance(integration_client, IntegrationClientCoverageProvider)
+        assert isinstance(integration_client, IntegrationClientCoverImageCoverageProvider)
 
     def test_process_item_creates_license_pool(self):
         self.resolver.required_coverage_providers = [
