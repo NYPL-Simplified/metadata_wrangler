@@ -455,6 +455,8 @@ class TestCatalogController(ControllerTest):
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(catalogued_id)
 
+        other_collection = self._collection()
+
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
@@ -479,6 +481,9 @@ class TestCatalogController(ControllerTest):
         # And even though it responds 'OK', the message tells you it
         # was already there.
         self.assert_message(m, catalogued_id, 200, 'Already in catalog')
+
+        # The other catalog is not affected.
+        eq_([], other_collection.catalog)
 
         # Invalid identifier return 400 errors.
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
@@ -620,6 +625,7 @@ class TestCatalogController(ControllerTest):
 
         other_collection = self._collection()
         other_collection.catalog_identifier(catalogued_id)
+        other_collection.catalog_identifier(uncatalogued_id)
 
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
@@ -655,6 +661,7 @@ class TestCatalogController(ControllerTest):
 
         # The other catalog was not affected.
         assert catalogued_id in other_collection.catalog
+        assert uncatalogued_id in other_collection.catalog
 
         # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(catalogued_id)
