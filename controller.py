@@ -666,8 +666,8 @@ class CatalogController(ISBNEntryMixin):
         # Extract the identifier IDs from the dictionary.
         identifier_ids = [x.id for x in identifiers_by_urn.values()]
 
-        # Find the subset of identifiers that are in the catalog, so
-        # we know to give them a 200 message after deletion.
+        # Find the IDs for the subset of identifiers that are in the
+        # catalog.
         table = collections_identifiers.c
         identifier_match_clause = and_(
             table.identifier_id.in_(identifier_ids),
