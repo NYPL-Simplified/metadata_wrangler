@@ -618,6 +618,9 @@ class TestCatalogController(ControllerTest):
         self.collection.catalog_identifier(catalogued_id)
         self.collection.catalog_identifier(unaffected_id)
 
+        other_collection = self._collection()
+        other_collection.catalog_identifier(catalogued_id)
+
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
                 method='POST', headers=self.valid_auth
@@ -649,6 +652,9 @@ class TestCatalogController(ControllerTest):
 
         # The catalog's other contents are not affected.
         assert unaffected_id in self.collection.catalog
+
+        # The other catalog was not affected.
+        assert catalogued_id in other_collection.catalog
 
         # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(catalogued_id)

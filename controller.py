@@ -8,6 +8,7 @@ from sqlalchemy import (
     not_,
 )
 from sqlalchemy.orm import joinedload
+from sqlalchemy.sql.expression import and_
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import base64
@@ -406,12 +407,24 @@ class CatalogController(ISBNEntryMixin):
             )
             messages.append(message)
 
-        for urn, identifier in identifiers_by_urn.items():
-            status = HTTP_OK
-            description = "Already in catalog"
+        # Find the subset of incoming identifiers that are already
+        # in the catalog.
+        already_in_catalog, ignore = self._in_catalog_subset(
+            collection, identifiers_by_urn
+        )
 
-            if identifier not in collection.catalog:
-                collection.catalog_identifier(identifier)
+        # Everything else needs to be added to the catalog.
+        needs_to_be_added = [
+            x for x in identifiers_by_urn.values()
+            if x not in already_in_catalog
+        ]
+        collection.catalog_identifiers(needs_to_be_added)
+
+        for urn, identifier in identifiers_by_urn.items():
+            if identifier.id in already_in_catalog:
+                status = HTTP_OK
+                description = "Already in catalog"
+            else:
                 status = HTTP_CREATED
                 description = "Successfully added"
 
@@ -599,17 +612,11 @@ class CatalogController(ISBNEntryMixin):
             )
             messages.append(message)
 
-        identifier_ids = [x.id for x in identifiers_by_urn.values()]
-        identifier_match_clause = collections_identifiers.c.identifier_id.in_(
-            identifier_ids
-        )
-
         # Find the subset of identifiers that are in the catalog, so
         # we know to give them a 200 message after deletion.
-        qu = self._db.query(collections_identifiers).filter(
-            identifier_match_clause
+        matching_ids, identifier_match_clause = self._in_catalog_subset(
+            collection, identifiers_by_urn
         )
-        matching_ids = [x[1] for x in qu]
 
         # Then delete all of the relevant catalog entries.
         delete_stmt = collections_identifiers.delete().where(
@@ -637,6 +644,37 @@ class CatalogController(ISBNEntryMixin):
         )
 
         return feed_response(removal_feed)
+
+    def _in_catalog_subset(self, collection, identifiers_by_urn):
+        """Helper method to find a subset of identifiers that
+        are already in a catalog.
+
+        :param collection: The collection whose catalog we're checking.
+
+        :param identifiers_by_urn: A dictionary mapping URNs to identifiers,
+        like the one returned by Identifier.parse_urns.
+
+        :return: a 2-tuple (in_catalog_ids,
+        match_clause). `in_catalog_ids` is a set of Identifier IDs
+        representing the subset of identifiers currently in the
+        catalog. `match_clause` is the SQLAlchemy clause that was used
+        to look up the matching subset.
+        """
+        # Extract the identifier IDs from the dictionary.
+        identifier_ids = [x.id for x in identifiers_by_urn.values()]
+
+        # Find the subset of identifiers that are in the catalog, so
+        # we know to give them a 200 message after deletion.
+        table = collections_identifiers.c
+        identifier_match_clause = and_(
+            table.identifier_id.in_(identifier_ids),
+            table.collection_id == collection.id
+        )
+        qu = self._db.query(collections_identifiers).filter(
+            identifier_match_clause
+        )
+        matching_ids = [x[1] for x in qu]
+        return matching_ids, identifier_match_clause
 
     def register(self, do_get=HTTP.get_with_timeout):
         public_key_url = request.form.get('url')
