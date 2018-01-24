@@ -27,6 +27,7 @@ from core.app_server import (
 from core.config import Configuration
 from core.model import (
     Collection,
+    collections_identifiers,
     ConfigurationSetting,
     Contributor,
     CoverageRecord,
@@ -598,16 +599,33 @@ class CatalogController(ISBNEntryMixin):
             )
             messages.append(message)
 
-        for urn, identifier in identifiers_by_urn.items():
-            message = None
-            status = HTTP_NOT_FOUND
-            description = "Not in catalog"
+        identifier_ids = [x.id for x in identifiers_by_urn.values()]
+        identifier_match_clause = collections_identifiers.c.identifier_id.in_(
+            identifier_ids
+        )
 
-            if identifier in collection.catalog:
-                collection.catalog.remove(identifier)
+        # Find the subset of identifiers that are in the catalog, so
+        # we know to give them a 200 message after deletion.
+        qu = self._db.query(collections_identifiers).filter(
+            identifier_match_clause
+        )
+        matching_ids = [x[1] for x in qu]
+
+        # Then delete all of the relevant catalog entries.
+        delete_stmt = collections_identifiers.delete().where(
+            identifier_match_clause
+        )
+        self._db.execute(delete_stmt)
+
+        # IDs that matched get a 200 message; all others get a 404
+        # message.
+        for urn, identifier in identifiers_by_urn.items():
+            if identifier.id in matching_ids:
                 status = HTTP_OK
                 description = "Successfully removed"
-
+            else:
+                status = HTTP_NOT_FOUND
+                description = "Not in catalog"
             message = OPDSMessage(urn, status, description)
             messages.append(message)
 

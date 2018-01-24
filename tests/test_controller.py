@@ -613,8 +613,10 @@ class TestCatalogController(ControllerTest):
     def test_remove_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
+        unaffected_id = self._identifier()
         uncatalogued_id = self._identifier()
         self.collection.catalog_identifier(catalogued_id)
+        self.collection.catalog_identifier(unaffected_id)
 
         with self.app.test_request_context(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
@@ -644,6 +646,9 @@ class TestCatalogController(ControllerTest):
         # But it's still in the database.
         eq_(catalogued_id, self._db.query(Identifier).filter_by(
             id=catalogued_id.id).one())
+
+        # The catalog's other contents are not affected.
+        assert unaffected_id in self.collection.catalog
 
         # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(catalogued_id)
