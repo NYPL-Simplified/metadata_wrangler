@@ -416,7 +416,7 @@ class CatalogController(ISBNEntryMixin):
         # Everything else needs to be added to the catalog.
         needs_to_be_added = [
             x for x in identifiers_by_urn.values()
-            if x not in already_in_catalog
+            if x.id not in already_in_catalog
         ]
         collection.catalog_identifiers(needs_to_be_added)
 
@@ -612,13 +612,16 @@ class CatalogController(ISBNEntryMixin):
             )
             messages.append(message)
 
-        # Find the subset of identifiers that are in the catalog, so
-        # we know to give them a 200 message after deletion.
+        # Find the IDs of the subset of provided identifiers that are
+        # in the catalog, so we know which ones to delete and give a
+        # 200 message. Also get a SQLAlchemy clause that selects only
+        # those IDs.
         matching_ids, identifier_match_clause = self._in_catalog_subset(
             collection, identifiers_by_urn
         )
 
-        # Then delete all of the relevant catalog entries.
+        # Use that clause to delete all of the relevant catalog
+        # entries.
         delete_stmt = collections_identifiers.delete().where(
             identifier_match_clause
         )
