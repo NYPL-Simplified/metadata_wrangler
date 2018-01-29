@@ -15,7 +15,7 @@ from core.model import (
     Resource,
     Representation,
 )
-from core.s3 import S3Uploader
+from core.util.mirror import MirrorUploader
 
 
 class CoverImageMirror(object):
@@ -29,7 +29,7 @@ class CoverImageMirror(object):
     def __init__(self, db, uploader=None):
         self._db = db
         self.data_source = DataSource.lookup(self._db, self.DATA_SOURCE)
-        self.uploader = uploader or S3Uploader.from_config(self._db)
+        self.uploader = uploader or MirrorUploader.sitewide(self._db)
         self.log = logging.getLogger("Cover Image Mirror")
 
     def run(self):
@@ -123,7 +123,7 @@ class ImageScaler(object):
     def __init__(self, db, mirrors, uploader=None):
         self._db = db
         self.data_source_ids = []
-        self.uploader = uploader or S3Uploader.from_config(self._db)
+        self.uploader = uploader or MirrorUploader.sitewide(self._db)
         self.log = logging.getLogger("Cover Image Scaler")
 
         for mirror in mirrors:

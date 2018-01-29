@@ -7,7 +7,7 @@ from core.metadata_layer import ReplacementPolicy
 from core.overdrive import (
     OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider
 )
-from core.s3 import S3Uploader
+from core.util.mirror import MirrorUploader
 
 from mirror import CoverImageMirror
 
@@ -19,7 +19,10 @@ class OverdriveBibliographicCoverageProvider(
 
     def __init__(self, collection, uploader=None, **kwargs):
         _db = Session.object_session(collection)
-        self.mirror = uploader or S3Uploader.from_config(_db)
+        # As the metadata wrangler, we will be mirroring these to the
+        # sitewide mirror rather than to a mirror associated
+        # with a specific collection.
+        self.mirror = uploader or MirrorUploader.sitewide(collection)
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
             collection, **kwargs

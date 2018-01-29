@@ -28,9 +28,7 @@ from core.model import (
 
 from core.overdrive import OverdriveAPI
 
-from core.s3 import (
-    S3Uploader, 
-)
+from core.util.mirror import MirrorUploader
 
 from core.util import fast_query_count
 
@@ -109,8 +107,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
-        if not uploader:
-            uploader = S3Uploader.from_config(self._db)
+        uploader = uploader or MirrorUploader.sitewide(self._db)
         self.uploader = uploader
 
         # We're going to be aggressive about recalculating the presentation

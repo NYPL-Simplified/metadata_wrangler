@@ -28,7 +28,7 @@ from core.overdrive import (
     MockOverdriveAPI,
     OverdriveBibliographicCoverageProvider,
 )
-from core.s3 import DummyS3Uploader
+from core.s3 import MockS3Uploader
 from core.testing import (
     AlwaysSuccessfulCoverageProvider,
     NeverSuccessfulCoverageProvider,
@@ -208,7 +208,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             IdentifierResolutionCoverageProvider.DEFAULT_OVERDRIVE_COLLECTION_NAME
         )
         self.viaf = MockVIAFClient(self._db)
-        self.uploader = DummyS3Uploader()
+        self.uploader = MockS3Uploader()
         self.mock_content_cafe = ContentCafeAPI(
             self._db, None, object(), object(), self.uploader
         )
