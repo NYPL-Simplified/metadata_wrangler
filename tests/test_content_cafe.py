@@ -7,7 +7,7 @@ from nose.tools import (
 from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
 from core.model import ExternalIntegration
-from core.s3 import DummyS3Uploader
+from core.s3 import MockS3Uploader
 
 from . import (
     DatabaseTest,
@@ -52,7 +52,7 @@ class TestContentCafeAPI(DatabaseTest):
 
         integration.username = u'yup'
         result = ContentCafeAPI.from_config(
-            self._db, None, uploader=DummyS3Uploader(),
+            self._db, None, uploader=MockS3Uploader(),
             soap_client=DummyContentCafeSOAPClient()
         )
         eq_(True, isinstance(result, ContentCafeAPI))
@@ -62,7 +62,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
     def test_constructor(self):
         """Just test that we can create the object."""
-        uploader=DummyS3Uploader()
+        uploader=MockS3Uploader()
         soap_client = DummyContentCafeSOAPClient()
         api = ContentCafeAPI(self._db, None, "user_id", "password", 
                              uploader, soap_client=soap_client)
@@ -78,7 +78,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
                 raise Exception("Oh no!")
 
         provider = ContentCafeCoverageProvider(
-            self._db, api=AlwaysFailsContentCafe(), uploader=DummyS3Uploader()
+            self._db, api=AlwaysFailsContentCafe(), uploader=MockS3Uploader()
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)

@@ -3,7 +3,7 @@ from nose.tools import (
     eq_,
     set_trace,
 )
-from core.s3 import DummyS3Uploader
+from core.s3 import MockS3Uploader
 from core.testing import (
     DatabaseTest,
     DummyHTTPClient,
@@ -23,7 +23,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
 
     def test_replacement_policy_uses_provided_mirror(self):
         collection = MockOverdriveAPI.mock_collection(self._db)
-        mirror = DummyS3Uploader()
+        mirror = MockS3Uploader()
         provider = OverdriveBibliographicCoverageProvider(
                 collection, uploader=mirror, api_class=MockOverdriveAPI
         )

@@ -15,7 +15,7 @@ from core.model import (
     PresentationCalculationPolicy,
     Work,
 )
-from core.s3 import DummyS3Uploader
+from core.s3 import MockS3Uploader
 from core.testing import AlwaysSuccessfulCoverageProvider
 
 from integration_client import (
@@ -150,7 +150,7 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
-        uploader = DummyS3Uploader()
+        uploader = MockS3Uploader()
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         )
