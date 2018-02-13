@@ -153,23 +153,19 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         )
 
     @classmethod
-    def all(cls, _db, **kwargs):
-        """Yield a sequence of IdentifierResolutionCoverageProvider instances,
-        one for every collection.
-
-        The 'unaffiliated' collection is always last in the list.
+    def collections(cls, _db):
+        """Return a list of covered collections. The 'unaffiliated' collection
+        is always last in the list.
         """
         unaffiliated, ignore = cls.unaffiliated_collection(_db)
-        instances = list(super(IdentifierResolutionCoverageProvider, cls).all(
-            _db, **kwargs
-        ))
-        collections = [x.collection for x in instances]
-        if unaffiliated in collections:
-            i = collections.index(unaffiliated)
-            unaffiliated_instance = instances[i]
-            instances.remove(unaffiliated_instance)
-            instances.append(unaffiliated_instance)
-        return instances
+        collections = super(cls, cls).collections(_db)
+
+        if unaffiliated in collections[:]:
+            # Always put the unaffiliated collection last.
+            collections.remove(unaffiliated)
+            collections.append(unaffiliated)
+
+        return collections
 
     def providers(self):
         """Instantiate required and optional CoverageProviders.
