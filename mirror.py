@@ -15,7 +15,7 @@ from core.model import (
     Resource,
     Representation,
 )
-from core.util.mirror import MirrorUploader
+from core.mirror import MirrorUploader
 
 
 class CoverImageMirror(object):

@@ -28,7 +28,7 @@ from core.model import (
 
 from core.overdrive import OverdriveAPI
 
-from core.util.mirror import MirrorUploader
+from core.mirror import MirrorUploader
 
 from core.util import fast_query_count
 
