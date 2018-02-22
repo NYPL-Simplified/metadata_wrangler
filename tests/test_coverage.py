@@ -261,6 +261,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             self._db, uploader=self.uploader, 
             content_cafe_api=self.mock_content_cafe,
         )
+        providers = list(providers)
         eq_(6, len(providers))
         eq_(unaffiliated, providers[-1].collection)
 
