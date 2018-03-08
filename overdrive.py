@@ -7,7 +7,7 @@ from core.metadata_layer import ReplacementPolicy
 from core.overdrive import (
     OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider
 )
-from core.util.mirror import MirrorUploader
+from core.mirror import MirrorUploader
 
 from mirror import CoverImageMirror
 
