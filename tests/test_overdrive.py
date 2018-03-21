@@ -64,7 +64,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
 
         # The URLs for the Resource objects are our S3 URLs, not Overdrive's
         # URLs.
-        expect = "Overdrive/Overdrive%%20ID/%s" % identifier.identifier
+        expect = "Overdrive/Overdrive+ID/%s" % identifier.identifier
         for url in [full.mirror_url, thumbnail.mirror_url]:
             assert expect in url
         assert "/scaled/" in thumbnail.mirror_url
