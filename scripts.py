@@ -23,10 +23,12 @@ from core.model import (
     Equivalency,
     Identifier,
     IntegrationClient,
+    Timestamp,
 )
 
 from core.scripts import (
     CheckContributorNamesInDB, 
+    DatabaseMigrationInitializationScript,
     Explain,
     IdentifierInputScript,
     WorkProcessingScript,
@@ -43,7 +45,6 @@ from oclc_classify import OCLCClassifyCoverageProvider
 from viaf import VIAFClient
 
 
-
 class FillInVIAFAuthorNames(Script):
 
     """Normalize author names using data from VIAF."""
@@ -54,7 +55,6 @@ class FillInVIAFAuthorNames(Script):
     def run(self):
         """Fill in all author names with information from VIAF."""
         VIAFClient(self._db).run(self.force)
-
 
 
 class CheckContributorTitles(Script):
@@ -104,7 +104,6 @@ class CheckContributorTitles(Script):
         if contributor_titles:
             output = "%s|\t%s|\t%r" % (contributor.id, contributor.sort_name, contributor_titles)
             print output.encode("utf8")
-
 
 
 class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
@@ -362,7 +361,6 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         for complaint in complaints:
             # say that we fixed it
             complaint.resolved = datetime.datetime.utcnow()
-
 
 
 class CoverImageMirrorScript(Script):
@@ -630,6 +628,18 @@ class RedoOCLCForThreeMScript(Script):
         for contribution in oclc_contributions:
             for edition in identifier.primarily_identifies:
                 edition.add_contributor(contribution.contributor, contribution.role)
+
+
+class InstanceInitializationScript(DatabaseMigrationInitializationScript):
+
+    """Initializes the database idempotently without raising an error.
+    Intended for use with docker and SIMPLIFIED_DB_TASK=auto.
+    """
+
+    def run(self, cmd_args=None):
+        existing_timestamp = get_one(self._db, Timestamp, service=self.name)
+        if not existing_timestamp:
+            super(InstanceInitializationScript, self).run(cmd_args=cmd_args)
 
 
 class IntegrationClientGeneratorScript(Script):
