@@ -1,11 +1,11 @@
-# /etc/cron.d/circulation: Library Simplified Circulation Manager crontab
+# /etc/cron.d/metadata: Library Simplified Metadata Wrangler crontab
 # You don't have to run the `crontab' command to install the new
 # version when you edit this file in /etc/cron.d. Files in this directory
 # also have username fields, similar to the systemwide /etc/crontab.
 
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-HOME=/var/www/circulation
+HOME=/var/www/metadata
 
 # m h dom mon dow user command
 

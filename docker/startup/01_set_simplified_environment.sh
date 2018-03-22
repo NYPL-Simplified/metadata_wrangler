@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stores Circulation Manager environment variables in the virtualenv environment.
+# Stores Metadata Wrangler environment variables in the virtualenv environment.
 # Local environment variables are not passed into cron, so variables set at
 # runtime need to be stored.
 

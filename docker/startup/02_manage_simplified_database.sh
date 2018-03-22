@@ -1,5 +1,5 @@
 #!/bin/bash
-# Manages the Circulation Manager database (either initializing it, migrating
+# Manages the Metadata Wrangler database (either initializing it, migrating
 # it, or ignoring it) when the container starts and before the app launches.
 
 set -ex
