@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+source ~/metadata/env/bin/activate && uwsgi --ini ~/metadata/uwsgi.ini

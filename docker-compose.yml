@@ -1,0 +1,43 @@
+version: '3.6'
+services:
+  db:
+    image: "postgres:9.5"
+    environment:
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_USER: "simplified"
+      POSTGRES_DB: "simplified_metadata_dev"
+    volumes:
+      - "dbdata:/var/lib/postgresql/data"
+
+  webapp:
+    build:
+      context: docker/
+      dockerfile: Dockerfile.webapp
+      args:
+        - version
+    environment:
+      SIMPLIFIED_PRODUCTION_DATABASE: postgres://simplified:password@db:5432/simplified_metadata_dev
+    ports:
+      - 80:80
+    depends_on:
+      - db
+    volumes:
+      - "uwsgi_log:/var/log/uwsgi"
+
+  scripts:
+    build:
+      context: docker/
+      dockerfile: Dockerfile.scripts
+      args:
+        - version
+    environment:
+      SIMPLIFIED_PRODUCTION_DATABASE: postgres://simplified:password@db:5432/simplified_metadata_dev
+    depends_on:
+      - db
+    volumes:
+      - "script_logs:/var/log/simplified"
+
+volumes:
+  dbdata:
+  uwsgi_log:
+  script_logs:
