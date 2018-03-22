@@ -1,0 +1,27 @@
+# /etc/cron.d/circulation: Library Simplified Circulation Manager crontab
+# You don't have to run the `crontab' command to install the new
+# version when you edit this file in /etc/cron.d. Files in this directory
+# also have username fields, similar to the systemwide /etc/crontab.
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+HOME=/var/www/circulation
+
+# m h dom mon dow user command
+
+# Register identifiers to for coverage from all third-party sources.
+*/30 * * * * root core/bin/run register_identifiers >> /var/log/cron.log 2>&1
+
+# Confirm complete overall coverage and generate Works.
+8 * * * * root core/bin/run identifiers_resolve >> /var/log/cron.log 2>&1
+
+# Coverage from third-party data sources
+#
+51 */2 * * * root core/bin/run content_cafe_coverage >> /var/log/cron.log 2>&1
+23 */6 * * * root core/bin/run integration_client_coverage >> /var/log/cron.log 
+0 */3 * * * root core/bin/run oclc_classify_coverage >> /var/log/cron.log 2>&1
+12 */2 * * * root core/bin/run oclc_linked_data_coverage >> /var/log/cron.log 2>&1
+31 */6 * * * root core/bin/run opds_import_coverage >> /var/log/cron.log 2>&1
+42 */4 * * * root core/bin/run overdrive_bibliographic_coverage >> /var/log/cron.log 2>&1
+0 0 * * * root core/bin/run subjects_assign >> /var/log/cron.log 2>&1
+45 */12 * * * root core/bin/run work_presentation_coverage >> /var/log/cron.log 2>&1
