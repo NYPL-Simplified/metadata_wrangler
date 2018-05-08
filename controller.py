@@ -784,7 +784,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
     @property
     def default_collection(self):
-        if not self._default_collection_id:
+        if getattr(self, '_default_collection_id', None) is None:
             default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
             self._default_collection_id = default_collection.id
         return get_one(self._db, Collection, id=self._default_collection_id)
@@ -829,11 +829,15 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
     def process_urns(self, urns, collection_details=None, **kwargs):
         """Processes URNs submitted via lookup request
 
+        An authenticated request can process up to 50 URNs at once,
+        but must specify a collection under which to catalog the URNs.
+
+        An unauthenticated request is used for testing. Such a request
+        does not have to specify a collection (the "Unaffiliated"
+        collection is used), but can only process one URN at a time.
+
         :return: None or ProblemDetail
         """
-        # We are at least willing to try to resolve this Identifier.
-        # If a Collection was provided by an authenticated IntegrationClient,
-        # this Identifier is part of the Collection's catalog.
         client = authenticated_client_from_request(self._db, required=False)
         if isinstance(client, ProblemDetail):
             return client
@@ -842,13 +846,20 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             self._db, client, collection_details
         )
 
-        # TODO: uncomment the segment adding the default collection once
-        # the Metadata Wrangler can handle its existing load. This will add
-        # unaffiliated identifiers to the Unaffiliated Identifier collection.
-        collection = collection # or self.default_collection
-        if not collection:
-            return INVALID_INPUT.detailed(_("No collection provided."))
+        if client:
+            # Authenticated access.
+            if not collection:
+                return INVALID_INPUT.detailed(_("No collection provided."))
+            limit = 50
+        else:
+            # Anonymous access.
+            collection = self.default_collection
+            limit = 1
 
+        if len(urns) > limit:
+            return INVALID_INPUT.detailed(
+                _("The maximum number of URNs you can provide at once is %d. (You sent %d)") % (limit, len(urns))
+            )
         identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
         self.add_urn_failure_messages(failures)
 

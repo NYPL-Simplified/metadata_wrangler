@@ -898,6 +898,48 @@ class TestURNLookupController(ControllerTest):
         identifier = Identifier.parse_urn(self._db, urn)[0]
         assert identifier in collection.catalog
 
+        # Failure -- we didn't specify a collection.
+        result = self.controller.process_urns([urn])
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_(u"No collection provided.", result.detail)
+
+        # Failure - we sent too many URNs.
+        result = self.controller.process_urns([urn] * 51, collection_details=name)
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_(u"The maximum number of URNs you can provide at once is 50. (You sent 51)",
+            result.detail)
+
+
+    @basic_request_context
+    def test_process_urn_default_collection(self):
+        # It's possible to look up individual URNs anonymously.
+        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier"
+
+        # Test success.
+        self.controller.process_urns([urn])
+        self.assert_one_message(
+            urn, 201, URNLookupController.IDENTIFIER_REGISTERED
+        )
+
+        # The Identifier has been added to the collection to await registration
+        identifier = Identifier.parse_urn(self._db, urn)[0]
+        assert identifier in self.controller.default_collection.catalog
+
+        # When we try to register the URN with a specific collection,
+        # it gets put into the unaffiliated collection instead.
+        remote_collection = self._collection(external_account_id='banana')
+        name = remote_collection.metadata_identifier
+        urn2 = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier2"
+        identifier2 = Identifier.parse_urn(self._db, urn)[0]
+        self.controller.process_urns([urn2], collection_details=name)
+        assert identifier2 in self.controller.default_collection.catalog
+
+        # Failure -- we sent more than one URN with an unauthenticated request.
+        result = self.controller.process_urns([urn, urn2])
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
+            result.detail)
+
     @basic_request_context
     def test_process_identifier_pending_resolve_attempt(self):
         # Simulate calling process_identifier after the identifier has been
