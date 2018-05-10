@@ -829,8 +829,11 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
     def process_urns(self, urns, collection_details=None, **kwargs):
         """Processes URNs submitted via lookup request
 
-        An authenticated request can process up to 50 URNs at once,
-        but must specify a collection under which to catalog the URNs.
+        An authenticated request can process up to 10 URNs at once,
+        but must specify a collection under which to catalog the
+        URNs. This is generally not necessary -- URNs should be
+        registered and updates on them should be obtained using the
+        CatalogController.
 
         An unauthenticated request is used for testing. Such a request
         does not have to specify a collection (the "Unaffiliated"
@@ -850,7 +853,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             # Authenticated access.
             if not collection:
                 return INVALID_INPUT.detailed(_("No collection provided."))
-            limit = 50
+            limit = 10
         else:
             # Anonymous access.
             collection = self.default_collection
