@@ -5,10 +5,13 @@ import json
 import re
 import urllib
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Hash import SHA
+from Crypto.Signature import PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from StringIO import StringIO
 from datetime import datetime, timedelta
 from functools import wraps
+import jwt
 from lxml import etree
 from nose.tools import set_trace, eq_
 
@@ -686,10 +689,13 @@ class TestCatalogController(ControllerTest):
         # The catalogued identifier is still removed.
         assert catalogued_id not in self.collection.catalog
 
-    def create_register_request_args(self, url):
+    def create_register_request_args(self, url, token=None):
+        data = dict(url=url)
+        if token:
+            data['jwt'] = token
         return dict(
             method='POST',
-            data=dict(url=url),
+            data=data,
             headers={ 'Content-Type' : 'application/x-www-form-urlencoded' }
         )
 
@@ -823,7 +829,17 @@ class TestCatalogController(ControllerTest):
         shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
         eq_(client.shared_secret, shared_secret)
 
-        # If the client already exists, the shared_secret is updated.
+        # If the client already has a shared_secret, a request cannot
+        # succeed without providing it.
+        self.http.responses.append(mock_doc_response)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+            eq_(INVALID_CREDENTIALS.uri, response.uri)
+            eq_('Cannot update existing IntegratedClient without valid shared_secret',
+                response.detail)
+
+        # If the existing shared secret is provided, the shared_secret
+        # is updated.
         client.shared_secret = 'token'
         bearer_token = 'Bearer '+base64.b64encode('token')
         request_args['headers']['Authorization'] = bearer_token
@@ -841,6 +857,83 @@ class TestCatalogController(ControllerTest):
         shared_secret = catalog.get('metadata').get('shared_secret')
         shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
         eq_(client.shared_secret, shared_secret)
+
+    def test_register_with_jwt(self):
+        # Create an encryptor so we can compare secrets later. :3
+        key = RSA.generate(1024)
+
+        # Export the keys to strings so that the jwt library can use them.
+        public_key = key.publickey().exportKey()
+        private_key = key.exportKey()
+
+        encryptor = PKCS1_OAEP.new(key)
+        signer = PKCS1_v1_5.new(key)
+
+        # Use the private key to sign a JWT proving ownership of
+        # the test.org web server.
+        in_five_seconds = datetime.utcnow() + timedelta(seconds=5)
+        payload = {'exp': in_five_seconds}
+        token = jwt.encode(payload, private_key, algorithm='RS256')
+
+        # Put the public key in the mock catalog.
+        mock_auth_json = json.loads(self.sample_data('public_key_document.json'))
+        mock_auth_json['public_key']['value'] = key.publickey().exportKey()
+        mock_public_key_doc = json.dumps(mock_auth_json)
+        mock_doc_response = MockRequestsResponse(
+            200, content=mock_public_key_doc,
+            headers={ 'Content-Type' : 'application/opds+json' }
+        )
+        self.http.responses.append(mock_doc_response)
+
+        # Send a request that includes the URL to the mock catalog,
+        # and a token that proves ownership of it.
+        url = 'https://test.org/'
+        request_args = self.create_register_request_args(url, token)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+
+        # An IntegrationClient has been created for test.org.
+        eq_(201, response.status_code)
+        client_qu = self._db.query(IntegrationClient).filter(
+            IntegrationClient.url == 'test.org'
+        )
+        client = client_qu.one()
+
+        # The IntegrationClient's shared secret is in the response,
+        # encrypted with the public key provided.
+        catalog = json.loads(response.data)
+        eq_(url, catalog.get('id'))
+        shared_secret = catalog.get('metadata').get('shared_secret')
+        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
+        eq_(client.shared_secret, shared_secret)
+
+        # Since a JWT always proves ownership of test.org, we allow
+        # clients who provide a JWT to modify an existing shared
+        # secret without providing the old secret.
+        old_secret = client.shared_secret
+        self.http.responses.append(mock_doc_response)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+        assert client.shared_secret != old_secret
+
+        # If the client provides an invalid JWT, nothing happens.
+        self.http.responses.append(mock_doc_response)
+        request_args = self.create_register_request_args(url, "bad token")
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+            eq_(INVALID_CREDENTIALS.uri, response.uri)
+            eq_("Error decoding JWT: Not enough segments", response.detail)
+
+        # Same if the client provides a valid but expired JWT.
+        five_seconds_ago = datetime.utcnow() - timedelta(seconds=5)
+        payload = {'exp': five_seconds_ago}
+        token = jwt.encode(payload, private_key, algorithm='RS256')
+        self.http.responses.append(mock_doc_response)
+        request_args = self.create_register_request_args(url, token)
+        with self.app.test_request_context('/', **request_args):
+            response = self.controller.register(do_get=self.http.do_get)
+            eq_(INVALID_CREDENTIALS.uri, response.uri)
+            eq_("Error decoding JWT: Signature has expired", response.detail)
 
 
 class TestURNLookupController(ControllerTest):
