@@ -30,6 +30,7 @@ pyld
 beautifulsoup4
 suds
 py-bcrypt
+pyjwt==1.4.2
 
 # for author name matching
 nameparser
