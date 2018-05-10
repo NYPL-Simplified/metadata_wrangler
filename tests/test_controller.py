@@ -997,9 +997,9 @@ class TestURNLookupController(ControllerTest):
         eq_(u"No collection provided.", result.detail)
 
         # Failure - we sent too many URNs.
-        result = self.controller.process_urns([urn] * 11, collection_details=name)
+        result = self.controller.process_urns([urn] * 31, collection_details=name)
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"The maximum number of URNs you can provide at once is 10. (You sent 11)",
+        eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
             result.detail)
 
 
