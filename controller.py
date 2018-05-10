@@ -14,6 +14,7 @@ from Crypto.Cipher import PKCS1_OAEP
 import base64
 import feedparser
 import json
+import jwt
 import logging
 import urllib
 import urlparse
@@ -680,6 +681,9 @@ class CatalogController(ISBNEntryMixin):
         return matching_ids, identifier_match_clause
 
     def register(self, do_get=HTTP.get_with_timeout):
+
+        # 'url' points to a document containing a public key that
+        # should be used to sign the secret.
         public_key_url = request.form.get('url')
         if not public_key_url:
             return NO_AUTH_URL
@@ -687,6 +691,15 @@ class CatalogController(ISBNEntryMixin):
         log = logging.getLogger(
             "Public key integration document (%s)" % public_key_url
         )
+
+        # 'jwt' is a JWT that proves the client making this request
+        # controls the private key.
+        #
+        # For backwards compatibility purposes, it's okay not to
+        # provide a JWT, but it may lead to situations where
+        # the client doesn't know their shared secret and can't reset
+        # it.
+        jwt_token = request.form.get('jwt')
 
         try:
             response = do_get(
@@ -735,7 +748,8 @@ class CatalogController(ISBNEntryMixin):
             message = _("The public key integration document is missing an RSA public_key.")
             log.error(unicode(message))
             return INVALID_INTEGRATION_DOCUMENT.detailed(message)
-        public_key = RSA.importKey(public_key.get('value'))
+        public_key_text = public_key.get('value')
+        public_key = RSA.importKey(public_key_text)
         encryptor = PKCS1_OAEP.new(public_key)
 
         submitted_secret = None
@@ -744,15 +758,41 @@ class CatalogController(ISBNEntryMixin):
             token = auth_header.split(' ')[1]
             submitted_secret = base64.b64decode(token)
 
-        try:
-            client, is_new = IntegrationClient.register(
-                self._db, url, submitted_secret=submitted_secret
-            )
-        except ValueError as e:
-            log.error("Error in IntegrationClient.register", exc_info=e)
-            return INVALID_CREDENTIALS.detailed(repr(e))
+        if jwt_token:
+            # In the new system, the 'token' must be a JWT whose
+            # signature can be verified with the public key.
+            try:
+                parsed = jwt.decode(
+                    jwt_token, public_key_text, algorithm='RS256'
+                )
+            except Exception, e:
+                return INVALID_CREDENTIALS.detailed(
+                    _("Error decoding JWT: %s") % e.message
+                )
 
-        # Encrypt shared secret.
+            # The ability to create a valid JWT indicates control over
+            # the server, so it's not necessary to know the current
+            # secret to set a new secret.
+            client, is_new = IntegrationClient.for_url(self._db, url)
+            client.randomize_secret()
+        else:
+            # If no JWT is provided, then we use the old logic. The first
+            # time registration happens, no special authentication
+            # is required apart from the ability to decode the secret.
+            #
+            # On subsequent attempts, the old secret must be provided to
+            # create a new secret.
+            try:
+                client, is_new = IntegrationClient.register(
+                    self._db, url, submitted_secret=submitted_secret
+                )
+            except ValueError as e:
+                log.error("Error in IntegrationClient.register", exc_info=e)
+                return INVALID_CREDENTIALS.detailed(e.message)
+
+        # Now that we have an IntegrationClient with a shared
+        # secret, encrypt the shared secret with the provided public key
+        # and send it back.
         encrypted_secret = encryptor.encrypt(str(client.shared_secret))
         shared_secret = base64.b64encode(encrypted_secret)
         auth_data = dict(
@@ -829,10 +869,11 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
     def process_urns(self, urns, collection_details=None, **kwargs):
         """Processes URNs submitted via lookup request
 
-        An authenticated request can process up to 10 URNs at once,
+        An authenticated request can process up to 30 URNs at once,
         but must specify a collection under which to catalog the
-        URNs. This is generally not necessary -- URNs should be
-        registered and updates on them should be obtained using the
+        URNs. This is used when initially recording the fact that
+        certain URNs are in a collection, to get a baseline set of
+        metadata. Updates on the books should be obtained through the
         CatalogController.
 
         An unauthenticated request is used for testing. Such a request
@@ -840,6 +881,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         collection is used), but can only process one URN at a time.
 
         :return: None or ProblemDetail
+
         """
         client = authenticated_client_from_request(self._db, required=False)
         if isinstance(client, ProblemDetail):
@@ -853,7 +895,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             # Authenticated access.
             if not collection:
                 return INVALID_INPUT.detailed(_("No collection provided."))
-            limit = 10
+            limit = 30
         else:
             # Anonymous access.
             collection = self.default_collection
