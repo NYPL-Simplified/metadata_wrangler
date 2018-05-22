@@ -6,7 +6,7 @@ bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
 
-from integration_client import IntegrationClientCoverageProvider
+from integration_client import IntegrationClientCoverImageCoverageProvider
 from core.scripts import RunCollectionCoverageProviderScript
 
-RunCollectionCoverageProviderScript(IntegrationClientCoverageProvider).run()
+RunCollectionCoverageProviderScript(IntegrationClientCoverImageCoverageProvider).run()

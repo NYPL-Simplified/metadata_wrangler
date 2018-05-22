@@ -1,4 +1,5 @@
 from nose.tools import set_trace
+from sqlalchemy.orm.session import Session
 from core.model import (
     CoverageRecord,
     DataSource,
@@ -13,6 +14,7 @@ from core.metadata_layer import (
     Metadata,
     ReplacementPolicy,
 )
+from core.mirror import MirrorUploader
 
 
 class WorkPresentationCoverageProvider(WorkCoverageProvider):
@@ -132,8 +134,12 @@ class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
     PROTOCOL = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
     COVERAGE_COUNTS_FOR_EVERY_COLLECTION = False
 
-    def __init__(self, uploader, collection, *args, **kwargs):
-        self.uploader = uploader
+    def __init__(self, collection, *args, **kwargs):
+        _db = Session.object_session(collection)
+        uploader = kwargs.pop('uploader', None) or MirrorUploader.sitewide(_db)
+        self.replacement_policy = ReplacementPolicy(
+            mirror=uploader, links=True
+        )
 
         # Only process identifiers that have been registered for coverage.
         kwargs['registered_only'] = kwargs.get('registered_only', True)
@@ -148,9 +154,9 @@ class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
 
     def process_item(self, identifier):
         edition = self.edition(identifier)
-        replace = ReplacementPolicy(mirror=self.uploader, links=True)
         metadata = Metadata.from_edition(edition)
-        metadata.apply(edition, self.collection, replace=replace)
+        metadata.apply(edition, self.collection,
+                       replace=self.replacement_policy)
 
         failure = self.register_work_for_calculation(identifier)
         if failure:
