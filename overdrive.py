@@ -22,7 +22,7 @@ class OverdriveBibliographicCoverageProvider(
         # As the metadata wrangler, we will be mirroring these to the
         # sitewide mirror rather than to a mirror associated
         # with a specific collection.
-        self.mirror = uploader or MirrorUploader.sitewide(collection)
+        self.mirror = uploader or MirrorUploader.sitewide(_db)
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
             collection, **kwargs
