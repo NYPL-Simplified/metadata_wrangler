@@ -220,7 +220,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
             required.append(
                 IntegrationClientCoverImageCoverageProvider(
-                    self.uploader, self.collection
+                    self.collection, uploader=self.uploader
                 )
             )
 
