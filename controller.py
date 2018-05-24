@@ -340,24 +340,29 @@ class CatalogController(ISBNEntryMixin):
 
         pagination = load_pagination_from_request(default_size=self.UPDATES_SIZE)
 
-        entries = []
+        precomposed_entries = []
         # Add entries for Works associated with the collection's catalog.
         updated_works = collection.works_updated_since(self._db, last_update_time)
         works = pagination.apply(updated_works).all()
-        for work in works[:]:
-            # Get the cached entry if it already exists.
+        annotator = VerboseAnnotator()
+        works_for_feed = []
+        for work, licensepool, identifier in works:
             entry = work.verbose_opds_entry or work.simple_opds_entry
             if entry:
+                # A cached OPDS entry for this Work already
+                # exists. annotate it with LicensePool and
+                # Identifier-specific information. We have to do this
+                # ourselves because we're asking LookupAcquisitionFeed
+                # to treat these as precomposed entries, meaning
+                # they must be complete as-is.
                 entry = etree.fromstring(entry)
-                entries.append(entry)
-                works.remove(work)
-
-        works_for_feed = list()
-        for work in works:
-            # Let the feed try to calculate OPDS entries for Works without one.
-            identifiers = [lp.identifier for lp in work.license_pools]
-            identifiers = [i for i in identifiers if i in collection.catalog]
-            works_for_feed.append((identifiers[0], work))
+                annotator.annotate_work_entry(
+                    work, licensepool, None, identifier, None, entry
+                )
+                precomposed_entries.append(entry)
+            else:
+                # There is no cached OPDS entry. We'll create one later.
+                works_for_feed.append((work, identifier))
 
         # Add entries for ISBNs associated with the collection's catalog.
         isbns = collection.isbns_updated_since(self._db, last_update_time)
@@ -365,7 +370,7 @@ class CatalogController(ISBNEntryMixin):
         for isbn, _latest_timestamp in isbns:
             entry = self.make_opds_entry_from_metadata_lookups(isbn)
             if entry:
-                entries.append(entry)
+                precomposed_entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         url_params = dict()
@@ -378,8 +383,8 @@ class CatalogController(ISBNEntryMixin):
         url = self.collection_feed_url('updates', collection, **url_params)
 
         update_feed = LookupAcquisitionFeed(
-            self._db, title, url, works_for_feed, VerboseAnnotator,
-            precomposed_entries=entries
+            self._db, title, url, works_for_feed, annotator,
+            precomposed_entries=precomposed_entries
         )
 
         self.add_pagination_links_to_feed(
