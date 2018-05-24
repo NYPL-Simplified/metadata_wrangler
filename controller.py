@@ -346,7 +346,7 @@ class CatalogController(ISBNEntryMixin):
         works = pagination.apply(updated_works).all()
         annotator = VerboseAnnotator()
         works_for_feed = []
-        for work, licensepool, identifier, ignore1, ignore2 in works[:]:
+        for work, licensepool, identifier, ignore1, ignore2 in works:
             entry = work.verbose_opds_entry or work.simple_opds_entry
             if entry:
                 # A cached OPDS entry for this Work already
