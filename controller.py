@@ -821,6 +821,12 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
     WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
     SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK = "Something's wrong. I have a record of covering this identifier but there's no presentation-ready work to show you."
 
+    # We resolve identifiers by running them through the
+    # IdentifierResolutionCoverageProvider. The Identifier types
+    # supported by that coverage provider are the only ones for which
+    # we can credibly provide a lookup service.
+    VALID_TYPES = IdentifierResolutionCoverageProvider.INPUT_IDENTIFIER_TYPES
+
     log = logging.getLogger("URN lookup controller")
 
     def __init__(self, _db):
@@ -849,27 +855,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
     
     def can_resolve_identifier(self, identifier):
         """A chance to determine whether resolution should proceed."""
-        # We can resolve any ISBN and any Overdrive ID.
-        #
-        # We can resolve any Gutenberg ID by looking it up in the open-access
-        # content server.
-        #
-        # We can attempt to resolve URIs by looking them up in the
-        # open-access content server, though there's no guarantee
-        # it will work.        
-        if identifier.type in (
-                Identifier.ISBN, Identifier.OVERDRIVE_ID,
-                Identifier.GUTENBERG_ID, Identifier.URI
-        ):
-            return True
-        
-        # We can resolve any identifier that's associated with a
-        # presentation-ready work, since the resolution has already
-        # been done--no need to speculate about how.
-        work = self.presentation_ready_work_for(identifier)
-        if work is None:
-            return False
-        return True
+        return identifier.type in self.VALID_TYPES
 
     def process_urns(self, urns, collection_details=None, **kwargs):
         """Processes URNs submitted via lookup request
@@ -910,7 +896,9 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             return INVALID_INPUT.detailed(
                 _("The maximum number of URNs you can provide at once is %d. (You sent %d)") % (limit, len(urns))
             )
-        identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
+        identifiers_by_urn, failures = Identifier.parse_urns(
+            self._db, urns, allowed_types=self.VALID_TYPES
+        )
         self.add_urn_failure_messages(failures)
 
         collection.catalog_identifiers(identifiers_by_urn.values())
