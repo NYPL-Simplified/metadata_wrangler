@@ -27,7 +27,11 @@ class OverdriveBibliographicCoverageProvider(
     def __init__(self, collection, uploader=None, **kwargs):
         _db = Session.object_session(collection)
         api_class = kwargs.pop('api_class', OverdriveAPI)
-        api = self.generic_overdrive_api(_db, api_class)
+        if callable(api_class):
+            api = self.generic_overdrive_api(_db, api_class)
+        else:
+            # The API 'class' is actually an object, probably a mock.
+            api = api_class
         if not api:
             raise CannotLoadConfiguration(
                 """OverdriveBibliographicCoverageProvider requires at least one fully configured Overdrive collection."""
