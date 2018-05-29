@@ -61,7 +61,7 @@ class OverdriveBibliographicCoverageProvider(
         OverdriveAPI that can be used in every collection.
         """
         qu = _db.query(Collection).join(
-            Collection.external_integration
+            Collection._external_integration
         ).join(
             ExternalIntegration.settings
         ).filter(
