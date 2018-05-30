@@ -2,10 +2,17 @@ from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 
 from core.coverage import CollectionCoverageProvider
-from core.model import DataSource
+from core.model import (
+    Collection,
+    ConfigurationSetting,
+    DataSource,
+    ExternalIntegration,
+    Identifier,
+)
 from core.metadata_layer import ReplacementPolicy
 from core.overdrive import (
-    OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider
+    OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider,
+    OverdriveAPI
 )
 from core.mirror import MirrorUploader
 
@@ -19,14 +26,60 @@ class OverdriveBibliographicCoverageProvider(
 
     def __init__(self, collection, uploader=None, **kwargs):
         _db = Session.object_session(collection)
+        api_class = kwargs.pop('api_class', OverdriveAPI)
+        if callable(api_class):
+            api = self.generic_overdrive_api(_db, api_class)
+        else:
+            # The API 'class' is actually an object, probably a mock.
+            api = api_class
+        if not api:
+            raise CannotLoadConfiguration(
+                """OverdriveBibliographicCoverageProvider requires at least one fully configured Overdrive collection."""
+            )
+
         # As the metadata wrangler, we will be mirroring these to the
         # sitewide mirror rather than to a mirror associated
         # with a specific collection.
         self.mirror = uploader or MirrorUploader.sitewide(_db)
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
-            collection, **kwargs
+            collection, api_class=api, **kwargs
         )
+
+    @classmethod
+    def generic_overdrive_api(cls, _db, api_class):
+        """Create an OverdriveAPI that will work for metadata
+        wrangler purposes.
+
+        As the metadata wrangler, most of our Overdrive
+        'collections' aren't actually configured with Overdrive
+        credentials. We can't create an OverdriveAPI specially for
+        each Overdrive collection.
+
+        But all we need is _one_ properly configured Overdrive
+        Collection. Overdrive allows us to get bibliographic
+        information about any book on Overdrive, not just ones
+        associated with a specific collection.
+
+        If we have one such Collection, we can create an
+        OverdriveAPI that can be used in every collection.
+        """
+        qu = _db.query(Collection).join(
+            Collection._external_integration
+        ).join(
+            ExternalIntegration.settings
+        ).filter(
+            ExternalIntegration.protocol==ExternalIntegration.OVERDRIVE
+        ).filter(
+            ExternalIntegration.goal==ExternalIntegration.LICENSE_GOAL
+        ).filter(ConfigurationSetting.key==ExternalIntegration.USERNAME)
+
+        configured_collections = qu.all()
+        if not configured_collections:
+            return None
+        configured_collection = configured_collections[0]
+        return api_class(_db, configured_collection)
+
 
     def _default_replacement_policy(self, _db):
         """Treat this as a trusted metadata source. Mirror any appropriate

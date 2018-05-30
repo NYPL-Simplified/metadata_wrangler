@@ -8,7 +8,10 @@ from core.testing import (
     DatabaseTest,
     DummyHTTPClient,
 )
-from core.model import Identifier
+from core.model import (
+    ExternalIntegration,
+    Identifier,
+)
 from core.overdrive import MockOverdriveAPI
 from overdrive import OverdriveBibliographicCoverageProvider
 
@@ -74,3 +77,19 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # same as the full image or the test cover.
         assert thumbnail.content != test_small_cover
         assert thumbnail.content != test_cover
+
+    def test_generic_overdrive_api(self):
+        # The only collection on the site has no Overdrive
+        # ExternalIntegration.
+        collection1 = self._collection()
+        m = OverdriveBibliographicCoverageProvider.generic_overdrive_api
+        eq_(None, m(self._db, MockOverdriveAPI))
+
+        # Now here's a collection that _is_ configured with
+        # an Overdrive ExternalIntegration.
+        collection2 = MockOverdriveAPI.mock_collection(self._db)
+
+        # It's the one returned by generic_overdrive_api.
+        result = m(self._db, MockOverdriveAPI)
+        assert isinstance(result, MockOverdriveAPI)
+        eq_(collection2, result.collection)
