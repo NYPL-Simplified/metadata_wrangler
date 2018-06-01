@@ -161,16 +161,18 @@ class TestIndexController(ControllerTest):
 
     def test_opds_catalog(self):
         controller = IndexController(self._db)
-        with self.app.test_request_context('/'):
+        request_url = "http://localhost/give-me-opds-catalog"
+        with self.app.test_request_context(request_url):
             response = controller.opds_catalog()
 
         eq_(200, response.status_code)
         catalog = json.loads(response.data)
 
-        app_url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
-        eq_(app_url, catalog.get('id'))
-        urls = [l.get('href') for l in catalog.get('links')]
+        # In the absence of a configured BASE_URL, the ID of the
+        # OPDS catalog is the request URL.
+        eq_(request_url, catalog.get('id'))
 
+        urls = [l.get('href') for l in catalog.get('links')]
         # Use flask endpoint syntax for path variables
         urls = [re.sub('\{', '<', url) for url in urls]
         urls = [re.sub('\}', '>', url) for url in urls]
@@ -181,6 +183,21 @@ class TestIndexController(ControllerTest):
         endpoints = [r.rule for r in self.app.url_map.iter_rules()]
         for url in urls:
             assert url in endpoints
+
+    def test_opds_catalog_application_id(self):
+        controller = IndexController(self._db)
+
+        # Configure a base URL.
+        app_url = self._url
+        ConfigurationSetting.sitewide(
+            self._db, Configuration.BASE_URL_KEY).value = app_url
+        with self.app.test_request_context('/give-me-opds-catalog'):
+            response = controller.opds_catalog()
+        catalog = json.loads(response.data)
+
+        # Unlike the previous test, the ID of the OPDS catalog is the
+        # BASE_URL, not the URL used in the request.
+        eq_(app_url, catalog.get('id'))
 
 
 class TestCatalogController(ControllerTest):

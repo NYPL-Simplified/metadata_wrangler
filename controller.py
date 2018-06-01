@@ -120,7 +120,7 @@ class IndexController(object):
         self._db = _db
 
     def opds_catalog(self):
-        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
+        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value_or_default(request.url)
         catalog = dict(
             id=url,
             title='Library Simplified Metadata Wrangler',
