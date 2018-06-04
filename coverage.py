@@ -39,6 +39,7 @@ from overdrive import (
 
 from content_cafe import (
     ContentCafeCoverageProvider, 
+    ContentCafeAPI,
 )
 
 from content_server import (
@@ -74,9 +75,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
     Coverage happens by running the Identifier through _other_
     CoverageProviders, filling in the blanks with additional data from
     third-party entities.
-
-    For ISBNs, we end up with a bunch of Resources, rather than
-    Works. TODO: This needs to change.
     """
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
@@ -97,7 +95,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
     PROTOCOL = None
 
     def __init__(
-        self, collection, uploader=None, viaf_client=None,
+        self, collection, mirror=None, viaf_client=None,
         content_cafe_api=None, overdrive_api_class=OverdriveAPI, **kwargs
     ):
 
@@ -107,8 +105,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror to S3.
-        uploader = uploader or MirrorUploader.sitewide(self._db)
-        self.uploader = uploader
+        mirror = mirror or MirrorUploader.sitewide(self._db)
+        self.mirror = mirror
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -119,7 +117,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
 
         self.overdrive_api = self.create_overdrive_api(overdrive_api_class)
 
-        self.content_cafe_api = content_cafe_api
+        self.content_cafe_api = (
+            content_cafe_api or ContentCafeAPI.from_config(self._db)
+        )
         
         # Determine the optional and required coverage providers.
         # Each Identifier in this Collection's catalog will be run
@@ -184,7 +184,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         # Classify, assuming their identifiers are of the right
         # type.
         content_cafe = ContentCafeCoverageProvider(
-            self._db, api=self.content_cafe_api, uploader=self.uploader
+            self.collection, api=self.content_cafe_api, mirror=self.mirror
         )
         oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
@@ -209,7 +209,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         if self.overdrive_api and self.collection.protocol == ExternalIntegration.OVERDRIVE:
             required.append(
                 OverdriveBibliographicCoverageProvider(
-                    self.collection, uploader=self.uploader,
+                    self.collection, mirror=self.mirror,
                     api_class=self.overdrive_api
                 )
             )
@@ -220,7 +220,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
             required.append(
                 IntegrationClientCoverImageCoverageProvider(
-                    self.collection, uploader=self.uploader
+                    self.collection, mirror=self.mirror
                 )
             )
 
@@ -412,6 +412,8 @@ class IdentifierResolutionRegistrar(CatalogCoverageProvider):
                 providers.append(provider)
 
         for provider_class in providers:
+            # TODO: depending on how this is instantiated,
+            # call ensure_coverage instead of register.
             provider_class.register(identifier)
 
         return identifier

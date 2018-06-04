@@ -24,7 +24,7 @@ class OverdriveBibliographicCoverageProvider(
 
     EXCLUDE_SEARCH_INDEX = True
 
-    def __init__(self, collection, uploader=None, **kwargs):
+    def __init__(self, collection, mirror=None, **kwargs):
         _db = Session.object_session(collection)
         api_class = kwargs.pop('api_class', OverdriveAPI)
         if callable(api_class):
@@ -40,7 +40,7 @@ class OverdriveBibliographicCoverageProvider(
         # As the metadata wrangler, we will be mirroring these to the
         # sitewide mirror rather than to a mirror associated
         # with a specific collection.
-        self.mirror = uploader or MirrorUploader.sitewide(_db)
+        self.mirror = mirror or MirrorUploader.sitewide(_db)
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
             collection, api_class=api, **kwargs
