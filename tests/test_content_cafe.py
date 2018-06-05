@@ -26,19 +26,13 @@ from content_cafe import (
 )
 import content_cafe
 
-class DummyContentCafeAPI(object):
-    pass
-
-class DummyContentCafeSOAPClient(object):
-    pass
 
 class TestContentCafeAPI(DatabaseTest):
 
     def test_from_config(self):
         # Without an integration, an error is raised.
         assert_raises(
-            CannotLoadConfiguration, ContentCafeAPI.from_config,
-            self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
         # With incomplete integrations, an error is raised.
@@ -48,23 +42,26 @@ class TestContentCafeAPI(DatabaseTest):
             username=u'yup'
         )
         assert_raises(
-            CannotLoadConfiguration, ContentCafeAPI.from_config,
-            self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
         integration.username = None
         integration.password = u'yurp'
         assert_raises(
-            CannotLoadConfiguration, ContentCafeAPI.from_config,
-            self._db, object()
+            CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
         integration.username = u'yup'
         result = ContentCafeAPI.from_config(
-            self._db, None, uploader=MockS3Uploader(),
-            soap_client=DummyContentCafeSOAPClient()
+            self._db, soap_client=object()
         )
         eq_(True, isinstance(result, ContentCafeAPI))
+
+        # NOTE: We can't test the case where soap_client is not
+        # mocked, because the ContentCafeSOAPClient constructor makes
+        # a real HTTP request to load its WSDL file. We might be able
+        # to improve this by seeing how mockable SudsClient is, or by
+        # mocking ContentCafeAPISOAPClient.WSDL_URL as a file:// URL.
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):
