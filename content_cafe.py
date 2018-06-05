@@ -325,6 +325,12 @@ class ContentCafeSOAPError(IOError):
     pass
 
 class ContentCafeSOAPClient(object):
+    """Get historical sales information from Content Cafe through
+    its SOAP interface.
+
+    NOTE: This class currently has no test coverage. It wouldn't be too
+    difficult to add coverage for estimate_popularity, at least.
+    """
 
     WSDL_URL = "http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx?WSDL"
 
