@@ -150,13 +150,13 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
-        uploader = MockS3Uploader()
+        mirror = MockS3Uploader()
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         )
 
         self.provider = IntegrationClientCoverImageCoverageProvider(
-            uploader=uploader, collection=self.collection
+            mirror=mirror, collection=self.collection
         )
 
     def test_data_source_is_collection_specific(self):
