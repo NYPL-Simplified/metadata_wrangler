@@ -4,17 +4,22 @@ from nose.tools import (
     assert_raises,
 )
 
+import os
+
 from core import mirror
 from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
 from core.metadata_layer import (
-    MeasurementData
+    Metadata,
+    MeasurementData,
 )
 from core.mirror import MirrorUploader
 from core.model import (
     DataSource,
     ExternalIntegration,
+    Hyperlink,
     Identifier,
+    Measurement,
 )
 from core.s3 import (
     MockS3Uploader,
@@ -32,18 +37,36 @@ from content_cafe import (
 import content_cafe
 
 class MockSOAPClient(object):
-    pass
 
+    def __init__(self, popularity_value):
+        # This value will be returned every time estimated_popularity
+        # is called.
+        self.popularity_value = popularity_value
+        self.estimated_popularity_calls = []
+
+    def estimated_popularity(self, identifier, cutoff):
+        self.estimated_popularity_calls.append((identifier, cutoff))
+        return self.popularity_value
 
 class TestContentCafeAPI(DatabaseTest):
+
+    base_path = os.path.split(__file__)[0]
+    resource_path = os.path.join(base_path, "files", "content_cafe")
+
+    def data_file(self, path):
+        """Return the contents of a test data file."""
+        return open(os.path.join(self.resource_path, path)).read()
 
     def setup(self):
         super(TestContentCafeAPI, self).setup()
         self.http = DummyHTTPClient()
-        self.soap = MockSOAPClient()
+        self.soap = MockSOAPClient(popularity_value=5)
         self.api = ContentCafeAPI(
             self._db, 'uid', 'pw', self.soap, self.http.do_get
         )
+        self.identifier = self._identifier(identifier_type=Identifier.ISBN)
+        self.args = dict(userid=self.api.user_id, password=self.api.password,
+                         isbn=self.identifier.identifier)
 
     def test_from_config(self):
         # Without an integration, an error is raised.
@@ -108,17 +131,13 @@ class TestContentCafeAPI(DatabaseTest):
         api = Mock(self._db, 'uid', 'pw', self.soap, self.http.do_get)
         m = api.create_metadata
 
-        identifier = self._identifier(identifier_type=Identifier.ISBN)
-
         # First we will make a request for a cover image. If that
         # gives a 404 error, we return nothing and don't bother making
         # any more requests.
         self.http.queue_requests_response(404)
-        eq_(None, m(identifier))
+        eq_(None, m(self.identifier))
         request_url = self.http.requests.pop()
-        args = dict(userid=api.user_id, password=api.password,
-                    isbn=identifier.identifier)
-        image_url = api.image_url % args
+        image_url = api.image_url % self.args
         eq_(image_url, request_url)
         eq_([], self.http.requests)
 
@@ -132,10 +151,11 @@ class TestContentCafeAPI(DatabaseTest):
         self.http.queue_requests_response(200, 'image/png', content='an image!')
 
         # Here's the result.
-        metadata = m(identifier)
+        metadata = m(self.identifier)
 
         # Here's the image LinkData.
         [image] = metadata.links
+        eq_(Hyperlink.IMAGE, image.rel)
         eq_(image_url, image.href)
         eq_('image/png', image.media_type)
         eq_('an image!', image.content)
@@ -146,35 +166,147 @@ class TestContentCafeAPI(DatabaseTest):
         # Confirm that the mock methods were called with the right
         # arguments -- their functionality is tested individually
         # below.
-        expected_args = (metadata, identifier, args)
+        expected_args = (metadata, self.identifier, self.args)
         for called_with in (
             api.add_reviews_called_with, api.add_descriptions_called_with,
             api.add_author_notes_called_with, api.add_excerpt_called_with,
         ):
             eq_(expected_args, called_with)
-        eq_((identifier, api.ONE_YEAR_AGO), api.measure_popularity_called_with)
+        eq_((self.identifier, api.ONE_YEAR_AGO),
+            api.measure_popularity_called_with)
 
         # If measure_popularity returns nothing, metadata.measurements
         # will be left empty.
         api.popularity_measurement = None
         self.http.queue_requests_response(200, 'image/png', content='an image!')
-        metadata = m(identifier)
+        metadata = m(self.identifier)
         eq_([], metadata.measurements)
 
     def test_annotate_with_web_resources(self):
-        pass
+        metadata = Metadata(DataSource.CONTENT_CAFE)
+        rel = self._str
 
-    def test_add_descriptions(self):
-        pass
+        # We're going to be grabbing this URL and
+        # scraping it.
+        url_template = "http://url/%(arg1)s"
+        args = dict(arg1='value')
+
+        # A couple of useful functions for scraping.
+        class MockScrapers(object):
+            scrape_called = False
+            explode_called = False
+            def scrape(self, soup):
+                self.scrape_called = True
+                return [soup.find('content').string]
+
+            def explode(self, soup):
+                self.explode_called = True
+                raise Exception("I'll never be called")
+        scrapers = MockScrapers()
+
+        # When the result of the HTTP request contains a certain phrase,
+        # we don't even bother scraping.
+        m = self.api.annotate_with_web_resources
+        http = self.http
+        http.queue_requests_response(
+            200, 'text/html', content='There is no data!'
+        )
+        m(metadata, self.identifier, args, url_template, "no data!", rel,
+          scrapers.explode)
+        # We made the request but nothing happened.
+        expect_url = url_template % args
+        eq_(expect_url, self.http.requests.pop())
+        eq_(False, scrapers.explode_called)
+        eq_(None, metadata.title)
+        eq_([], metadata.links)
+
+        # Otherwise, we try to scrape.
+        good_content = '<html><span class="PageHeader2">Book title</span><content>Here you go</content>'
+        http.queue_requests_response(200, 'text/html', content=good_content)
+        m(metadata, self.identifier, args, url_template, "no data!", rel,
+          scrapers.scrape)
+        eq_(True, scrapers.scrape_called)
+
+        # We called _extract_title and took a Content Cafe title out
+        # for the Metadata object.
+        eq_("Book title", metadata.title)
+
+        # Then we called mock_scrape, which gave us the content for
+        # one LinkData.
+        [link] = metadata.links
+        eq_(rel, link.rel)
+        eq_(None, link.href)
+        eq_("text/html", link.media_type)
+        eq_("Here you go", link.content)
+
+    def test_add_reviews(self):
+        """Verify that add_reviews works in a real case."""
+        metadata = Metadata(DataSource.CONTENT_CAFE)
+        content = self.data_file("reviews.html")
+        self.http.queue_requests_response(200, 'text/html', content=content)
+        self.api.add_reviews(metadata, self.identifier, self.args)
+
+        # We extracted six reviews from the sample file.
+        reviews = metadata.links
+        eq_(6, len(reviews))
+        assert all([x.rel==Hyperlink.REVIEW for x in reviews])
+        assert "isn't a myth!" in reviews[0].content
+
+        # We incidentally figured out the book's title.
+        eq_("Shadow Thieves", metadata.title)
 
     def test_add_author_notes(self):
-        pass
+        """Verify that add_author_notes works in a real case."""
+        metadata = Metadata(DataSource.CONTENT_CAFE)
+        content = self.data_file("author_notes.html")
+        self.http.queue_requests_response(200, 'text/html', content=content)
+        self.api.add_author_notes(metadata, self.identifier, self.args)
+
+        [notes] = metadata.links
+        eq_(Hyperlink.AUTHOR, notes.rel)
+        assert 'Brenda researched turtles' in notes.content
+
+        # We incidentally figured out the book's title.
+        eq_("Franklin's Christmas Gift", metadata.title)
 
     def test_add_excerpt(self):
-        pass
+        """Verify that add_excerpt works in a real case."""
+        metadata = Metadata(DataSource.CONTENT_CAFE)
+        content = self.data_file("excerpt.html")
+        self.http.queue_requests_response(200, 'text/html', content=content)
+        self.api.add_excerpt(metadata, self.identifier, self.args)
+
+        [excerpt] = metadata.links
+        eq_(Hyperlink.SAMPLE, excerpt.rel)
+        assert 'Franklin loved his marbles.' in excerpt.content
+
+        # We incidentally figured out the book's title.
+        eq_("Franklin's Christmas Gift", metadata.title)
 
     def test_measure_popularity(self):
-        pass
+        """Verify that measure_popularity turns the output of
+        a SOAP request into a MeasurementData.
+        """
+        cutoff = object()
+
+        # Call it.
+        result = self.api.measure_popularity(self.identifier, cutoff)
+
+        # The SOAP client's estimated_popularity method was called.
+        expect = (self.identifier.identifier, cutoff)
+        eq_(expect, self.soap.estimated_popularity_calls.pop())
+
+        # The result was turned into a MeasurementData.
+        assert isinstance(result, MeasurementData)
+        eq_(Measurement.POPULARITY, result.quantity_measured)
+        eq_(self.soap.popularity_value, result.value)
+
+        # If the SOAP API doesn't return a popularity value, no
+        # MeasurementData is created.
+        self.soap.popularity_value = None
+        result = self.api.measure_popularity(self.identifier, cutoff)
+        eq_(expect, self.soap.estimated_popularity_calls.pop())
+        eq_(None, result)
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):

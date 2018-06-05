@@ -173,7 +173,7 @@ class ContentCafeAPI(object):
             # cover image. There is no need to build a Metadata object.
             return None
 
-        media_type = response.headers.get('content-type', 'image/jpeg')
+        media_type = response.headers.get('Content-Type', 'image/jpeg')
 
         # Start building a Metadata object.
         metadata = Metadata(

@@ -1,192 +1,84 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head id="Head1">
-<meta http-equiv="content-type" content="text/html; charset=UTF-8"><title>
+
+<html xmlns="http://www.w3.org/1999/xhtml" >
+<head id="Head1"><title>
 	Content Cafe 3 Client - Excerpt
-</title><link href="Content%20Cafe%203%20Client%20-%20Excerpt_files/ContentCafe3.css" type="text/css" rel="stylesheet"></head>
+</title><link href="ContentCafe3.css" type="text/css" rel="stylesheet" /></head>
 <body style="background-color:#FFEFD5;">
 <center>
-    <form name="ContentCafeForm" method="post" action="Excerpt.aspx?UserID=NYPL49807&amp;Password=CC68707&amp;ItemKey=9781439158555" id="ContentCafeForm">
-<div>
-<input name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUJOTE0MTI1MjM1D2QWAgIBD2QWEgIBDw8WAh4ISW1hZ2VVcmwFfGh0dHA6Ly9pbWFnZXNjLmJ0b2wuY29tL0NvbnRlbnRDYWZlL0phY2tldC5hc3B4P1VzZXJJRD1Db250ZW50Q2FmZUNsaWVudCZQYXNzd29yZD1DbGllbnQmUmV0dXJuPVQmVHlwZT1TJlZhbHVlPTk3ODE0MzkxNTg1NTVkZAIDDw8WAh4EVGV4dAUJTWFlbHN0cm9tZGQCBQ8PFgQfAQUFVVBDOiAeB1Zpc2libGVoZGQCBw8PFgIfAQUTSVNCTjogOTc4MTQzOTE1ODU1NWRkAg8PDxYCHwEFCEV4Y2VycHQ6ZGQCEA9kFgJmD2QWAmYPDxYGHg9Ib3Jpem9udGFsQWxpZ24LKilTeXN0ZW0uV2ViLlVJLldlYkNvbnRyb2xzLkhvcml6b250YWxBbGlnbgEfAQXiUzxwIGFsaWduPSJjZW50ZXIiPiA8YmlnPjxiPjIxNDU8L2I+PC9iaWc+IDxiaWc+PGI+VFdPIERBWVMgQkVGT1JFPC9iPjwvYmlnPiA8YmlnPjxiPlRIRSBGSVJTVDwvYj48L2JpZz4gPGJpZz48Yj5PVVRCUkVBSzwvYj48L2JpZz4gIDxiciAvPiA8YnIgLz4gPHAgYWxpZ249ImNlbnRlciI+IDxiPjE8L2I+IDxiciAvPiA8Yj5USEUgTUlELUFUTEFOVElDIFJJREdFPC9iPjxiciAvPiA8Yj5USEUgUk9CRVJUIEJBTExBUkQgREVFUCBPQ0VBTiBMQUI8L2I+PGJyIC8+IDxiPkRFUFRIOiAxOCw2NzQgRkVFVCwgT1VUU0lERSBURU1QRVJBVFVSRTo8L2I+PGJyIC8+IDxiPjE3OCBERUdSRUVTIEZBSFJFTkhFSVQ8L2I+PGJyIC8+IDxiPkRBVEU6IDAzXzExXzIxNDU8L2I+ICA8YnIgLz4gPFA+IERBVklEIFJPRFJJR1VFUyBMT09LRUQgQVQgQSBTRUlTTUlDIG1hcCBvZiB0aGUgb2NlYW4gZmxvb3IsIGZvY3VzaW5nIG9uIHRoZSBtYW1tb3RoIE1pZC1BdGxhbnRpYyBSaWRnZSAtLSB0aGUgd29ybGQncyBncmVhdGVzdCBtb3VudGFpbiBjaGFpbiwgYWx0aG91Z2ggbWlsZXMgdW5kZXIgdGhlIHN1cmZhY2Ugb2YgdGhlIG9jZWFuLiAgPFA+IEhlIHNhdyBhIG1hc3NpdmUgbmV0d29yayBvZiBmaXNzdXJlcyAtLSBwb3RlbnRpYWwgcHJvYmxlbSBhcmVhcyAtLSBhbGwgYXQgZGlmZmVyZW50IGRlcHRocywgc3ByZWFkIHRocm91Z2hvdXQgdGhlIHJpZGdlLiBFYWNoIGFyZWEgZmVkIGEgc3RlYWR5IHN0cmVhbSBvZiByZWFsLXRpbWUgaW5mb3JtYXRpb24gdG8gdGhlIGxhYidzIGNvbXB1dGVycy4gIDxQPiBPbmx5IGRheXMgYWdvIHRoZSBsYWIgZ290IGFuIGVhcmx5IHdhcm5pbmcgYWJvdXQgYSBnb29kLXNpemVkIHBsYXRlIHNoaWZ0IHRoYXQgd2FzIGJvdW5kIHRvIHByb2R1Y2Ugc29tZSBtYWpvciBmaXNzdXJlcy4gQnV0IHRoZSBpbmZvcm1hdGlvbiBjb21pbmcgZnJvbSB0aGUgcHJvYmVzIC0tIGRldGFpbGluZyB0aGUgc3RyZXNzIHRvIHRoZSBjb250aW5lbnRhbCBwbGF0ZXMsIHRoZSBkZXB0aCBvZiBiZWRyb2NrLCB0aGUgcG9zc2libGUgcGF0aCBvZiBlcnVwdGluZyBtYWdtYSAtLSBzaG93ZWQgdGhhdCB0aGUgQmFsbGFyZExhYiBpdHNlbGYgd2FzIG5vdCBpbiBhbnkgZGFuZ2VyLiBHb29kIHRoaW5nIHRvby4gQW5ldmFjdWF0aW9uIHdvdWxkIGJlIGNvc3RseSwgbm90IHRvIG1lbnRpb24geWVhcnMgb2Ygd29yayBsb3N0IGRvd24gdGhlIGh5ZHJvdGhlcm1hbCB0dWJlLiAgPFA+IEJ1dCB0aGUgcHJvYmVzIGFsc28gc2hvd2VkIHRoYXQgdGhpcyBsYXRlc3Qgc2Vpc21pYyBzcHVyIHdvdWxkIGNyZWF0ZSBhIG5ldyBzZXJpZXMgb2YgdGhlcm1hbCBzcG91dHMgbm90IHRvbyBmYXIgZnJvbSB0aGUgbGFiLiAgPFA+IERhdmlkIHR1cm5lZCBiYWNrIHRvIHRoZSBvcGVuIHdvcmsgYXJlYSBiZWhpbmQgaGltLiBHaWFudCB0YW5rcyBob3VzZWQgc3BlY2ltZW5zLCBhbGwgc3Vycm91bmRlZCBieSB0ZWFtcyBvZiBoaXMgc2NpZW50aXN0cyB3b3JraW5nIGF0IHNlbGYtY29udGFpbmVkIG1vZHVsZXMgbmVhciB0aGUgdGFua3MuIE5vIGNsb3NlZCBvZmZpY2VzIG9yIGxhYiByb29tcyBoZXJlIC0tIGFzIGxhYiBkaXJlY3RvciwgRGF2aWQgUm9kcmlndWV6IGhhZCBhIHNheSBpbiB0aGUgZGVzaWduIGFuZCBoZSB3YW50ZWQgZXZlcnlvbmUgY29taW5nIGRvd24gaGVyZSB0byBmZWVsIHRoYXQgbm8gbWF0dGVyIHdoYXQgdGhleSB3ZXJlIHdvcmtpbmcgb24sIHRoZXkgd2VyZSBhbGwgcGFydCBvZiBhIHRlYW0uICA8UD4gPEk+V2hhdCBvbmUgZGlzY292ZXJzLCB3ZSBhbGwgZGlzY292ZXIsPC9pPiBoZSBhbHdheXMgdG9sZCB0aGVtLiAgPFA+IEFuZCB0aG91Z2ggcHJhY3RpY2FsbHkgZXZlcnlvbmUgZG93biBoZXJlIHdhcyBicmlzdGxpbmcgd2l0aCBjcmVkZW50aWFscyAtLSBtYW55IG1vcmUgc28gdGhhbiBvdGhlcnMgLS0gdGhlcmUgd291bGQgYmUgbm8gIkRvY3RvciB0aGlzIiBvciAiRG9jdG9yIHRoYXQuIiBJbmNsdWRpbmcgUm9kcmlndWV6IGhpbXNlbGYuICA8UD4gPEk+IsK/T2xhLCBUb21hcywgY8OzbW8gdmFuIGxhcyBjb3NhcyBob3k/IjwvaT4gIDxQPiBUb21hcywgd2hvIGhlbGQgYWR2YW5jZWQgZGVncmVlcyBpbiBnZW5ldGljIG1pY3JvYmlvbG9neSBhbmQgbW9sZWN1bGFyIHBoeXNpY3MsIGxvb2tlZCB1cCBhbmQgc21pbGVkLiA8ST4iTXV5IGJpZW4sPC9pPiBEYXZpZC4gVGhvdWdoIHdlIGhvcGUgdG8gZ2V0IG91ciBoYW5kcyBvbiBzb21lIG9mIHRoZSBuZXcgc2FtcGxlcyIgLS0gaGUgbm9kZGVkIGhpcyBoZWFkIHRvIHRoZSBncmVhdCBvY2VhbiBwYXN0IHRoZSBtYXNzaXZlIHdhbGxzIG9mIHRoZSBsYWIgLS0gIm91dCB0aGVyZS4iICA8UD4gRGF2aWQgbGF1Z2hlZC4gIkknbSBnb2luZyBvdXQgdGhlcmUgc29vbi4gSnVzdCB3YWl0aW5nIHVudGlsIHRoaW5ncyBzZXR0bGUgZG93biBhIGJpdC4iIEhlIHR1cm5lZCB0byB0aGUgYmlnIDMtRCB2aWV3IG9mIHRoZSBvY2VhbiBmbG9vciBiZWhpbmQgaGltLiAiU28gZmFyLCB0aGluZ3MgYXJlIGxvb2tpbmcgZ29vZC4iICA8UD4gIkkga25vdy4gVGhpcyByZWFsbHkgY291bGQgYmUgdGhlIG9wcG9ydHVuaXR5IHdlJ3ZlIGJlZW4gd2FpdGluZyBmb3IuIiAgPFA+IERhdmlkIG5vZGRlZCBpbiBhZ3JlZW1lbnQsIGFuZCBzdGFydGVkIGZvciB0aGUgZWFzdCBlbmQgb2YgdGhlIHBvZGxpa2UgbGFiLiAgPFA+IEFtYXppbmdseSwgdGhlIGRlc2lnbiBvZiB0aGUgbGFiJ3MgdHJhbnNwb3J0IHBvZCB3YXMgYmFzZWQgb24gYW4gb2xkIHZpZCBhYm91dCBzcGFjZSB0cmF2ZWwuIEV2ZW4gdGhlIHN1Ym1lcnNpYmxlcyB3ZXJlIG1vZGVsZWQgb24gdGhlIHNoYXBlIG9mIHRoZSBFVkEgdmVoaWNsZXMgb24gdGhlIHNwYWNlc2hpcCBpbiB0aGF0IGZpbG0gY2FsbGVkIDIwMDEsIG5vdyBuZWFybHkgMjAwIHllYXJzIG9sZC4gTm90IHRoYXQgYW55b25lIHJlYWxseSB3YXRjaGVkIHRoZSBvbGQgdmlkcyBhbnltb3JlLiAgPFA+IEJ1dCB0aGF0IGNhcmVmdWxseSByZXNlYXJjaGVkIGRlc2lnbiBmb3Igc3BhY2UgbWFkZSBhYnNvbHV0ZWx5IHBlcmZlY3Qgc2Vuc2UgZm9yIHRoZSBkZWVwIG9jZWFuIGVudmlyb25tZW50LCB3aGVyZSB0aGUgcHJlc3N1cmUgY291bGQgZ2V0IGNsb3NlIHRvIG9uZSB0aG91c2FuZCBhdG1vc3BoZXJlcyBhbmQgdGhlIHRlbXBlcmF0dXJlIHBsdW5nZWQgdG8gd2VsbCBiZWxvdyB0aGUgemVybyBtYXJrLCB0aG91Z2ggbm90aGluZyBldmVyIGZyb3plIHRoYW5rcyB0byB0aGUgd2F0ZXIgc2FsaW5pdHkuICA8UD4gVGhlIGRvb3IgdG8gdGhlIHN1Ym1lcnNpYmxlIGJheSBvcGVuZWQsIGFuZCBKdWxpZSBDaGFvIHdhbGtlZCBpbi4gIDxQPiAiTW9ybmluZywiIERhdmlkIHNhaWQgcXVpY2tseS4gIDxQPiBPbmNlIHRoZXkgaGFkIGJlZW4gdG9nZXRoZXIsIGJhY2sgYXQgV29vZHMgSG9sZSAtLSBwYXJ0bmVycyBpbiBsaWZlIGFuZCBpbiBzY2llbmNlLiBOb3QgYW55bW9yZS4gQnV0IHdoZW4gaGUgcGxhbm5lZCB0aGUgbGFiLCBoZSBrbmV3IGhlJ2Qgd2FudCBKdWxpZSB3b3JraW5nIHdpdGggdGhlIHRlYW0uIEJvdGggdGhvdWdodCB0aGV5IGNvdWxkIGdldCBwYXN0IHRoZWlyIHBhc3QuIEVhc2llciBzYWlkIHRoYW4gZG9uZSwgRGF2aWQgcmVhbGl6ZWQuICA8UD4gQnV0IHRoZW4sIHRoZXkgYm90aCB3b3JrZWQgaGFyZCB0byByZW1haW4gcHJvZmVzc2lvbmFsIGFuZCB0byBhdm9pZCBhbnkgbGV0dGluZyBkb3duIG9mIHRoZWlyIGd1YXJkIGFuZCBzbGlwcGluZyBpbnRvIC0tIHdoYXQ/IEZyaWVuZHNoaXA/IFJlbWVtYnJhbmNlPyBOb3N0YWxnaWEgZm9yIHRoZSBnb29kIHRpbWVzIHRoZXkgaGFkPyBPciBtYXliZSBiaXR0ZXJuZXNzIGF0IGhvdyBhbmQgd2h5IGl0IGVuZGVkPyAgPFA+ICJJcyBpdCBtb3JuaW5nPyBJIGdhdmUgdXAga2VlcGluZyB0cmFjayBvZiB3aGVuIGl0J3MgZGF5IG9yIG5pZ2h0LiBIb3cgcXVhaW50IG9mIHlvdSB0byBrZWVwIGl0IHVwLCIgSnVsaWUgcmVtYXJrZWQuICA8UD4gSGUgc21pbGVkLiBTaGUgYWx3YXlzIGRpZCBoYXZlIGEgYml0IG9mIGFuIGVkZ2UuICJSaWdodC4gT2theSwgZXZlcnl0aGluZyBhbGwgY2hlY2tlZCBvdXQgYXQgeW91ciBlbmQ/IiAgPFA+IEp1bGllIG5vZGRlZCwgZXZlbiBhcyBzaGUgc2xpcHBlZCBpbnRvIHRoZSBidWxreSBzdWl0IHRoYXQgd291bGQgcHJvdmlkZSBhbiBleHRyYSBtZWFzdXJlIG9mIHRlbXBlcmF0dXJlIHByb3RlY3Rpb24gc2hvdWxkIHRoZXkgaGl0IGFuIGFyZWEgd2hlcmUgdGhlIHRoZXJtYWwgY3VycmVudHMgc3Bpa2VkIGFuZCB0aGUgd2F0ZXIgd2VudCBmcm9tIGJlbG93IHplcm8gdG8gdHdvIGh1bmRyZWQgZGVncmVlcyBpbiBzZWNvbmRzLiAgPFA+ICJZdXAsIGFsbCBzZXQuIEV2ZXJ5b25lJ3MgZXhjaXRlZCBhYm91dCBnZXR0aW5nIHNhbXBsZXMgZnJvbSB0aGUgbmV3IHZlbnRzLiIgIDxQPiAiSSBrbm93LiBDb21wbGV0ZWx5IHZpcmdpbiBjb21wb3VuZHMgaW4gdGhlIHByb2Nlc3Mgb2YgYmVpbmcgLS0gSSBkb24ndCBrbm93IC0tIGJvcm4uIiAgPFA+IFNoZSBsYXVnaGVkIGF0IHRoYXQuICJJZiB5b3UgY2FuIGNhbGwgaXQgYmlydGguIiBUaGVuIHNoZSBsb29rZWQgYXQgaGltLiAiWW91IDxJPmFyZTwvaT4gY29taW5nIGFsb25nIHdpdGggbWUsIHJpZ2h0PyIgIDxQPiBEYXZpZCBub2RkZWQuICJSaWdodC4gSSdsbCBzdWl0IHVwLiBXZSdsbCB0YWtlIHN1Ym1lcnNpYmxlIG51bWJlciBvbmUuIiAgPFA+ICJEb2Vzbid0IG1hdHRlciB0byBtZS4iICA8UD4gV2l0aCB0aGF0LCBEYXZpZCBzdGFydGVkIGdldHRpbmcgaW50byBoaXMgc3VpdCwgY2hlY2tpbmcgYXMgaGUgZGlkIHRoYXQgdGhlIGJpb21ldHJpYyBmdW5jdGlvbnMga2lja2VkIGluLCB0cmFja2luZyBhbGwgaGlzIHZpdGFsIHNpZ25zLCBzZW5kaW5nIHRoZSBpbmZvcm1hdGlvbiB0byB0aGUgbGFiLiBXaGVuIGhlIHdhcyByZWFkeSwgdGhlIHRlY2huaWNpYW5zIG9wZW5lZCB1cCB0aGUgZmlyc3Qgc3ViIGRvb3IgYW5kIERhdmlkIGZvbGxvd2VkIEp1bGllIGludG8gdGhlIGluY3JlZGlibHkgdGlnaHQgc3BhY2UuICA8UD4gIk9rYXkuIEFsbCBzZXQgaGVyZSwiIERhdmlkIHNhaWQuICA8UD4gIlJvZ2VyLCBEYXZpZC4gQWlybG9jayBjbG9zZWQgYmVoaW5kIHlvdS4gSnVsaWUsIGFsbCB5b3VyIGVxdWlwbWVudCByZWFkaW5nIG9rYXk/IiAgPFA+ICJFdmVyeXRoaW5nJ3MgZmluZSwiIEp1bGllIHNhaWQuICA8UD4gIlJpZ2h0LiBFamVjdGlvbiBpbiB0aGlydHkgc2Vjb25kcy4iICA8UD4gVGhleSBzYXQgdGhlcmUgYW5kIHdhaXRlZC4gRGF2aWQgdHVybmVkIHRvIEp1bGllLCB3aG8gbG9va2VkIHN0cmFpZ2h0IGFoZWFkLCBleWVzIG9uIHRoZSBDaHJpc3RtYXMgdHJlZSAtLSBsaWtlIGFuIGFycmF5IG9mIGNvbG9yZnVsIGJ1dHRvbnMgYW5kIGxpZ2h0cy4gVGhlIHN1Ym1lcnNpYmxlIGhhZCB0aHJlZSBzbWFsbCBwb3J0cywgb25lIGRlYWQgYWhlYWQgYW5kIHR3byBvdGhlcnMgdG8gdGhlIHNpZGUuIEJlY2F1c2Ugb2YgdGhlIHRyZW1lbmRvdXMgcHJlc3N1cmUsIHRoZSB3aW5kb3dzIHRvIHRoZSBvdXRzaWRlIHdvcmxkIGhhZCB0byBiZSBzbWFsbCwgYW5kIHRoZSByZWluZm9yY2VkIHBvbHltZXIgImdsYXNzIiBpbmNoZXMgdGhpY2suICA8UD4gVGhlIHN1YiB3YXMgc2lsZW50bHkgYW5kIHNtb290aGx5IGVqZWN0ZWQgdGhyb3VnaCB0aGUgYWlybG9jay4gIDxQPiBUaGUgb3V0c2lkZSBjYW1lcmFzIHByb3ZpZGVkIGEgbXVjaCBiZXR0ZXIgdmlldyB0aGFuIGNvdWxkIGJlIHNlZW4gaW4gdGhlIHBvcnQgaW4gZnJvbnQgb2YgZWl0aGVyIHBhc3Nlbmdlci4gTm93IHRoZSBzY3JlZW5zIGFib3ZlIHRoZW0gc2hvd2VkIHRoZSB2aWV3IGFzIHRoZSBzdWIgZ2xpZGVkIGF3YXkgZnJvbSB0aGUgbGFiIHRvd2FyZCB0aGUgdW5kZXJ3YXRlciBtb3VudGFpbiByYW5nZSwgdGhlIE1pZC1BdGxhbnRpYyBSaWRnZS4gIDxQPiBZZWFycyBhZ28sIERhdmlkJ3MgdGVhbSBoYWQgbmF2aWdhdGVkIGFuZCBtYXBwZWQgYSBzZXJpZXMgb2YgdmFsbGV5cyB0aGF0IGN1dCBpbnRvIHRoZSBuZWFyZXN0IHVuZGVyc2VhIG1vdW50YWlucy4gRGF2aWQga25ldyB3aGljaCB2YWxsZXkgZ2F2ZSB0aGVtIGEgY2xlYXIgc2hvdCB0byBIVFZSLTExMzggLS0gdGhlIG5ldyBIeWRyb3RoZXJtYWwgVmVudCBSZWdpb24gMTEzOC4gIDxQPiBOb3cgSnVsaWUgZ3VpZGVkIHRoZSBzdWIgYmV0d2VlbiB0d28gbWFzc2l2ZSBtb3VuZHMgd2l0aCBqdXN0IGVub3VnaCBzcGFjZSB0byBzbGlwIGJldHdlZW4gdGhlbS4gU29tZSBhYnlzc2FsIGNyZWF0dXJlcywgYSBsaWdodC1kYW5nbGluZyBhbmdsZXIgZmlzaCBhbmQgdGhlIGFsd2F5cyBiaXphcnJlIHBlbGljYW4gZ3VscGVyIGVlbCwgY2FtZSBieSB0byBleHBsb3JlLiAgPFA+IDxJPlRoZXkgZG9uJ3QgZ2V0IG1hbnkgdmlzaXRvcnMgYXJvdW5kIGhlcmUuPC9pPiAgPFA+ICJFdmVyeXRoaW5nIGdvb2QsIEp1bGllPyIgIDxQPiAiWXVwIC0tIG5pY2UgYW5kIHNtb290aC4gVGhlIHRlbXAgcmVhZGluZ3MgYXJlIGFib3V0IHdoYXQgd2UnZCBleHBlY3QuIiAgPFA+IERhdmlkIGtuZXcgdGhhdCB0aGVzZSBzdWJzIHdlcmUgbm90IHRoZSBuZXdlc3QgdG95cyBvdXQgb2YgdGhlIFVBQydzIGJveC4gVGhlaXIgcmVhbCBhdHRlbnRpb24gc3RheWVkIGxvY2tlZCBvbiBNYXJzIGFuZCB0aGUgbXVjaC12YXVudGVkIE1hcnMgQ2l0eS4gVGhpcyBkZWVwLW9jZWFuIGxhYiBoYWQgdHVybmVkIGludG8gYSBuZWdsZWN0ZWQgc2lkZXNob3cgZm9yIEtlbGxpaGVyIGFuZCBoaXMgdGVhbSBvZiBhZHZpc2VycyBpbiBDYWxpZm9ybmlhLiAgPFA+IFdhcyB0aGUgZGF5IGNvbWluZyB0aGF0IGl0IHdvdWxkIGJlIHNodXQgZG93bj8gVGhhdCBjb3VsZCB3ZWxsIGhhcHBlbiBpZiBub3RoaW5nIHByYWN0aWNhbCBjYW1lIG91dCBvZiB0aGUgbGFiLCBhbmQgc29vbi4gVGhlIGxhYiBoYWQgYmVlbiBwcm9tb3RlZCB0byB0aGUgd29ybGQgYXMgYSBnZW5lcmFsIG9jZWFuaWMgcmVzZWFyY2ggY2VudGVyIHNwZWNpYWxpemluZyBpbiBmaW5kaW5nIG5ldyBtZXRob2RzIG9mIGRlc2FsaW5pemF0aW9uIGFuZCB1c2Ugb2Ygb2NlYW4gcmVzb3VyY2VzLCBidXQgRGF2aWQga25ldyB0aGF0IC0tIGZvciB0aGUgVUFDIC0tIHRoZXJlIHdhcyBhIG11Y2ggbGFyZ2VyIGdvYWwuIFRvd2FyZCB3aGljaCB0aGVyZSBoYWQgYmVlbiB2ZXJ5IGxpdHRsZSBwcm9ncmVzcy4gIDxQPiAiV2hvYSAtLSB0aGVyZSdzIHNvbWV0aGluZyEiIEp1bGllIHRhcHBlZCBhIGJ1dHRvbiBpbiBmcm9udCBvZiBoZXIuICA8UD4gRGF2aWQgbG9va2VkIGRvd24gYW5kIHNhdyB0aGF0IHRoZSBvdXRzaWRlIHdhdGVyIHRlbXBlcmF0dXJlIHdhcyBiZWdpbm5pbmcgdG8gc3Bpa2UuIFdoaWNoIG1lYW50IHRoYXQgYSBjdXJyZW50IG9mIHN1cGVyaGVhdGVkIHdhdGVyIGhhZCBqdXN0IGhpdCB0aGUgc3ViLiAgPFA+ICJUaGluayB3ZSdyZSBva2F5IHRvIGdvIG9uPyIgIDxQPiAiRm9yIG5vdy4gQnV0IHdlIGJlc3Qgd2F0Y2ggaXQuIEdvdCB0aGUgbmV3IHZlbnQgZmllbGQgY29taW5nIHVwIGRlYWQgYWhlYWQuIiAgPFA+IERhdmlkIGxvb2tlZCBhdCB0aGUgbGFyZ2Ugc2NyZWVuIGFib3ZlIHRoZWlyIGhlYWRzLiBUd2luIENhbWVyb24gbGVuc2VzIHByb3ZpZGVkIGEgd2F2eSAzLUQgaW1hZ2Ugb2YgdGhlIHdvcmxkIGFoZWFkIC0tIHdhdnkgZHVlIHRvIHRoZSBibHVycmluZyBlZmZlY3Qgb2YgdGhlIHZvbGNhbmljYWxseSBoZWF0ZWQgd2F0ZXIuICA8UD4gQW5kIGFzIHRoZSBzdWIgZ2xpZGVkIGZvcndhcmQgYWxtb3N0IHNvdW5kbGVzc2x5LCBib3RoIG9mIHRoZW0gZ2F6ZWQgYXQgYSBzaWdodCB0aGF0IHNpbXBseSBuZXZlciBiZWNhbWUgYW55dGhpbmcgbGVzcyB0aGFuIHN0YWdnZXJpbmcuICA8YnIgLz4gPFA+IEZpcnN0IHRoZXkgc2F3IHRoZSBjcmFiIGNvbG9uaWVzIC0tIGdhdGhlcmluZ3Mgb2YgZ2lhbnQgYWxiaW5vIGNyYWJzIHRoYXQsIHVubGlrZSB0aGVpciBtb3JlIHByb3NhaWMgc2Vhc2hvcmUgY291c2lucywgd29ya2VkIGFuZCBodW50ZWQgdG9nZXRoZXIsIGFjdGluZyBtb3JlIGxpa2UgYW50cy4gVGhlIGZhY3QgdGhhdCB0aGV5IHdlcmUgYmxlYWNoLXdoaXRlIGFuZCBlYWNoIHdhcyB0aGUgc2l6ZSBvZiBhIGtpdGNoZW4gdGFibGUgYWx3YXlzIG1hZGUgdGhlIGluaXRpYWwgZ2xpbXBzZSBvZiB0aGlzIGFsdGVybmF0ZSB3b3JsZCBhbiBhbWF6aW5nIG9uZS4gIDxQPiBUaGVuIHRoZXkgc3BvdHRlZCBvdGhlciBjcnVzdGFjZWFucyBoYW5naW5nIGFyb3VuZCB0aGUgcGVyaXBoZXJ5LCBwZXJoYXBzIGhvcGluZyB0byBzY2FyZiB1cCB3aGF0ZXZlciB0aGUgY3JhYnMgbGVmdCBvdmVyLiBPbmUgb2YgdGhlbSAtLSBmb3IgRGF2aWQsIHRoZSBtb3N0IGRpc3R1cmJpbmcgY3JlYXR1cmUgZG93biBoZXJlIC0tIHdhcyB0aGUgZ3lhbnRob21vdXMsIGFuIGlzb3BvZCB0aGUgc2l6ZSBvZiBhIGdvbGRlbiByZXRyaWV2ZXIuIFRvIHdpdG5lc3MgaXQgd2FzIHRvIHRoaW5rIHRoYXQgaXQgd2FzIGltcG9zc2libGUgdGhhdCBpdCBjYW1lIGZyb20gRWFydGguICA8UD4gIlR1YmUgd29ybXMgY29taW5nIHVwLCIgSnVsaWUgc2FpZC4gIDxQPiBGcm9tIG91dCBvZiB0aGUgbWlzdCBvZiBibHVycnkgdm9sY2FuaWMgd2F0ZXIgYW5kIGZsZWNrcyBvZiBkZWJyaXMsIERhdmlkIHdhdGNoZWQgdGhlIGZpZWxkIG9mIHR1YmUgd29ybXMgYXBwZWFyLiBUaGVzZSB3b3JtcyAtLSBzb21lIHN0YW5kaW5nIHR3ZW50eSB0byB0aGlydHkgZmVldCB0YWxsIC0tIHdlcmUgdGhlIHRydWUgZG9taW5hbnQgbGlmZS1mb3JtIGRvd24gaGVyZS4gVGhlIHR1YmUgd29ybXMgaG9zdGVkIHRoZSBwYXJhc2l0aWMgYmFjdGVyaWEgdGhhdCBzb21laG93IHRvb2sgdGhlIHN1bGZ1cm91cyB3YXRlciwgcG9pc29ub3VzIHRvIGFueSBvdGhlciBjcmVhdHVyZSwgYW5kIHR1cm5lZCBpdCBpbnRvIGZvb2QgdGhhdCB0aGUgd29ybXMgdGhlbiBjb25zdW1lZC4gQSBwZXJmZWN0IGFuZCBpbmNyZWRpYmxlIHN5bWJpb3RpYyByZWxhdGlvbnNoaXAuIEFuZCB0aGUgZmFjdCB0aGF0IHRoZSBmb29kIHByb2R1Y2VkIHJlc2VtYmxlZCBoZW1vZ2xvYmluIGluIGl0cyBjaGVtaWNhbCBtYWtldXAgd2FzIHN0aWxsIHNvbWV0aGluZyB0aGF0IGNvbmZ1c2VkIHNjaWVudGlzdHMsIGV2ZW4gYSBodW5kcmVkIHllYXJzIGFmdGVyIHRoZSB3b3JtcycgZGlzY292ZXJ5IGJ5IFJvYmVydCBCYWxsYXJkLiBNYW55IG9mIHRoZSBzdGF0aW9uJ3MgYmVzdCB0ZWFtcyB3b3JrZWQgb24gZmluZGluZyBvdXQgd2hlcmUgdGhpcyBsaWZlIGNhbWUgZnJvbSwgaG93IGl0IGRldmVsb3BlZCwgYW5kIGhvdyBpdCBtaWdodCBldm9sdmUgaW4gdGhlIGZ1dHVyZS4gIDxQPiBKdWxpZSBlZGdlZCB0aGUgc21hbGwgc3ViIHVwIGFuZCBzYWlsZWQgaXQgYWJvdmUgdGhlIG1hc3NpdmUgdHViZSB3b3JtIGZpZWxkLCBhcyB0aGUgd29ybXMgcmVwZWF0ZWRseSBzdWNrZWQgaW4gdGhlIHBvaXNvbm91cyB3YXRlciwgZWFjaCBmZWVkaW5nIGl0cyBvd24gY29sb255IG9mIGJhY3RlcmlhLiBUaGUgc2hhcnAgdGVtcGVyYXR1cmUgc3Bpa2UgLS0gdGhlIHN0cmF5IGN1cnJlbnQgLS0gc2VlbWVkIHRvIGhhdmUgdmVlcmVkIGF3YXkuICA8UD4gIkFsd2F5cyBzb21ldGhpbmcgdG8gc2VlLCBpc24ndCBpdD8iIERhdmlkIHNhaWQuICA8UD4gIlRoYXQncyBmb3Igc3VyZS4iICA8UD4gPEk+U29tZXRoaW5nIC0tIGFzIGluIGEgY29tcGxldGUgZWNvc3lzdGVtIHRoYXQgaGFzIGFic29sdXRlbHkgbm90aGluZyB0byBkbyB3aXRoIHBob3Rvc3ludGhlc2lzLjwvaT4gTm90aGluZyB0byBkbyB3aXRoIGFueSBzeXN0ZW0gb2YgbGlmZSBmb3VuZCBvbiB0aGUgc3VyZmFjZSBhdCBhbGwuIFRoaXMgd2FzIGFzIGNsb3NlIHRvIGFuIGFsaWVuIHdvcmxkIGFzIERhdmlkIGNvdWxkIGltYWdpbmUuICA8UD4gWWV0LCBoZXJlIGl0IHdhcywgYW5jaWVudCwgdGhyaXZpbmcgLS0gYW5kIERhdmlkLCBhbG9uZyB3aXRoIHRoZSBvdGhlcnMgb24gaGlzIHRlYW0sIGZlbHQgaXQgaGFkIHRoaW5ncyB0byBzYXkuIEFib3V0IHBsYW5ldCBFYXJ0aC4gQWJvdXQgaHVtYW5pdHkuIE1heWJlIGFib3V0IGh1bWFuaXR5J3MgYWJpbGl0eSB0byBzdXJ2aXZlLiAgPFA+IExldCBldmVyeW9uZSBlbHNlIGtlZXAgdGhlaXIgZXllcyBvbiBNYXJzLiBGb3IgRGF2aWQsIGRvd24gaGVyZSB3YXMgd2hlcmUgdGhlIHJlYWwgbXlzdGVyeSBvZiBsaWZlIGxheS4gIDxQPiAiT2theSwgZ29pbmcgdG8gc3RhcnQgaGVhZGluZyBvdmVyIHRvd2FyZCB0aGUgbmV3IHZlbnRzLCIgSnVsaWUgc2FpZC4gIDxQPiBEYXZpZCBub2RkZWQgYXMgc2hlIGJhbmtlZCB0aGUgc3VibWVyc2libGUgdG8gdGhlIHJpZ2h0LCBhd2F5IGZyb20gdGhpcyBtYXR1cmUgdmVudCBmaWVsZCwgYXdheSBmcm9tIHRoZSBsb29taW5nICJzbW9rZXJzIiBhaGVhZCAtLSB0aGUgbWluaXZvbGNhbm8tIGxpa2Ugb3BlbmluZ3MgLS0gdG8gd2hlcmUgTW90aGVyIEVhcnRoIGhhZCBqdXN0IHJlY2VudGx5IGNyYWNrZWQgb3BlbiBhIGJpdCBtb3JlLiAgPFA+IEFuZCBsaWZlIC0tIGEgZGlmZmVyZW50IGtpbmQgb2YgbGlmZSAtLSB3YXMgYWJvdXQgdG8gYmVnaW4uICA8UD4gQ29weXJpZ2h0IMKpIDIwMDkgYnkgSWQgU29mdHdhcmUsIEluYy4gQWxsIHJpZ2h0cyByZXNlcnZlZB4EXyFTQgKAgARkZAISDw9kFgIeB29uY2xpY2sFHGhpc3RvcnkuYmFjaygpOyByZXR1cm4gZmFsc2VkAhQPD2QWAh8FBThKYXZhU2NyaXB0OnBvc3REZXRhaWxzKCdDb250ZW50Q2FmZS5hc3B4Jyk7IHJldHVybiBmYWxzZWQCFg8PFgIfAmcWAh8FBRx3aW5kb3cuY2xvc2UoKTsgcmV0dXJuIGZhbHNlZGTyGPP50LGL3xsKZcd3E/IVORAoCw==" type="hidden">
-</div>
+    <form name="ContentCafeForm" method="post" action="Excerpt.aspx?UserID=NYPL49807&amp;Password=CC68707&amp;ItemKey=9781453219539" id="ContentCafeForm">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUJOTE0MTI1MjM1D2QWAgIBD2QWEgIBDw8WAh4ISW1hZ2VVcmwFfGh0dHA6Ly9pbWFnZXNhLmJ0b2wuY29tL0NvbnRlbnRDYWZlL0phY2tldC5hc3B4P1VzZXJJRD1Db250ZW50Q2FmZUNsaWVudCZQYXNzd29yZD1DbGllbnQmUmV0dXJuPVQmVHlwZT1TJlZhbHVlPTk3ODE0NTMyMTk1MzlkZAIDDw8WAh4EVGV4dAUZRnJhbmtsaW4ncyBDaHJpc3RtYXMgR2lmdGRkAgUPDxYEHwEFBVVQQzogHgdWaXNpYmxlaGRkAgcPDxYCHwEFE0lTQk46IDk3ODE0NTMyMTk1MzlkZAIPDw8WAh8BBQhFeGNlcnB0OmRkAhAPZBYCZg9kFgJmDw8WBh4PSG9yaXpvbnRhbEFsaWduCyopU3lzdGVtLldlYi5VSS5XZWJDb250cm9scy5Ib3Jpem9udGFsQWxpZ24BHwEFhh88aHRtbD48Ym9keT4KPGgxPjxmb250IHNpemU9IiszIj5GcmFua2xpbiYjMzk7cyBDaHJpc3RtYXMgR2lmdDwvZm9udD48L2gxPgo8aHIgbm9zaGFkZSBzaXplPSIxIj48Zm9udCBzaXplPSIrMSI+PGI+QnkgUGF1bGV0dGUgQm91cmdlb2lzLCBCcmVuZGEgQ2xhcms8L2I+PC9mb250PjwvaHI+CjxoND48Yj5LaWRzIENhbiBQcmVzczwvYj48L2g0Pgo8Zm9udCBzaXplPS0xPjxiPgo8ZGl2PkNvcHlyaWdodCAmY29weTsgMTk5OCBDb250ZXh0eDxici8+CkFsbCByaWdodHMgcmVzZXJ2ZWQuPGJyLz48L2Rpdj4KSVNCTjogOTc4LTEtNDUzMi0xOTUzLTkKPC9iPjwvZm9udD48YnIvPgo8aHIgbm9zaGFkZSBzaXplPScxJz48L2hyPgo8IS0tIEV4Y2VycHQgLS0+CjxkaXY+PERJVj5DSEFQVEVSIDE8UD5GcmFua2xpbiBsb3ZlZCBDaHJpc3RtYXMuIEhlIGNvdWxkIG5hbWUgYWxsIG9mIFNhbnRhJ3MgcmVpbmRlZXIuIEhlIGNvdWxkIHRpZSByaWJib25zIGludG8gYm93cyBhbmQgcGxheSAiU2lsZW50IE5pZ2h0IiBvbiBoaXMgcmVjb3JkZXIuPC9QPjxQPkZyYW5rbGluIGxpa2VkIHRvIGdpdmUgcHJlc2VudHMgYW5kIHRvIHJlY2VpdmUgdGhlbS4gQnV0IHRoaXMgeWVhciBoZSBjb3VsZG4ndCBkZWNpZGUgd2hhdCB0byBnaXZlIHRvIHRoZSBDaHJpc3RtYXMgdG95IGRyaXZlLjwvUD48UD5FdmVyeSBEZWNlbWJlciB0aGUgc3R1ZGVudHMgaW4gTXIuIE93bCdzIGNsYXNzIGRvbmF0ZWQgdG95cyBmb3IgbmVlZHkgZmFtaWxpZXMuIFRoZSB0b3lzIGNvdWxkIGJlIG5ldyBvciBjYXJlZnVsbHkgdXNlZC48L1A+PFA+V2hlbiBNci4gT3dsIHB1dCBvdXQgdGhlIGNvbGxlY3Rpb24gYm94LCBldmVyeW9uZSB3YXMgZXhjaXRlZC4gVGhleSBoYWQgdGhyZWUgZGF5cyB0byBjaG9vc2UgdGhlIHBlcmZlY3QgZ2lmdHMgdG8gZ2l2ZS48L1A+PFA+VGhhdCBldmVuaW5nIEZyYW5rbGluIGR1ZyB0aHJvdWdoIGhpcyB0b3lzLiBIZSBwaWNrZWQgdXAgYSBzaGlueSByZWQgY2FyLjwvUD48UD4iSSByZW1lbWJlciB0aGlzLCIgaGUgc2FpZCwgd2hlZWxpbmcgaXQgYXJvdW5kLiAiVnJvb20hIjwvUD48UD5OZXh0LCBGcmFua2xpbiBwdWxsZWQgb3V0IGEgc3R1ZmZlZCBlbGVwaGFudCBhbmQgaGVsZCBoZXIgdGlnaHQuPC9QPjxQPiJJIHdvbmRlcmVkIHdoZXJlIHlvdSdkIGdvbmUhIiBoZSBjcmllZC48L1A+PFA+VGhlbiBGcmFua2xpbiBmb3VuZCBoaXMgYmVzdCBncmVlbiBtYXJibGUuIEl0IGhhZCBiZWVuIG1pc3NpbmcgZm9yIHdlZWtzLjwvUD48UD4iRmFudGFzdGljISIgaGUgc2hvdXRlZC48L1A+PFA+RnJhbmtsaW4gbG92ZWQgaGlzIG1hcmJsZXMuIEhlIGhhZCB3b24gZXZlcnkgbWFyYmxlIGluIGhpcyBjb2xsZWN0aW9uLCBhbmQgZWFjaCBvbmUgd2FzIGJlYXV0aWZ1bC48L1A+PFA+RnJhbmtsaW4gcGlja2VkIHRocm91Z2ggdGhlIHJlc3Qgb2YgdGhlIHRveXMuIEhlIGRlY2lkZWQgdG8ga2VlcCBldmVyeXRoaW5nIGJ1dCBhIHJ1c3R5IHRydWNrIHdpdGggYSBtaXNzaW5nIHdoZWVsLjwvUD48UD5GcmFua2xpbiBhc2tlZCBoaXMgZmF0aGVyIHRvIGhlbHAgaGltIGZpeCB0aGUgdHJ1Y2suPC9QPjxQPiJXZSBjYW4gdHJ5LCIgc2FpZCBoaXMgZmF0aGVyLiAiQnV0IGl0IHdvbid0IGxvb2sgbmV3IG9yIGV2ZW4gZ2VudGx5IHVzZWQuIjwvUD48UD4iSXQncyBhbGwgSSBoYXZlLiBFdmVyeXRoaW5nIGVsc2UgaXMgdG9vIHNwZWNpYWwgdG8gZ2l2ZSBhd2F5LiI8L1A+PFA+IkknZCBsaWtlIHlvdSB0byB0aGluayBhYm91dCB0aGF0LCIgc2FpZCBGcmFua2xpbidzIGZhdGhlci4gIkNocmlzdG1hcyBpcyBhIHRpbWUgdG8gYmUgZ2VuZXJvdXMuIjwvUD48UD5UaGUgbmV4dCBkYXkgYXQgc2Nob29sLCBGcmFua2xpbiBhc2tlZCBoaXMgZnJpZW5kcyB3aGF0IHRoZXkgd2VyZSBnaXZpbmcuPC9QPjxQPkJlYXZlciB3YXMgZG9uYXRpbmcgaGVyIGJpZyBib29rIG9mIHF1ZXN0aW9ucyBhbmQgYW5zd2Vycy48L1A+PFA+IkkgYWxyZWFkeSBrbm93IGFsbCB0aGUgYW5zd2VycywiIHNoZSBib2FzdGVkLjwvUD48UD4iSSdtIGdpdmluZyBhIHB1enpsZSwgc2FpZCBCZWFyLiAiSSBvbmx5IGRpZCBpdCBvbmNlLiI8L1A+PFA+RnJhbmtsaW4gZnJvd25lZC4gIkknbSBnaXZpbmcgYSB0cnVjayAuLi4gSSB0aGluay4iPC9QPjxQPkhlIGhhZCB0d28gZGF5cyBsZWZ0IHRvIGRlY2lkZS48L1A+PFA+QnV0IEZyYW5rbGluIHdhcyB0b28gYnVzeSB0byB0aGluayBhYm91dCB0aGUgdG95IGRyaXZlLjwvUD48UD5IZSBwbGF5ZWQgdGhlIHJlY29yZGVyIGluIHRoZSBzY2hvb2wgY29uY2VydCwgbWFkZSBhIGNhcmQgZm9yIE1yLiBPd2wgYW5kIHdyb3RlIGEgaG9saWRheSBzdG9yeS48L1A+PFA+IkknbGwgcGljayBhIHRveSBhZnRlciBzY2hvb2wsIiBoZSBwcm9taXNlZCBoaW1zZWxmLjwvUD48UD5XaGVuIEZyYW5rbGluIGdvdCBob21lLCB0aGVyZSB3YXMgYSBnaWZ0IGZvciBoaW0gdW5kZXIgdGhlIHRyZWUuIEl0IHdhcyBmcm9tIEdyZWF0IEF1bnQgSGFycmlldC48L1A+PFA+RnJhbmtsaW4gd2FzIHNvIGV4Y2l0ZWQgdGhhdCBoZSBmb3Jnb3QgYWxsIGFib3V0IGNob29zaW5nIGEgZ2lmdCBmb3IgdGhlIHRveSBkcml2ZS48L1A+PFA+RnJhbmtsaW4gc3F1ZWV6ZWQgdGhlIHByZXNlbnQgYW5kIHNob29rIGl0LjwvUD48UD4iTm8gcGVla2luZywiIGxhdWdoZWQgaGlzIG1vdGhlci48L1A+PFA+IkRvIHlvdSBrbm93IHdoYXQgaXQgaXM/IiBhc2tlZCBGcmFua2xpbiBlYWdlcmx5LjwvUD48UD4iSXQgbXVzdCBiZSBzb21ldGhpbmcgc3BlY2lhbC4iIEhpcyBtb3RoZXIgc21pbGVkLiAiR3JlYXQgQXVudCBIYXJyaWV0IGFsd2F5cyBnaXZlcyBwcmVzZW50cyB0aGF0IG1lYW4gc29tZXRoaW5nIHRvIHlvdSBhbmQgdG8gaGVyLiI8L1A+PFA+Ikxpa2UgbGFzdCB5ZWFyLCIgc2FpZCBGcmFua2xpbi48L1A+PFA+R3JlYXQgQXVudCBIYXJyaWV0IGtuZXcgdGhhdCBoZSBsb3ZlZCB0byBwdXQgb24gcGxheXMuIEFuZCBzaGUgZ2F2ZSBoaW0gdHdvIHB1cHBldHMgdGhhdCBoYWQgYmVlbiBoZXJzIHdoZW4gc2hlIHdhcyBsaXR0bGUuIEl0IHdhcyBvbmUgb2YgRnJhbmtsaW4ncyBiZXN0IHByZXNlbnRzIGV2ZXIuPC9QPjxQPlRoZSBuZXh0IGRheSBhdCBzY2hvb2wsIHRoZSBjb2xsZWN0aW9uIGJveCB3YXMgYnJpbW1pbmcuPC9QPjxQPiJZb3UndmUgYWxsIGJlZW4gdmVyeSBnZW5lcm91cywiIHNhaWQgTXIuIE93bC4gIkRvIHlvdSBrbm93IHRoYXQgeW91ciBnaWZ0IG1pZ2h0IGJlIHRoZSBvbmx5IG9uZSBzb21lYm9keSByZWNlaXZlcyB0aGlzIGhvbGlkYXk/IjwvUD48UD5GcmFua2xpbiBndWxwZWQuIEhlJ2QgbmV2ZXIgdGhvdWdodCBvZiB0aGF0LiBIZSBoYWQgdG8gYnJpbmcgYSBwcmVzZW50IHRvbW9ycm93ISAgICAgPC9ESVY+PC9QPjwvZGl2Pjxici8+CjxpPihDb250aW51ZXMuLi4pPC9pPgo8IS0tIENvcHlyaWdodCBOb3RpY2UgLS0+CjxibG9ja3F1b3RlPjxociBub3NoYWRlIHNpemU9JzEnPjxmb250IHNpemU9Jy0yJz5FeGNlcnB0ZWQgZnJvbSA8Yj5GcmFua2xpbiYjMzk7cyBDaHJpc3RtYXMgR2lmdDwvYj4gYnkgPGI+UGF1bGV0dGUgQm91cmdlb2lzLCBCcmVuZGEgQ2xhcms8L2I+LiBDb3B5cmlnaHQgJmNvcHk7IDE5OTggQ29udGV4dHguIEV4Y2VycHRlZCBieSBwZXJtaXNzaW9uIG9mIEtpZHMgQ2FuIFByZXNzLiA8YnIvPkFsbCByaWdodHMgcmVzZXJ2ZWQuIE5vIHBhcnQgb2YgdGhpcyBleGNlcnB0IG1heSBiZSByZXByb2R1Y2VkIG9yIHJlcHJpbnRlZCB3aXRob3V0IHBlcm1pc3Npb24gaW4gd3JpdGluZyBmcm9tIHRoZSBwdWJsaXNoZXIuPGJyLz5FeGNlcnB0cyBhcmUgcHJvdmlkZWQgYnkgRGlhbC1BLUJvb2sgSW5jLiBzb2xlbHkgZm9yIHRoZSBwZXJzb25hbCB1c2Ugb2YgdmlzaXRvcnMgdG8gdGhpcyB3ZWIgc2l0ZS48L2ZvbnQ+PGhyIG5vc2hhZGUgc2l6ZT0nMSc+PC9ibG9ja3F1b3RlPgo8L2JvZHk+PC9odG1sPh4EXyFTQgKAgARkZAISDw9kFgIeB29uY2xpY2sFHGhpc3RvcnkuYmFjaygpOyByZXR1cm4gZmFsc2VkAhQPD2QWAh8FBThKYXZhU2NyaXB0OnBvc3REZXRhaWxzKCdDb250ZW50Q2FmZS5hc3B4Jyk7IHJldHVybiBmYWxzZWQCFg8PFgIfAmcWAh8FBRx3aW5kb3cuY2xvc2UoKTsgcmV0dXJuIGZhbHNlZGTDwetnYooT8fbwj3n3jre8OpB1NQ==" />
 
-<div>
-
-	<input name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEWBwKfjJjLAQK/urWcBwL0263HBwLE1NLiAQK+rvNOAtDK7eMDApP4+ZoIakots6uVTwjrr2pTdruzUfnn6SY=" type="hidden">
-</div>
-			<table align="center" border="0" cellpadding="1" cellspacing="0" width="100%">
-				<tbody><tr>
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="B0DDCE78" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEWBwKq+8W2CQK/urWcBwL0263HBwLE1NLiAQK+rvNOAtDK7eMDApP4+ZoIjFNkhkHhrvx4PxFr6gvl2U6Oh6A=" />
+			<table cellspacing="0" cellpadding="1" width="100%" align="center" border="0">
+				<tr>
 					<td align="left">&nbsp;</td>
-					<td align="left"><img id="ImageHeader" src="Content%20Cafe%203%20Client%20-%20Excerpt_files/Jacket.jpeg" style="border-width:0px;"></td>
+					<td align="left"><img id="ImageHeader" src="http://imagesa.btol.com/ContentCafe/Jacket.aspx?UserID=ContentCafeClient&amp;Password=Client&amp;Return=T&amp;Type=S&amp;Value=9781453219539" border="0" /></td>
 					<td align="left">&nbsp;</td>
 					<td align="left">
-						<table border="0" cellpadding="1" cellspacing="0" width="100%">
-							<tbody><tr>
-								<td align="left"><span id="Label_Content" class="PageHeader2">Maelstrom</span></td>
+						<table cellspacing="0" cellpadding="1" width="100%" border="0">
+							<tr>
+								<td align="left"><span id="Label_Content" class="PageHeader2">Franklin's Christmas Gift</span></td>
 							</tr>
 							<tr>
 								<td align="left"></td>
 							</tr>
 							<tr>
-								<td align="left"><span id="Label_ItemKey" class="PageHeader3">ISBN: 9781439158555</span></td>
+								<td align="left"><span id="Label_ItemKey" class="PageHeader3">ISBN: 9781453219539</span></td>
 							</tr>
 							<tr>
 								<td align="left">
-								        <input name="strUserIDHidden" id="strUserIDHidden" type="hidden">
-								        <input name="strPasswordHidden" id="strPasswordHidden" type="hidden">
-								        <input name="strItemKeyHidden" id="strItemKeyHidden" type="hidden">
+								        <input type="hidden" name="strUserIDHidden" id="strUserIDHidden" />
+								        <input type="hidden" name="strPasswordHidden" id="strPasswordHidden" />
+								        <input type="hidden" name="strItemKeyHidden" id="strItemKeyHidden" />
 								</td>
 							</tr>
-						</tbody></table>
+						</table>
 					</td>
 				</tr>
-			</tbody></table>
-			<br>
-			<hr>
-			<br>
-				<span id="Label_ContentText" class="PageHeader2">Excerpt:</span><table id="Table_Main" border="0" cellpadding="2" cellspacing="1">
-	<tbody><tr>
-		<td align="left"><p align="center"> <big><b>2145</b></big> <big><b>TWO DAYS BEFORE</b></big> <big><b>THE FIRST</b></big> <big><b>OUTBREAK</b></big>  <br> <br> </p><p align="center"> <b>1</b> <br> <b>THE MID-ATLANTIC RIDGE</b><br> <b>THE ROBERT BALLARD DEEP OCEAN LAB</b><br> <b>DEPTH: 18,674 FEET, OUTSIDE TEMPERATURE:</b><br> <b>178 DEGREES FAHRENHEIT</b><br> <b>DATE: 03_11_2145</b>  <br> </p><p>
- DAVID RODRIGUES LOOKED AT A SEISMIC map of the ocean floor, focusing on
- the mammoth Mid-Atlantic Ridge -- the world's greatest mountain chain, 
-although miles under the surface of the ocean.  </p><p> He saw a massive
- network of fissures -- potential problem areas -- all at different 
-depths, spread throughout the ridge. Each area fed a steady stream of 
-real-time information to the lab's computers.  </p><p> Only days ago the
- lab got an early warning about a good-sized plate shift that was bound 
-to produce some major fissures. But the information coming from the 
-probes -- detailing the stress to the continental plates, the depth of 
-bedrock, the possible path of erupting magma -- showed that the 
-BallardLab itself was not in any danger. Good thing too. Anevacuation 
-would be costly, not to mention years of work lost down the hydrothermal
- tube.  </p><p> But the probes also showed that this latest seismic spur
- would create a new series of thermal spouts not too far from the lab.  </p><p>
- David turned back to the open work area behind him. Giant tanks housed 
-specimens, all surrounded by teams of his scientists working at 
-self-contained modules near the tanks. No closed offices or lab rooms 
-here -- as lab director, David Rodriguez had a say in the design and he 
-wanted everyone coming down here to feel that no matter what they were 
-working on, they were all part of a team.  </p><p> <i>What one discovers, we all discover,</i> he always told them.  </p><p>
- And though practically everyone down here was bristling with 
-credentials -- many more so than others -- there would be no "Doctor 
-this" or "Doctor that." Including Rodriguez himself.  </p><p> <i>"¿Ola, Tomas, cómo van las cosas hoy?"</i>  </p><p> Tomas, who held advanced degrees in genetic microbiology and molecular physics, looked up and smiled. <i>"Muy bien,</i>
- David. Though we hope to get our hands on some of the new samples" -- 
-he nodded his head to the great ocean past the massive walls of the lab 
--- "out there."  </p><p> David laughed. "I'm going out there soon. Just 
-waiting until things settle down a bit." He turned to the big 3-D view 
-of the ocean floor behind him. "So far, things are looking good."  </p><p> "I know. This really could be the opportunity we've been waiting for."  </p><p> David nodded in agreement, and started for the east end of the podlike lab.  </p><p>
- Amazingly, the design of the lab's transport pod was based on an old 
-vid about space travel. Even the submersibles were modeled on the shape 
-of the EVA vehicles on the spaceship in that film called 2001, now 
-nearly 200 years old. Not that anyone really watched the old vids 
-anymore.  </p><p> But that carefully researched design for space made 
-absolutely perfect sense for the deep ocean environment, where the 
-pressure could get close to one thousand atmospheres and the temperature
- plunged to well below the zero mark, though nothing ever froze thanks 
-to the water salinity.  </p><p> The door to the submersible bay opened, and Julie Chao walked in.  </p><p> "Morning," David said quickly.  </p><p>
- Once they had been together, back at Woods Hole -- partners in life and
- in science. Not anymore. But when he planned the lab, he knew he'd want
- Julie working with the team. Both thought they could get past their 
-past. Easier said than done, David realized.  </p><p> But then, they 
-both worked hard to remain professional and to avoid any letting down of
- their guard and slipping into -- what? Friendship? Remembrance? 
-Nostalgia for the good times they had? Or maybe bitterness at how and 
-why it ended?  </p><p> "Is it morning? I gave up keeping track of when it's day or night. How quaint of you to keep it up," Julie remarked.  </p><p> He smiled. She always did have a bit of an edge. "Right. Okay, everything all checked out at your end?"  </p><p>
- Julie nodded, even as she slipped into the bulky suit that would 
-provide an extra measure of temperature protection should they hit an 
-area where the thermal currents spiked and the water went from below 
-zero to two hundred degrees in seconds.  </p><p> "Yup, all set. Everyone's excited about getting samples from the new vents."  </p><p> "I know. Completely virgin compounds in the process of being -- I don't know -- born."  </p><p> She laughed at that. "If you can call it birth." Then she looked at him. "You <i>are</i> coming along with me, right?"  </p><p> David nodded. "Right. I'll suit up. We'll take submersible number one."  </p><p> "Doesn't matter to me."  </p><p>
- With that, David started getting into his suit, checking as he did that
- the biometric functions kicked in, tracking all his vital signs, 
-sending the information to the lab. When he was ready, the technicians 
-opened up the first sub door and David followed Julie into the 
-incredibly tight space.  </p><p> "Okay. All set here," David said.  </p><p> "Roger, David. Airlock closed behind you. Julie, all your equipment reading okay?"  </p><p> "Everything's fine," Julie said.  </p><p> "Right. Ejection in thirty seconds."  </p><p>
- They sat there and waited. David turned to Julie, who looked straight 
-ahead, eyes on the Christmas tree -- like an array of colorful buttons 
-and lights. The submersible had three small ports, one dead ahead and 
-two others to the side. Because of the tremendous pressure, the windows 
-to the outside world had to be small, and the reinforced polymer "glass"
- inches thick.  </p><p> The sub was silently and smoothly ejected through the airlock.  </p><p>
- The outside cameras provided a much better view than could be seen in 
-the port in front of either passenger. Now the screens above them showed
- the view as the sub glided away from the lab toward the underwater 
-mountain range, the Mid-Atlantic Ridge.  </p><p> Years ago, David's team
- had navigated and mapped a series of valleys that cut into the nearest 
-undersea mountains. David knew which valley gave them a clear shot to 
-HTVR-1138 -- the new Hydrothermal Vent Region 1138.  </p><p> Now Julie 
-guided the sub between two massive mounds with just enough space to slip
- between them. Some abyssal creatures, a light-dangling angler fish and 
-the always bizarre pelican gulper eel, came by to explore.  </p><p> <i>They don't get many visitors around here.</i>  </p><p> "Everything good, Julie?"  </p><p> "Yup -- nice and smooth. The temp readings are about what we'd expect."  </p><p>
- David knew that these subs were not the newest toys out of the UAC's 
-box. Their real attention stayed locked on Mars and the much-vaunted 
-Mars City. This deep-ocean lab had turned into a neglected sideshow for 
-Kelliher and his team of advisers in California.  </p><p> Was the day 
-coming that it would be shut down? That could well happen if nothing 
-practical came out of the lab, and soon. The lab had been promoted to 
-the world as a general oceanic research center specializing in finding 
-new methods of desalinization and use of ocean resources, but David knew
- that -- for the UAC -- there was a much larger goal. Toward which there
- had been very little progress.  </p><p> "Whoa -- there's something!" Julie tapped a button in front of her.  </p><p>
- David looked down and saw that the outside water temperature was 
-beginning to spike. Which meant that a current of superheated water had 
-just hit the sub.  </p><p> "Think we're okay to go on?"  </p><p> "For now. But we best watch it. Got the new vent field coming up dead ahead."  </p><p>
- David looked at the large screen above their heads. Twin Cameron lenses
- provided a wavy 3-D image of the world ahead -- wavy due to the 
-blurring effect of the volcanically heated water.  </p><p> And as the 
-sub glided forward almost soundlessly, both of them gazed at a sight 
-that simply never became anything less than staggering.  <br> </p><p> 
-First they saw the crab colonies -- gatherings of giant albino crabs 
-that, unlike their more prosaic seashore cousins, worked and hunted 
-together, acting more like ants. The fact that they were bleach-white 
-and each was the size of a kitchen table always made the initial glimpse
- of this alternate world an amazing one.  </p><p> Then they spotted 
-other crustaceans hanging around the periphery, perhaps hoping to scarf 
-up whatever the crabs left over. One of them -- for David, the most 
-disturbing creature down here -- was the gyanthomous, an isopod the size
- of a golden retriever. To witness it was to think that it was 
-impossible that it came from Earth.  </p><p> "Tube worms coming up," Julie said.  </p><p>
- From out of the mist of blurry volcanic water and flecks of debris, 
-David watched the field of tube worms appear. These worms -- some 
-standing twenty to thirty feet tall -- were the true dominant life-form 
-down here. The tube worms hosted the parasitic bacteria that somehow 
-took the sulfurous water, poisonous to any other creature, and turned it
- into food that the worms then consumed. A perfect and incredible 
-symbiotic relationship. And the fact that the food produced resembled 
-hemoglobin in its chemical makeup was still something that confused 
-scientists, even a hundred years after the worms' discovery by Robert 
-Ballard. Many of the station's best teams worked on finding out where 
-this life came from, how it developed, and how it might evolve in the 
-future.  </p><p> Julie edged the small sub up and sailed it above the 
-massive tube worm field, as the worms repeatedly sucked in the poisonous
- water, each feeding its own colony of bacteria. The sharp temperature 
-spike -- the stray current -- seemed to have veered away.  </p><p> "Always something to see, isn't it?" David said.  </p><p> "That's for sure."  </p><p> <i>Something -- as in a complete ecosystem that has absolutely nothing to do with photosynthesis.</i>
- Nothing to do with any system of life found on the surface at all. This
- was as close to an alien world as David could imagine.  </p><p> Yet, 
-here it was, ancient, thriving -- and David, along with the others on 
-his team, felt it had things to say. About planet Earth. About humanity.
- Maybe about humanity's ability to survive.  </p><p> Let everyone else keep their eyes on Mars. For David, down here was where the real mystery of life lay.  </p><p> "Okay, going to start heading over toward the new vents," Julie said.  </p><p>
- David nodded as she banked the submersible to the right, away from this
- mature vent field, away from the looming "smokers" ahead -- the 
-minivolcano- like openings -- to where Mother Earth had just recently 
-cracked open a bit more.  </p><p> And life -- a different kind of life -- was about to begin.  </p><p> Copyright © 2009 by Id Software, Inc. All rights reserved</p></td>
+			</table>
+			<br />
+			<hr />
+			<br />
+				<span id="Label_ContentText" class="PageHeader2">Excerpt:</span><table id="Table_Main" cellspacing="1" cellpadding="2" border="0">
+	<tr>
+		<td align="left"><html><body>
+<h1><font size="+3">Franklin&#39;s Christmas Gift</font></h1>
+<hr noshade size="1"><font size="+1"><b>By Paulette Bourgeois, Brenda Clark</b></font></hr>
+<h4><b>Kids Can Press</b></h4>
+<font size=-1><b>
+<div>Copyright &copy; 1998 Contextx<br/>
+All rights reserved.<br/></div>
+ISBN: 978-1-4532-1953-9
+</b></font><br/>
+<hr noshade size='1'></hr>
+<!-- Excerpt -->
+<div><DIV>CHAPTER 1<P>Franklin loved Christmas. He could name all of Santa's reindeer. He could tie ribbons into bows and play "Silent Night" on his recorder.</P><P>Franklin liked to give presents and to receive them. But this year he couldn't decide what to give to the Christmas toy drive.</P><P>Every December the students in Mr. Owl's class donated toys for needy families. The toys could be new or carefully used.</P><P>When Mr. Owl put out the collection box, everyone was excited. They had three days to choose the perfect gifts to give.</P><P>That evening Franklin dug through his toys. He picked up a shiny red car.</P><P>"I remember this," he said, wheeling it around. "Vroom!"</P><P>Next, Franklin pulled out a stuffed elephant and held her tight.</P><P>"I wondered where you'd gone!" he cried.</P><P>Then Franklin found his best green marble. It had been missing for weeks.</P><P>"Fantastic!" he shouted.</P><P>Franklin loved his marbles. He had won every marble in his collection, and each one was beautiful.</P><P>Franklin picked through the rest of the toys. He decided to keep everything but a rusty truck with a missing wheel.</P><P>Franklin asked his father to help him fix the truck.</P><P>"We can try," said his father. "But it won't look new or even gently used."</P><P>"It's all I have. Everything else is too special to give away."</P><P>"I'd like you to think about that," said Franklin's father. "Christmas is a time to be generous."</P><P>The next day at school, Franklin asked his friends what they were giving.</P><P>Beaver was donating her big book of questions and answers.</P><P>"I already know all the answers," she boasted.</P><P>"I'm giving a puzzle, said Bear. "I only did it once."</P><P>Franklin frowned. "I'm giving a truck ... I think."</P><P>He had two days left to decide.</P><P>But Franklin was too busy to think about the toy drive.</P><P>He played the recorder in the school concert, made a card for Mr. Owl and wrote a holiday story.</P><P>"I'll pick a toy after school," he promised himself.</P><P>When Franklin got home, there was a gift for him under the tree. It was from Great Aunt Harriet.</P><P>Franklin was so excited that he forgot all about choosing a gift for the toy drive.</P><P>Franklin squeezed the present and shook it.</P><P>"No peeking," laughed his mother.</P><P>"Do you know what it is?" asked Franklin eagerly.</P><P>"It must be something special." His mother smiled. "Great Aunt Harriet always gives presents that mean something to you and to her."</P><P>"Like last year," said Franklin.</P><P>Great Aunt Harriet knew that he loved to put on plays. And she gave him two puppets that had been hers when she was little. It was one of Franklin's best presents ever.</P><P>The next day at school, the collection box was brimming.</P><P>"You've all been very generous," said Mr. Owl. "Do you know that your gift might be the only one somebody receives this holiday?"</P><P>Franklin gulped. He'd never thought of that. He had to bring a present tomorrow!     </DIV></P></div><br/>
+<i>(Continues...)</i>
+<!-- Copyright Notice -->
+<blockquote><hr noshade size='1'><font size='-2'>Excerpted from <b>Franklin&#39;s Christmas Gift</b> by <b>Paulette Bourgeois, Brenda Clark</b>. Copyright &copy; 1998 Contextx. Excerpted by permission of Kids Can Press. <br/>All rights reserved. No part of this excerpt may be reproduced or reprinted without permission in writing from the publisher.<br/>Excerpts are provided by Dial-A-Book Inc. solely for the personal use of visitors to this web site.</font><hr noshade size='1'></blockquote>
+</body></html></td>
 	</tr>
-</tbody></table>
-				<br>
-				<br>
+</table>
+				<br />
+				<br />
 				
-                    <input name="btnBack" value="Back" onclick="history.back(); return false;" id="btnBack" type="submit">
-                    <input name="btnMenu" value="Menu" onclick="JavaScript:postDetails('ContentCafe.aspx'); return false;" id="btnMenu" type="submit">
-				    <input name="btnClose" value="Close" onclick="window.close(); return false;" id="btnClose" type="submit">
+                    <input type="submit" name="btnBack" value="Back" onclick="history.back(); return false;" id="btnBack" />
+                    <input type="submit" name="btnMenu" value="Menu" onclick="JavaScript:postDetails('ContentCafe.aspx'); return false;" id="btnMenu" />
+				    <input type="submit" name="btnClose" value="Close" onclick="window.close(); return false;" id="btnClose" />
 								
-				<br>
-				<br>
-				<hr>
-				<table border="0" cellpadding="1" cellspacing="0" width="100%">
-					<tbody><tr>
+				<br />
+				<br />
+				<hr />
+				<table cellspacing="0" cellpadding="1" width="100%" border="0">
+					<tr>
 						<td align="center"><span id="LabelPageFooter" class="PageFooter">Copyright&nbsp;held&nbsp;by&nbsp;Baker &amp; Taylor.&nbsp;&nbsp;</span></td>
 					</tr>
-				</tbody></table>
-				<br>
+				</table>
+				<br />
 			<p></p>
 		</form>
 
@@ -199,14 +91,14 @@ cracked open a bit more.  </p><p> And life -- a different kind of life -- was ab
 	}		
 </script>
 <form name="FormPostDetails" method="post" action="">
-	<input name="UserId" value="NYPL49807" type="hidden">
-	<input name="Password" value="CC68707" type="hidden">
-	<input name="ItemKey" value="9781439158555" type="hidden">
-	<input name="VendorID" value="" type="hidden">
-	<input name="BGColor" value="" type="hidden">	
-	<input name="Options" value="" type="hidden">	
+	<input type="hidden" name="UserId" value="NYPL49807">
+	<input type="hidden" name="Password" value="CC68707">
+	<input type="hidden" name="ItemKey" value="9781453219539">
+	<input type="hidden" name="VendorID" value="">
+	<input type="hidden" name="BGColor" value="">	
+	<input type="hidden" name="Options" value="">	
 </form>		
 	
 </center>
-
-</body></html>
+</body>
+</html>
