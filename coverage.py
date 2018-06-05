@@ -34,7 +34,6 @@ from core.util import fast_query_count
 
 from overdrive import (
     OverdriveBibliographicCoverageProvider,
-    OverdriveCoverImageMirror,
 )
 
 from content_cafe import (

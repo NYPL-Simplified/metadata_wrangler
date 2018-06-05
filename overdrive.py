@@ -103,9 +103,3 @@ class OverdriveBibliographicCoverageProvider(
             Collection.id==self.collection_id
         )
         return qu
-
-
-class OverdriveCoverImageMirror(CoverImageMirror):
-    """Downloads images from Overdrive and writes them to disk."""
-
-    DATA_SOURCE = DataSource.OVERDRIVE

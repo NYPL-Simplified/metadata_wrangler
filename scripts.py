@@ -38,9 +38,7 @@ from core.scripts import (
 from core.util.permanent_work_id import WorkIDCalculator
 from core.util.personal_names import contributor_name_match_ratio
 
-from mirror import ImageScaler
 from oclc import LinkedDataCoverageProvider
-from overdrive import OverdriveCoverImageMirror
 from oclc_classify import OCLCClassifyCoverageProvider
 from viaf import VIAFClient
 
@@ -361,35 +359,6 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         for complaint in complaints:
             # say that we fixed it
             complaint.resolved = datetime.datetime.utcnow()
-
-
-class CoverImageMirrorScript(Script):
-    """This is not needed in normal usage, but it's useful to have it
-    around in case the covers get screwed up, or to do intial
-    bootstrapping of a large dataset.
-    """
-
-    def __init__(self, force=False):
-        self.force = force
-        super(CoverImageMirrorScript, self).__init__()
-
-    def run(self):
-        OverdriveCoverImageMirror(self._db).run()
-
-
-class CoverImageScaleScript(Script):
-    """This is not needed in normal usage, but it's useful to have it
-    around in case the covers get screwed up, or to do initial
-    bootstrapping of a large dataset.
-    """
-
-    def __init__(self, force=False):
-        self.force = force
-        super(CoverImageScaleScript, self).__init__()
-
-    def run(self):
-        mirrors = [OverdriveCoverImageMirror]
-        ImageScaler(self._db, mirrors).run(force=self.force)
 
 
 class PermanentWorkIDStressTestGenerationScript(Script):
