@@ -70,10 +70,15 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
     """Make sure all Identifiers registered as needing coverage by this
     CoverageProvider become Works with Editions and (probably dummy)
     LicensePools.
-
+    
     Coverage happens by running the Identifier through _other_
-    CoverageProviders, filling in the blanks with additional data from
+    CoverageProviders, which fill in the blanks with data from
     third-party entities.
+
+    This CoverageProvider may force those other CoverageProviders to
+    do their work for each Identifier immediately, or it may simply
+    register its Identifiers with those CoverageProviders and allow
+    them to complete the work at their own page.
     """
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
