@@ -195,7 +195,7 @@ class ContentCafeAPI(object):
             annotator(metadata, isbn_identifier, args)
 
         popularity = self.measure_popularity(
-            isbn_identifier, self.soap_client.ONE_YEAR_AGO
+            isbn_identifier, self.ONE_YEAR_AGO
         )
         if popularity:
             metadata.measurements.append(popularity)
@@ -329,8 +329,6 @@ class ContentCafeSOAPClient(object):
     WSDL_URL = "http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx?WSDL"
 
     DEMAND_HISTORY = "DemandHistoryDetail"
-
-    ONE_YEAR_AGO = datetime.timedelta(days=365)
 
     def __init__(self, user_id, password, wsdl_url=None):
         wsdl_url = wsdl_url or self.WSDL_URL

@@ -7,15 +7,20 @@ from nose.tools import (
 from core import mirror
 from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
+from core.metadata_layer import (
+    MeasurementData
+)
 from core.mirror import MirrorUploader
 from core.model import (
     DataSource,
     ExternalIntegration,
+    Identifier,
 )
 from core.s3 import (
     MockS3Uploader,
     S3Uploader,
 )
+from core.testing import DummyHTTPClient
 
 from . import (
     DatabaseTest,
@@ -26,8 +31,19 @@ from content_cafe import (
 )
 import content_cafe
 
+class MockSOAPClient(object):
+    pass
+
 
 class TestContentCafeAPI(DatabaseTest):
+
+    def setup(self):
+        super(TestContentCafeAPI, self).setup()
+        self.http = DummyHTTPClient()
+        self.soap = MockSOAPClient()
+        self.api = ContentCafeAPI(
+            self._db, 'uid', 'pw', self.soap, self.http.do_get
+        )
 
     def test_from_config(self):
         # Without an integration, an error is raised.
@@ -62,6 +78,103 @@ class TestContentCafeAPI(DatabaseTest):
         # a real HTTP request to load its WSDL file. We might be able
         # to improve this by seeing how mockable SudsClient is, or by
         # mocking ContentCafeAPISOAPClient.WSDL_URL as a file:// URL.
+
+    def test_data_source(self):
+        eq_(DataSource.CONTENT_CAFE, self.api.data_source.name)
+
+    def test_create_metadata(self):
+
+        class Mock(ContentCafeAPI):
+
+            popularity_measurement = "a popularity measurement"
+            annotate_calls = []
+
+            def add_reviews(self, *args):
+                self.add_reviews_called_with = args
+
+            def add_descriptions(self, *args):
+                self.add_descriptions_called_with = args
+
+            def add_author_notes(self, *args):
+                self.add_author_notes_called_with = args
+
+            def add_excerpt(self, *args):
+                self.add_excerpt_called_with = args
+
+            def measure_popularity(self, *args):
+                self.measure_popularity_called_with = args
+                return self.popularity_measurement
+
+        api = Mock(self._db, 'uid', 'pw', self.soap, self.http.do_get)
+        m = api.create_metadata
+
+        identifier = self._identifier(identifier_type=Identifier.ISBN)
+
+        # First we will make a request for a cover image. If that
+        # gives a 404 error, we return nothing and don't bother making
+        # any more requests.
+        self.http.queue_requests_response(404)
+        eq_(None, m(identifier))
+        request_url = self.http.requests.pop()
+        args = dict(userid=api.user_id, password=api.password,
+                    isbn=identifier.identifier)
+        image_url = api.image_url % args
+        eq_(image_url, request_url)
+        eq_([], self.http.requests)
+
+        # If the cover image request succeeds, we turn it into a LinkData
+        # and add it to a new Metadata object. We then pass the
+        # Metadata object a number of other methods to get additional
+        # information from Content Cafe.
+        #
+        # We then call measure_popularity, and add its return value
+        # to Metadata.measurements.
+        self.http.queue_requests_response(200, 'image/png', content='an image!')
+
+        # Here's the result.
+        metadata = m(identifier)
+
+        # Here's the image LinkData.
+        [image] = metadata.links
+        eq_(image_url, image.href)
+        eq_('image/png', image.media_type)
+        eq_('an image!', image.content)
+
+        # Here's the popularity measurement.
+        eq_([api.popularity_measurement], metadata.measurements)
+
+        # Confirm that the mock methods were called with the right
+        # arguments -- their functionality is tested individually
+        # below.
+        expected_args = (metadata, identifier, args)
+        for called_with in (
+            api.add_reviews_called_with, api.add_descriptions_called_with,
+            api.add_author_notes_called_with, api.add_excerpt_called_with,
+        ):
+            eq_(expected_args, called_with)
+        eq_((identifier, api.ONE_YEAR_AGO), api.measure_popularity_called_with)
+
+        # If measure_popularity returns nothing, metadata.measurements
+        # will be left empty.
+        api.popularity_measurement = None
+        self.http.queue_requests_response(200, 'image/png', content='an image!')
+        metadata = m(identifier)
+        eq_([], metadata.measurements)
+
+    def test_annotate_with_web_resources(self):
+        pass
+
+    def test_add_descriptions(self):
+        pass
+
+    def test_add_author_notes(self):
+        pass
+
+    def test_add_excerpt(self):
+        pass
+
+    def test_measure_popularity(self):
+        pass
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):
