@@ -34,21 +34,25 @@ from core.util.summary import SummaryEvaluator
 from core.mirror import MirrorUploader
 
 class ContentCafeCoverageProvider(BibliographicCoverageProvider):
-    """Give coverage to ISBNs by looking them up on Content Cafe.
+    """Create bare-bones Editions for ISBN-type Identifiers.
+
+    An Edition will have no bibliographic information, apart from a
+    possible title, but the Identifier should get some very
+    important Hyperlinks associated, such as a cover image and
+    description.
     """
     SERVICE_NAME = "Content Cafe Coverage Provider"
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
     def __init__(self, collection, api=None, mirror=None, **kwargs):
-        """Create bare-bones Editions for ISBN-type Identifiers.  These
-        Editions will have no bibliographic information, apart from a
-        possible title, but the Identifiers will usually have very
-        important Hyperlinks associated, such as cover images and
-        descriptions.
+        """Constructor.
 
+        :param collection: A Collection.
         :param api: A ContentCafeAPI.
         :param mirror: A MirrorUploader.
+        :param kwargs: Any extra arguments to be passed into the
+            BibliographicCoverageProvider superconstructor.
         """
         # We pass in registered_only=True because we don't need to cover
         # every single ISBN in the system (most of which are alternate

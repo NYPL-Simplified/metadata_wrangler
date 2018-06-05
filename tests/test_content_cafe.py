@@ -8,7 +8,10 @@ from core import mirror
 from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
 from core.mirror import MirrorUploader
-from core.model import ExternalIntegration
+from core.model import (
+    DataSource,
+    ExternalIntegration,
+)
 from core.s3 import (
     MockS3Uploader,
     S3Uploader,
@@ -91,12 +94,14 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         class MockUploader(MirrorUploader):
             @classmethod
             def sitewide(cls, *args, **kwargs):
-                return mock_uploader
+                return mock_mirror
         # The content_cafe module has already imported MirrorUploader
         # from core/mirror, so we need to mock it there rather than
         # mocking mirror.
         content_cafe.MirrorUploader = MockUploader
 
+        # Now we can invoke the constructor with no special arguments
+        # and our mocked defaults will be used.
         provider = ContentCafeCoverageProvider(self._default_collection)
         eq_(mock_mirror, provider.replacement_policy.mirror)
         eq_(mock_api, provider.content_cafe)
@@ -105,15 +110,77 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         content_cafe.ContentCafeAPI = ContentCafeAPI
         content_cafe.MirroUploader = MirrorUploader
 
-    def test_process_item_can_return_coverage_failure(self):
+    def test_process_item_success(self):
+        class MockMetadata(object):
+            def __init__(self, identifier):
+                self.identifier = identifier
 
-        class AlwaysFailsContentCafe(DummyContentCafeAPI):
-            mirror = None
-            def mirror_resources(self, identifier):
+            def apply(self, *args, **kwargs):
+                self.apply_called_with = (args, kwargs)
+
+        class MockContentCafeAPI(object):
+            """Pretend that we went to Content Cafe and got some Metadata."""
+            def create_metadata(self, identifier):
+                self.metadata = MockMetadata(identifier)
+                return self.metadata
+        api = MockContentCafeAPI()
+
+        provider = ContentCafeCoverageProvider(
+            self._default_collection, api, object()
+        )
+        identifier = self._identifier()
+
+        # process_item indicates success by returning the Identifier
+        # it was given.
+        eq_(identifier, provider.process_item(identifier))
+
+        # An Edition has been created representing Content Cafe's
+        # take on this book.
+        [edition] = identifier.primarily_identifies
+        eq_(DataSource.CONTENT_CAFE, edition.data_source.name)
+
+        # MockContentCafeAPI.create_metadata(identifier) was called.
+        metadata = api.metadata
+        eq_(identifier, metadata.identifier)
+
+        # And then apply() was called on the resulting MockMetadata
+        # object.
+        args, kwargs = metadata.apply_called_with
+        eq_((edition,), args)
+        eq_(None, kwargs['collection'])
+        eq_(provider.replacement_policy, kwargs['replace'])
+
+    def test_process_item_failure_not_found(self):
+        """Test what happens when Content Cafe hasn't heard of
+        an Identifier.
+        """
+
+        class NotFoundContentAPI(object):
+            def create_metadata(self, *args, **kwargs):
+                return None
+
+        provider = ContentCafeCoverageProvider(
+            self._default_collection, api=NotFoundContentAPI(),
+            mirror=object()
+        )
+        identifier = self._identifier()
+        result = provider.process_item(identifier)
+        eq_(True, isinstance(result, CoverageFailure))
+        eq_(identifier, result.obj)
+        eq_("Content Cafe has no knowledge of this identifier.",
+            result.exception)
+
+    def test_process_item_exception(self):
+        """Test what happens when an exception is raised
+        in the course of obtaining coverage.
+        """
+        class CantCreateMetadata(object):
+            def create_metadata(self, *args, **kwargs):
                 raise Exception("Oh no!")
 
         provider = ContentCafeCoverageProvider(
-            self._db, api=AlwaysFailsContentCafe(), uploader=MockS3Uploader()
+            self._default_collection, api=CantCreateMetadata(),
+            mirror=object()
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)
