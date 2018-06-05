@@ -31,7 +31,7 @@ from core.model import (
 from core.util.http import HTTP
 from core.util.summary import SummaryEvaluator
 
-from core.s3 import S3Uploader
+from core.mirror import MirrorUploader
 
 class ContentCafeCoverageProvider(BibliographicCoverageProvider):
     """Give coverage to ISBNs by looking them up on Content Cafe.
@@ -41,29 +41,42 @@ class ContentCafeCoverageProvider(BibliographicCoverageProvider):
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
     def __init__(self, collection, api=None, mirror=None, **kwargs):
-        """Associate resources with Identifiers.
+        """Create bare-bones Editions for ISBN-type Identifiers.  These
+        Editions will have no bibliographic information, apart from a
+        possible title, but the Identifiers will usually have very
+        important Hyperlinks associated, such as cover images and
+        descriptions.
 
         :param api: A ContentCafeAPI.
         :param mirror: A MirrorUploader.
         """
+        # We pass in registered_only=True because we don't need to cover
+        # every single ISBN in the system (most of which are alternate
+        # ISBNs found in OCLC Linked Data), only the ISBNs that a
+        # client specifically asked to look up.
         super(ContentCafeCoverageProvider, self).__init__(
             collection=collection, registered_only=True, **kwargs
         )
         self.content_cafe = api or ContentCafeAPI.from_config(self._db)
-        mirror = kwargs.pop('mirror', None)
-        mirror = mirror or S3Uploader.sitewide(self._db)
+        mirror = mirror or MirrorUploader.sitewide(self._db)
         self.replacement_policy = ReplacementPolicy.from_metadata_source(
             mirror=mirror
         )
 
-    def handle_success(self, identifier):
-        return None
-
     def process_item(self, identifier):
-        """Associate bibliographic metadata with the given Identifier."""
+        """Associate bibliographic metadata with the given Identifier.
+
+        :param Identifier: Look up this Identifier on Content Cafe.
+        """
         try:
+            # Create a Metadata object.
             metadata = self.content_cafe.create_metadata(identifier)
             if not metadata:
+                # TODO: The only time this is really a transient error
+                # is when the book is too new for Content Cafe to know
+                # about it, which isn't often. It would be best to
+                # keep this as a transient failure but give it a relatively
+                # long and exponentially increasing retry time.
                 return self.failure(
                     identifier,
                     "Content Cafe has no knowledge of this identifier.",

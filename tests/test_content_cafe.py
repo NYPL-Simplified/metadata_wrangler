@@ -4,10 +4,15 @@ from nose.tools import (
     assert_raises,
 )
 
+from core import mirror
 from core.config import CannotLoadConfiguration
 from core.coverage import CoverageFailure
+from core.mirror import MirrorUploader
 from core.model import ExternalIntegration
-from core.s3 import MockS3Uploader
+from core.s3 import (
+    MockS3Uploader,
+    S3Uploader,
+)
 
 from . import (
     DatabaseTest,
@@ -16,6 +21,7 @@ from content_cafe import (
     ContentCafeAPI,
     ContentCafeCoverageProvider,
 )
+import content_cafe
 
 class DummyContentCafeAPI(object):
     pass
@@ -62,13 +68,42 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
     def test_constructor(self):
         """Just test that we can create the object."""
-        uploader=MockS3Uploader()
-        soap_client = DummyContentCafeSOAPClient()
-        api = ContentCafeAPI(self._db, None, "user_id", "password", 
-                             uploader, soap_client=soap_client)
+        mock_api = object()
+        mock_mirror = object()
         provider = ContentCafeCoverageProvider(
-            self._db, api=api, uploader=uploader
+            self._default_collection, api=mock_api, mirror=mock_mirror
         )
+        eq_(self._default_collection, provider.collection)
+        eq_(mock_mirror, provider.replacement_policy.mirror)
+        eq_(mock_api, provider.content_cafe)
+
+        # If no ContentCafeAPI is provided, the output of
+        # ContentCafeAPI.from_config is used.
+        #
+        # If no MirrorUploader is provided, the output of
+        # S3Uploader.sitewide is used.
+        class MockContentCafeAPI(ContentCafeAPI):
+            @classmethod
+            def from_config(cls, *args, **kwargs):
+                return mock_api
+        content_cafe.ContentCafeAPI = MockContentCafeAPI
+
+        class MockUploader(MirrorUploader):
+            @classmethod
+            def sitewide(cls, *args, **kwargs):
+                return mock_uploader
+        # The content_cafe module has already imported MirrorUploader
+        # from core/mirror, so we need to mock it there rather than
+        # mocking mirror.
+        content_cafe.MirrorUploader = MockUploader
+
+        provider = ContentCafeCoverageProvider(self._default_collection)
+        eq_(mock_mirror, provider.replacement_policy.mirror)
+        eq_(mock_api, provider.content_cafe)
+
+        # Restore mocked classes
+        content_cafe.ContentCafeAPI = ContentCafeAPI
+        content_cafe.MirroUploader = MirrorUploader
 
     def test_process_item_can_return_coverage_failure(self):
 
