@@ -49,8 +49,6 @@ from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
 
-from mirror import ImageScaler
-
 from oclc import (
     LinkedDataCoverageProvider,
 )
