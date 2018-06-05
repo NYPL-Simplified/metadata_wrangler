@@ -16,8 +16,6 @@ from core.overdrive import (
 )
 from core.mirror import MirrorUploader
 
-from mirror import CoverImageMirror
-
 class OverdriveBibliographicCoverageProvider(
         BaseOverdriveBibliographicCoverageProvider):
     """Finds and updates bibliographic information for Overdrive items."""
