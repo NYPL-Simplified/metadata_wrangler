@@ -36,7 +36,10 @@ from core.util import (
     fast_query_count,
 )
 
-from viaf import VIAFClient
+from viaf import (
+    ResolveVIAFOnSuccessCoverageProvider,
+    VIAFClient,
+)
 
 
 class ldq(object):
@@ -902,7 +905,7 @@ class LinkedDataURLLister:
                     output.write("\n")
 
 
-class LinkedDataCoverageProvider(IdentifierCoverageProvider):
+class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
 
     """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
 
@@ -920,16 +923,14 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
     ]
     
     def __init__(self, _db, *args, **kwargs):
-        if 'api' in kwargs:
-            self.api = kwargs['api']
-            del kwargs['api']
-        else:
-            self.api = OCLCLinkedData(_db)
-        if 'viaf_api' in kwargs:
-            self.viaf = kwargs['viaf_api']
-            del kwargs['viaf_api']
-        else:
-            self.viaf = VIAFClient(_db)
+        api = kwargs.pop('api', None)
+        if not api:
+            api = OCLCLinkedData(_db)
+
+        viaf = kwargs.pop('viaf', None)
+        if not viaf:
+            viaf = VIAFClient(_db)
+        self.viaf = viaf
 
         kwargs['registered_only'] = True
         super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)

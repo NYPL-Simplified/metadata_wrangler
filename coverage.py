@@ -57,17 +57,13 @@ from viaf import (
     VIAFClient, 
 )
 from integration_client import (
-    CalculatesWorkPresentation,
     IntegrationClientCoverImageCoverageProvider,
 )
 
 
-class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
-    CalculatesWorkPresentation
-):
-    """Make sure all Identifiers registered as needing coverage by this
-    CoverageProvider become Works with Editions and (probably dummy)
-    LicensePools.
+class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
+    """Make sure all Identifiers associated with some Collection become
+    Works.
     
     Coverage happens by running the Identifier through _other_
     CoverageProviders, which fill in the blanks with data from
@@ -90,16 +86,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
     INPUT_IDENTIFIER_TYPES = [
         Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
-        Identifier.GUTENBERG_ID
     ]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
     
-    LICENSE_SOURCE_NOT_ACCESSIBLE = (
-        "Could not access underlying license source over the network.")
-    UNKNOWN_FAILURE = "Unknown failure."
-
-    DEFAULT_OVERDRIVE_COLLECTION_NAME = u'Default Overdrive'
-
     # We cover all Collections, regardless of their protocol.
     PROTOCOL = None
 
@@ -146,16 +135,12 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         mirror = mirror or MirrorUploader.sitewide(self._db)
         self.mirror = mirror
 
+        self.viaf = viaf or VIAFClient(self._db)
+
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.
         
-        # TODO: This replacement policy is what needs to be passed in to
-        # the CoverageProviders, not just the mirror.
-        #
-        # TODO: Maybe the replacement policy should also contain the
-        # VIAF client, since that needs to be used when the work is
-        # finalized.
         self.policy = PresentationCalculationPolicy(
             regenerate_opds_entries=True, mirror=self.mirror
         )
@@ -263,7 +248,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
             overdrive = instantiate(
                 OverdriveBibliographicCoverageProvider, providers,
                 provider_kwargs, collection=self.collection,
-                mirror=self.mirror
+                viaf=self.viaf, policy=self.policy
             )
 
         # We already have metadata for books we heard about from an
@@ -328,21 +313,3 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
             provider.register(
                 identifier, collection=collection, force=self.force
             )
-
-    def resolve_viaf(self, work):
-        """Get VIAF data on all contributors.
-
-        TODO: This needs to be in a mix-in class which is used as a
-        post-coverage hook by all CoverageProviders that might add contributors
-        to a work.
-        """
-
-        for pool in work.license_pools:
-            edition = pool.presentation_edition
-            if not edition:
-                continue
-            for contributor in edition.contributors:
-                self.viaf_client.process_contributor(contributor)
-                if not contributor.display_name:
-                    contributor.family_name, contributor.display_name = (
-                        contributor.default_names())

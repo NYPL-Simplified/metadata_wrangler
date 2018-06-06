@@ -16,13 +16,18 @@ from core.overdrive import (
 )
 from core.mirror import MirrorUploader
 
+from viaf import ResolveVIAFOnSuccessCoverageProvider
+
 class OverdriveBibliographicCoverageProvider(
-        BaseOverdriveBibliographicCoverageProvider):
+        ResolveVIAFOnSuccessCoverageProvider,
+        BaseOverdriveBibliographicCoverageProvider
+):
     """Finds and updates bibliographic information for Overdrive items."""
 
     EXCLUDE_SEARCH_INDEX = True
 
-    def __init__(self, collection, mirror=None, **kwargs):
+    def __init__(self, collection, viaf=None, replacement_policy=None,
+                 **kwargs):
         _db = Session.object_session(collection)
         api_class = kwargs.pop('api_class', OverdriveAPI)
         if callable(api_class):
@@ -35,13 +40,18 @@ class OverdriveBibliographicCoverageProvider(
                 """OverdriveBibliographicCoverageProvider requires at least one fully configured Overdrive collection."""
             )
 
-        # As the metadata wrangler, we will be mirroring these to the
-        # sitewide mirror rather than to a mirror associated
-        # with a specific collection.
-        self.mirror = mirror or MirrorUploader.sitewide(_db)
+        self.viaf = viaf or VIAFClient(_db)
+
+        if not replacement_policy:
+            mirror = MirrorUploader.sitewide(_db)
+            replacement_policy = ReplacementPolicy.from_metadata_source(
+                mirror=self.mirror
+            )
+
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
-            collection, api_class=api, **kwargs
+            collection, api_class=api, replacement_policy=replacement_policy,
+            **kwargs
         )
 
     @classmethod
@@ -78,13 +88,6 @@ class OverdriveBibliographicCoverageProvider(
         configured_collection = configured_collections[0]
         return api_class(_db, configured_collection)
 
-
-    def _default_replacement_policy(self, _db):
-        """Treat this as a trusted metadata source. Mirror any appropriate
-        resources to S3.
-        """
-        return ReplacementPolicy.from_metadata_source(mirror=self.mirror)
-
     def items_that_need_coverage(self, identifiers=None, **kwargs):
         """Finds the items that need coverage based on the collection's catalog
         instead of its license_pools. This is specific to work done on the
@@ -101,3 +104,9 @@ class OverdriveBibliographicCoverageProvider(
             Collection.id==self.collection_id
         )
         return qu
+
+    def handle_success(self, identifier):
+        result = super(
+            OverdriveBibliographicCoverageProvider, self
+        ).handle_success(identifier)
+        return self.handle_success_mixin(result)

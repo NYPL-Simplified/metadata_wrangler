@@ -45,27 +45,30 @@ class ContentCafeCoverageProvider(BibliographicCoverageProvider):
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
-    def __init__(self, collection, api=None, mirror=None, **kwargs):
+    def __init__(self, collection, api=None, replacement_policy=None, **kwargs):
         """Constructor.
 
         :param collection: A Collection.
         :param api: A ContentCafeAPI.
-        :param mirror: A MirrorUploader.
+        :param replacement_policy: A ReplacementPolicy.
         :param kwargs: Any extra arguments to be passed into the
             BibliographicCoverageProvider superconstructor.
         """
+        if not replacement_policy:
+            mirror = MirrorUploader.sitewide(self._db)
+            replacement_policy = ReplacementPolicy.from_metadata_source(
+                mirror=mirror
+            )
+
         # We pass in registered_only=True because we don't need to cover
         # every single ISBN in the system (most of which are alternate
         # ISBNs found in OCLC Linked Data), only the ISBNs that a
         # client specifically asked to look up.
         super(ContentCafeCoverageProvider, self).__init__(
-            collection=collection, registered_only=True, **kwargs
+            collection=collection, registered_only=True,
+            replacement_policy=replacement_policy, **kwargs
         )
         self.content_cafe = api or ContentCafeAPI.from_config(self._db)
-        mirror = mirror or MirrorUploader.sitewide(self._db)
-        self.replacement_policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror
-        )
 
     def process_item(self, identifier):
         """Associate bibliographic metadata with the given Identifier.
