@@ -92,8 +92,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     # We cover all Collections, regardless of their protocol.
     PROTOCOL = None
 
-    def __init__(self, collection, mirror=None, viaf_client=None, force=False,
-                 **kwargs):
+    def __init__(self, collection, mirror=None, viaf=None,
+                 provide_coverage_immediately=False, force=False, **kwargs):
         """Constructor.
 
         :param collection: Handle all Identifiers from this Collection
@@ -118,17 +118,15 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         If this is False (the default), then resolving an identifier
         just means registering it with all other relevant
         CoverageProviders.
-        """
-        self.provide_coverage_immediately = kwargs.pop(
-            'provide_coverage_immediately', False
-        )
-        
+        """       
         # We don't pass in registered_only=True because if an
         # Identifier is part of this collection's catalog it means
         # someone asked about it.
         super(IdentifierResolutionCoverageProvider, self).__init__(
             collection, **kwargs
         )
+
+        self.provide_coverage_immediately = provide_coverage_immediately
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror using the sitewide MirrorUploader.
@@ -139,8 +137,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
-        # at all, or something went wrong trying to set it up.
-        
+        # at all, or something went wrong trying to set it up.        
         self.policy = PresentationCalculationPolicy(
             regenerate_opds_entries=True, mirror=self.mirror
         )

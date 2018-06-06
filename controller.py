@@ -211,57 +211,6 @@ class CanonicalizationController(object):
         return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
-class ISBNEntryMixin(object):
-
-    def make_opds_entry_from_metadata_lookups(self, identifier):
-        """This identifier cannot be turned into a presentation-ready Work,
-        but maybe we can make an OPDS entry based on metadata lookups.
-        """
-
-        # We can only create an OPDS entry if all the lookups have
-        # in fact been done.
-        metadata_sources = DataSource.metadata_sources_for(
-            self._db, identifier
-        )
-        q = self._db.query(CoverageRecord)\
-            .filter(CoverageRecord.identifier==identifier)\
-            .filter(
-                CoverageRecord.data_source_id.in_([x.id for x in metadata_sources]),
-                CoverageRecord.status==CoverageRecord.SUCCESS
-            )
-
-        coverage_records = q.all()
-        unaccounted_for = set(metadata_sources)
-        for r in coverage_records:
-            if r.data_source in unaccounted_for:
-                unaccounted_for.remove(r.data_source)
-
-        if unaccounted_for:
-            # At least one metadata lookup has not successfully
-            # completed.
-            names = [x.name for x in unaccounted_for]
-            self.log.info(
-                "Cannot build metadata-based OPDS feed for %r: missing coverage records for %s",
-                identifier,
-                ", ".join(names)
-            )
-            return None
-
-        # All metadata lookups have completed. Create that OPDS
-        # entry!
-        entry = identifier.opds_entry()
-        if entry is None:
-            # We can't do lookups on an identifier of this type, so
-            # the best thing to do is to treat this identifier as a
-            # 404 error.
-            return OPDSMessage(
-                identifier.urn, HTTP_NOT_FOUND, self.UNRECOGNIZED_IDENTIFIER
-            )
-
-        # We made it!
-        return entry
-
-
 class CatalogController(ISBNEntryMixin):
     """A controller to manage a Collection's catalog"""
 
@@ -363,14 +312,6 @@ class CatalogController(ISBNEntryMixin):
             else:
                 # There is no cached OPDS entry. We'll create one later.
                 works_for_feed.append((work, identifier))
-
-        # Add entries for ISBNs associated with the collection's catalog.
-        isbns = collection.isbns_updated_since(self._db, last_update_time)
-        isbns = pagination.apply(isbns).all()
-        for isbn, _latest_timestamp in isbns:
-            entry = self.make_opds_entry_from_metadata_lookups(isbn)
-            if entry:
-                precomposed_entries.append(entry)
 
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         url_params = dict()
@@ -738,10 +679,10 @@ class CatalogController(ISBNEntryMixin):
             return '%s://%s' % (scheme, netloc)
 
         client_url = base_url(url)
-        base_public_key_url = base_url(public_key_url) 
+        base_public_key_url = base_url(public_key_url)
         if not client_url == base_public_key_url:
             log.error(
-                "ID of OPDS 2 document (%s) doesn't match submitted URL (%s)", 
+                "ID of OPDS 2 document (%s) doesn't match submitted URL (%s)",
                 client_url, base_public_key_url
             )
             return INVALID_INTEGRATION_DOCUMENT.detailed(
@@ -841,7 +782,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
-        """Either return a presentation-ready work associated with the 
+        """Either return a presentation-ready work associated with the
         given `identifier`, or return None.
         """
         pools = identifier.licensed_through
@@ -852,7 +793,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         if not work or not work.presentation_ready:
             return None
         return work
-    
+
     def can_resolve_identifier(self, identifier):
         """A chance to determine whether resolution should proceed."""
         return identifier.type in self.VALID_TYPES
@@ -877,6 +818,8 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         client = authenticated_client_from_request(self._db, required=False)
         if isinstance(client, ProblemDetail):
             return client
+
+        resolve_now = request.args.get('resolve_now', None) is not None
 
         collection = collection_from_details(
             self._db, client, collection_details
@@ -904,36 +847,57 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         collection.catalog_identifiers(identifiers_by_urn.values())
         self.bulk_load_coverage_records(identifiers_by_urn.values())
 
+        resolver = IdentifierResolutionCoverageProvider(
+            collection, provide_coverage_immediately=resolve_now,
+            **provider_kwargs
+        )
         for urn, identifier in identifiers_by_urn.items():
-            self.process_identifier(identifier, urn, **kwargs)
+            self.process_identifier(
+                identifier, urn, collection=collection,
+                resolver=resolver, **kwargs
+            )
 
-    def process_identifier(self, identifier, urn, **kwargs):
-        """Turn an Identifier into a Work suitable for use in an OPDS feed.
+    def process_identifier(self, identifier, urn, collection, resolver,
+                           **kwargs):
+        """Find or create an OPDS entry for the given Identifier,
+        if possible.
+
+        Even if it's not possible to do this right
+
+        In most cases, if it's not possible to quickly create an OPDS entry
+        containing bibliographic information, a status message
+        will be returned instead.
+
+        :param identifier: The Identifier that needs to be processed.
+        :param urn: The original URN provided by the client. This
+            might be different from Identifier.urn, e.g. because of
+            ISBN normalization.
+        :param collection: The Identifier was registered with this collection.
+        :param resolve_now: If this is True, we will try to do all work
+            necessary to resolve this identifier immediately, even though
+            it may take a long time.
         """
-        if not self.can_resolve_identifier(identifier):
-            return self.add_message(urn, HTTP_NOT_FOUND, self.UNRESOLVABLE_IDENTIFIER)
-
-        if (identifier.type == Identifier.ISBN and not identifier.work):
-            # There's not always enough information about an ISBN to
-            # create a full Work. If not, we scrape together the cover
-            # and description information and force the entry.
-            entry = self.make_opds_entry_from_metadata_lookups(identifier)
-            if not entry:
-                return self.register_identifier_as_unresolved(
-                    identifier.urn, identifier
-                )
-            return self.add_entry(entry)
-
-        # All other identifiers need to be associated with a
-        # presentation-ready Work for the lookup to succeed. If there
-        # isn't one, we need to register it as unresolved.
         work = self.presentation_ready_work_for(identifier)
         if work:
-            # The work has been done.
+            # We already have a presentation-ready Work for this Identifier.
             return self.add_work(identifier, work)
 
-        # Work remains to be done.
-        return self.register_identifier_as_unresolved(urn, identifier)
+        # Some work has not been done. Make the
+        # IdentifierResolutionCoverageProvider process this
+        # Identifier. This will either do the work, or register all
+        # the work that needs to be done.
+        result = resolver.process_item(identifier)
+
+        work = self.presentation_ready_work_for(identifier)
+        if work:
+            # The IdentifierResolutionCoverageProvider did enough work
+            # that there is _now_ a presentation-ready work for this
+            # identifier, even though there wasn't before.
+            return self.add_work(identifier, work)
+
+        # We are not able to generate a real OPDS entry for this identifier.
+        # Send a failure message instead.
+        #return self.add_failure_message(urn, identifier)
 
     def bulk_load_coverage_records(self, identifiers):
         """Loads CoverageRecords for a list of identifiers into the database
@@ -944,21 +908,11 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         self._db.query(Identifier).filter(Identifier.id.in_(identifier_ids))\
             .options(joinedload(Identifier.coverage_records)).all()
 
-    def register_identifier_as_unresolved(self, urn, identifier):
-        # This identifier could have a presentation-ready Work
-        # associated with it, but it doesn't. We need to make sure the
-        # work gets done eventually by creating a CoverageRecord
-        # representing the work that needs to be done.
+    def add_failure_message(self, urn, identifier):
+        """There is no presentation-ready work for this identifier.
+        Add an OPDS message explaining why.
+        """
         source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-
-        registration_records = filter(
-            lambda c: c.operation==IdentifierResolutionRegistrar.OPERATION,
-            identifier.coverage_records
-        )
-        if not (identifier.coverage_records or registration_records):
-            # This identifier hasn't been registered for coverage yet.
-            # Tell the client to come back later.
-            return self.add_message(urn, HTTP_CREATED, self.IDENTIFIER_REGISTERED)
 
         resolution_records = filter(
             lambda c: c.operation==IdentifierResolutionCoverageProvider.OPERATION,
@@ -1001,6 +955,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
         We commit the database session because new Identifier and/or
         CoverageRecord objects may have been created during the
-        lookup process.
+        lookup process. In fact, entire new Works may have been
+        created.
         """
         self._db.commit()
