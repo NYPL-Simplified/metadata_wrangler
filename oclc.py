@@ -11,6 +11,8 @@ from collections import Counter
 from pyld import jsonld
 from nose.tools import set_trace
 
+from sqlalchemy.orm.session import Session
+
 from core.coverage import (
     IdentifierCoverageProvider,
 )
@@ -36,10 +38,8 @@ from core.util import (
     fast_query_count,
 )
 
-from viaf import (
-    ResolveVIAFOnSuccessCoverageProvider,
-    VIAFClient,
-)
+from coverage_utils import ResolveVIAFOnSuccessCoverageProvider
+from viaf import VIAFClient
 
 
 class ldq(object):
@@ -922,10 +922,12 @@ class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
         Identifier.ISBN, Identifier.OVERDRIVE_ID
     ]
     
-    def __init__(self, _db, *args, **kwargs):
+    def __init__(self, collection, *args, **kwargs):
+        _db = Session.object_session(collection)
         api = kwargs.pop('api', None)
         if not api:
             api = OCLCLinkedData(_db)
+        self.api = api
 
         viaf = kwargs.pop('viaf', None)
         if not viaf:
@@ -933,7 +935,9 @@ class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
         self.viaf = viaf
 
         kwargs['registered_only'] = True
-        super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)
+        super(LinkedDataCoverageProvider, self).__init__(
+            collection, *args, **kwargs
+        )
             
     def process_item(self, identifier):
         # Books are not looked up in OCLC Linked Data directly, since

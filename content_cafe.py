@@ -9,6 +9,8 @@ from suds.client import Client as SudsClient
 # Tone down the verbose Suds logging.
 logging.getLogger('suds').setLevel(logging.ERROR)
 
+from sqlalchemy.orm.session import Session
+
 from core.config import CannotLoadConfiguration
 from core.coverage import (
     BibliographicCoverageProvider,
@@ -33,7 +35,9 @@ from core.util.summary import SummaryEvaluator
 
 from core.mirror import MirrorUploader
 
-class ContentCafeCoverageProvider(BibliographicCoverageProvider):
+from coverage_utils import MetadataWranglerBibliographicCoverageProvider
+
+class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
     """Create bare-bones Editions for ISBN-type Identifiers.
 
     An Edition will have no bibliographic information, apart from a
@@ -54,8 +58,9 @@ class ContentCafeCoverageProvider(BibliographicCoverageProvider):
         :param kwargs: Any extra arguments to be passed into the
             BibliographicCoverageProvider superconstructor.
         """
+        _db = Session.object_session(collection)
         if not replacement_policy:
-            mirror = MirrorUploader.sitewide(self._db)
+            mirror = MirrorUploader.sitewide(_db)
             replacement_policy = ReplacementPolicy.from_metadata_source(
                 mirror=mirror
             )
@@ -242,7 +247,6 @@ class ContentCafeAPI(object):
         for content in resource_contents:
             if not content:
                 continue
-            print repr(content)
             content = content.strip()
             if not content:
                 continue

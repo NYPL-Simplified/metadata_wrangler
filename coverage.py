@@ -127,6 +127,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         )
 
         self.provide_coverage_immediately = provide_coverage_immediately
+        self.force = force
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror using the sitewide MirrorUploader.
@@ -138,8 +139,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.        
-        self.policy = PresentationCalculationPolicy(
-            regenerate_opds_entries=True, mirror=self.mirror
+        presentation = PresentationCalculationPolicy(
+            regenerate_opds_entries=True
+        )
+        self.policy = ReplacementPolicy.from_metadata_source(
+            presentation_calculation_policy=presentation, mirror=self.mirror
         )
         
         # Instantiate the coverage providers that may be needed to
@@ -189,7 +193,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         real servers on instantiation.
         """
 
-        def instantiate(self, cls, add_to, provider_kwargs, **kwargs):
+        def instantiate(cls, add_to, provider_kwargs, **kwargs):
             """Instantiate a CoverageProvider, possibly with mocked
             arguments, and add it to a list.
 
@@ -204,7 +208,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
             # The testing setup may want us to use different constructor
             # arguments than the default.
-            this_provider_kwargs = provider_kwargs.get(cls)
+            provider_kwargs = provider_kwargs or {}
+            this_provider_kwargs = provider_kwargs.get(cls, {})
             kwargs.update(this_provider_kwargs)
 
             add_to.append(cls(**kwargs))
@@ -221,9 +226,19 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         
         content_cafe = instantiate(
             ContentCafeCoverageProvider, providers, provider_kwargs,
-            collection=self.collection, mirror=self.mirror
+            collection=self.collection, replacement_policy=self.policy
         )
-            
+
+        # TODO: This is temporarily disabled because process_item doesn't
+        # work directly on ISBNs -- it assumes the ISBN has already been
+        # associated with OCLC Numbers in some other step.
+        #
+        #linked_data = instantiate(
+        #    LinkedDataCoverageProvider, providers, provider_kwargs,
+        #    collection=self.collection, replacement_policy=self.policy,
+        #    viaf=self.viaf
+        #)
+
         # All books derived from OPDS import must be looked up from the
         # server they were imported from.
         #

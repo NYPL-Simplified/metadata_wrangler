@@ -16,7 +16,7 @@ from core.overdrive import (
 )
 from core.mirror import MirrorUploader
 
-from viaf import ResolveVIAFOnSuccessCoverageProvider
+from coverage_utils import ResolveVIAFOnSuccessCoverageProvider
 
 class OverdriveBibliographicCoverageProvider(
         ResolveVIAFOnSuccessCoverageProvider,

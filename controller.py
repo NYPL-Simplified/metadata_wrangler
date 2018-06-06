@@ -66,7 +66,6 @@ from core.util.problem_detail import ProblemDetail
 
 from coverage import (
     IdentifierResolutionCoverageProvider,
-    IdentifierResolutionRegistrar,
 )
 from canonicalize import AuthorNameCanonicalizer
 from integration_client import IntegrationClientCoverImageCoverageProvider
@@ -211,7 +210,7 @@ class CanonicalizationController(object):
         return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
 
 
-class CatalogController(ISBNEntryMixin):
+class CatalogController(object):
     """A controller to manage a Collection's catalog"""
 
     log = logging.getLogger("Catalog Controller")
@@ -755,12 +754,9 @@ class CatalogController(ISBNEntryMixin):
         return make_response(content, status_code, headers)
 
 
-class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
+class URNLookupController(CoreURNLookupController):
 
-    UNRESOLVABLE_IDENTIFIER = "I can't gather information about an identifier of this type."
-    IDENTIFIER_REGISTERED = "You're the first one to ask about this identifier. I'll try to find out about it."
-    WORKING_TO_RESOLVE_IDENTIFIER = "I'm working to locate a source for this identifier."
-    SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK = "Something's wrong. I have a record of covering this identifier but there's no presentation-ready work to show you."
+    WORKING_TO_RESOLVE_IDENTIFIER = "I don't have enough information about this Identifier yet.\nDetailed work log:\n "
 
     # We resolve identifiers by running them through the
     # IdentifierResolutionCoverageProvider. The Identifier types
@@ -849,33 +845,32 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
         resolver = IdentifierResolutionCoverageProvider(
             collection, provide_coverage_immediately=resolve_now,
-            **provider_kwargs
         )
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(
                 identifier, urn, collection=collection,
-                resolver=resolver, **kwargs
+                resolver=resolver, resolve_now=resolve_now, **kwargs
             )
 
     def process_identifier(self, identifier, urn, collection, resolver,
-                           **kwargs):
-        """Find or create an OPDS entry for the given Identifier,
-        if possible.
+                           resolve_now=False, **kwargs):
+        """If there is a presentation-ready Work for the given Identifier,
+        add its OPDS entry to the feed.
 
-        Even if it's not possible to do this right
-
-        In most cases, if it's not possible to quickly create an OPDS entry
-        containing bibliographic information, a status message
-        will be returned instead.
+        Otherwise, use the `resolver` to either do all the work
+        immediately, or to lay the groundwork that will eventually
+        give us a presentation-ready Work. Add to the OPDS feed a
+        status message indicating that we're working on it.
 
         :param identifier: The Identifier that needs to be processed.
         :param urn: The original URN provided by the client. This
             might be different from Identifier.urn, e.g. because of
             ISBN normalization.
         :param collection: The Identifier was registered with this collection.
-        :param resolve_now: If this is True, we will try to do all work
-            necessary to resolve this identifier immediately, even though
-            it may take a long time.
+        :param resolver: An IdentifierResolutionCoverageProvider which
+            will either create a presentation-ready Work immediately, or
+            make sure that one eventually gets created.
+        :param return: None.
         """
         work = self.presentation_ready_work_for(identifier)
         if work:
@@ -886,7 +881,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
         # IdentifierResolutionCoverageProvider process this
         # Identifier. This will either do the work, or register all
         # the work that needs to be done.
-        result = resolver.process_item(identifier)
+        result = resolver.ensure_coverage(identifier, force=resolve_now)
 
         work = self.presentation_ready_work_for(identifier)
         if work:
@@ -895,9 +890,7 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
             # identifier, even though there wasn't before.
             return self.add_work(identifier, work)
 
-        # We are not able to generate a real OPDS entry for this identifier.
-        # Send a failure message instead.
-        #return self.add_failure_message(urn, identifier)
+        return self.add_failure_message(urn, identifier)
 
     def bulk_load_coverage_records(self, identifiers):
         """Loads CoverageRecords for a list of identifiers into the database
@@ -910,44 +903,20 @@ class URNLookupController(CoreURNLookupController, ISBNEntryMixin):
 
     def add_failure_message(self, urn, identifier):
         """There is no presentation-ready work for this identifier.
-        Add an OPDS message explaining why.
+        Add an OPDS message explaining the current status of every
+        CoverageRecord associated with it.
         """
-        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-
-        resolution_records = filter(
-            lambda c: c.operation==IdentifierResolutionCoverageProvider.OPERATION,
-            identifier.coverage_records
-        )
-        resolution_record = None
-        if resolution_records:
-            resolution_record = resolution_records[0]
-
-        # There is a pending attempt to resolve this identifier.
-        # Tell the client we're working on it, or if the
-        # pending attempt resulted in an exception,
-        # tell the client about the exception.
         status = HTTP_ACCEPTED
-        if (not resolution_record or resolution_record.status in
-            (CoverageRecord.REGISTERED, CoverageRecord.TRANSIENT_FAILURE)
-        ):
-            return self.add_message(
-                urn, status, self.WORKING_TO_RESOLVE_IDENTIFIER
-            )
+        rows = []
+        template = '%(timestamp)s - %(data_source)s -%(operation)s status=%(status)s %(exception)s'
+        for cr in identifier.coverage_records:
+            rows.append(cr.human_readable(template))
 
-        # There is a pending attempt to resolve this identifier. Tell the
-        # client we're working on it, or if the pending attempt resulted
-        # in an exception, tell the client about the exception.
-        message = resolution_record.exception
-        if resolution_record.status == CoverageRecord.PERSISTENT_FAILURE:
-            # Apparently we just can't provide coverage of this
-            # identifier.
-            status = HTTP_INTERNAL_SERVER_ERROR
-        elif resolution_record.status == CoverageRecord.SUCCESS:
-            # This shouldn't happen, since success in providing
-            # this sort of coverage means creating a presentation
-            # ready work. Something weird is going on.
-            status = HTTP_INTERNAL_SERVER_ERROR
-            message = self.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
+        if rows:
+            rows = "\n ".join(rows)
+        else:
+            rows = "No coverage records for this Identifier."
+        message = self.WORKING_TO_RESOLVE_IDENTIFIER + rows
         return self.add_message(urn, status, message)
 
     def post_lookup_hook(self):
