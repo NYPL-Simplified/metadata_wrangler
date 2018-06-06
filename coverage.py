@@ -72,14 +72,12 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     This CoverageProvider may force those other CoverageProviders to
     do their work for each Identifier immediately, or it may simply
     register its Identifiers with those CoverageProviders and allow
-    them to complete the work at their own page.
+    them to complete the work at their own pace.
 
-    This CoverageProvider is invoked twice: once from the
-    URNLookupController.process_urns, where its
-    register_identifier_as_unresolved method or its ensure_coverage
-    method may be called; and once from a script (TODO: which one?)
-    which invokes it through RunCollectionCoverageProviderScript to
-    ensure coverage for all previously registered identifiers.
+    Unlike most CoverageProviders, which are invoked from a script,
+    this CoverageProvider is invoked from
+    URNLookupController.process_urns, and only when a client expresses
+    a desire that we look into a specific identifier.
     """
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
@@ -231,7 +229,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # TODO: This is temporarily disabled because process_item doesn't
         # work directly on ISBNs -- it assumes the ISBN has already been
-        # associated with OCLC Numbers in some other step.
+        # associated with OCLC Numbers in some other step. The best
+        # solution is to rearchitect LinkedDataCoverageProvider
+        # to make it assume it's processing ISBNs.
         #
         #linked_data = instantiate(
         #    LinkedDataCoverageProvider, providers, provider_kwargs,
@@ -254,8 +254,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         #        collection=self.collection
         #    )
 
-        # All books obtained from Overdrive must be looked up via the
-        # Overdrive API.
+        # All books identified by Overdrive ID must be looked up via
+        # the Overdrive API.
         if protocol == ExternalIntegration.OVERDRIVE:
             overdrive = instantiate(
                 OverdriveBibliographicCoverageProvider, providers,
@@ -277,12 +277,12 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     def process_item(self, identifier):
         """Either make sure this Identifier is registered with all
         CoverageProviders, or actually attempt to use them to provide
-        all overage.        
+        all coverage.
         """
         if self.provide_coverage_immediately:
-            message = "Immediately providing coverage for %s"
+            message = "Immediately providing coverage for %s."
         else:
-            message = "Registering %s with coverage providers"
+            message = "Registering %s with coverage providers."
         self.log.info(message, identifier)
 
         # Make sure there's a LicensePool for this Identifier in this
@@ -309,17 +309,18 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             # handle Identifiers of this type.
             return
 
-        if provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION:
+        # TODO: This code could be moved into register,
+        # if it weren't a class method.
+        if self.COVERAGE_COUNTS_FOR_EVERY_COLLECTION:
             # We need to cover this Identifier once, and then we're
             # done, for all collections.
             collection = None
         else:
-            # We need separate coverage for this Collection
-            # specifically.
+            # We need separate coverage for the specific Collection
+            # associated with this CoverageProvider.
             collection = self.collection
 
         if self.provide_coverage_immediately:
-            # TODO: ensure_coverage needs to take a collection argument.
             provider.ensure_coverage(identifier, force=self.force)
         else:
             provider.register(

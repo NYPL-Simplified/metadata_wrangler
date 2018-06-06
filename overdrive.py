@@ -106,6 +106,8 @@ class OverdriveBibliographicCoverageProvider(
         return qu
 
     def handle_success(self, identifier):
+        # TODO: Find the ISBN associated with the Overdrive identifier
+        # and register it with the LinkedDataCoverageProvider.
         result = super(
             OverdriveBibliographicCoverageProvider, self
         ).handle_success(identifier)
