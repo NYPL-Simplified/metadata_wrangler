@@ -241,7 +241,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             replacement_policy=self.replacement_policy
         )
 
-        # TODO: This is temporarily disabled because process_item doesn't
+        # TODO: This is temporarily disabled because its process_item doesn't
         # work directly on ISBNs -- it assumes the ISBN has already been
         # associated with OCLC Numbers in some other step. The best
         # solution is to rearchitect LinkedDataCoverageProvider
@@ -313,16 +313,17 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             # handle Identifiers of this type.
             return
 
-        # TODO: This code could be moved into register,
-        # if it weren't a class method.
-        if self.COVERAGE_COUNTS_FOR_EVERY_COLLECTION:
+        # TODO: This code could be moved into
+        # IdentifierCoverageProvider.register, if it weren't a class
+        # method. This would simplify testing.
+        if provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION:
             # We need to cover this Identifier once, and then we're
             # done, for all collections.
             collection = None
         else:
             # We need separate coverage for the specific Collection
             # associated with this CoverageProvider.
-            collection = self.collection
+            collection = provider.collection
 
         if self.provide_coverage_immediately:
             provider.ensure_coverage(identifier, force=self.force)

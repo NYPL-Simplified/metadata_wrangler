@@ -11,6 +11,7 @@ from core.model import (
 )
 
 from core.s3 import S3Uploader
+from core.coverage import CollectionCoverageProvider
 from core.overdrive import MockOverdriveAPI
 
 from content_cafe import ContentCafeCoverageProvider
@@ -173,6 +174,117 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             eq_(provider.collection, subprovider.collection)
             eq_(provider.replacement_policy, subprovider.replacement_policy)
 
+    def test_process_item(self):
+        """We handle an Identifier by making sure it's handle by all
+        sub-CoverageProviders.
+        """
+
+        provider1 = object()
+        provider2 = object()
+
+        class Mock(IdentifierResolutionCoverageProvider):
+            processed = []
+
+            def providers(self):
+                return [provider1, provider2]
+
+            def process_one_provider(self, identifier, provider):
+                self.processed.append((identifier, provider))
+
+        provider = Mock(self._default_collection)
+        identifier = self._identifier()
+        result = provider.process_item(identifier)
+
+        # Success!
+        eq_(identifier, result)
+
+        # A dummy LicensePool was created for this Identifier.
+        [lp] = identifier.licensed_through
+        eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
+        eq_(1, lp.licenses_owned)
+        eq_(1, lp.licenses_available)
+
+        # process_one_provider was called on every known sub-provider.
+        eq_([(identifier, provider1), (identifier, provider2)],
+            provider.processed)
+
+    def test_process_one_provider(self):
+        """Test what happens when IdentifierResolutionCoverageProvider
+        tells a subprovider to do something.
+        """
+        collection = self._default_collection
+
+        provider = IdentifierResolutionCoverageProvider(
+            collection, force=object()
+        )
+
+        # If the subprovider can't cover the Identifier, nothing
+        # happens.
+        class CantCoverAnything(object):
+            def can_cover(self, identifier):
+                return False
+            def ensure_coverage(self, identifier, force):
+                raise Exception("I'll never be called")
+        provider.process_one_provider(object(), CantCoverAnything())
+
+        # Try again with a subprovider that doesn't need coverage
+        # for every collection.
+        class OnlyOnce(CollectionCoverageProvider):
+            SERVICE_NAME = "Do it once, it's done for every collection"
+            COVERAGE_COUNTS_FOR_EVERY_COLLECTION = True
+            DATA_SOURCE_NAME = DataSource.OVERDRIVE
+
+            def register(self, identifier, collection, force):
+                self.register_called_with = [identifier, collection, force]
+
+            def ensure_coverage(self, identifier, force):
+                self.ensure_coverage_called_with = [identifier, force]
+
+        i1 = self._identifier()
+        subprovider = OnlyOnce(collection)
+        provider.process_one_provider(i1, subprovider)
+        
+        # The subprovider's register method was called, with no
+        # collection being provided.
+        eq_([i1, None, provider.force], subprovider.register_called_with)
+
+        # If the main provider requires that coverage happen immediately,
+        # then ensure_coverage_called_with is called instead.
+        provider.provide_coverage_immediately = True
+        provider.process_one_provider(i1, subprovider)
+        eq_([i1, provider.force], subprovider.ensure_coverage_called_with)
+
+        # Try again with a subprovider that _does_ need separate coverage
+        # for every collection.
+        class EveryTime(CollectionCoverageProvider):
+            SERVICE_NAME = "Every collection must be covered separately"
+            COVERAGE_COUNTS_FOR_EVERY_COLLECTION = False
+            DATA_SOURCE_NAME = DataSource.OVERDRIVE
+
+            def register(self, identifier, collection, force):
+                self.register_called_with = [identifier, collection, force]
+
+            def ensure_coverage(self, identifier, force):
+                self.ensure_coverage_called_with = [identifier, force]
+
+        subprovider = EveryTime(collection)
+        provider.provide_coverage_immediately = False
+        provider.process_one_provider(i1, subprovider)
+
+        # The subprovider's register method was called, with the
+        # collection we're covering being provided.
+        eq_([i1, provider.collection, provider.force],
+            subprovider.register_called_with)
+
+        # If the main provider requires that coverage happen immediately,
+        # then ensure_coverage_called_with is called instead.
+        provider.provide_coverage_immediately = True
+        provider.process_one_provider(i1, subprovider)
+        eq_([i1, provider.force], subprovider.ensure_coverage_called_with)
+
+        # In this case, collection is not provided, because
+        # ensure_coverage has its own code to check
+        # COVERAGE_COUNTS_FOR_EVERY_COLLECTION.
 
 # class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
