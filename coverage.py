@@ -165,7 +165,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         is always last in the list.
         """
         unaffiliated, ignore = cls.unaffiliated_collection(_db)
-        collections = super(cls, cls).collections(_db)
+        collections = super(
+            IdentifierResolutionCoverageProvider, cls).collections(_db)
 
         if unaffiliated in collections[:]:
             # Always put the unaffiliated collection last.

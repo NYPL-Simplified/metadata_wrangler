@@ -6,7 +6,8 @@ from nose.tools import (
 from . import DatabaseTest
 
 from core.model import (
-    ExternalIntegration
+    DataSource,
+    ExternalIntegration,
 )
 
 from core.s3 import S3Uploader
@@ -66,8 +67,40 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # A VIAFClient was instantiated as well.
         assert isinstance(provider.viaf, VIAFClient)
 
+        # The sub-providers were set up by calling gather_providers().
+        eq_(["a provider"], provider.providers)
 
-            
+    def test_unaffiliated_collection(self):
+        """A special collection exists to track Identifiers not affiliated
+        with any collection associated with a particular library.
+        """
+        m = IdentifierResolutionCoverageProvider.unaffiliated_collection
+        unaffiliated, is_new = m(self._db)
+        eq_(True, is_new)
+        eq_("Unaffiliated Identifiers", unaffiliated.name)
+        eq_(DataSource.INTERNAL_PROCESSING, unaffiliated.protocol)
+
+        unaffiliated2, is_new = m(self._db)
+        eq_(unaffiliated, unaffiliated2)
+        eq_(False, is_new)
+
+    def test_all(self):
+        class Mock(IdentifierResolutionCoverageProvider):
+            def gather_providers(self):
+                return []
+
+        # We have 3 collections created here, plus the 'unaffiliated'
+        # collection.
+        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+        for i in range(3):
+            collection = self._collection()
+
+        # all() puts them in random order (not tested), but
+        # the unaffiliated collection is always last.
+        providers = Mock.all(self._db, mirror=object())
+        providers = list(providers)
+        eq_(4, len(providers))
+        eq_(unaffiliated, providers[-1].collection)
 
 
 # class TestIdentifierResolutionCoverageProvider(DatabaseTest):
@@ -112,37 +145,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 #         self.never_successful = NeverSuccessfulCoverageProvider(self._db)
 #         self.broken = BrokenCoverageProvider(self._db)
 
-#     def test_unaffiliated_collection(self):
-#         """A special collection exists to track Identifiers not affiliated
-#         with any collection associated with a particular library.
-#         """
-#         m = IdentifierResolutionCoverageProvider.unaffiliated_collection
-#         unaffiliated, is_new = m(self._db)
-#         eq_(True, is_new)
-#         eq_("Unaffiliated Identifiers", unaffiliated.name)
-#         eq_(DataSource.INTERNAL_PROCESSING, unaffiliated.protocol)
 
-#         unaffiliated2, is_new = m(self._db)
-#         eq_(unaffiliated, unaffiliated2)
-#         eq_(False, is_new)
-
-
-#     def test_all(self):
-#         # We have 2 collections created during setup, plus 3 more
-#         # created here, plus the 'unaffiliated' collection.
-#         unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
-#         for i in range(3):
-#             collection = self._collection()
-
-#         # all() puts them in random order (not tested), but
-#         # the unaffiliated collection is always last.
-#         providers = IdentifierResolutionCoverageProvider.all(
-#             self._db, mirror=self.mirror,
-#             content_cafe_api=self.mock_content_cafe,
-#         )
-#         providers = list(providers)
-#         eq_(6, len(providers))
-#         eq_(unaffiliated, providers[-1].collection)
 
 #     def test_providers_opds(self):
 #         # For an OPDS collection that goes against the open-access content
