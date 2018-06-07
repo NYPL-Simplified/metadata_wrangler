@@ -49,9 +49,8 @@ class OverdriveBibliographicCoverageProvider(
         self.viaf = viaf or VIAFClient(_db)
 
         if not replacement_policy:
-            mirror = MirrorUploader.sitewide(_db)
             replacement_policy = ReplacementPolicy.from_metadata_source(
-                mirror=self.mirror
+                mirror=MirrorUploader.sitewide(_db)
             )
 
         kwargs['registered_only'] = True

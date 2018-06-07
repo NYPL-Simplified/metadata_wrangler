@@ -89,7 +89,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     PROTOCOL = None
 
     def __init__(self, collection, mirror=None, viaf=None,
-                 provide_coverage_immediately=False, force=False, **kwargs):
+                 provide_coverage_immediately=False, force=False, 
+                 provider_kwargs=None, **kwargs
+    ):
         """Constructor.
 
         :param collection: Handle all Identifiers from this Collection
@@ -114,6 +116,10 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         If this is False (the default), then resolving an identifier
         just means registering it with all other relevant
         CoverageProviders.
+
+        :param provider_kwargs: Pass this object in as provider_kwargs
+        when calling gather_providers at the end of the
+        constructor. Used only in testing.
         """
         _db = Session.object_session(collection)
 
@@ -148,7 +154,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # with all relevant providers (if provide_coverage_immediately
         # is False) or immediately covered by all relevant providers
         # (if provide_coverage_immediately is True).
-        self.providers = self.gather_providers()
+        self.providers = self.gather_providers(provider_kwargs)
 
     @classmethod
     def unaffiliated_collection(cls, _db):
@@ -215,14 +221,24 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # These CoverageProviders can handle items from any kind of
         # collection, so long as the Identifier is of the right type.
-        oclc_classify = instantiate(
-            OCLCClassifyCoverageProvider, providers, provider_kwargs,
-            _db=self._db
-        )
+
+        # TODO: This is temporarily disabled -- it needs to become
+        # a CollectionCoverageProvider.
+        #
+        # There's no rush to get this working again because 
+        # it was primarily intended for use with Project Gutenberg titles,
+        # which we've downplayed in favor of Feedbooks titles, which
+        # have much better metadata.
+        #
+        #oclc_classify = instantiate(
+        #    OCLCClassifyCoverageProvider, providers, provider_kwargs,
+        #    _db=self._db
+        #)
 
         content_cafe = instantiate(
             ContentCafeCoverageProvider, providers, provider_kwargs,
-            collection=self.collection, replacement_policy=self.policy
+            collection=self.collection,
+            replacement_policy=self.replacement_policy
         )
 
         # TODO: This is temporarily disabled because process_item doesn't
@@ -230,6 +246,10 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # associated with OCLC Numbers in some other step. The best
         # solution is to rearchitect LinkedDataCoverageProvider
         # to make it assume it's processing ISBNs.
+        #
+        # This is fine for now because the main things we need out of the
+        # metadata wrangler are cover images and descriptions, which
+        # we can get from ContentCafeCoverageProvider.
         #
         #linked_data = instantiate(
         #    LinkedDataCoverageProvider, providers, provider_kwargs,
@@ -243,7 +263,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             overdrive = instantiate(
                 OverdriveBibliographicCoverageProvider, providers,
                 provider_kwargs, collection=self.collection,
-                viaf=self.viaf, policy=self.policy
+                viaf=self.viaf, replacement_policy=self.replacement_policy
             )
 
         # We already have metadata for books we heard about from an
@@ -252,7 +272,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
             instantiate(
                 IntegrationClientCoverImageCoverageProvider, providers,
-                provider_kwargs, collection=self.collection, mirror=self.mirror,
+                provider_kwargs, collection=self.collection,
+                replacement_policy=self.replacement_policy
             )
 
         return providers

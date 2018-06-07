@@ -11,12 +11,36 @@ from core.model import (
 )
 
 from core.s3 import S3Uploader
+from core.overdrive import MockOverdriveAPI
 
+from content_cafe import ContentCafeCoverageProvider
 from coverage import IdentifierResolutionCoverageProvider
+from integration_client import IntegrationClientCoverImageCoverageProvider
+from oclc_classify import OCLCClassifyCoverageProvider 
+from overdrive import OverdriveBibliographicCoverageProvider
 from viaf import VIAFClient
 
 
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
+
+    def setup(self):
+        super(TestIdentifierResolutionCoverageProvider, self).setup()
+
+        # Set up a sitewide storage integration.
+        storage = self._external_integration(
+            goal=ExternalIntegration.STORAGE_GOAL,
+            protocol=ExternalIntegration.S3,
+            username="a",
+            password="b"
+        )
+
+        # Set up a Content Cafe integration
+        content_cafe = self._external_integration(
+            goal=ExternalIntegration.METADATA_GOAL,
+            protocol=ExternalIntegration.CONTENT_CAFE,
+            username="a",
+            password="b"
+        )
 
     def test_constructor(self):
         """Test that the constructor does the right thing when
@@ -24,16 +48,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         Other tests will invoke the constructor with mock objects.
         """
-        # Set up a sitewide mirror.
-        integration = self._external_integration(
-            goal=ExternalIntegration.STORAGE_GOAL,
-            protocol=ExternalIntegration.S3,
-            username="a",
-            password="b"
-        )
-
         class Mock(IdentifierResolutionCoverageProvider):
-            def gather_providers(self):
+            def gather_providers(self, provider_kwargs):
                 return ["a provider"]
 
         immediate = object()
@@ -86,7 +102,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
     def test_all(self):
         class Mock(IdentifierResolutionCoverageProvider):
-            def gather_providers(self):
+            def gather_providers(self, provider_kwargs):
                 return []
 
         # We have 3 collections created here, plus the 'unaffiliated'
@@ -101,6 +117,61 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         providers = list(providers)
         eq_(4, len(providers))
         eq_(unaffiliated, providers[-1].collection)
+
+    def test_gather_providers_overdrive(self):
+        overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
+        provider_kwargs = {
+            OverdriveBibliographicCoverageProvider : dict(
+                api_class=MockOverdriveAPI
+            )
+        }
+        provider = IdentifierResolutionCoverageProvider(
+            overdrive_collection, provider_kwargs=provider_kwargs
+        )
+
+        # We got two CoverageProviders -- one that can handle a collection
+        # based on any protocol, and one that can only handle a collection
+        # based on the Overdrive protocol.
+        content_cafe, overdrive = provider.providers
+        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
+
+        # The MockOverdriveAPI we passed in as part of provider_kwargs
+        # was instantiated as part of the
+        # OverdriveBibliographicCoverageProvider instantiation.
+        assert isinstance(overdrive.api, MockOverdriveAPI)
+
+        # Since the Overdrive coverage provider checks with VIAF after
+        # adding author information to the database, it's been given a
+        # reference to our VIAF client.
+        eq_(provider.viaf, overdrive.viaf)
+
+        # All subproviders are associated with the collection used in the
+        # main provider, and they all have the same replacement policy.
+        # (And thus the same MirrorUploader.)
+        for subprovider in provider.providers:
+            eq_(provider.collection, subprovider.collection)
+            eq_(provider.replacement_policy, subprovider.replacement_policy)
+
+    def test_gather_providers_opds_for_distributors(self):
+        collection = self._default_collection
+        collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
+        provider = IdentifierResolutionCoverageProvider(collection)
+
+        # We got two subproviders -- one that can handle a collection
+        # based on any protocol, and one that can only handle a
+        # collection based on the OPDS For Distributors protocol.
+        content_cafe, integration_client = provider.providers
+        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        assert isinstance(
+            integration_client, IntegrationClientCoverImageCoverageProvider
+        )
+        # All subproviders are associated with the collection used in the
+        # main provider, and they all have the same replacement policy.
+        # (And thus the same MirrorUploader.)
+        for subprovider in provider.providers:
+            eq_(provider.collection, subprovider.collection)
+            eq_(provider.replacement_policy, subprovider.replacement_policy)
 
 
 # class TestIdentifierResolutionCoverageProvider(DatabaseTest):
@@ -144,77 +215,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 #         self.always_successful = AlwaysSuccessfulCoverageProvider(self._db)
 #         self.never_successful = NeverSuccessfulCoverageProvider(self._db)
 #         self.broken = BrokenCoverageProvider(self._db)
-
-
-
-#     def test_providers_opds(self):
-#         # For an OPDS collection that goes against the open-access content
-#         # server...
-#         self._default_collection.external_integration.set_setting(
-#             Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
-#         )
-#         mirror = object()
-#         # In lieu of a proper mock API, create one that will crash
-#         # if it tries to make a real HTTP request.
-#         resolver = IdentifierResolutionCoverageProvider(
-#             self._default_collection, content_cafe_api=self.mock_content_cafe,
-#             mirror=mirror
-#         )
-
-#         # We get three required coverage providers: Content Cafe, OCLC
-#         # Classify, and OPDS Lookup Protocol.
-#         [content_cafe, oclc_classify, opds], optional = resolver.providers()
-#         eq_([], optional)
-#         assert isinstance(content_cafe, ContentCafeCoverageProvider)
-#         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
-#         assert isinstance(opds, LookupClientCoverageProvider)
-#         eq_(self.mock_content_cafe, content_cafe.content_cafe)
-#         eq_(self._default_collection, opds.collection)
-
-#     def test_providers_overdrive(self):
-#         # For an Overdrive collection...
-#         collection = MockOverdriveAPI.mock_collection(self._db)
-
-#         # In lieu of a proper mock API, create one that will crash
-#         # if it tries to make a real HTTP request.
-#         mock_content_cafe = ContentCafeAPI(
-#             self._db, None, object(), object(), self.mirror
-#         )
-#         resolver = IdentifierResolutionCoverageProvider(
-#             collection, overdrive_api_class=MockOverdriveAPI,
-#             content_cafe_api=mock_content_cafe,
-#             mirror=self.mirror
-#         )
-
-#         # We get three required coverage providers: Content Cafe, OCLC
-#         # Classify, and Overdrive.
-#         [content_cafe, oclc_classify, overdrive], optional = resolver.providers()
-#         eq_([], optional)
-#         assert isinstance(content_cafe, ContentCafeCoverageProvider)
-#         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
-#         assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
-
-#     def test_providers_opds_for_distributors(self):
-#         # For an OPDS for distributors collection from a circulation manager.
-#         self._default_collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
-#         mirror = object()
-
-#         # In lieu of a proper mock API, create one that will crash
-#         # if it tries to make a real HTTP request.
-#         mock_content_cafe = ContentCafeAPI(
-#             self._db, None, object(), object(), self.mirror
-#         )
-#         resolver = IdentifierResolutionCoverageProvider(
-#             self._default_collection,
-#             content_cafe_api=mock_content_cafe,
-#             mirror=self.mirror
-#         )
-
-#         # We get one required coverage provider and two optional coverage providers.
-#         [integration_client], [content_cafe, oclc_classify] = resolver.providers()
-#         assert isinstance(content_cafe, ContentCafeCoverageProvider)
-#         assert isinstance(oclc_classify, OCLCClassifyCoverageProvider)
-#         assert isinstance(integration_client, IntegrationClientCoverImageCoverageProvider)
 
 #     def test_process_item_creates_license_pool(self):
 #         self.resolver.required_coverage_providers = [

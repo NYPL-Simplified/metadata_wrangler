@@ -136,11 +136,15 @@ class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
 
     def __init__(self, collection, *args, **kwargs):
         _db = Session.object_session(collection)
-        mirror = kwargs.pop('mirror', None) or MirrorUploader.sitewide(_db)
-        self.replacement_policy = ReplacementPolicy(
-            mirror=mirror, links=True
-        )
 
+        replacement_policy = kwargs.pop('replacement_policy', None) 
+        if not replacement_policy:
+            mirror = MirrorUploader.sitewide(_db)
+            replacement_policy = ReplacementPolicy(
+                mirror=mirror, links=True
+            )
+
+        kwargs['replacement_policy'] = replacement_policy
         # Only process identifiers that have been registered for coverage.
         kwargs['registered_only'] = kwargs.get('registered_only', True)
         super(IntegrationClientCoverImageCoverageProvider, self).__init__(
