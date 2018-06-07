@@ -17,12 +17,18 @@ from core.overdrive import (
 from core.mirror import MirrorUploader
 
 from coverage_utils import ResolveVIAFOnSuccessCoverageProvider
+from viaf import VIAFClient
 
 class OverdriveBibliographicCoverageProvider(
         ResolveVIAFOnSuccessCoverageProvider,
         BaseOverdriveBibliographicCoverageProvider
 ):
-    """Finds and updates bibliographic information for Overdrive items."""
+    """Finds and updates bibliographic information for Overdrive items.
+
+    TODO: As part of processing, find the ISBN associated with the
+    Overdrive identifier and make sure the LinkedDataCoverageProvider
+    eventually handles it.
+    """
 
     EXCLUDE_SEARCH_INDEX = True
 
@@ -104,11 +110,3 @@ class OverdriveBibliographicCoverageProvider(
             Collection.id==self.collection_id
         )
         return qu
-
-    def handle_success(self, identifier):
-        # TODO: Find the ISBN associated with the Overdrive identifier
-        # and register it with the LinkedDataCoverageProvider.
-        result = super(
-            OverdriveBibliographicCoverageProvider, self
-        ).handle_success(identifier)
-        return self.handle_success_mixin(result)
