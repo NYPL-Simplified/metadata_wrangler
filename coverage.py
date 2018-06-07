@@ -89,7 +89,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     PROTOCOL = None
 
     def __init__(self, collection, mirror=None, viaf=None,
-                 provide_coverage_immediately=False, force=False, 
+                 provide_coverage_immediately=False, force=False,
                  provider_kwargs=None, **kwargs
     ):
         """Constructor.
@@ -225,7 +225,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # TODO: This is temporarily disabled -- it needs to become
         # a CollectionCoverageProvider.
         #
-        # There's no rush to get this working again because 
+        # There's no rush to get this working again because
         # it was primarily intended for use with Project Gutenberg titles,
         # which we've downplayed in favor of Feedbooks titles, which
         # have much better metadata.
