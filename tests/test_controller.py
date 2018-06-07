@@ -509,7 +509,7 @@ class TestCatalogController(ControllerTest):
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
 
     def test_add_with_metadata(self):
-        # Pretend this content server OPDS came from a circulation manager.
+        # Pretend this OPDS came from a circulation manager.
         base_path = os.path.split(__file__)[0]
         resource_path = os.path.join(base_path, "files", "opds")
         path = os.path.join(resource_path, "content_server_lookup.opds")

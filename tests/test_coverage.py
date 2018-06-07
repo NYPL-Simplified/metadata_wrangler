@@ -35,7 +35,6 @@ from core.testing import (
     BrokenCoverageProvider,
 )
 
-from content_server import LookupClientCoverageProvider
 from content_cafe import (
     ContentCafeAPI,
     ContentCafeCoverageProvider, 
@@ -52,129 +51,6 @@ from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
 from viaf import MockVIAFClient
-
-
-class MockLookupClientCoverageProvider(LookupClientCoverageProvider):
-
-    def _lookup_client(self, url):
-        return MockSimplifiedOPDSLookup(url)
-
-    def _importer(self):
-        # Part of this test is verifying that we just import the OPDS
-        # metadata and don't try to make any other HTTP requests or
-        # mirror anything. If we should try to do that, we'll get a 
-        # crash because object() isn't really an HTTP client.
-        return OPDSImporter(
-            self._db, collection=self.collection, metadata_client=object(),
-            mirror=None, http_get=object()
-        )
-
-
-class TestLookupClientCoverageProvider(DatabaseTest):
-    
-    def setup(self):
-        super(TestLookupClientCoverageProvider, self).setup()
-
-        # Make the default collection look like a collection that goes
-        # against the Library Simplified open-access content server.
-        self._default_collection.external_integration.set_setting(
-            Collection.DATA_SOURCE_NAME_SETTING, DataSource.OA_CONTENT_SERVER
-        )
-        self._default_collection.external_account_id = self._url
-        self.provider = MockLookupClientCoverageProvider(
-            self._default_collection
-        )
-        self.lookup_client = self.provider.lookup_client
-        base_path = os.path.split(__file__)[0]
-
-    def sample_data(self, filename):
-        return sample_data(filename, 'opds')
-
-    def test_success(self):
-        data = self.sample_data("content_server_lookup.opds")
-        self.lookup_client.queue_response(
-            200, {"content-type": "application/atom+xml"},
-            content=data
-        )
-        identifier = self._identifier(identifier_type=Identifier.GUTENBERG_ID)
-
-        # Make the Identifier match the book the queued-up response is
-        # talking about
-        identifier.identifier = "20201"
-        success = self.provider.process_item(identifier)
-        eq_(success, identifier)
-
-        # The book was imported and turned into a Work.
-        [lp] = identifier.licensed_through
-        work = lp.work
-        eq_("Mary Gray", work.title)
-
-        # It's not presentation-ready yet, because we are the metadata
-        # wrangler and our work is not yet done.
-        eq_(False, work.presentation_ready)
-
-    def test_no_such_work(self):
-        data = self.sample_data("no_such_work.opds")
-        self.lookup_client.queue_response(
-            200, {"content-type": "application/atom+xml"},
-            content=data
-        )
-        identifier = self._identifier(identifier_type=Identifier.GUTENBERG_ID)
-
-        # Make the Identifier match the book the queued-up response is
-        # talking about
-        identifier.identifier = "2020110"
-        failure = self.provider.process_item(identifier)
-        eq_(identifier, failure.obj)
-        eq_("404: I've never heard of this work.", failure.exception)
-        eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
-
-        # Most of the time this is a persistent error but it's
-        # possible that we know about a book the content server
-        # doesn't know about yet.
-        eq_(True, failure.transient)
-
-    def test_wrong_work_in_response(self):
-        data = self.sample_data("content_server_lookup.opds")
-        self.lookup_client.queue_response(
-            200, {"content-type": "application/atom+xml"},
-            content=data
-        )
-        identifier = self._identifier(identifier_type=Identifier.GUTENBERG_ID)
-
-        # The content server told us about a different book than the
-        # one we asked about.
-        identifier.identifier = "999"
-        failure = self.provider.process_item(identifier)
-        eq_(identifier, failure.obj)
-        eq_('Identifier was not mentioned in lookup response', failure.exception)
-        eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
-        eq_(True, failure.transient)
-
-    def test_content_server_http_failure(self):
-        """Test that HTTP-level failures of the content server
-        become transient CoverageFailures.
-        """
-        identifier = self._identifier(identifier_type=Identifier.GUTENBERG_ID)
-
-        self.lookup_client.queue_response(
-            500, content="help me!"
-        )
-        failure = self.provider.process_item(identifier)
-        eq_(identifier, failure.obj)
-        eq_("Got status code 500 from external server, cannot continue.",
-            failure.exception)
-        eq_(True, failure.transient)
-
-        self.lookup_client.queue_response(
-            200, {"content-type": "text/plain"}, content="help me!"
-        )
-        failure = self.provider.process_item(identifier)
-        eq_(identifier, failure.obj)
-        eq_("OPDS Server served unhandleable media type: text/plain",
-            failure.exception)
-        eq_(True, failure.transient)
-        eq_(DataSource.OA_CONTENT_SERVER, failure.data_source.name)
 
 
 class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvider):

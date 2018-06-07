@@ -41,10 +41,6 @@ from content_cafe import (
     ContentCafeAPI,
 )
 
-from content_server import (
-    LookupClientCoverageProvider, 
-)
-
 from oclc_classify import (
     OCLCClassifyCoverageProvider, 
 )
@@ -238,21 +234,6 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         #    collection=self.collection, replacement_policy=self.policy,
         #    viaf=self.viaf
         #)
-
-        # All books derived from OPDS import must be looked up from the
-        # server they were imported from.
-        #
-        # TODO: This is temporarily disabled, possibly permanently. It
-        # doesn't work very well and if we really need this
-        # information the circulation manager can provide it to us.
-        #
-        #if (protocol==ExternalIntegration.OPDS_IMPORT
-        #    and self.collection.data_source
-        #):
-        #    opds_lookup = instantiate(
-        #        LookupClientCoverageProvider, providers, provider_kwargs,
-        #        collection=self.collection
-        #    )
 
         # All books identified by Overdrive ID must be looked up via
         # the Overdrive API.
