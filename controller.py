@@ -767,7 +767,7 @@ class URNLookupController(CoreURNLookupController):
     log = logging.getLogger("URN lookup controller")
 
     def __init__(self, _db):
-        self.default_collection_id = None
+        self._default_collection_id = None
         super(URNLookupController, self).__init__(_db)
 
     @property
@@ -778,21 +778,13 @@ class URNLookupController(CoreURNLookupController):
         return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
-        """Either return a presentation-ready work associated with the
-        given `identifier`, or return None.
+        """Either return an existing presentation-ready work associated with
+        the given `identifier`, or return None.
         """
-        pools = identifier.licensed_through
-        if not pools:
-            return None
-        # All LicensePools for a given Identifier have the same Work.
-        work = pools[0].work
-        if not work or not work.presentation_ready:
-            return None
-        return work
-
-    def can_resolve_identifier(self, identifier):
-        """A chance to determine whether resolution should proceed."""
-        return identifier.type in self.VALID_TYPES
+        work = identifier.work
+        if work.presentation_ready:
+            return work
+        return None
 
     def process_urns(self, urns, collection_details=None, **kwargs):
         """Processes URNs submitted via lookup request
@@ -831,6 +823,10 @@ class URNLookupController(CoreURNLookupController):
             collection = self.default_collection
             limit = 1
 
+        if resolve_now:
+            # You can't force-resolve more than one Identifier at a time.
+            limit = 1
+
         if len(urns) > limit:
             return INVALID_INPUT.detailed(
                 _("The maximum number of URNs you can provide at once is %d. (You sent %d)") % (limit, len(urns))
@@ -840,7 +836,12 @@ class URNLookupController(CoreURNLookupController):
         )
         self.add_urn_failure_messages(failures)
 
+        # Catalog all identifiers.
         collection.catalog_identifiers(identifiers_by_urn.values())
+
+        # Load all coverage records in a single query to speed up the
+        # code that reports on the status of Identifiers that aren't
+        # ready.
         self.bulk_load_coverage_records(identifiers_by_urn.values())
 
         resolver = IdentifierResolutionCoverageProvider(
@@ -849,11 +850,12 @@ class URNLookupController(CoreURNLookupController):
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(
                 identifier, urn, collection=collection,
-                resolver=resolver, resolve_now=resolve_now, **kwargs
+                resolver=resolver, resolve_now=resolve_now,
+                force=resolve_now, **kwargs
             )
 
     def process_identifier(self, identifier, urn, collection, resolver,
-                           resolve_now=False, **kwargs):
+                           **kwargs):
         """If there is a presentation-ready Work for the given Identifier,
         add its OPDS entry to the feed.
 
@@ -881,7 +883,7 @@ class URNLookupController(CoreURNLookupController):
         # IdentifierResolutionCoverageProvider process this
         # Identifier. This will either do the work, or register all
         # the work that needs to be done.
-        result = resolver.ensure_coverage(identifier, force=resolve_now)
+        result = resolver.ensure_coverage(identifier, force=resolver.force)
 
         work = self.presentation_ready_work_for(identifier)
         if work:

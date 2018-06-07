@@ -80,6 +80,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
+
+    # These are the only identifier types we have any hope of providing
+    # insight into.
     INPUT_IDENTIFIER_TYPES = [
         Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
     ]
