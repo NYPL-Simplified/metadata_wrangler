@@ -2,6 +2,7 @@ from core.coverage import (
     BibliographicCoverageProvider,
     CoverageFailure
 )
+from core.model import DataSource
 
 class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvider):
 
@@ -33,20 +34,23 @@ class ResolveVIAFOnSuccessCoverageProvider(MetadataWranglerBibliographicCoverage
     completes its work, it should run any Contributors associated with
     the presentation Edition through VIAF. Then it should try to
     create a presentation-ready work.
+
+    By the time handle_success is called, instances of this class must
+    have self.viaf set to a VIAFClient.
     """
     def handle_success(self, identifier):
         work = self.work(identifier)
         if isinstance(work, CoverageFailure):
             return work
+        work.set_presentation_ready()
         try:
-            self.resolve_viaf(self, work, client)
+            self.resolve_viaf(self, work)
         except Exception, e:
             message = "Exception updating VIAF coverage: %r" % e
             return self.failure(identifier, message, transient=True)
-        work.set_presentation_ready()
         return identifier
 
-    def resolve_viaf(self, work, client):
+    def resolve_viaf(self, work):
         """Get VIAF data on all contributors to the Work's presentation edition.
         """
         for pool in work.license_pools:
@@ -56,7 +60,7 @@ class ResolveVIAFOnSuccessCoverageProvider(MetadataWranglerBibliographicCoverage
             for contributor in edition.contributors:
                 # TODO: We need some way of not going to VIAF over and over
                 # again for the same contributors.
-                client.process_contributor(contributor)
+                self.viaf.process_contributor(contributor)
                 if not contributor.display_name:
                     contributor.family_name, contributor.display_name = (
                         contributor.default_names()
