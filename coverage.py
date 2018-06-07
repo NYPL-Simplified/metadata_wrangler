@@ -1,6 +1,8 @@
 import logging
 from nose.tools import set_trace
 
+from sqlalchemy.orm.session import Session
+
 from core.config import CannotLoadConfiguration
 
 from core.coverage import (
@@ -113,22 +115,12 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         just means registering it with all other relevant
         CoverageProviders.
         """
-        # We don't pass in registered_only=True because if an
-        # Identifier is part of this collection's catalog it means
-        # someone asked about it.
-        super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, **kwargs
-        )
-
-        self.provide_coverage_immediately = provide_coverage_immediately
-        self.force = force
+        _db = Session.object_session(collection)
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror using the sitewide MirrorUploader.
-        mirror = mirror or MirrorUploader.sitewide(self._db)
+        mirror = mirror or MirrorUploader.sitewide(_db)
         self.mirror = mirror
-
-        self.viaf = viaf or VIAFClient(self._db)
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
@@ -136,9 +128,18 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         presentation = PresentationCalculationPolicy(
             regenerate_opds_entries=True
         )
-        self.policy = ReplacementPolicy.from_metadata_source(
+        replacement_policy = ReplacementPolicy.from_metadata_source(
             presentation_calculation_policy=presentation, mirror=self.mirror
         )
+        super(IdentifierResolutionCoverageProvider, self).__init__(
+            collection, replacement_policy=replacement_policy,
+            **kwargs
+        )
+
+        self.provide_coverage_immediately = provide_coverage_immediately
+        self.force = force
+
+        self.viaf = viaf or VIAFClient(self._db)
 
         # Instantiate the coverage providers that may be needed to
         # relevant to any given Identifier.
@@ -147,7 +148,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # with all relevant providers (if provide_coverage_immediately
         # is False) or immediately covered by all relevant providers
         # (if provide_coverage_immediately is True).
-        self.providers = self.providers()
+        self.providers = self.gather_providers()
 
     @classmethod
     def unaffiliated_collection(cls, _db):
@@ -173,7 +174,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         return collections
 
-    def providers(self, provider_kwargs=None):
+    def gather_providers(self, provider_kwargs=None):
         """Instantiate all CoverageProviders that might be necessary
         to handle an Identifier from this Collection.
 
