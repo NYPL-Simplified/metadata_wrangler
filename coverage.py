@@ -4,13 +4,13 @@ from nose.tools import set_trace
 from core.config import CannotLoadConfiguration
 
 from core.coverage import (
-    CoverageFailure, 
-    CatalogCoverageProvider, 
+    CoverageFailure,
+    CatalogCoverageProvider,
     IdentifierCoverageProvider,
 )
 
 from core.metadata_layer import (
-    ReplacementPolicy, 
+    ReplacementPolicy,
 )
 
 from core.model import (
@@ -37,12 +37,12 @@ from overdrive import (
 )
 
 from content_cafe import (
-    ContentCafeCoverageProvider, 
+    ContentCafeCoverageProvider,
     ContentCafeAPI,
 )
 
 from oclc_classify import (
-    OCLCClassifyCoverageProvider, 
+    OCLCClassifyCoverageProvider,
 )
 
 from oclc import (
@@ -50,7 +50,7 @@ from oclc import (
 )
 
 from viaf import (
-    VIAFClient, 
+    VIAFClient,
 )
 from integration_client import (
     IntegrationClientCoverImageCoverageProvider,
@@ -60,7 +60,7 @@ from integration_client import (
 class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     """Make sure all Identifiers associated with some Collection become
     Works.
-    
+
     Coverage happens by running the Identifier through _other_
     CoverageProviders, which fill in the blanks with data from
     third-party entities.
@@ -82,7 +82,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
     ]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
-    
+
     # We cover all Collections, regardless of their protocol.
     PROTOCOL = None
 
@@ -112,7 +112,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         If this is False (the default), then resolving an identifier
         just means registering it with all other relevant
         CoverageProviders.
-        """       
+        """
         # We don't pass in registered_only=True because if an
         # Identifier is part of this collection's catalog it means
         # someone asked about it.
@@ -132,14 +132,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
-        # at all, or something went wrong trying to set it up.        
+        # at all, or something went wrong trying to set it up.
         presentation = PresentationCalculationPolicy(
             regenerate_opds_entries=True
         )
         self.policy = ReplacementPolicy.from_metadata_source(
             presentation_calculation_policy=presentation, mirror=self.mirror
         )
-        
+
         # Instantiate the coverage providers that may be needed to
         # relevant to any given Identifier.
         #
@@ -217,7 +217,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             OCLCClassifyCoverageProvider, providers, provider_kwargs,
             _db=self._db
         )
-        
+
         content_cafe = instantiate(
             ContentCafeCoverageProvider, providers, provider_kwargs,
             collection=self.collection, replacement_policy=self.policy
@@ -254,7 +254,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             )
 
         return providers
-            
+
     def process_item(self, identifier):
         """Either make sure this Identifier is registered with all
         CoverageProviders, or actually attempt to use them to provide

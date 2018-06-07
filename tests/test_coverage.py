@@ -12,10 +12,10 @@ from . import (
 from core.coverage import CoverageFailure
 from core.model import (
     Collection,
-    CoverageRecord, 
+    CoverageRecord,
     DataSource,
     ExternalIntegration,
-    get_one, 
+    get_one,
     Identifier,
     LicensePool,
     Work,
@@ -37,7 +37,7 @@ from core.testing import (
 
 from content_cafe import (
     ContentCafeAPI,
-    ContentCafeCoverageProvider, 
+    ContentCafeCoverageProvider,
 )
 from coverage import (
     IdentifierResolutionCoverageProvider,
@@ -48,7 +48,7 @@ from integration_client import (
     WorkPresentationCoverageProvider,
 )
 from oclc_classify import (
-    OCLCClassifyCoverageProvider, 
+    OCLCClassifyCoverageProvider,
 )
 from viaf import MockVIAFClient
 
@@ -63,11 +63,11 @@ class MockIdentifierResolutionCoverageProvider(IdentifierResolutionCoverageProvi
         super(MockIdentifierResolutionCoverageProvider, self).__init__(
             *args, **kwargs
         )
-    
+
     def providers(self, *args, **kwargs):
         return self.required_coverage_providers, self.optional_coverage_providers
-        
-    
+
+
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
     def setup(self):
@@ -165,7 +165,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert isinstance(opds, LookupClientCoverageProvider)
         eq_(self.mock_content_cafe, content_cafe.content_cafe)
         eq_(self._default_collection, opds.collection)
-        
+
     def test_providers_overdrive(self):
         # For an Overdrive collection...
         collection = MockOverdriveAPI.mock_collection(self._db)
@@ -284,7 +284,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # coverage provider.
         assert isinstance(failure, CoverageFailure)
         eq_("500: What did you expect?", failure.exception)
-        
+
     def test_process_item_succeeds_if_all_required_coverage_providers_succeed(self):
         # Give the identifier an edition so a work can be created.
         edition = self._edition(
