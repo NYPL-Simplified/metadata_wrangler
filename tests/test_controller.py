@@ -399,7 +399,7 @@ class TestCatalogController(ControllerTest):
             eq_(0, len(feed['entries']))
 
         # The feed can be paginated.
-        identifier2 = self.work1.license_pools[0].identifier
+        identifier2 = self.work2.license_pools[0].identifier
         self.collection.catalog_identifier(identifier2)
         with self.app.test_request_context(
                 '/?last_update_time=%s&size=1' % yesterday_timestamp,

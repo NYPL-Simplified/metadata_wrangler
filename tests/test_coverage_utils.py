@@ -53,7 +53,7 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
         """Test failures that can happen during handle_success."""
 
         class Mock(MockResolveVIAF):
-            def resolve_viaf(self, work, client):
+            def resolve_viaf(self, work):
                 raise Exception("nooo")
 
         provider = Mock(self._default_collection)
@@ -86,9 +86,17 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
         work = self._work(
             authors=['Author 1', 'Author 2'], with_license_pool=True
         )
-        c1, c2 = work.presentation_edition.contributors
-        eq_(None, c1.sort_name)
-        eq_(None, c2.sort_name)
+        c1, c2 = sorted(
+            work.presentation_edition.contributors,
+            key=lambda x: x.sort_name
+        )
+        eq_("1, Author", c1.sort_name)
+        eq_("2, Author", c2.sort_name)
+
+        # However, (let's say) we were not able to find the display
+        # names of the contributors, only the sort names.
+        c1.display_name = None
+        c2.display_name = None
 
         # Now let's call resolve_viaf().
         provider = MockResolveVIAF(self._default_collection)
@@ -101,7 +109,6 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
 
         # Since it's just a mock, no VIAF anything actually happened.
         # But _because_ nothing happened, we made guesses as to the
-        # sort names of the two contributors.
-        eq_("1, Author", c1.sort_name)
-        eq_("2, Author", c2.sort_name)
-
+        # display names of the two contributors.
+        eq_("Author 1", c1.display_name)
+        eq_("Author 2", c2.display_name)
