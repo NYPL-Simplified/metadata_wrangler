@@ -265,6 +265,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         work = identifier.work
         eq_(True, work.presentation_ready)
         eq_("A great book", work.title)
+        eq_(None, work.fiction)
+        eq_(None, work.audience)
 
         #
         # But what if that CoverageRecord hadn't been created with the
