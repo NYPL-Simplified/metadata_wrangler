@@ -900,7 +900,7 @@ class URNLookupController(CoreURNLookupController):
             # identifier, even though there wasn't before.
             return self.add_work(identifier, work)
 
-        return self.add_failure_message(urn, identifier)
+        return self.add_status_message(urn, identifier)
 
     def bulk_load_coverage_records(self, identifiers):
         """Loads CoverageRecords for a list of identifiers into the database
@@ -911,7 +911,7 @@ class URNLookupController(CoreURNLookupController):
         self._db.query(Identifier).filter(Identifier.id.in_(identifier_ids))\
             .options(joinedload(Identifier.coverage_records)).all()
 
-    def add_failure_message(self, urn, identifier):
+    def add_status_message(self, urn, identifier):
         """There is no presentation-ready work for this identifier.
         Add an OPDS message explaining the current status of every
         CoverageRecord associated with it.
