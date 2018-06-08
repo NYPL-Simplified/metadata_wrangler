@@ -1,3 +1,4 @@
+# encoding: utf-8
 import os
 import base64
 import feedparser
@@ -36,6 +37,8 @@ from core.model import (
 )
 from core.opds import AcquisitionFeed
 from core.opds_import import OPDSXMLParser
+from core.overdrive import MockOverdriveAPI
+from core.s3 import MockS3Uploader
 from core.testing import (
     DummyHTTPClient,
     MockRequestsResponse,
@@ -43,6 +46,10 @@ from core.testing import (
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
 
+from content_cafe import (
+    ContentCafeCoverageProvider,
+    MockContentCafeAPI,
+)
 from controller import (
     CatalogController,
     IndexController,
@@ -60,8 +67,12 @@ from coverage import (
     IdentifierResolutionCoverageProvider,
 )
 from integration_client import IntegrationClientCoverImageCoverageProvider
-from problem_details import *
+from overdrive import (
+    OverdriveBibliographicCoverageProvider,
+)
 
+from problem_details import *
+from viaf import MockVIAFClient
 
 class ControllerTest(DatabaseTest):
 
@@ -328,9 +339,12 @@ class TestCatalogController(ControllerTest):
             assert self.collection.name+'/remove' in href
 
     def test_updates_feed(self):
+        # Add an Identifier associated with a Work to our catalog.
         identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(identifier)
 
+        # Ask for updates as though we had no information about what's in
+        # our catalog.
         with self.app.test_request_context('/', headers=self.valid_auth):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
@@ -339,20 +353,29 @@ class TestCatalogController(ControllerTest):
             eq_(feed.feed.title,
                 u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
-            # The feed has the catalog's catalog.
+            # The feed has information on the only work in our
+            # catalog.
             eq_(1, len(feed['entries']))
             [entry] = feed['entries']
             eq_(self.work1.title, entry['title'])
             eq_(identifier.urn, entry['id'])
 
-        # A time can be passed.
-        time = datetime.utcnow()
-        timestamp = time.strftime(self.controller.TIMESTAMP_FORMAT)
-        for record in self.work1.coverage_records:
-            # Set back the clock on all of work1's time records
-            record.timestamp = time - timedelta(days=1)
-        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-            headers=self.valid_auth):
+        # We can ask for updates since a given time.
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        yesterday_timestamp = yesterday.strftime(
+            self.controller.TIMESTAMP_FORMAT
+        )
+        tomorrow = datetime.utcnow() + timedelta(days=1)
+        tomorrow_timestamp = tomorrow.strftime(
+            self.controller.TIMESTAMP_FORMAT
+        )
+
+        # If we ask for updates since before work1 was created,
+        # we'll get work1.
+        with self.app.test_request_context(
+                '/?last_update_time=%s' % yesterday_timestamp,
+                headers=self.valid_auth
+        ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
@@ -360,80 +383,46 @@ class TestCatalogController(ControllerTest):
                 u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The timestamp is included in the url.
-            linkified_timestamp = time.strftime(self.controller.TIMESTAMP_FORMAT).replace(":", "%3A")
+            linkified_timestamp = yesterday_timestamp.replace(":", "%3A")
             assert feed['feed']['id'].endswith(linkified_timestamp)
-            # And only works updated since the timestamp are returned.
+            eq_(1, len(feed['entries']))
+
+        # If we ask for updates from a time later than work1 was created,
+        # we'll get no results.
+        with self.app.test_request_context(
+                '/?last_update_time=%s' % tomorrow_timestamp,
+                headers=self.valid_auth
+        ):
+            response = self.controller.updates_feed(self.collection.name)
+            eq_(HTTP_OK, response.status_code)
+            feed = feedparser.parse(response.get_data())
             eq_(0, len(feed['entries']))
 
-        # Works updated since the timestamp are returned
-        self.work1.coverage_records[0].timestamp = datetime.utcnow()
-        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-            headers=self.valid_auth
+        # The feed can be paginated.
+        identifier2 = self.work1.license_pools[0].identifier
+        self.collection.catalog_identifier(identifier2)
+        with self.app.test_request_context(
+                '/?last_update_time=%s&size=1' % yesterday_timestamp,
+                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
+            eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
-            eq_(1, len(feed['entries']))
             [entry] = feed['entries']
-            eq_(self.work1.title, entry['title'])
+
+            # work1 shows up first since it was created earlier.
             eq_(identifier.urn, entry['id'])
 
-        # ISBNs updated since the timestamp are also included in the feed.
-        timestamp = datetime.utcnow().strftime(self.controller.TIMESTAMP_FORMAT)
-        isbn = self._identifier(
-            identifier_type=Identifier.ISBN, foreign_id=self._isbn
-        )
-        self.collection.catalog_identifier(isbn)
-
-        # Let's provide the coverage.
-        def cover_isbn(isbn):
-            metadata_sources = DataSource.metadata_sources_for(self._db, isbn)
-            for source in metadata_sources:
-                CoverageRecord.add_for(isbn, source)
-
-        cover_isbn(isbn)
-        # Set back the work timestamp to simplify the test.
-        self.work1.coverage_records[0].timestamp = datetime.utcnow() - timedelta(days=1)
-
-        with self.app.test_request_context('/?last_update_time=%s' % timestamp,
-            headers=self.valid_auth
+        # Page two contains work2.
+        with self.app.test_request_context(
+                '/?last_update_time=%s&size=1&after=1' % yesterday_timestamp,
+                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
+            eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
-            [entry] = feed.entries
-            eq_(isbn.urn, entry.id)
-
-        # Pagination is applied to both works and isbns (each).
-
-        # Create another work and ISBN to test.
-        i2 = self.work2.license_pools[0].identifier
-        isbn2 = self._identifier(
-            identifier_type=Identifier.ISBN, foreign_id=self._isbn
-        )
-        cover_isbn(isbn2)
-        self.collection.catalog_identifiers([i2, isbn2])
-
-        with self.app.test_request_context('/?size=1', headers=self.valid_auth):
-            response = self.controller.updates_feed(self.collection.name)
-            feed = feedparser.parse(response.get_data())
-
-            # The feed size has been applied to both works and isbns.
-            eq_(2, len(feed.entries))
-
-            # The earlier updated items are represented.
-            resulting_urns = [e.id for e in feed.entries]
-            eq_(sorted([identifier.urn, isbn.urn]), sorted(resulting_urns))
-
-        with self.app.test_request_context('/?after=1&size=1',
-            headers=self.valid_auth
-        ):
-            response = self.controller.updates_feed(self.collection.name)
-            feed = feedparser.parse(response.get_data())
-
-            eq_(2, len(feed.entries))
-
-            # The later items are included.
-            resulting_urns = [e.id for e in feed.entries]
-            eq_(sorted([i2.urn, isbn2.urn]), sorted(resulting_urns))
+            [entry] = feed['entries']
+            eq_(identifier2.urn, entry['id'])
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
@@ -954,9 +943,51 @@ class TestCatalogController(ControllerTest):
 
 class TestURNLookupController(ControllerTest):
 
+    ISBN_URN = 'urn:isbn:9781449358068'
+
+    base_path = os.path.split(__file__)[0]
+    resource_path = os.path.join(base_path, "files")
+
+    def data_file(self, path):
+        """Return the contents of a test data file."""
+        return open(os.path.join(self.resource_path, path)).read()
+
     def setup(self):
         super(TestURNLookupController, self).setup()
-        self.controller = URNLookupController(self._db)
+
+        self.mirror = MockS3Uploader()
+        self.content_cafe = MockContentCafeAPI()
+
+        self.overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
+        self.overdrive = MockOverdriveAPI(self._db, self.overdrive_collection)
+
+        self.viaf = MockVIAFClient(self._db)
+
+        self.http = DummyHTTPClient()
+
+        # The IdentifierResolutionCoverageProvider is going to instantiate
+        # a number of other CoverageProviders. When it does, we want each
+        # one to be instantiated with an appropriate mock API.
+        individual_provider_kwargs = {
+            OverdriveBibliographicCoverageProvider : dict(
+                api_class=self.overdrive
+            ),
+            ContentCafeCoverageProvider : dict(
+                api=self.content_cafe
+            )
+        }
+
+        identifier_resolution_coverage_provider_kwargs = dict(
+            mirror=self.mirror,
+            http_get=self.http.do_get,
+            viaf=self.viaf,
+            provider_kwargs=individual_provider_kwargs
+        )
+
+        self.controller = URNLookupController(
+            self._db,
+            coverage_provider_kwargs=identifier_resolution_coverage_provider_kwargs
+        )
         self.source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
     def basic_request_context(f):
@@ -979,33 +1010,175 @@ class TestURNLookupController(ControllerTest):
                 return f(*args, **kwargs)
         return decorated
 
-    def assert_one_message(self, urn, code, message):
-        """Assert that the given message is the only thing
-        in the feed.
+    def authenticated_request_context_resolve_now(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            from app import app
+
+            secret = args[0].client.shared_secret.encode('utf8')
+            valid_auth = 'Bearer '+ base64.urlsafe_b64encode(secret)
+            headers = { 'Authorization' : valid_auth }
+            with app.test_request_context('/?resolve_now=True', headers=headers):
+                return f(*args, **kwargs)
+        return decorated
+
+    def one_message(self, urn, status_code, message_prefix):
+        """Assert that a <message> with the given status code and URN is the
+        only thing in the feed.
+
+        Return the string associated with the message, which can be
+        used in further assertions.
         """
         [obj] = self.controller.precomposed_entries
-        expect = OPDSMessage(urn, code, message)
         assert isinstance(obj, OPDSMessage)
         eq_(urn, obj.urn)
-        eq_(code, obj.status_code)
-        eq_(message, obj.message)
+        eq_(status_code, obj.status_code)
         eq_([], self.controller.works)
+        if message_prefix:
+            assert obj.message.startswith(message_prefix)
+        return obj.message
 
     @authenticated_request_context
-    def test_process_urn_initial_registration(self):
-        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier"
-        remote_collection = self._collection(external_account_id='banana')
-        name = remote_collection.metadata_identifier
+    def test_process_urn_registration_success_overdrive(self):
+        # Create an Overdrive URN, then modify it to one that doesn't
+        # actually exist in any database session.
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID, foreign_id='changeme'
+        )
+        urn = identifier.urn.replace('changeme', 'abc-123-xyz')
+        name = self.overdrive_collection.metadata_identifier
 
         self.controller.process_urns([urn], collection_details=name)
-        self.assert_one_message(
-            urn, 201, URNLookupController.IDENTIFIER_REGISTERED
+        message = self.one_message(
+            urn, 202,
+            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
+
+        # The Identifier was successfully resolved, that is, it was
+        # registered with the CoverageProvider for Overdrive.
+        assert 'operation="resolve-identifier" status=success' in message
+        assert 'Overdrive - status=registered' in message
+
+        # It was not registered with the CoverageProvider for Content Cafe,
+        # since Content Cafe can't handle Overdrive IDs.
+        assert 'Content Cafe' not in message
 
         # The Identifier has been added to the collection to await registration
         collection = self._db.query(Collection).filter(Collection.name==name).one()
         identifier = Identifier.parse_urn(self._db, urn)[0]
         assert identifier in collection.catalog
+
+        # The CoverageRecords exist on the Identifier -- it's not
+        # something that was made up for the OPDS message.
+        [resolver_cr, overdrive_cr] = identifier.coverage_records
+        eq_(DataSource.INTERNAL_PROCESSING, resolver_cr.data_source.name)
+        eq_(CoverageRecord.RESOLVE_IDENTIFIER_OPERATION, resolver_cr.operation)
+        eq_(CoverageRecord.SUCCESS, resolver_cr.status)
+
+        eq_(DataSource.OVERDRIVE, overdrive_cr.data_source.name)
+        eq_(None, overdrive_cr.operation)
+        eq_(CoverageRecord.REGISTERED, overdrive_cr.status)
+
+        # A LicensePool has been associated with the Identifier.
+        [lp] = identifier.licensed_through
+
+        # However, there is no Work associated with the Identifier, because
+        # no CoverageProvider has run that would create one.
+        eq_(None, identifier.work)
+
+        # Processing the URN a second time will give the same result.
+        self.controller.precomposed_entries = []
+        self.controller.process_urns([urn], collection_details=name)
+        message = self.one_message(
+            urn, 202,
+            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+        )
+        assert 'operation="resolve-identifier" status=success' in message
+        assert 'Overdrive - status=registered' in message
+
+    @authenticated_request_context
+    def test_process_urn_registration_success_isbn(self):
+        # Register an ISBN with an Overdrive collection.
+        urn = self.ISBN_URN
+        name = self.overdrive_collection.metadata_identifier
+
+        self.controller.process_urns([urn], collection_details=name)
+        message = self.one_message(
+            urn, 202,
+            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+        )
+
+        # The Identifier was not registered with the CoverageProvider
+        # for Overdrive, even though it's cataloged in an Overdrive
+        # collection, because it's not of a type the Overdrive coverage
+        # provider can handle.
+        assert 'operation="resolve-identifier" status=success' in message
+        assert 'Overdrive' not in message
+
+        # However, it was registered with the CoverageProvider for
+        # Content Cafe, which can handle an ISBN from any type of
+        # collection.
+        assert 'Content Cafe - status=registered' in message
+
+    @authenticated_request_context_resolve_now
+    def test_process_urn_immediate_resolution_success(self):
+        """A start-to-finish test showing immediate and complete
+        resolution of an Overdrive identifier from within
+        this controller.
+        """
+        # Create an Overdrive URN, then modify it to the one the mock
+        # Overdrive API will expect, without actually inserting the
+        # corresponding Identifier into the database.
+        identifier = self._identifier(
+            identifier_type=Identifier.OVERDRIVE_ID, foreign_id='changeme'
+        )
+        urn = identifier.urn.replace(
+            'changeme', '3896665d-9d81-4cac-bd43-ffc5066de1f5'
+        )
+        name = self.overdrive_collection.metadata_identifier
+
+        # Since we are resolving everything immediately,
+        # prepare the mock Overdrive API with some data.
+        metadata = self.data_file("overdrive/overdrive_metadata.json")
+        self.overdrive.queue_response(200, content=metadata)
+
+        cover = self.data_file("covers/test-book-cover.png")
+        self.http.queue_response(200, "image/jpeg", content=cover)
+        self.controller.process_urns([urn], collection_details=name)
+
+        # A presentation-ready work with a LicensePool was immediately
+        # created.
+        [(identifier, work)] = self.controller.works
+        [lp] = work.license_pools
+        eq_(urn, lp.identifier.urn)
+        eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
+        eq_(u"Agile Documentation", work.title)
+
+        # After processing the Overdrive data, we asked VIAF to
+        # improve the author information.
+        [(sort_name, display_name, known_titles)] = self.viaf.name_lookups
+
+        # TODO: However, the data was partly used, and partly ignored
+        # because the author names were too dissimilar.
+        #
+        # This indicates that the VIAF client needs work.
+        # [contributor] = work.presentation_edition.contributors
+        # eq_(u"Andreas R&#252;ping", contributor.display_name)
+        # eq_(u"Kaling, Mindy", contributor.sort_name)
+
+        # We 'downloaded' a cover image, thumbnailed it, and 'uploaded'
+        # cover and thumbnail to S3.
+        eq_(1, len(self.http.requests))
+        eq_(2, len(self.mirror.uploaded))
+
+    @authenticated_request_context
+    def test_process_urn_registration_failure(self):
+        """There are limits on how many URNs you can register at once, even if
+        you authenticate, but the limit depends on whether you
+        specified a collection.
+        """
+        urn = self._identifier(identifier_type=Identifier.ISBN).urn
+        name = self.overdrive_collection.metadata_identifier
 
         # Failure -- we didn't specify a collection.
         result = self.controller.process_urns([urn])
@@ -1018,29 +1191,41 @@ class TestURNLookupController(ControllerTest):
         eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
             result.detail)
 
-        result = self.controller.process_urns([urn] * 2, collection_details=name, resolve_now=True)
+    @authenticated_request_context_resolve_now
+    def test_process_urn_registration_failure_resolving_too_much(self):
+        """Even when you authenticate, you can only ask that one identifier at
+        a time be immediately resolved.
+        """
+        urn = self._identifier(identifier_type=Identifier.ISBN).urn
+        name = self.overdrive_collection.metadata_identifier
+        result = self.controller.process_urns([urn] * 2, collection_details=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
-
     @basic_request_context
     def test_process_urn_default_collection(self):
         # It's possible to look up individual URNs anonymously.
-        urn = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier"
+        urn = self.ISBN_URN
 
         # Test success.
         self.controller.process_urns([urn])
-        self.assert_one_message(
-            urn, 201, URNLookupController.IDENTIFIER_REGISTERED
+        message = self.one_message(
+            urn, 202, URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
         )
 
-        # The Identifier has been added to the collection to await registration
+        # The ISBN was registered with the Content Cafe coverage provider,
+        # which can handle ISBNs.
+        assert "Content Cafe - status=registered" in message
+
+        # The Identifier has been added to the collection to await
+        # processing.
         identifier = Identifier.parse_urn(self._db, urn)[0]
         assert identifier in self.controller.default_collection.catalog
 
         # When we try to register the URN with a specific collection,
-        # it gets put into the unaffiliated collection instead.
+        # but we're not authenticated, the Identifier is  put into the
+        # unaffiliated collection instead.
         remote_collection = self._collection(external_account_id='banana')
         name = remote_collection.metadata_identifier
         urn2 = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier2"
@@ -1055,73 +1240,6 @@ class TestURNLookupController(ControllerTest):
             result.detail)
 
     @basic_request_context
-    def test_process_identifier_pending_resolve_attempt(self):
-        # Simulate calling process_identifier after the identifier has been
-        # registered and make sure the second call results in an
-        # "I'm working on it, hold your horses" message.
-        identifier = self._identifier(Identifier.GUTENBERG_ID)
-
-        source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
-        operation = IdentifierResolutionRegistrar.OPERATION
-        self._coverage_record(identifier, source, operation=operation)
-
-        self.controller.process_identifier(identifier, identifier.urn)
-        self.assert_one_message(
-            identifier.urn, HTTP_ACCEPTED,
-            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
-        )
-
-    @basic_request_context
-    def test_process_identifier_exception_during_resolve_attempt(self):
-        identifier = self._identifier(Identifier.GUTENBERG_ID)
-        record, is_new = CoverageRecord.add_for(
-            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.TRANSIENT_FAILURE
-        )
-        record.exception = "foo"
-
-        # A transient failure results in an "accepted" 201 status code.
-        self.controller.process_identifier(identifier, identifier.urn)
-        self.assert_one_message(
-            identifier.urn, HTTP_ACCEPTED,
-            self.controller.WORKING_TO_RESOLVE_IDENTIFIER
-        )
-
-        # A persistent failure results in a "server error" 500 status code.
-        self.controller.precomposed_entries = []
-        record.status = CoverageRecord.PERSISTENT_FAILURE
-        self.controller.process_identifier(identifier, identifier.urn)
-        self.assert_one_message(
-            identifier.urn, HTTP_INTERNAL_SERVER_ERROR, "foo"
-        )
-
-    @basic_request_context
-    def test_process_identifier_no_presentation_ready_work(self):
-        identifier = self._identifier(Identifier.GUTENBERG_ID)
-
-        # There's a record of success, but no presentation-ready work.
-        record, is_new = CoverageRecord.add_for(
-            identifier, self.source, CoverageRecord.RESOLVE_IDENTIFIER_OPERATION,
-            status=CoverageRecord.SUCCESS
-        )
-
-        self.controller.process_identifier(identifier, identifier.urn)
-        self.assert_one_message(
-            identifier.urn, HTTP_INTERNAL_SERVER_ERROR,
-            self.controller.SUCCESS_DID_NOT_RESULT_IN_PRESENTATION_READY_WORK
-        )
-
-    @basic_request_context
-    def test_process_identifier_unresolvable_type(self):
-        # We can't resolve a Bibliotheca identifier because we don't have the
-        # appropriate access to the bibliographic API.
-        identifier = self._identifier(Identifier.BIBLIOTHECA_ID)
-        self.controller.process_identifier(identifier, identifier.urn)
-        self.assert_one_message(
-            identifier.urn, HTTP_NOT_FOUND, self.controller.UNRESOLVABLE_IDENTIFIER
-        )
-
-    @basic_request_context
     def test_process_urns_unresolvable_type(self):
         # We won't even parse a Bibliotheca identifier because we
         # know we can't resolve it.
@@ -1129,47 +1247,3 @@ class TestURNLookupController(ControllerTest):
         response = self.controller.process_urns([identifier.urn])
         [message] = self.controller.precomposed_entries
         eq_("Could not parse identifier.", message.message)
-
-    @basic_request_context
-    def test_process_identifier_isbn(self):
-        # Create a new ISBN identifier.
-        # Ask online providers for metadata to turn into an opds feed about this identifier.
-        # Make sure a coverage record was created, and a 201 status obtained from provider.
-        # Ask online provider again, and make sure we're now getting a 202 "working on it" status.
-        # Ask again, this time getting a result.  Make sure know that got a result.
-
-        isbn, ignore = Identifier.for_foreign_id(
-            self._db, Identifier.ISBN, self._isbn
-        )
-
-        # The first time we look up an ISBN
-        self.controller.process_identifier(isbn, isbn.urn)
-        self.assert_one_message(
-            isbn.urn, HTTP_CREATED, self.controller.IDENTIFIER_REGISTERED
-        )
-
-        # So long as the necessary coverage is not provided,
-        # future lookups will not provide useful information
-        source = DataSource.lookup(self._db, DataSource.OCLC)
-        self._coverage_record(isbn, source)
-
-        self.controller.precomposed_entries = []
-        self.controller.process_identifier(isbn, isbn.urn)
-        self.assert_one_message(
-            isbn.urn, HTTP_ACCEPTED, self.controller.WORKING_TO_RESOLVE_IDENTIFIER
-        )
-
-        # Let's provide the coverage.
-        metadata_sources = DataSource.metadata_sources_for(
-            self._db, isbn
-        )
-        for source in metadata_sources:
-            CoverageRecord.add_for(isbn, source)
-
-        # Process the ISBN again, and we get an <entry> tag with the
-        # information.
-        self.controller.precomposed_entries = []
-        self.controller.process_identifier(isbn, isbn.urn)
-        expect = isbn.opds_entry()
-        [actual] = self.controller.precomposed_entries
-        eq_(etree.tostring(expect), etree.tostring(actual))

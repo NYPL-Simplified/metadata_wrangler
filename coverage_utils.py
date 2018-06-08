@@ -1,3 +1,4 @@
+from nose.tools import set_trace
 from core.coverage import (
     BibliographicCoverageProvider,
     CoverageFailure
@@ -44,7 +45,7 @@ class ResolveVIAFOnSuccessCoverageProvider(MetadataWranglerBibliographicCoverage
             return work
         work.set_presentation_ready()
         try:
-            self.resolve_viaf(self, work)
+            self.resolve_viaf(work)
         except Exception, e:
             message = "Exception updating VIAF coverage: %r" % e
             return self.failure(identifier, message, transient=True)

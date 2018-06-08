@@ -402,3 +402,25 @@ class ContentCafeSOAPClient(object):
             return max(lifetime) * 0.5
         else:
             return None
+
+
+class MockContentCafeAPI(ContentCafeAPI):
+
+    def __init__(self, *args, **kwargs):
+        self.requests = []
+        self.responses = []
+        self.measurements = []
+        self.do_get = self._do_get
+
+    def queue_response(self, response):
+        self.responses.push(response)
+
+    def queue_measurement(self, measurement):
+        self.measurements.push(measurement)
+
+    def _do_get(self, url):
+        self.requests.push(url)
+        return self.responses.pop()
+
+    def measure_popularity(self, identifier, cutoff):
+        return self.measurements.pop()

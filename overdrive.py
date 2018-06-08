@@ -21,7 +21,7 @@ from viaf import VIAFClient
 
 class OverdriveBibliographicCoverageProvider(
         ResolveVIAFOnSuccessCoverageProvider,
-        BaseOverdriveBibliographicCoverageProvider
+        BaseOverdriveBibliographicCoverageProvider,
 ):
     """Finds and updates bibliographic information for Overdrive items.
 
@@ -109,3 +109,11 @@ class OverdriveBibliographicCoverageProvider(
             Collection.id==self.collection_id
         )
         return qu
+
+    def metadata_pre_hook(self, metadata):
+        """If we happened to get any circulation data, because this item
+        is in the default Overdrive collection, wipe it out. We're not
+        interested.
+        """
+        metadata.circulation = None
+        return metadata

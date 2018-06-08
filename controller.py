@@ -766,9 +766,16 @@ class URNLookupController(CoreURNLookupController):
 
     log = logging.getLogger("URN lookup controller")
 
-    def __init__(self, _db):
+    def __init__(self, _db, coverage_provider_kwargs=None):
+        """Constructor.
+
+        :param coverage_provider_kwargs: When instantiating a
+        IdentifierResolutionCoverageProvider, pass in these keyword
+        arguments.  Used only in testing.
+        """
         self._default_collection_id = None
         super(URNLookupController, self).__init__(_db)
+        self.coverage_provider_kwargs = dict(coverage_provider_kwargs or {})
 
     @property
     def default_collection(self):
@@ -782,7 +789,7 @@ class URNLookupController(CoreURNLookupController):
         the given `identifier`, or return None.
         """
         work = identifier.work
-        if work.presentation_ready:
+        if work and work.presentation_ready:
             return work
         return None
 
@@ -846,6 +853,7 @@ class URNLookupController(CoreURNLookupController):
 
         resolver = IdentifierResolutionCoverageProvider(
             collection, provide_coverage_immediately=resolve_now,
+            **self.coverage_provider_kwargs
         )
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(
@@ -908,6 +916,10 @@ class URNLookupController(CoreURNLookupController):
         Add an OPDS message explaining the current status of every
         CoverageRecord associated with it.
         """
+
+        # We don't know whether or not this Identifier was previously
+        # registered, because it was registered in a bulk
+        # operation. So we always send response code 202.
         status = HTTP_ACCEPTED
         rows = []
         template = '%(timestamp)s - %(data_source)s -%(operation)s status=%(status)s %(exception)s'

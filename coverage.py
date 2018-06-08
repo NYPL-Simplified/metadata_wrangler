@@ -91,7 +91,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
     # We cover all Collections, regardless of their protocol.
     PROTOCOL = None
 
-    def __init__(self, collection, mirror=None, viaf=None,
+    def __init__(self, collection, mirror=None, http_get=None, viaf=None,
                  provide_coverage_immediately=False, force=False,
                  provider_kwargs=None, **kwargs
     ):
@@ -102,6 +102,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         :param mirror: A MirrorUploader to use if coverage requires
         uploading any cover images to external storage.
+
+        :param http_get: A drop-in replacement for
+        Representation.simple_http_get, to be used if any information
+        (such as a book cover) needs to be obtained from the public
+        Internet.
 
         :param viaf_client: A VIAFClient to use if coverage requires
         gathering information about authors from VIAF.
@@ -123,6 +128,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         :param provider_kwargs: Pass this object in as provider_kwargs
         when calling gather_providers at the end of the
         constructor. Used only in testing.
+
         """
         _db = Session.object_session(collection)
 
@@ -138,7 +144,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             regenerate_opds_entries=True
         )
         replacement_policy = ReplacementPolicy.from_metadata_source(
-            presentation_calculation_policy=presentation, mirror=self.mirror
+            presentation_calculation_policy=presentation, mirror=self.mirror,
+            http_get=http_get,
         )
         super(IdentifierResolutionCoverageProvider, self).__init__(
             collection, replacement_policy=replacement_policy,
