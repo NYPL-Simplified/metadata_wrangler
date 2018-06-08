@@ -1,6 +1,7 @@
 from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 
+from core.config import CannotLoadConfiguration
 from core.coverage import CollectionCoverageProvider
 from core.model import (
     Collection,

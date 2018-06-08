@@ -271,11 +271,16 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # the Overdrive API. We don't enforce that the collection
         # is an Overdrive collection, because we want to allow
         # unauthenticated lookups in the 'unaffiliated' collection.
-        overdrive = instantiate(
-            OverdriveBibliographicCoverageProvider, providers,
-            provider_kwargs, collection=self.collection,
-            viaf=self.viaf, replacement_policy=self.replacement_policy
-        )
+        try:
+            overdrive = instantiate(
+                OverdriveBibliographicCoverageProvider, providers,
+                provider_kwargs, collection=self.collection,
+                viaf=self.viaf, replacement_policy=self.replacement_policy
+            )
+        except CannotLoadConfiguration, e:
+            # No Overdrive collection is configured -- we can't
+            # handle Overdrive lookups, as much as we'd like to.
+            pass
 
         # We already have metadata for books we heard about from an
         # IntegrationClient, but we need to make sure the covers get
