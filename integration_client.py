@@ -144,11 +144,10 @@ class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
                 mirror=mirror, links=True
             )
 
-        kwargs['replacement_policy'] = replacement_policy
         # Only process identifiers that have been registered for coverage.
         kwargs['registered_only'] = kwargs.get('registered_only', True)
         super(IntegrationClientCoverImageCoverageProvider, self).__init__(
-            collection, *args, **kwargs
+            collection, *args, replacement_policy=replacement_policy, **kwargs
         )
 
     @property
