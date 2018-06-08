@@ -58,7 +58,6 @@ from controller import (
 )
 from coverage import (
     IdentifierResolutionCoverageProvider,
-    IdentifierResolutionRegistrar,
 )
 from integration_client import IntegrationClientCoverImageCoverageProvider
 from problem_details import *
@@ -1017,6 +1016,11 @@ class TestURNLookupController(ControllerTest):
         result = self.controller.process_urns([urn] * 31, collection_details=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
+            result.detail)
+
+        result = self.controller.process_urns([urn] * 2, collection_details=name, resolve_now=True)
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
 
