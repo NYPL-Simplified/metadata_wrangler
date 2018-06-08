@@ -857,13 +857,10 @@ class URNLookupController(CoreURNLookupController):
         )
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(
-                identifier, urn, collection=collection,
-                resolver=resolver, resolve_now=resolve_now,
-                force=resolve_now, **kwargs
+                identifier, urn, resolver=resolver
             )
 
-    def process_identifier(self, identifier, urn, collection, resolver,
-                           **kwargs):
+    def process_identifier(self, identifier, urn, resolver):
         """If there is a presentation-ready Work for the given Identifier,
         add its OPDS entry to the feed.
 
@@ -891,6 +888,13 @@ class URNLookupController(CoreURNLookupController):
         # IdentifierResolutionCoverageProvider process this
         # Identifier. This will either do the work, or register all
         # the work that needs to be done.
+
+        # We pass in 'force' even though it appears redundant because
+        # the resolver.force attribute controls whether, when an
+        # update happens, it happens forcefully. 'force' passed into
+        # ensure_coverage() controls whether an update happens even
+        # when it doesn't seem like it needs to. We want to use one
+        # setting for both purposes.
         result = resolver.ensure_coverage(identifier, force=resolver.force)
 
         work = self.presentation_ready_work_for(identifier)

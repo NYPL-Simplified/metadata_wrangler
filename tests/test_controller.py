@@ -1247,3 +1247,52 @@ class TestURNLookupController(ControllerTest):
         response = self.controller.process_urns([identifier.urn])
         [message] = self.controller.precomposed_entries
         eq_("Could not parse identifier.", message.message)
+
+    def test_process_identifier(self):
+        class MockController(URNLookupController):
+            ready_work = None
+            def presentation_ready_work_for(self, identifier):
+                return self.ready_work
+
+            def add_status_message(self, urn, identifier):
+                self.status_message = (urn, identifier)
+
+        # If a work is already presentation-ready, it is used immediately.
+        # No other code runs.
+        controller = MockController(self._db)
+        work = object()
+        controller.ready_work = work
+        identifier = object()
+        urn = object()
+        controller.process_identifier(identifier, urn, object())
+        eq_([(identifier, work)], controller.works)
+
+        # If a work is not presentation-ready, but calling
+        # resolver.ensure_coverage makes it presentation ready, it is
+        # used immediately.
+        class SuccessfulResolver(object):
+            force = False
+            def ensure_coverage(self, identifier, force):
+                controller.ready_work = work
+
+        controller.ready_work = None
+        controller.works = []
+        controller.process_identifier(
+            identifier, urn, SuccessfulResolver()
+        )
+        eq_([(identifier, work)], controller.works)
+
+        # If a work is not presentation-ready, and calling
+        # resolver.ensure_coverage does not make it presentation
+        # ready, controller.add_status_message is called
+        class UnsuccessfulResolver(object):
+            force = False
+            def ensure_coverage(self, identifier, force):
+                controller.ready_work = None
+
+        controller.ready_work = None
+        controller.works = []
+        controller.process_identifier(identifier, urn, UnsuccessfulResolver())
+        eq_([], controller.works)
+        eq_((urn, identifier), controller.status_message)
+
