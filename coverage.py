@@ -313,8 +313,32 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         if not license_pool.licenses_owned:
             license_pool.update_availability(1, 1, 0, 0)
 
-        for provider in self.providers:
+        # Let all the CoverageProviders do something.
+        results = [
             self.process_one_provider(identifier, provider)
+            for provider in self.providers
+        ]
+        successes = [
+            x for x in results if isinstance(x, CoverageRecord)
+            and x.status==CoverageRecord.SUCCESS
+        ]
+
+        if (
+            any(successes)
+            and (not license_pool.work
+                 or not license_pool.work.presentation_ready)
+        ):
+            # At least one CoverageProvider succeeded, but there's no
+            # presentation-ready Work. It's possible that the
+            # CoverageProvider didn't try to create a Work, or that a
+            # preexisting Work has been removed. In the name of
+            # resiliency, we might as well try creating a Work.
+            work, is_new = license_pool.calculate_work(even_if_no_author=True)
+            if work:
+                # If we were able to create a Work, it should be made
+                # presentation-ready immediately so people can see the
+                # data.
+                work.set_presentation_ready()
 
         # The only way this can fail is if there is an uncaught exception
         # during the registration/processing process. The failure of a
@@ -342,8 +366,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             collection = provider.collection
 
         if self.provide_coverage_immediately:
-            provider.ensure_coverage(identifier, force=self.force)
+            coverage_record = provider.ensure_coverage(
+                identifier, force=self.force
+            )
         else:
-            provider.register(
+            coverage_record = provider.register(
                 identifier, collection=collection, force=self.force
             )
+        return coverage_record

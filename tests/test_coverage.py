@@ -6,6 +6,7 @@ from nose.tools import (
 from . import DatabaseTest
 
 from core.model import (
+    CoverageRecord,
     DataSource,
     ExternalIntegration,
 )
@@ -217,6 +218,69 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_([lp], identifier.licensed_through)
         eq_(10, lp.licenses_owned)
         eq_(5, lp.licenses_available)
+
+    def test_process_item_creates_work_object_if_any_work_was_done(self):
+
+        class JustAddMetadata(object):
+            """A mock CoverageProvider that puts some data in place, but for
+            whatever reason neglects to create a presentation-ready
+            Work.
+            """
+            COVERAGE_COUNTS_FOR_EVERY_COLLECTION = True
+            STATUS = CoverageRecord.SUCCESS
+            SOURCE = DataSource.lookup(self._db, DataSource.GUTENBERG)
+            TITLE = "A great book"
+            def can_cover(self, *args, **kwargs):
+                return True
+
+            def register(s, identifier, *args, **kwargs):
+                # They only told us to register, but we're going to
+                # actually do the work.
+                edition = self._edition(
+                    identifier_type=identifier.type,
+                    identifier_id=identifier.identifier,
+                    title=s.TITLE
+                )
+                return self._coverage_record(
+                    identifier, coverage_source=s.SOURCE,
+                    status=s.STATUS
+                )
+
+        sub_provider = JustAddMetadata()
+        class Mock(IdentifierResolutionCoverageProvider):
+            def gather_providers(self, provider_kwargs):
+                return [sub_provider]
+
+        identifier = self._identifier()
+        provider = Mock(self._default_collection)
+        result = provider.process_item(identifier)
+
+        # The IdentifierResolutionCoverageProvider completed
+        # successfully.
+        eq_(result, identifier)
+
+        # Because JustAddMetadata created a CoverageRecord with the status
+        # of SUCCESS, process_item decided to try and create a Work for
+        # the Identifier, and was successful.
+        work = identifier.work
+        eq_(True, work.presentation_ready)
+        eq_("A great book", work.title)
+
+        #
+        # But what if that CoverageRecord hadn't been created with the
+        # 'success' status? What if some work was done, but the
+        # CoverageRecord was created with the 'registered' status?
+        #
+        sub_provider.TITLE = "Another book"
+        sub_provider.STATUS = CoverageRecord.REGISTERED
+
+        # In that case, process_item() doesn't bother trying to create
+        # a Work for the Identifier, since it appears that no work was
+        # actually done.
+        identifier = self._identifier()
+        result = provider.process_item(identifier)
+        eq_(result, identifier)
+        eq_(None, identifier.work)
 
     def test_process_one_provider(self):
         """Test what happens when IdentifierResolutionCoverageProvider
