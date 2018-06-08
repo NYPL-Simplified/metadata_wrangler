@@ -105,7 +105,7 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
 
         # The two contributors associated with the work's presentation edition
         # were run through the MockVIAF().
-        eq_([c1, c2], provider.viaf.processed)
+        eq_(set([c1, c2]), set(provider.viaf.processed))
 
         # Since it's just a mock, no VIAF anything actually happened.
         # But _because_ nothing happened, we made guesses as to the
