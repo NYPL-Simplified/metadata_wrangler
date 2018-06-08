@@ -268,13 +268,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         #)
 
         # All books identified by Overdrive ID must be looked up via
-        # the Overdrive API.
-        if protocol == ExternalIntegration.OVERDRIVE:
-            overdrive = instantiate(
-                OverdriveBibliographicCoverageProvider, providers,
-                provider_kwargs, collection=self.collection,
-                viaf=self.viaf, replacement_policy=self.replacement_policy
-            )
+        # the Overdrive API. We don't enforce that the collection
+        # is an Overdrive collection, because we want to allow
+        # unauthenticated lookups in the 'unaffiliated' collection.
+        overdrive = instantiate(
+            OverdriveBibliographicCoverageProvider, providers,
+            provider_kwargs, collection=self.collection,
+            viaf=self.viaf, replacement_policy=self.replacement_policy
+        )
 
         # We already have metadata for books we heard about from an
         # IntegrationClient, but we need to make sure the covers get

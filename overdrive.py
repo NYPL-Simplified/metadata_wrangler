@@ -32,6 +32,10 @@ class OverdriveBibliographicCoverageProvider(
 
     EXCLUDE_SEARCH_INDEX = True
 
+    # We want to process Overdrive identifiers associated with the
+    # 'unaffiliated' collection, which is not an Overdrive collection.
+    PROTOCOL = None
+
     def __init__(self, collection, viaf=None, replacement_policy=None,
                  **kwargs):
         _db = Session.object_session(collection)

@@ -889,13 +889,11 @@ class URNLookupController(CoreURNLookupController):
         # Identifier. This will either do the work, or register all
         # the work that needs to be done.
 
-        # We pass in 'force' even though it appears redundant because
-        # the resolver.force attribute controls whether, when an
-        # update happens, it happens forcefully. 'force' passed into
-        # ensure_coverage() controls whether an update happens even
-        # when it doesn't seem like it needs to. We want to use one
-        # setting for both purposes.
-        result = resolver.ensure_coverage(identifier, force=resolver.force)
+        # force=True isn't ideal but it seems like a safer bet to
+        # refresh the registration every time someone asks. (A given
+        # library shouldn't ask more than once, and this code will
+        # stop running once a presentation-ready Work is created.)
+        result = resolver.ensure_coverage(identifier, force=True)
 
         work = self.presentation_ready_work_for(identifier)
         if work:
