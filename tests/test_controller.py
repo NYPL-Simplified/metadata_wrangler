@@ -1070,7 +1070,9 @@ class TestURNLookupController(ControllerTest):
 
         # The CoverageRecords exist on the Identifier -- it's not
         # something that was made up for the OPDS message.
-        [resolver_cr, overdrive_cr] = identifier.coverage_records
+        [overdrive_cr, resolver_cr] = sorted(
+            identifier.coverage_records, key=lambda x: x.operation
+        )
         eq_(DataSource.INTERNAL_PROCESSING, resolver_cr.data_source.name)
         eq_(CoverageRecord.RESOLVE_IDENTIFIER_OPERATION, resolver_cr.operation)
         eq_(CoverageRecord.SUCCESS, resolver_cr.status)
