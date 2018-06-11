@@ -58,13 +58,8 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
 
         provider = Mock(self._default_collection)
 
-        # We can't create a Work for this Identifier because there's no data
-        # whatsoever.
-        no_data = self._identifier()
-        failure = provider.handle_success(no_data)
-        eq_("Work could not be calculated", failure.exception)
-
-        # We can create a Work for this Identifier but we have a problem
+        # We can create a Work for this Identifier, even though we
+        # have no information about it, but we have a problem
         # normalizing its contributor information through VIAF.
         edition = self._edition()
         failure = provider.handle_success(edition.primary_identifier)

@@ -153,7 +153,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         )
 
         self.provide_coverage_immediately = provide_coverage_immediately
-        self.force = force
+        self.force = force or provide_coverage_immediately
 
         self.viaf = viaf or VIAFClient(self._db)
 
@@ -312,6 +312,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         license_pool = self.license_pool(identifier)
         if not license_pool.licenses_owned:
             license_pool.update_availability(1, 1, 0, 0)
+        if not license_pool.collection:
+            license_pool.collection = self.collection
 
         # Let all the CoverageProviders do something.
         results = [
@@ -333,7 +335,9 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             # CoverageProvider didn't try to create a Work, or that a
             # preexisting Work has been removed. In the name of
             # resiliency, we might as well try creating a Work.
-            work, is_new = license_pool.calculate_work(even_if_no_author=True)
+            work, is_new = license_pool.calculate_work(
+                even_if_no_author=True, even_if_no_title=True
+            )
             if work:
                 # If we were able to create a Work, it should be made
                 # presentation-ready immediately so people can see the
@@ -370,7 +374,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
                 identifier, force=self.force
             )
         else:
-            coverage_record = provider.register(
+            coverage_record, is_new = provider.register(
                 identifier, collection=collection, force=self.force
             )
         return coverage_record
