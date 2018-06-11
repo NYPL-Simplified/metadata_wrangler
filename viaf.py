@@ -851,7 +851,6 @@ class VIAFClient(object):
 
         return best_match
 
-
         
 class MockVIAFClient(VIAFClient):
 
@@ -860,7 +859,8 @@ class MockVIAFClient(VIAFClient):
         self.log = logging.getLogger("Mocked VIAF Client")
         base_path = os.path.split(__file__)[0]
         self.resource_path = os.path.join(base_path, "tests", "files", "viaf")
-
+        self.viaf_lookups = []
+        self.name_lookups = []
 
     def get_data(self, filename):
         # returns contents of sample file as xml string
@@ -870,11 +870,17 @@ class MockVIAFClient(VIAFClient):
 
     def lookup_by_viaf(self, viaf, working_sort_name=None,
                        working_display_name=None, do_get=None):
+        self.viaf_lookups.append(
+            (viaf, working_sort_name, working_display_name)
+        )
         xml = self.get_data("mindy_kaling.xml")
         return self.parser.parse(xml, working_sort_name, working_display_name)
 
     def lookup_by_name(self, sort_name, display_name=None, do_get=None,
                        known_titles=None):
+        self.name_lookups.append(
+            (sort_name, display_name, known_titles)
+        )
         def do_get(*args, **kwargs):
             return (200, {}, self.get_data("mindy_kaling.xml"))
         return super(MockVIAFClient, self).lookup_by_name(

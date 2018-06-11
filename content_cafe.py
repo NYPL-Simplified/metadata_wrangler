@@ -9,79 +9,130 @@ from suds.client import Client as SudsClient
 # Tone down the verbose Suds logging.
 logging.getLogger('suds').setLevel(logging.ERROR)
 
+from sqlalchemy.orm.session import Session
+
 from core.config import CannotLoadConfiguration
 from core.coverage import (
-    IdentifierCoverageProvider,
+    BibliographicCoverageProvider,
     CoverageFailure,
+)
+from core.metadata_layer import (
+    LinkData,
+    MeasurementData,
+    Metadata,
+    ReplacementPolicy,
 )
 from core.model import (
     DataSource,
+    Edition,
     ExternalIntegration,
     Hyperlink,
     Measurement,
     Identifier,
 )
+from core.util.http import HTTP
 from core.util.summary import SummaryEvaluator
 
-from mirror import (
-    CoverImageMirror,
-    ImageScaler,
-)
+from core.mirror import MirrorUploader
 
+from coverage_utils import MetadataWranglerBibliographicCoverageProvider
 
-class ContentCafeCoverageProvider(IdentifierCoverageProvider):
+class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
+    """Create bare-bones Editions for ISBN-type Identifiers.
+
+    An Edition will have no bibliographic information, apart from a
+    possible title, but the Identifier should get some very
+    important Hyperlinks associated, such as a cover image and
+    description.
+    """
     SERVICE_NAME = "Content Cafe Coverage Provider"
-    DEFAULT_BATCH_SIZE = 25
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
-    def __init__(self, _db, api=None, uploader=None, **kwargs):
-        super(ContentCafeCoverageProvider, self).__init__(
-            _db, registered_only=True, **kwargs
-        )
-        if api:
-            self.content_cafe = api
-            self.mirror = api.mirror
-        else:
-            self.mirror = ContentCafeCoverImageMirror(
-                self._db, uploader=uploader
-            )
-            self.content_cafe = api or ContentCafeAPI.from_config(
-                self._db, self.mirror, uploader=uploader
+    def __init__(self, collection, api=None, replacement_policy=None, **kwargs):
+        """Constructor.
+
+        :param collection: A Collection.
+        :param api: A ContentCafeAPI.
+        :param replacement_policy: A ReplacementPolicy.
+        :param kwargs: Any extra arguments to be passed into the
+            BibliographicCoverageProvider superconstructor.
+        """
+        _db = Session.object_session(collection)
+        if not replacement_policy:
+            mirror = MirrorUploader.sitewide(_db)
+            replacement_policy = ReplacementPolicy.from_metadata_source(
+                mirror=mirror
             )
 
+        # We pass in registered_only=True because we don't need to cover
+        # every single ISBN in the system (most of which are alternate
+        # ISBNs found in OCLC Linked Data), only the ISBNs that a
+        # client specifically asked to look up.
+        super(ContentCafeCoverageProvider, self).__init__(
+            collection=collection, registered_only=True,
+            replacement_policy=replacement_policy, **kwargs
+        )
+        self.content_cafe = api or ContentCafeAPI.from_config(self._db)
+
     def process_item(self, identifier):
+        """Associate bibliographic metadata with the given Identifier.
+
+        :param Identifier: Look up this Identifier on Content Cafe.
+        """
         try:
-            self.content_cafe.mirror_resources(identifier)
+            # Create a Metadata object.
+            metadata = self.content_cafe.create_metadata(identifier)
+            if not metadata:
+                # TODO: The only time this is really a transient error
+                # is when the book is too new for Content Cafe to know
+                # about it, which isn't often. It would be best to
+                # keep this as a transient failure but give it a relatively
+                # long and exponentially increasing retry time.
+                return self.failure(
+                    identifier,
+                    "Content Cafe has no knowledge of this identifier.",
+                    transient=True
+                )
+            edition, is_new = Edition.for_foreign_id(
+                self._db, self.data_source, identifier.type,
+                identifier.identifier
+            )
+            # We're passing in collection=None even though we
+            # technically have a Collection available, because our
+            # goal is to add metadata for the book without reference
+            # to any particular collection.
+            metadata.apply(
+                edition, collection=None, replace=self.replacement_policy
+            )
             return identifier
         except Exception as e:
             self.log.error('Coverage error for %r', identifier, exc_info=e)
             return self.failure(identifier, repr(e), transient=True)
 
 
-class ContentCafeCoverImageMirror(CoverImageMirror):
-    """Downloads images from Content Cafe."""
-
-    DATA_SOURCE = DataSource.CONTENT_CAFE
-
-
 class ContentCafeAPI(object):
-    """Associates up to four resources with an ISBN."""
+    """Gets data from Content Cafe to be associated with an ISBN."""
 
     BASE_URL = "http://contentcafe2.btol.com/"
     ONE_YEAR_AGO = datetime.timedelta(days=365)
 
     image_url = BASE_URL + "ContentCafe/Jacket.aspx?userID=%(userid)s&password=%(password)s&Type=L&Value=%(isbn)s"
-    overview_url= BASE_URL + "ContentCafeClient/ContentCafe.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     review_url = BASE_URL + "ContentCafeClient/ReviewsDetail.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     summary_url = BASE_URL + "ContentCafeClient/Summary.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     excerpt_url = BASE_URL + "ContentCafeClient/Excerpt.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
     author_notes_url = BASE_URL + "ContentCafeClient/AuthorNotes.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
+    # This URL is not used -- it just links to the other URLs.
+    overview_url= BASE_URL + "ContentCafeClient/ContentCafe.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
+
     log = logging.getLogger("Content Cafe API")
 
     @classmethod
-    def from_config(cls, _db, mirror, **kwargs):
+    def from_config(cls, _db, **kwargs):
+        """Create a ContentCafeAPI object based on database
+        configuration.
+        """
         integration = ExternalIntegration.lookup(
             _db, ExternalIntegration.CONTENT_CAFE,
             ExternalIntegration.METADATA_GOAL
@@ -90,142 +141,166 @@ class ContentCafeAPI(object):
             raise CannotLoadConfiguration('Content Cafe not properly configured')
 
         return cls(
-            _db, mirror, integration.username, integration.password,
+            _db, integration.username, integration.password,
             **kwargs
         )
 
-    def __init__(self, _db, mirror, user_id, password, uploader=None,
-                 soap_client=None):
+    def __init__(self, _db, user_id, password, soap_client=None, do_get=None):
+        """Constructor.
+        """
         self._db = _db
-
-        self.mirror = mirror
-        if self.mirror:
-            self.scaler = ImageScaler(_db, [self.mirror], uploader=uploader)
-        else:
-            self.scaler = None
-
         self.user_id = user_id
         self.password = password
         self.soap_client = (
             soap_client or ContentCafeSOAPClient(user_id, password)
         )
+        self.do_get = do_get or HTTP.get_with_timeout
 
     @property
     def data_source(self):
         return DataSource.lookup(self._db, DataSource.CONTENT_CAFE)
 
-    def mirror_resources(self, isbn_identifier):
-        """Associate a number of resources with the given ISBN.
+    def create_metadata(self, isbn_identifier):
+        """Make a Metadata object for the given Identifier.
+
+        The Metadata object may include a cover image, descriptions,
+        reviews, an excerpt, author notes, and a popularity measurement.
+
+        :return: A Metadata object, or None if Content Cafe has no
+        knowledge of this ISBN.
         """
         isbn = isbn_identifier.identifier
 
         args = dict(userid=self.user_id, password=self.password, isbn=isbn)
         image_url = self.image_url % args
-        hyperlink, is_new = isbn_identifier.add_link(
-            Hyperlink.IMAGE, image_url, self.data_source)
-        representation = self.mirror.mirror_hyperlink(hyperlink)
-        if representation.status_code == 404:
+        response = self.do_get(image_url)
+        if response.status_code == 404:
             # Content Cafe served us an HTML page instead of an
             # image. This indicates that Content Cafe has no knowledge
-            # of this ISBN. There is no need to make any more
-            # requests.
-            return True
+            # of this ISBN -- if it knew _anything_ it would have a
+            # cover image. There is no need to build a Metadata object.
+            return None
 
-        self.mirror.uploader.mirror_one(representation)
-        self.scaler.scale_edition(isbn_identifier)
-        self.get_descriptions(isbn_identifier, args)
-        self.get_excerpt(isbn_identifier, args)
-        self.get_reviews(isbn_identifier, args)
-        self.get_author_notes(isbn_identifier, args)
-        self.measure_popularity(isbn_identifier, self.soap_client.ONE_YEAR_AGO)
+        media_type = response.headers.get('Content-Type', 'image/jpeg')
 
-    def get_associated_web_resources(
-            self, identifier, args, url,
+        # Start building a Metadata object.
+        metadata = Metadata(
+            self.data_source, primary_identifier=isbn_identifier
+        )
+        
+        # Add the cover image to it.
+        metadata.links.append(
+            LinkData(
+                rel=Hyperlink.IMAGE, href=image_url, media_type=media_type,
+                content=response.content
+            )
+        )
+
+        for annotator in (
+            self.add_descriptions, self.add_excerpt,
+            self.add_reviews, self.add_author_notes
+        ):
+            annotator(metadata, isbn_identifier, args)
+
+        popularity = self.measure_popularity(
+            isbn_identifier, self.ONE_YEAR_AGO
+        )
+        if popularity:
+            metadata.measurements.append(popularity)
+        return metadata
+
+    def annotate_with_web_resources(
+            self, metadata, identifier, args, url_template,
             phrase_indicating_missing_data,
-            rel, scrape_method):
-        url = url % args
+            rel, scrape_method
+    ):
+        """Retrieve a URL, scrape information from the response,
+        and use it to improve a Metadata object.
+
+        Generally, this just means adding LinkData objects to .links,
+        but in some cases we can also set the title.
+
+        :param metadata: Anything found will be used to improve
+           this Metadata object.
+        """
+        url = url_template % args
         self.log.debug("Getting associated resources for %s", url)
-        response = requests.get(url)
+        response = self.do_get(url)
         content_type = response.headers['Content-Type']
-        hyperlinks = []
+        if (phrase_indicating_missing_data and 
+            phrase_indicating_missing_data in response.content):
+            # There is no data; do nothing.
+            self.log.debug("No data is present.")
+            return
+
+        links = []
         already_seen = set()
-        if not phrase_indicating_missing_data in response.content:
-            self.log.info("Found %s %s Content!", identifier.identifier, rel)
-            soup = BeautifulSoup(response.content, "lxml")
-            resource_contents = scrape_method(soup)
-            if resource_contents:
-                for content in resource_contents:
-                    if content in already_seen:
-                        continue
-                    already_seen.add(content)
-                    hyperlink, is_new = identifier.add_link(
-                        rel, None, self.data_source, media_type="text/html",
-                        content=content)
-                    hyperlinks.append(hyperlink)
-                    self.log.debug(
-                        "Content: %s",
-                        hyperlink.resource.representation.content[:75])
-        return hyperlinks
+        self.log.info("Found %s %s Content!", identifier.identifier, rel)
+        soup = BeautifulSoup(response.content, "lxml")
+        if not metadata.title:
+            metadata.title = self._extract_title(soup)
+        resource_contents = scrape_method(soup)
+        if not resource_contents:
+            self.log.debug("Data is present but contains no resources.")
+            return
 
-    def get_reviews(self, identifier, args):
-        return self.get_associated_web_resources(
-            identifier, args, self.review_url,
+        for content in resource_contents:
+            if not content:
+                continue
+            content = content.strip()
+            if not content:
+                continue
+            if content in already_seen:
+                continue
+            already_seen.add(content)
+            link = LinkData(
+                rel=rel, href=None, media_type="text/html",
+                content=content
+            )
+            metadata.links.append(link)
+            self.log.debug("Content: %s", content[:75])
+
+    def add_reviews(self, metadata, identifier, args):
+        return self.annotate_with_web_resources(
+            metadata, identifier, args, self.review_url,
             'No review info exists for this item',
-            Hyperlink.REVIEW, self._scrape_list)
+            Hyperlink.REVIEW, self._scrape_list
+        )
 
-    def get_descriptions(self, identifier, args):
-        hyperlinks = list(self.get_associated_web_resources(
-            identifier, args, self.summary_url,
+    def add_descriptions(self, metadata, identifier, args):
+        return self.annotate_with_web_resources(
+            metadata, identifier, args, self.summary_url,
             'No annotation info exists for this item',
-            Hyperlink.DESCRIPTION, self._scrape_list))
-        if not hyperlinks:
-            return hyperlinks
+            Hyperlink.DESCRIPTION, self._scrape_list
+        )
 
-        # Since we get multiple descriptions, and there is no
-        # associated Edition, now is a good time to evaluate the quality
-        # of the descriptions. This will make it easy to pick the best one
-        # when this identifier is looked up.
-        evaluator = SummaryEvaluator(bad_phrases=[])
-        by_content = dict()
-        for link in hyperlinks:
-            content = link.resource.representation.content
-            evaluator.add(content)
-        evaluator.ready()
-        for link in hyperlinks:
-            resource = link.resource
-            content = resource.representation.content
-            quality = evaluator.score(content)
-            resource.set_estimated_quality(quality)
-            resource.update_quality()
-        return hyperlinks
-
-    def get_author_notes(self, identifier, args):
-        return self.get_associated_web_resources(
-            identifier, args, self.author_notes_url,
+    def add_author_notes(self, metadata, identifier, args):
+        return self.annotate_with_web_resources(
+            metadata, identifier, args, self.author_notes_url,
             'No author notes info exists for this item',
-            Hyperlink.AUTHOR, self._scrape_one)
+            Hyperlink.AUTHOR, self._scrape_one
+        )
 
-    def get_excerpt(self, identifier, args):
-        return self.get_associated_web_resources(
-            identifier, args, self.excerpt_url,
+    def add_excerpt(self, metadata, identifier, args):
+        return self.annotate_with_web_resources(
+            metadata, identifier, args, self.excerpt_url,
             'No excerpt info exists for this item', Hyperlink.SAMPLE,
-            self._scrape_one)
+            self._scrape_one
+        )
 
     def measure_popularity(self, identifier, cutoff=None):
-        if identifier.type != Identifier.ISBN:
-            raise Error("I can only measure the popularity of ISBNs.")
-        value = self.soap_client.estimated_popularity(identifier.identifier)
-        # Even a complete lack of popularity data is useful--it tells
-        # us there's no need to check again anytime soon.
-        measurement = identifier.add_measurement(
-            self.data_source, Measurement.POPULARITY, value)
-
-        # Since there is no associated Edition, now is a good time to
-        # normalize the value.
-        return measurement.normalized_value
+        value = self.soap_client.estimated_popularity(
+            identifier.identifier, cutoff=cutoff
+        )
+        # NOTE: even a complete lack of popularity data is useful--it tells
+        # us there's no need to check again anytime soon. But we can't
+        # store that information in the database.
+        if value is not None:
+            return MeasurementData(Measurement.POPULARITY, value)
 
     @classmethod
     def _scrape_list(cls, soup):
+        resources = []
         table = soup.find('table', id='Table_Main')
         if table:
             for header in table.find_all('td', class_='SectionHeader'):
@@ -234,28 +309,39 @@ class ContentCafeAPI(object):
                     continue
                 if not content.td:
                     continue
-                yield content.td.encode_contents()
+                resources.append(content.td.encode_contents())
+        return resources
 
     @classmethod
     def _scrape_one(cls, soup):
         table = soup.find('table', id='Table_Main')
-        if not table:
-            return []
-        if table.tr and table.tr.td:
-            return [table.tr.td.encode_contents()]
-        else:
-            return []
+        resources = []
+        if table and table.tr and table.tr.td:
+            resources = [table.tr.td.encode_contents()]
+        return resources
+
+    @classmethod
+    def _extract_title(cls, soup):
+        """Find the book's title."""
+        title_header = soup.find('span', class_='PageHeader2')
+        if not title_header or not title_header.string:
+            return
+        return title_header.string
 
 class ContentCafeSOAPError(IOError):
     pass
 
 class ContentCafeSOAPClient(object):
+    """Get historical sales information from Content Cafe through
+    its SOAP interface.
+
+    NOTE: This class currently has no test coverage. It wouldn't be too
+    difficult to add coverage for estimate_popularity, at least.
+    """
 
     WSDL_URL = "http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx?WSDL"
 
     DEMAND_HISTORY = "DemandHistoryDetail"
-
-    ONE_YEAR_AGO = datetime.timedelta(days=365)
 
     def __init__(self, user_id, password, wsdl_url=None):
         wsdl_url = wsdl_url or self.WSDL_URL
@@ -293,9 +379,10 @@ class ContentCafeSOAPClient(object):
         """Turn demand data into a library-friendly estimate of popularity.
 
         :return: The book's maximum recent popularity, or one-half its
-        maximum all-time popularity, whichever is greater. If there are no
-        measurements, returns None. This is different from zero, which
-        indicates a measured lack of demand.
+        maximum all-time popularity, whichever is greater. If there
+        are no measurements, returns None. This is different from a
+        measurement of zero, which indicates a measured lack of
+        demand.
 
         :param cutoff: The point at which "recent popularity" stops.
         """
@@ -315,3 +402,25 @@ class ContentCafeSOAPClient(object):
             return max(lifetime) * 0.5
         else:
             return None
+
+
+class MockContentCafeAPI(ContentCafeAPI):
+
+    def __init__(self, *args, **kwargs):
+        self.requests = []
+        self.responses = []
+        self.measurements = []
+        self.do_get = self._do_get
+
+    def queue_response(self, response):
+        self.responses.push(response)
+
+    def queue_measurement(self, measurement):
+        self.measurements.push(measurement)
+
+    def _do_get(self, url):
+        self.requests.push(url)
+        return self.responses.pop()
+
+    def measure_popularity(self, identifier, cutoff):
+        return self.measurements.pop()

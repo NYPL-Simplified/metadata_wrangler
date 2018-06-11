@@ -3,6 +3,7 @@ from nose.tools import (
     eq_,
     set_trace,
 )
+from core.metadata_layer import ReplacementPolicy
 from core.s3 import MockS3Uploader
 from core.testing import (
     DatabaseTest,
@@ -27,8 +28,12 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
     def test_replacement_policy_uses_provided_mirror(self):
         collection = MockOverdriveAPI.mock_collection(self._db)
         mirror = MockS3Uploader()
+        replacement_policy = ReplacementPolicy.from_metadata_source(
+            mirror=mirror
+        )
         provider = OverdriveBibliographicCoverageProvider(
-                collection, uploader=mirror, api_class=MockOverdriveAPI
+            collection, replacement_policy=replacement_policy,
+            api_class=MockOverdriveAPI
         )
         
         # Any resources discovered by Overdrive will be
