@@ -25,7 +25,7 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
 
         return super(
             MetadataWranglerBibliographicCoverageProvider, self).work(
-                identifier, license_pool
+                identifier, license_pool, even_if_no_title=True
             )
 
 

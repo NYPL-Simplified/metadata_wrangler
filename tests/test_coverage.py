@@ -244,7 +244,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
                 return self._coverage_record(
                     identifier, coverage_source=s.SOURCE,
                     status=s.STATUS
-                )
+                ), True
 
         sub_provider = JustAddMetadata()
         class Mock(IdentifierResolutionCoverageProvider):
@@ -312,6 +312,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
             def register(self, identifier, collection, force):
                 self.register_called_with = [identifier, collection, force]
+                return None, None
 
             def ensure_coverage(self, identifier, force):
                 self.ensure_coverage_called_with = [identifier, force]
@@ -339,6 +340,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
             def register(self, identifier, collection, force):
                 self.register_called_with = [identifier, collection, force]
+                return None, None
 
             def ensure_coverage(self, identifier, force):
                 self.ensure_coverage_called_with = [identifier, force]
