@@ -11,6 +11,8 @@ from collections import Counter
 from pyld import jsonld
 from nose.tools import set_trace
 
+from sqlalchemy.orm.session import Session
+
 from core.coverage import (
     IdentifierCoverageProvider,
 )
@@ -36,6 +38,7 @@ from core.util import (
     fast_query_count,
 )
 
+from coverage_utils import ResolveVIAFOnSuccessCoverageProvider
 from viaf import VIAFClient
 
 
@@ -902,7 +905,7 @@ class LinkedDataURLLister:
                     output.write("\n")
 
 
-class LinkedDataCoverageProvider(IdentifierCoverageProvider):
+class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
 
     """Runs Editions obtained from OCLC Lookup through OCLC Linked Data.
 
@@ -919,20 +922,22 @@ class LinkedDataCoverageProvider(IdentifierCoverageProvider):
         Identifier.ISBN, Identifier.OVERDRIVE_ID
     ]
     
-    def __init__(self, _db, *args, **kwargs):
-        if 'api' in kwargs:
-            self.api = kwargs['api']
-            del kwargs['api']
-        else:
-            self.api = OCLCLinkedData(_db)
-        if 'viaf_api' in kwargs:
-            self.viaf = kwargs['viaf_api']
-            del kwargs['viaf_api']
-        else:
-            self.viaf = VIAFClient(_db)
+    def __init__(self, collection, *args, **kwargs):
+        _db = Session.object_session(collection)
+        api = kwargs.pop('api', None)
+        if not api:
+            api = OCLCLinkedData(_db)
+        self.api = api
+
+        viaf = kwargs.pop('viaf', None)
+        if not viaf:
+            viaf = VIAFClient(_db)
+        self.viaf = viaf
 
         kwargs['registered_only'] = True
-        super(LinkedDataCoverageProvider, self).__init__(_db, *args, **kwargs)
+        super(LinkedDataCoverageProvider, self).__init__(
+            collection, *args, **kwargs
+        )
             
     def process_item(self, identifier):
         # Books are not looked up in OCLC Linked Data directly, since

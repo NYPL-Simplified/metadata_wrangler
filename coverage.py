@@ -1,16 +1,18 @@
 import logging
 from nose.tools import set_trace
 
+from sqlalchemy.orm.session import Session
+
 from core.config import CannotLoadConfiguration
 
 from core.coverage import (
-    CoverageFailure, 
-    CatalogCoverageProvider, 
+    CoverageFailure,
+    CatalogCoverageProvider,
     IdentifierCoverageProvider,
 )
 
 from core.metadata_layer import (
-    ReplacementPolicy, 
+    ReplacementPolicy,
 )
 
 from core.model import (
@@ -37,16 +39,12 @@ from overdrive import (
 )
 
 from content_cafe import (
-    ContentCafeCoverageProvider, 
+    ContentCafeCoverageProvider,
     ContentCafeAPI,
 )
 
-from content_server import (
-    LookupClientCoverageProvider, 
-)
-
 from oclc_classify import (
-    OCLCClassifyCoverageProvider, 
+    OCLCClassifyCoverageProvider,
 )
 
 from oclc import (
@@ -54,91 +52,119 @@ from oclc import (
 )
 
 from viaf import (
-    VIAFClient, 
+    VIAFClient,
 )
 from integration_client import (
-    CalculatesWorkPresentation,
     IntegrationClientCoverImageCoverageProvider,
 )
 
 
-class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
-    CalculatesWorkPresentation
-):
-    """Make sure all Identifiers registered as needing coverage by this
-    CoverageProvider become Works with Editions and (probably dummy)
-    LicensePools.
+class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
+    """Make sure all Identifiers associated with some Collection become
+    Works.
 
     Coverage happens by running the Identifier through _other_
-    CoverageProviders, filling in the blanks with additional data from
+    CoverageProviders, which fill in the blanks with data from
     third-party entities.
+
+    This CoverageProvider may force those other CoverageProviders to
+    do their work for each Identifier immediately, or it may simply
+    register its Identifiers with those CoverageProviders and allow
+    them to complete the work at their own pace.
+
+    Unlike most CoverageProviders, which are invoked from a script,
+    this CoverageProvider is invoked from
+    URNLookupController.process_urns, and only when a client expresses
+    a desire that we look into a specific identifier.
     """
 
     SERVICE_NAME = "Identifier Resolution Coverage Provider"
     DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
+
+    # These are the only identifier types we have any hope of providing
+    # insight into.
     INPUT_IDENTIFIER_TYPES = [
         Identifier.OVERDRIVE_ID, Identifier.ISBN, Identifier.URI,
-        Identifier.GUTENBERG_ID
     ]
     OPERATION = CoverageRecord.RESOLVE_IDENTIFIER_OPERATION
-    
-    LICENSE_SOURCE_NOT_ACCESSIBLE = (
-        "Could not access underlying license source over the network.")
-    UNKNOWN_FAILURE = "Unknown failure."
-
-    DEFAULT_OVERDRIVE_COLLECTION_NAME = u'Default Overdrive'
 
     # We cover all Collections, regardless of their protocol.
     PROTOCOL = None
 
-    def __init__(
-        self, collection, mirror=None, viaf_client=None,
-        content_cafe_api=None, overdrive_api_class=OverdriveAPI, **kwargs
+    def __init__(self, collection, mirror=None, http_get=None, viaf=None,
+                 provide_coverage_immediately=False, force=False,
+                 provider_kwargs=None, **kwargs
     ):
+        """Constructor.
 
-        super(IdentifierResolutionCoverageProvider, self).__init__(
-            collection, registered_only=True, **kwargs
-        )
+        :param collection: Handle all Identifiers from this Collection
+        that were previously registered with this CoverageProvider.
+
+        :param mirror: A MirrorUploader to use if coverage requires
+        uploading any cover images to external storage.
+
+        :param http_get: A drop-in replacement for
+        Representation.simple_http_get, to be used if any information
+        (such as a book cover) needs to be obtained from the public
+        Internet.
+
+        :param viaf_client: A VIAFClient to use if coverage requires
+        gathering information about authors from VIAF.
+
+        :param force: Force CoverageProviders to cover identifiers
+        even if they believe they have already done the work.
+
+        :param provide_coverage_immediately: If this is True, then
+        resolving an identifier means registering it with all of its
+        other CoverageProviders *and then attempting to provide
+        coverage*.  Registration is considered a success even if the
+        other CoverageProviders fail, but the attempt must be made
+        immediately.
+
+        If this is False (the default), then resolving an identifier
+        just means registering it with all other relevant
+        CoverageProviders.
+
+        :param provider_kwargs: Pass this object in as provider_kwargs
+        when calling gather_providers at the end of the
+        constructor. Used only in testing.
+
+        """
+        _db = Session.object_session(collection)
 
         # Since we are the metadata wrangler, any resources we find,
-        # we mirror to S3.
-        mirror = mirror or MirrorUploader.sitewide(self._db)
+        # we mirror using the sitewide MirrorUploader.
+        mirror = mirror or MirrorUploader.sitewide(_db)
         self.mirror = mirror
 
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.
-        self.policy = PresentationCalculationPolicy(
+        presentation = PresentationCalculationPolicy(
             regenerate_opds_entries=True
         )
-
-        self.overdrive_api = self.create_overdrive_api(overdrive_api_class)
-
-        self.content_cafe_api = (
-            content_cafe_api or ContentCafeAPI.from_config(self._db)
+        replacement_policy = ReplacementPolicy.from_metadata_source(
+            presentation_calculation_policy=presentation, mirror=self.mirror,
+            http_get=http_get,
         )
-        
-        # Determine the optional and required coverage providers.
-        # Each Identifier in this Collection's catalog will be run
-        # through all relevant providers.
-        self.required_coverage_providers, self.optional_coverage_providers = self.providers()
-
-        # When we need to look up a contributor via VIAF we will use this
-        # client.
-        self.viaf_client = viaf_client or VIAFClient(self._db)
-
-    def create_overdrive_api(self, overdrive_api_class):
-        collection, is_new = Collection.by_name_and_protocol(
-            self._db, self.DEFAULT_OVERDRIVE_COLLECTION_NAME,
-            ExternalIntegration.OVERDRIVE
+        super(IdentifierResolutionCoverageProvider, self).__init__(
+            collection, replacement_policy=replacement_policy,
+            **kwargs
         )
-        try:
-            return overdrive_api_class(self._db, collection)
-        except CannotLoadConfiguration, e:
-            self.log.error(
-                'Default Overdrive collection is not properly configured. No Overdrive work will be done.'
-            )
-            return
+
+        self.provide_coverage_immediately = provide_coverage_immediately
+        self.force = force
+
+        self.viaf = viaf or VIAFClient(self._db)
+
+        # Instantiate the coverage providers that may be needed to
+        # relevant to any given Identifier.
+        #
+        # Each Identifier in this Collection's catalog will be registered
+        # with all relevant providers (if provide_coverage_immediately
+        # is False) or immediately covered by all relevant providers
+        # (if provide_coverage_immediately is True).
+        self.providers = self.gather_providers(provider_kwargs)
 
     @classmethod
     def unaffiliated_collection(cls, _db):
@@ -155,7 +181,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
         is always last in the list.
         """
         unaffiliated, ignore = cls.unaffiliated_collection(_db)
-        collections = super(cls, cls).collections(_db)
+        collections = super(
+            IdentifierResolutionCoverageProvider, cls).collections(_db)
 
         if unaffiliated in collections[:]:
             # Always put the unaffiliated collection last.
@@ -164,319 +191,186 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider,
 
         return collections
 
-    def providers(self):
-        """Instantiate required and optional CoverageProviders.
+    def gather_providers(self, provider_kwargs=None):
+        """Instantiate all CoverageProviders that might be necessary
+        to handle an Identifier from this Collection.
 
         All Identifiers in this Collection's catalog will be run
-        through each provider. If an optional provider fails, nothing
-        will happen.  If a required provider fails, the coverage
-        operation as a whole will fail.
+        through each provider that can handle its Identifier.type.
 
-        NOTE: This method creates CoverageProviders that go against
-        real servers. Because of this, tests must use a subclass that
-        mocks providers(), such as
-        MockIdentifierResolutionCoverageProvider.
+        :param provider_kwargs: A dictionary mapping
+        CoverageProvider classes to dictionaries of keyword arguments
+        to be used in those classes constructors. Used in testing to
+        avoid creating CoverageProviders that make requests against
+        real servers on instantiation.
         """
-        # All books must be run through Content Cafe and OCLC
-        # Classify, assuming their identifiers are of the right
-        # type.
-        content_cafe = ContentCafeCoverageProvider(
-            self.collection, api=self.content_cafe_api, mirror=self.mirror
+
+        def instantiate(cls, add_to, provider_kwargs, **kwargs):
+            """Instantiate a CoverageProvider, possibly with mocked
+            arguments, and add it to a list.
+
+            :param cls: Instantiate this class.
+            :param add_to: Add it to this list.
+            :param provider_kwargs: Keyword arguments provided by
+            test code to override the defaults.
+            """
+            # The testing setup may want us to instantiate a different
+            # class entirely.
+            cls = kwargs.pop('cls', cls)
+
+            # The testing setup may want us to use different constructor
+            # arguments than the default.
+            provider_kwargs = provider_kwargs or {}
+            this_provider_kwargs = provider_kwargs.get(cls, {})
+            kwargs.update(this_provider_kwargs)
+
+            add_to.append(cls(**kwargs))
+
+        protocol = self.collection.protocol
+        providers = []
+
+        # These CoverageProviders can handle items from any kind of
+        # collection, so long as the Identifier is of the right type.
+
+        # TODO: This is temporarily disabled -- it needs to become
+        # a CollectionCoverageProvider.
+        #
+        # There's no rush to get this working again because
+        # it was primarily intended for use with Project Gutenberg titles,
+        # which we've downplayed in favor of Feedbooks titles, which
+        # have much better metadata.
+        #
+        #oclc_classify = instantiate(
+        #    OCLCClassifyCoverageProvider, providers, provider_kwargs,
+        #    _db=self._db
+        #)
+
+        content_cafe = instantiate(
+            ContentCafeCoverageProvider, providers, provider_kwargs,
+            collection=self.collection,
+            replacement_policy=self.replacement_policy
         )
-        oclc_classify = OCLCClassifyCoverageProvider(self._db)
 
-        if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
-            # If a book came from an OPDS for distributors collection, it may
-            # not have an identifier that can be looked up elsewhere.
-            optional = [content_cafe, oclc_classify]
-            required = []
-        else:
-            optional = []
-            required = [content_cafe, oclc_classify]
-            
-        # All books derived from OPDS import against an open-access
-        # content server must be looked up in that server.
-        if (self.collection.protocol==ExternalIntegration.OPDS_IMPORT
-            and self.collection.data_source
-        ):
-            required.append(LookupClientCoverageProvider(self.collection))
+        # TODO: This is temporarily disabled because its process_item doesn't
+        # work directly on ISBNs -- it assumes the ISBN has already been
+        # associated with OCLC Numbers in some other step. The best
+        # solution is to rearchitect LinkedDataCoverageProvider
+        # to make it assume it's processing ISBNs.
+        #
+        # This is fine for now because the main things we need out of the
+        # metadata wrangler are cover images and descriptions, which
+        # we can get from ContentCafeCoverageProvider.
+        #
+        #linked_data = instantiate(
+        #    LinkedDataCoverageProvider, providers, provider_kwargs,
+        #    collection=self.collection, replacement_policy=self.policy,
+        #    viaf=self.viaf
+        #)
 
-        # All books obtained from Overdrive must be looked up via the
-        # Overdrive API.
-        if self.overdrive_api and self.collection.protocol == ExternalIntegration.OVERDRIVE:
-            required.append(
-                OverdriveBibliographicCoverageProvider(
-                    self.collection, mirror=self.mirror,
-                    api_class=self.overdrive_api
-                )
+        # All books identified by Overdrive ID must be looked up via
+        # the Overdrive API. We don't enforce that the collection
+        # is an Overdrive collection, because we want to allow
+        # unauthenticated lookups in the 'unaffiliated' collection.
+        try:
+            overdrive = instantiate(
+                OverdriveBibliographicCoverageProvider, providers,
+                provider_kwargs, collection=self.collection,
+                viaf=self.viaf, replacement_policy=self.replacement_policy
             )
+        except CannotLoadConfiguration, e:
+            # No Overdrive collection is configured -- we can't
+            # handle Overdrive lookups, as much as we'd like to.
+            pass
 
         # We already have metadata for books we heard about from an
         # IntegrationClient, but we need to make sure the covers get
         # mirrored.
-        if self.collection.protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
-            required.append(
-                IntegrationClientCoverImageCoverageProvider(
-                    self.collection, mirror=self.mirror
-                )
+        if protocol == ExternalIntegration.OPDS_FOR_DISTRIBUTORS:
+            instantiate(
+                IntegrationClientCoverImageCoverageProvider, providers,
+                provider_kwargs, collection=self.collection,
+                replacement_policy=self.replacement_policy
             )
 
-        return required, optional
-            
-    def process_item(self, identifier):
-        """For this identifier, checks that it has all of the available
-        3rd party metadata, and if not, obtains it.
+        return providers
 
-        If metadata failed to be obtained, and the coverage was deemed
-        required, then returns a CoverageFailure.
+    def process_item(self, identifier):
+        """Either make sure this Identifier is registered with all
+        CoverageProviders, or actually attempt to use them to provide
+        all coverage.
         """
-        self.log.info("Ensuring coverage for %r", identifier)
+        if self.provide_coverage_immediately:
+            message = "Immediately providing coverage for %s."
+        else:
+            message = "Registering %s with coverage providers."
+        self.log.info(message, identifier)
 
         # Make sure there's a LicensePool for this Identifier in this
         # Collection. Since we're the metadata wrangler, the
-        # LicensePool will probably be a stub that doesn't actually
-        # represent the right to loan the book, but that's okay.
+        # LicensePool is a stub that doesn't actually represent the
+        # right to loan the book, but that's okay.
         license_pool = self.license_pool(identifier)
         if not license_pool.licenses_owned:
             license_pool.update_availability(1, 1, 0, 0)
 
-        # Go through all relevant providers and try to ensure coverage.
-        failure = self.run_through_relevant_providers(
-            identifier, self.required_coverage_providers,
-            fail_on_any_failure=True
-        )
-        if failure:
-            return failure
+        # Let all the CoverageProviders do something.
+        results = [
+            self.process_one_provider(identifier, provider)
+            for provider in self.providers
+        ]
+        successes = [
+            x for x in results if isinstance(x, CoverageRecord)
+            and x.status==CoverageRecord.SUCCESS
+        ]
 
-        # Now go through relevant optional providers and try to ensure
-        # coverage.
-        failure = self.run_through_relevant_providers(
-            identifier, self.optional_coverage_providers,
-            fail_on_any_failure=False
-        )
-        if failure:
-            return failure
+        if (
+            any(successes)
+            and (not license_pool.work
+                 or not license_pool.work.presentation_ready)
+        ):
+            # At least one CoverageProvider succeeded, but there's no
+            # presentation-ready Work. It's possible that the
+            # CoverageProvider didn't try to create a Work, or that a
+            # preexisting Work has been removed. In the name of
+            # resiliency, we might as well try creating a Work.
+            work, is_new = license_pool.calculate_work(even_if_no_author=True)
+            if work:
+                # If we were able to create a Work, it should be made
+                # presentation-ready immediately so people can see the
+                # data.
+                work.set_presentation_ready()
 
-        # We got coverage from all the required coverage providers,
-        # and none of the optional coverage providers raised an exception.
-        #
-        # Register the identifier's work for presentation calculation.
-        failure = self.register_work_for_calculation(identifier)
-        if failure:
-            return failure
-
+        # The only way this can fail is if there is an uncaught exception
+        # during the registration/processing process. The failure of a
+        # CoverageProvider to provide coverage doesn't mean this process
+        # has failed -- that's a problem that the CoverageProvider itself
+        # can resolve later.
         return identifier
 
-    def run_through_relevant_providers(self, identifier, providers,
-                                       fail_on_any_failure):
-        """Run the given Identifier through a set of CoverageProviders.
+    def process_one_provider(self, identifier, provider):
+        if not provider.can_cover(identifier):
+            # The CoverageProvider under consideration doesn't
+            # handle Identifiers of this type.
+            return
 
-        :param identifier: Process this Identifier.
-        :param providers: Run `identifier` through every relevant
-            CoverageProvider in this list.
-        :param fail_on_any_failure: True means that each
-            CoverageProvider must succeed or the whole operation
-            fails. False means that if a CoverageProvider fails it's
-            not a deal-breaker.
-        :return: A CoverageFailure if there was an unrecoverable failure,
-            None if everything went okay.
-        """
-        for provider in providers:
-            if (provider.input_identifier_types
-                and not identifier.type in provider.input_identifier_types):
-                # The CoverageProvider under consideration doesn't
-                # handle Identifiers of this type.
-                continue
-            try:
-                record = provider.ensure_coverage(identifier, force=True)
-                if fail_on_any_failure and record.exception:
-                    # As the CoverageProvider under consideration has
-                    # fallen, so must this CoverageProvider also fall.
-                    error_msg = "500: " + record.exception
-                    transient = (
-                        record.status == CoverageRecord.TRANSIENT_FAILURE
-                    )
-                    return self.failure(
-                        identifier, error_msg, transient=transient
-                    )                
-            except Exception as e:
-                # An uncaught exception becomes a CoverageFailure no
-                # matter what.
-                return self.transform_exception_into_failure(e, identifier)
+        # TODO: This code could be moved into
+        # IdentifierCoverageProvider.register, if it weren't a class
+        # method. This would simplify testing.
+        if provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION:
+            # We need to cover this Identifier once, and then we're
+            # done, for all collections.
+            collection = None
+        else:
+            # We need separate coverage for the specific Collection
+            # associated with this CoverageProvider.
+            collection = provider.collection
 
-        # Return None to indicate success.
-        return None
-
-    def transform_exception_into_failure(self, error, identifier):
-        """Ensures coverage of a given identifier by a given provider with
-        appropriate error handling for broken providers.
-        """
-        self.log.warn(
-            "Error completing coverage for %r: %r", identifier, error,
-            exc_info=error
-        )
-        return self.failure(identifier, repr(error), transient=True)
-
-    def presentation_calculation_pre_hook(self, work):
-        """A hook method for the CalculatesWorkPresentation mixin"""
-        self.resolve_viaf(work)
-
-    def resolve_viaf(self, work):
-        """Get VIAF data on all contributors."""
-
-        for pool in work.license_pools:
-            edition = pool.presentation_edition
-            if not edition:
-                continue
-            for contributor in edition.contributors:
-                self.viaf_client.process_contributor(contributor)
-                if not contributor.display_name:
-                    contributor.family_name, contributor.display_name = (
-                        contributor.default_names())
-
-
-class IdentifierResolutionRegistrar(CatalogCoverageProvider):
-
-    # All of the providers used to resolve an Identifier for the
-    # Metadata Wrangler.
-    RESOLVER = IdentifierResolutionCoverageProvider
-
-    IDENTIFIER_PROVIDERS = [
-        ContentCafeCoverageProvider,
-        LinkedDataCoverageProvider,
-        OCLCClassifyCoverageProvider,
-        OverdriveBibliographicCoverageProvider,
-    ]
-
-    COLLECTION_PROVIDERS = [
-        IntegrationClientCoverImageCoverageProvider,
-        LookupClientCoverageProvider,
-    ]
-
-    SERVICE_NAME = 'Identifier Resolution Registrar'
-    DATA_SOURCE_NAME = DataSource.INTERNAL_PROCESSING
-    OPERATION = 'register-for-metadata'
-
-    # Any kind of identifier can be registered.
-    INPUT_IDENTIFIER_TYPES = None
-
-    # An identifier can be catalogued with any type of Collection.
-    PROTOCOL = None
-
-    def process_item(self, identifier, force=False):
-        """Creates a transient failure CoverageRecord for each provider
-        that the identifier eligible for coverage from.
-
-        :return: (CoverageRecord, bool) tuple with a CoverageRecord
-        for the IdentifierResolutionCoverageProvider and a boolean representing
-        whether or not the CoverageRecord is new
-        """
-        collection, ignore = self.RESOLVER.unaffiliated_collection(self._db)
-        if not identifier.collections:
-            # This Identifier is not in any collections. Add it to the
-            # 'unaffiliated' collection to make sure it gets covered
-            # eventually by the identifier resolution script, which only
-            # covers Identifiers that are in some collection.
-            collection.catalog.append(identifier)
-
-        # Give the identifier a mock LicensePool if it doesn't have one.
-        self.license_pool(identifier, collection)
-
-        self.log.info('Identifying required coverage for %r' % identifier)
-
-        # Get Collection coverage before resolution coverage, to make sure
-        # that an identifier that's been added to a new collection is
-        # registered for any relevant coverage -- even if its resolution has
-        # already been completed.
-        #
-        # This is extremely important for coverage providers with
-        # COVERAGE_COUNTS_FOR_EVERY_COLLECTION set to False.
-        providers = self.collection_coverage_providers(identifier)
-
-        # Find an resolution CoverageRecord if it exists.
-        resolution_record = self.resolution_coverage(identifier)
-        if resolution_record and not force:
-            return identifier
-
-        # Every identifier gets the resolver.
-        providers.append(self.RESOLVER)
-
-        # Filter Identifier-typed CoverageProviders.
-        for provider in self.IDENTIFIER_PROVIDERS:
-            if (not provider.INPUT_IDENTIFIER_TYPES
-                or identifier.type in provider.INPUT_IDENTIFIER_TYPES
-            ):
-                providers.append(provider)
-
-        for provider_class in providers:
-            # TODO: depending on how this is instantiated,
-            # call ensure_coverage instead of register.
-            provider_class.register(identifier)
-
-        return identifier
-
-    @classmethod
-    def resolution_coverage(cls, identifier):
-        """Returns a CoverageRecord if the given identifier has been registered
-        for resolution with the IdentifierResolutionCoverageProvider
-
-        :return: CoverageRecord or None
-        """
-        source = cls.RESOLVER.DATA_SOURCE_NAME
-        operation = cls.RESOLVER.OPERATION
-        return CoverageRecord.lookup(identifier, source, operation)
-
-    @classmethod
-    def collection_coverage_providers(cls, identifier):
-        """Determines the required catalog-based coverage an identifier needs.
-
-        :return: A list of Collection- and CatalogCoverageProviders
-        """
-        providers = list()
-        for provider in cls.COLLECTION_PROVIDERS:
-            if not provider.PROTOCOL:
-                providers.append(provider)
-                continue
-
-            covered_collections = filter(
-                lambda c: c.protocol==provider.PROTOCOL, identifier.collections
+        if self.provide_coverage_immediately:
+            coverage_record = provider.ensure_coverage(
+                identifier, force=self.force
             )
-
-            if not covered_collections:
-                continue
-
-            is_lookup_client_provider = provider==LookupClientCoverageProvider
-            if (is_lookup_client_provider or
-                not provider.COVERAGE_COUNTS_FOR_EVERY_COLLECTION
-            ):
-                for collection in covered_collections:
-                    data_source = None
-                    if is_lookup_client_provider:
-                        # The LookupClientCoverageProvider doesn't have an
-                        # obvious data source. It uses the collection's data.
-                        # source instead.
-                        data_source = collection.data_source
-
-                    _record, newly_registered = provider.register(
-                        identifier, data_source=data_source,
-                        collection=collection, autocreate=True
-                    )
-            else:
-                providers.append(provider)
-        return providers
-
-    def license_pool(self, identifier, collection):
-        """Creates a LicensePool in the unaffiliated_collection for
-        otherwise unlicensed identifiers.
-        """
-        license_pool = None
-        if not identifier.licensed_through:
-            license_pool, ignore = LicensePool.for_foreign_id(
-                self._db, self.RESOLVER.DATA_SOURCE_NAME, identifier.type,
-                identifier.identifier, collection=collection
+        else:
+            coverage_record = provider.register(
+                identifier, collection=collection, force=self.force
             )
-
-        license_pool = license_pool or identifier.licensed_through[0]
-
-        if not license_pool.licenses_owned:
-            license_pool.update_availability(1, 1, 0, 0)
+        return coverage_record

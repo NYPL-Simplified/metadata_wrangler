@@ -162,7 +162,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestLinkedDataCoverageProvider, self).setup()
-        self.provider = LinkedDataCoverageProvider(self._db)
+        self.provider = LinkedDataCoverageProvider(self._default_collection)
 
     def test_new_isbns(self):
         existing_id = self._identifier()
@@ -221,7 +221,9 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             def info_for(self, identifier):
                 raise IOError("Exception!")
 
-        provider = LinkedDataCoverageProvider(self._db, api=DoomedOCLCLinkedData(self._db))
+        provider = LinkedDataCoverageProvider(
+            self._default_collection, api=DoomedOCLCLinkedData(self._db)
+        )
         
         edition = self._edition()
         identifier = edition.primary_identifier
@@ -236,7 +238,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
                 raise IOError("Tried, but couldn't find location")
 
         provider = LinkedDataCoverageProvider(
-            self._db, api=DoomedOCLCLinkedData(self._db)
+            self._default_collection, api=DoomedOCLCLinkedData(self._db)
         )
         
         edition = self._edition()
@@ -254,8 +256,9 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         oclc = MockOCLCLinkedDataAPI()
         viaf = MockVIAFClient()
         provider = LinkedDataCoverageProvider(
-            self._db, api=oclc, viaf_api=viaf
+            self._default_collection, api=oclc
         )
+        provider.viaf = viaf
 
         # Here's a placeholder that will be filled in with information from
         # OCLC Linked Data.

@@ -9,6 +9,8 @@ from suds.client import Client as SudsClient
 # Tone down the verbose Suds logging.
 logging.getLogger('suds').setLevel(logging.ERROR)
 
+from sqlalchemy.orm.session import Session
+
 from core.config import CannotLoadConfiguration
 from core.coverage import (
     BibliographicCoverageProvider,
@@ -33,7 +35,9 @@ from core.util.summary import SummaryEvaluator
 
 from core.mirror import MirrorUploader
 
-class ContentCafeCoverageProvider(BibliographicCoverageProvider):
+from coverage_utils import MetadataWranglerBibliographicCoverageProvider
+
+class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
     """Create bare-bones Editions for ISBN-type Identifiers.
 
     An Edition will have no bibliographic information, apart from a
@@ -45,27 +49,31 @@ class ContentCafeCoverageProvider(BibliographicCoverageProvider):
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
     
-    def __init__(self, collection, api=None, mirror=None, **kwargs):
+    def __init__(self, collection, api=None, replacement_policy=None, **kwargs):
         """Constructor.
 
         :param collection: A Collection.
         :param api: A ContentCafeAPI.
-        :param mirror: A MirrorUploader.
+        :param replacement_policy: A ReplacementPolicy.
         :param kwargs: Any extra arguments to be passed into the
             BibliographicCoverageProvider superconstructor.
         """
+        _db = Session.object_session(collection)
+        if not replacement_policy:
+            mirror = MirrorUploader.sitewide(_db)
+            replacement_policy = ReplacementPolicy.from_metadata_source(
+                mirror=mirror
+            )
+
         # We pass in registered_only=True because we don't need to cover
         # every single ISBN in the system (most of which are alternate
         # ISBNs found in OCLC Linked Data), only the ISBNs that a
         # client specifically asked to look up.
         super(ContentCafeCoverageProvider, self).__init__(
-            collection=collection, registered_only=True, **kwargs
+            collection=collection, registered_only=True,
+            replacement_policy=replacement_policy, **kwargs
         )
         self.content_cafe = api or ContentCafeAPI.from_config(self._db)
-        mirror = mirror or MirrorUploader.sitewide(self._db)
-        self.replacement_policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror
-        )
 
     def process_item(self, identifier):
         """Associate bibliographic metadata with the given Identifier.
@@ -239,7 +247,6 @@ class ContentCafeAPI(object):
         for content in resource_contents:
             if not content:
                 continue
-            print repr(content)
             content = content.strip()
             if not content:
                 continue
@@ -395,3 +402,25 @@ class ContentCafeSOAPClient(object):
             return max(lifetime) * 0.5
         else:
             return None
+
+
+class MockContentCafeAPI(ContentCafeAPI):
+
+    def __init__(self, *args, **kwargs):
+        self.requests = []
+        self.responses = []
+        self.measurements = []
+        self.do_get = self._do_get
+
+    def queue_response(self, response):
+        self.responses.push(response)
+
+    def queue_measurement(self, measurement):
+        self.measurements.push(measurement)
+
+    def _do_get(self, url):
+        self.requests.push(url)
+        return self.responses.pop()
+
+    def measure_popularity(self, identifier, cutoff):
+        return self.measurements.pop()

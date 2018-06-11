@@ -315,11 +315,12 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         """Just test that we can create the object."""
         mock_api = object()
         mock_mirror = object()
+        policy = object()
         provider = ContentCafeCoverageProvider(
-            self._default_collection, api=mock_api, mirror=mock_mirror
+            self._default_collection, api=mock_api, replacement_policy=policy
         )
         eq_(self._default_collection, provider.collection)
-        eq_(mock_mirror, provider.replacement_policy.mirror)
+        eq_(policy, provider.replacement_policy)
         eq_(mock_api, provider.content_cafe)
 
         # If no ContentCafeAPI is provided, the output of
@@ -403,7 +404,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
         provider = ContentCafeCoverageProvider(
             self._default_collection, api=NotFoundContentAPI(),
-            mirror=object()
+            replacement_policy=object()
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)
@@ -422,7 +423,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
         provider = ContentCafeCoverageProvider(
             self._default_collection, api=CantCreateMetadata(),
-            mirror=object()
+            replacement_policy=object()
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)
