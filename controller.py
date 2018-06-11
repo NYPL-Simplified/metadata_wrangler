@@ -877,7 +877,7 @@ class URNLookupController(CoreURNLookupController):
         :param resolver: An IdentifierResolutionCoverageProvider which
             will either create a presentation-ready Work immediately, or
             make sure that one eventually gets created.
-        :param return: None.
+        :return: None.
         """
         work = self.presentation_ready_work_for(identifier)
         if work:
