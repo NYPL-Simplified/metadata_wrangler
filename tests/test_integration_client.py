@@ -9,6 +9,7 @@ from . import (
 )
 
 from core.coverage import CoverageFailure
+from core.metadata_layer import ReplacementPolicy
 from core.model import (
     CoverageRecord,
     ExternalIntegration,
@@ -150,13 +151,16 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
-        uploader = MockS3Uploader()
+        mirror = MockS3Uploader()
+        replacement_policy = ReplacementPolicy.from_metadata_source(
+            mirror=mirror
+        )
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         )
 
         self.provider = IntegrationClientCoverImageCoverageProvider(
-            uploader=uploader, collection=self.collection
+            replacement_policy=replacement_policy, collection=self.collection
         )
 
     def test_data_source_is_collection_specific(self):
