@@ -65,13 +65,11 @@ class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider)
                 mirror=mirror
             )
 
-        # We pass in registered_only=True because we don't need to cover
-        # every single ISBN in the system (most of which are alternate
-        # ISBNs found in OCLC Linked Data), only the ISBNs that a
-        # client specifically asked to look up.
+        # Any ISBN-type identifier cataloged in a Collection needs to
+        # be processed, whether or not it was explicitly registered.
         super(ContentCafeCoverageProvider, self).__init__(
-            collection=collection, registered_only=True,
-            replacement_policy=replacement_policy, **kwargs
+            collection=collection, replacement_policy=replacement_policy,
+            **kwargs
         )
         self.content_cafe = api or ContentCafeAPI.from_config(self._db)
 
