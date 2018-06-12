@@ -7,6 +7,6 @@ package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
 
 from content_cafe import ContentCafeCoverageProvider
-from core.scripts import RunCoverageProviderScript
+from core.scripts import RunCollectionCoverageProviderScript
 
-RunCoverageProviderScript(ContentCafeCoverageProvider).run()
+RunCollectionCoverageProviderScript(ContentCafeCoverageProvider).run()
