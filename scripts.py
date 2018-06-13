@@ -1,4 +1,6 @@
 import argparse
+import base64
+from collections import Counter
 import csv
 import datetime
 import os
@@ -7,27 +9,31 @@ import unicodedata
 
 from nose.tools import set_trace
 
+from sqlalchemy.sql import select
 from sqlalchemy.sql.functions import func
 from sqlalchemy.sql.expression import or_
 
 from canonicalize import AuthorNameCanonicalizer, MockAuthorNameCanonicalizer
 
 from core.model import (
-    get_one,
     Collection,
     Complaint,
     Contribution,
-    Contributor, 
+    Contributor,
     DataSource,
     Edition,
     Equivalency,
     Identifier,
     IntegrationClient,
+    LicensePool,
     Timestamp,
+    Work,
+    get_one,
+    production_session,
 )
 
 from core.scripts import (
-    CheckContributorNamesInDB, 
+    CheckContributorNamesInDB,
     DatabaseMigrationInitializationScript,
     Explain,
     IdentifierInputScript,
@@ -56,10 +62,10 @@ class FillInVIAFAuthorNames(Script):
 
 
 class CheckContributorTitles(Script):
-    """ For the Contributr objects in our database, goes to VIAF and extracts 
-    titles (Mrs., Eminence, Prince, etc.) from the MARC records. 
-    Output those titles to stdout.  Used to gather common name parts to help 
-    hone the HumanName libraries. 
+    """ For the Contributr objects in our database, goes to VIAF and extracts
+    titles (Mrs., Eminence, Prince, etc.) from the MARC records.
+    Output those titles to stdout.  Used to gather common name parts to help
+    hone the HumanName libraries.
     """
 
     def __init__(self, viaf=None):
@@ -67,8 +73,8 @@ class CheckContributorTitles(Script):
 
 
     def run(self, batch_size=1000):
-        """ 
-        NOTE: We do not want to _db.commit in this method, as this script is look-no-touch. 
+        """
+        NOTE: We do not want to _db.commit in this method, as this script is look-no-touch.
         """
         query = self._db.query(Contributor).filter(Contributor.viaf!=None).order_by(Contributor.id)
 
@@ -97,7 +103,7 @@ class CheckContributorTitles(Script):
         if not contributor or not contributor.viaf:
             return
 
-        # we should have enough known viaf ids for our task to only process those 
+        # we should have enough known viaf ids for our task to only process those
         contributor_titles = self.viaf.lookup_name_title(contributor.viaf)
         if contributor_titles:
             output = "%s|\t%s|\t%r" % (contributor.id, contributor.sort_name, contributor_titles)
@@ -106,10 +112,10 @@ class CheckContributorTitles(Script):
 
 class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
     """
-    Inherits process_contribution_local from parent.  
-    Adds process_contribution_viaf functionality, which 
-    sends a request to viaf to try and determine correct sort_name 
-    for a given author.  
+    Inherits process_contribution_local from parent.
+    Adds process_contribution_viaf functionality, which
+    sends a request to viaf to try and determine correct sort_name
+    for a given author.
     """
 
     COMPLAINT_SOURCE = "CheckContributorNamesOnWeb"
@@ -134,16 +140,16 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
 
     def run(self, batch_size=10):
         """
-        TODO:  run the local db one, make a fix_mismatch, and 
-        override it here.  in db local make it just register the complaint, 
+        TODO:  run the local db one, make a fix_mismatch, and
+        override it here.  in db local make it just register the complaint,
         but here make it first check the web, then register the complaint.
 
         start by running the db local to make sure generated complaints where should
-        then run the web search only on the ones that have complaints about.  either run only 
+        then run the web search only on the ones that have complaints about.  either run only
         on the non-
         """
         param_args = self.parse_command_line(self._db)
-        
+
         self.query = self.make_query(
             self._db, param_args.identifier_type, param_args.identifiers, self.log
         )
@@ -172,8 +178,8 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         parser = super(CheckContributorNamesOnWeb, cls).arg_parser()
 
         parser.add_argument(
-            '--mock', 
-            help='If turned on, will use the MockCheckContributorNamesOnWeb client.', 
+            '--mock',
+            help='If turned on, will use the MockCheckContributorNamesOnWeb client.',
             action='store_true'
         )
         return parser
@@ -181,26 +187,26 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
 
     def process_local_mismatch(self, _db, contribution, computed_sort_name, error_message_detail, log=None):
         """
-        Overrides parent method to allow further resolution of sort_name problems by 
-        calling process_contribution_web, which asks OCLC and VIAF for info. 
-        Determines if a problem is to be investigated further or recorded as a Complaint, 
-        to be solved by a human.  
-        """ 
-        self.process_contribution_web(_db=_db, contribution=contribution, 
+        Overrides parent method to allow further resolution of sort_name problems by
+        calling process_contribution_web, which asks OCLC and VIAF for info.
+        Determines if a problem is to be investigated further or recorded as a Complaint,
+        to be solved by a human.
+        """
+        self.process_contribution_web(_db=_db, contribution=contribution,
             redo_complaints=False, log=log)
 
 
     def process_contribution_web(self, _db, contribution, redo_complaints=False, log=None):
         """
-        If sort_name that got from VIAF is not too far off from sort_name we already have, 
-        then use it (auto-fix).  If it is far off, then it's possible we did not match 
+        If sort_name that got from VIAF is not too far off from sort_name we already have,
+        then use it (auto-fix).  If it is far off, then it's possible we did not match
         the author very well.  Make a wrong-author complaint, and ask a human to fix it.
 
-        Searches VIAF by contributor's display_name and contribution title.  If the 
-        contributor already has a viaf_id store in our database, ignore it.  It's possible 
-        that id was produced by an older, less precise matching algorithm and might want replacing. 
+        Searches VIAF by contributor's display_name and contribution title.  If the
+        contributor already has a viaf_id store in our database, ignore it.  It's possible
+        that id was produced by an older, less precise matching algorithm and might want replacing.
 
-        :param redo_complaints: Should try OCLC/VIAF on the names that already have Complaint objects lodged against them?  
+        :param redo_complaints: Should try OCLC/VIAF on the names that already have Complaint objects lodged against them?
         Alternative is to require human review of all Complaints.
         """
         if not contribution or not contribution.edition:
@@ -223,19 +229,19 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         pool = contribution.edition.is_presentation_for
         parent_source = super(CheckContributorNamesOnWeb, self).COMPLAINT_SOURCE
         complaint = get_one(
-            _db, Complaint, on_multiple='interchangeable', 
-            license_pool=pool, 
-            source=self.COMPLAINT_SOURCE, 
+            _db, Complaint, on_multiple='interchangeable',
+            license_pool=pool,
+            source=self.COMPLAINT_SOURCE,
             type=self.COMPLAINT_TYPE,
         )
 
         if not redo_complaints and complaint:
-            # We already did some work on this contributor, and determined to 
-            # ask a human for help.  This method was called with the time-saving 
+            # We already did some work on this contributor, and determined to
+            # ask a human for help.  This method was called with the time-saving
             # redo_complaints=False flag.  Skip calling OCLC and VIAF.
             return
 
-        # can we find an ISBN-type Identifier for this Contribution to send 
+        # can we find an ISBN-type Identifier for this Contribution to send
         # a request to OCLC with?
         isbn_identifier = None
         if identifier.type == Identifier.ISBN:
@@ -289,11 +295,11 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
                 self.set_contributor_sort_name(sort_name, contribution)
                 return
 
-        # If we got to this point, we have not gotten a satisfying enough answer from 
-        # either OCLC or VIAF.  Now is the time to generate a Complaint, ask a human to 
-        # come fix this. 
+        # If we got to this point, we have not gotten a satisfying enough answer from
+        # either OCLC or VIAF.  Now is the time to generate a Complaint, ask a human to
+        # come fix this.
         error_message_detail = "Contributor[id=%s].sort_name cannot be resolved from outside web services, human intervention required." % contributor.id
-        self.register_problem(source=self.COMPLAINT_SOURCE, contribution=contribution, 
+        self.register_problem(source=self.COMPLAINT_SOURCE, contribution=contribution,
             computed_sort_name=sort_name, error_message_detail=error_message_detail, log=log)
 
 
@@ -315,15 +321,15 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
             # no change is good change
             return True
 
-        # computed names don't match.  by how much?  if it's a matter of a comma or a misplaced 
-        # suffix, we can fix without asking for human intervention.  if the names are very different, 
-        # there's a chance the sort and display names are different on purpose, s.a. when foreign names 
-        # are passed as translated into only one of the fields, or when the author has a popular pseudonym. 
+        # computed names don't match.  by how much?  if it's a matter of a comma or a misplaced
+        # suffix, we can fix without asking for human intervention.  if the names are very different,
+        # there's a chance the sort and display names are different on purpose, s.a. when foreign names
+        # are passed as translated into only one of the fields, or when the author has a popular pseudonym.
         # best ask a human.
 
         # if the relative lengths are off than by a stray space or comma, ask a human
-        # it probably means that a human metadata professional had added an explanation/expansion to the 
-        # sort_name, s.a. "Bob A. Jones" --> "Bob A. (Allan) Jones", and we'd rather not replace this data 
+        # it probably means that a human metadata professional had added an explanation/expansion to the
+        # sort_name, s.a. "Bob A. Jones" --> "Bob A. (Allan) Jones", and we'd rather not replace this data
         # with the "Jones, Bob A." that the auto-algorigthm would generate.
         length_difference = len(contributor.sort_name.strip()) - len(computed_sort_name.strip())
         if abs(length_difference) > 3:
@@ -332,8 +338,8 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         match_ratio = contributor_name_match_ratio(contributor.sort_name, computed_sort_name, normalize_names=False)
 
         if (match_ratio < 40):
-            # ask a human.  this kind of score can happen when the sort_name is a transliteration of the display_name, 
-            # and is non-trivial to fix.  
+            # ask a human.  this kind of score can happen when the sort_name is a transliteration of the display_name,
+            # and is non-trivial to fix.
             return False
         else:
             # we can fix it!
@@ -342,13 +348,13 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
 
     def resolve_local_complaints(self, contribution):
         """
-        Resolves any complaints that the parent script may have made about this 
-        contributor's sort_name, because we've now asked the Web, and it gave us the answer. 
+        Resolves any complaints that the parent script may have made about this
+        contributor's sort_name, because we've now asked the Web, and it gave us the answer.
         """
         pool = contribution.edition.is_presentation_for
         parent_source = super(CheckContributorNamesOnWeb, self).COMPLAINT_SOURCE
         parent_type = super(CheckContributorNamesOnWeb, self).COMPLAINT_TYPE
-        
+
         query = self._db.query(Complaint)
         query = query.filter(Complaint.license_pool_id == pool.id)
         query = query.filter(Complaint.source == parent_source)
@@ -552,3 +558,150 @@ class IntegrationClientGeneratorScript(Script):
         print "CLIENT KEY: %s" % client.key
         print "CLIENT SECRET: %s" % plaintext_secret
         self._db.commit()
+
+
+class DashboardScript(Script):
+    """A basic dashboard that tracks recently registered and recently
+    processed identifiers.
+    """
+
+    def write(self, s=''):
+        self.out.write(s + "\n")
+
+    def do_run(self, output=sys.stdout):
+        self.out = output
+
+        # Within the past 24 hours, how many new LicensePools became
+        # available? This represents new registrations coming in.
+        qu = self._db.query(
+            Identifier.type, func.count(func.distinct(LicensePool.id))
+        )
+        new_pools = qu.select_from(LicensePool).join(LicensePool.identifier)
+        self.report_the_past(
+            "New LicensePools (~registrations)", new_pools,
+            LicensePool.availability_time
+        )
+        self.write()
+
+        # Within the past 24 hours, how many Works were updated?
+        # This represents work being done to achieve coverage.
+        qu = self._db.query(Identifier.type, func.count(func.distinct(Work.id)))
+        updated_works = qu.select_from(Work).join(Work.license_pools).join(
+            LicensePool.identifier
+        )
+        self.report_the_past(
+            "Updated Works (~coverage)", updated_works, Work.last_update_time
+        )
+        self.write()
+
+        # For each catalog, how many Identifiers have Works and how
+        # many don't? This is a rough proxy for 'the basic tasks have
+        # been done and we can improve the data at our leisure.'
+        self.write("Current coverage:")
+        total_done = Counter()
+        total_not_done = Counter()
+        types = set()
+        for collection in self._db.query(Collection).order_by(Collection.id):
+            done, not_done = self.report_backlog(collection)
+            for type, count in done.items():
+                total_done[type] += count
+                types.add(type)
+            for type, count in not_done.items():
+                total_not_done[type] += count
+                types.add(type)
+        self.write("\n Totals:")
+        self.report_backlog(None)
+
+    def report_the_past(self, title, base_qu, field, days=7):
+        """Go backwards `days` days into the past and execute a
+        query for each day.
+        """
+        end = datetime.datetime.utcnow()
+        one_day = datetime.timedelta(days=1)
+        self.write("=" * len(title))
+        self.write(title)
+        self.write("=" * len(title))
+        for i in range(days):
+            start = end - one_day
+            qu = base_qu.filter(field > start).filter(field <= end)
+            qu = qu.order_by(Identifier.type)
+            qu = qu.group_by(Identifier.type)
+            def format(d):
+                return d.strftime("%Y-%m-%d")
+            print format(start)
+            for count, type in qu:
+                self.write(" %s - %s" % (type, count))
+            end = start
+
+    def decode_metadata_identifier(self, collection):
+        """Decode a Collection's name into the parts used
+        on the origin server to generate the origin Collection's
+        metadata identifier.
+
+        TODO: This could go into Collection. It's metadata-wrangler
+        specific but this probably isn't the only place we'll need it.
+        """
+        try:
+            combined = base64.decodestring(collection.name)
+            return map(base64.decodestring, combined.split(':', 2))
+        except Exception, e:
+            try:
+                unique_id = collection.unique_account_id
+            except Exception, e:
+                unique_id = None
+
+        # Just show it as-is.
+        return collection.name, unique_id
+
+    def report_backlog_item(self, type, done, not_done):
+        """Report what percentage of items of the given type have
+        been processed.
+        """
+        done_for_type = done[type]
+        not_done_for_type = not_done[type]
+        total_for_type = done_for_type + not_done_for_type
+        percentage_complete = (float(done_for_type) / total_for_type) * 100
+        print "  %s %d/%d (%d%%)" % (
+            type, done_for_type, total_for_type, percentage_complete
+        )
+
+    def report_backlog(self, collection):
+        done = Counter()
+        not_done = Counter()
+        clause = LicensePool.work_id==None
+
+        types = set()
+        for clause, counter in (
+                (LicensePool.work_id==None, done),
+                (LicensePool.work_id!=None, not_done),
+        ):
+            qu = self._db.query(
+                Identifier.type,
+                func.count(func.distinct(Identifier.id)),
+            ).select_from(
+                Collection
+            ).join(
+                Collection.catalog
+            ).outerjoin(
+                Identifier.licensed_through
+            )
+            if collection:
+                qu = qu.filter(
+                    Collection.id==collection.id
+                )
+            qu = qu.filter(
+                clause
+            ).group_by(Identifier.type).order_by(Identifier.type)
+            for type, count in qu:
+                counter[type] += count
+                types.add(type)
+            if len(done) == 0 and len(not_done) == 0:
+                # This catalog is empty.
+                return done, not_done
+        if collection:
+            name, identifier = self.decode_metadata_identifier(collection)
+            self.write(' %s/%s' % (name, identifier))
+        for type in sorted(types):
+            self.report_backlog_item(type, done, not_done)
+        return done, not_done
+
