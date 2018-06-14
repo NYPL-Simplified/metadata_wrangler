@@ -672,8 +672,8 @@ class DashboardScript(Script):
 
         types = set()
         for clause, counter in (
-                (LicensePool.work_id==None, done),
-                (LicensePool.work_id!=None, not_done),
+                (LicensePool.work_id!=None, done),
+                (LicensePool.work_id==None, not_done),
         ):
             qu = self._db.query(
                 Identifier.type,
