@@ -4,4 +4,4 @@ update representations set mirror_url=replace(replace(replace(replace(replace(mi
 
 -- Make sure that any work whose OPDS entry contains the old URL
 -- eventually has a new OPDS entry generated.
-delete from workcoveragerecords where operation='generate-opds' and work_id in (select id from works where verbose_opds_entry like '%book-covers.nypl.org%';
+delete from workcoveragerecords where operation='generate-opds' and work_id in (select id from works where verbose_opds_entry like '%book-covers.nypl.org%');
