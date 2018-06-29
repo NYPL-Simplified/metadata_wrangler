@@ -762,7 +762,14 @@ class URNLookupController(CoreURNLookupController):
     # IdentifierResolutionCoverageProvider. The Identifier types
     # supported by that coverage provider are the only ones for which
     # we can credibly provide a lookup service.
-    VALID_TYPES = IdentifierResolutionCoverageProvider.INPUT_IDENTIFIER_TYPES
+    #
+    # However, we also offer a lookup service by Gutenberg ID, since
+    # we have that information from a while back and it's useful to
+    # some clients.
+    VALID_TYPES = (
+        IdentifierResolutionCoverageProvider.INPUT_IDENTIFIER_TYPES
+        + [Identifier.GUTENBERG_ID]
+    )
 
     log = logging.getLogger("URN lookup controller")
 
