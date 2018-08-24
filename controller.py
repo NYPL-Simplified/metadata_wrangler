@@ -652,7 +652,10 @@ class CatalogController(object):
             )
         except Exception as e:
             log.error("Error retrieving URL", exc_info=e)
-            return REMOTE_INTEGRATION_ERROR
+            return REMOTE_INTEGRATION_ERROR.detailed(
+                _("Could not retrieve public key URL %(url)s",
+                  url=public_key_url)
+            )
 
         content_type = None
         if response.headers:
@@ -662,7 +665,9 @@ class CatalogController(object):
             # There's no JSON to speak of.
             log.error("Could not find OPDS 2 document: %s/%s",
                       response.content, content_type)
-            return INVALID_INTEGRATION_DOCUMENT
+            return INVALID_INTEGRATION_DOCUMENT.detailed(
+                _("Not an integration document: %(doc)s", doc=response.content)
+            )
 
         public_key_response = response.json()
 
@@ -685,7 +690,7 @@ class CatalogController(object):
                 client_url, base_public_key_url
             )
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                _("The public key integration document id doesn't match submitted url")
+                _("The public key integration document id (%(id)s) doesn't match submitted url %(url)s", id=client_url, url=base_public_key_url)
             )
 
         public_key = public_key_response.get('public_key')
@@ -712,7 +717,7 @@ class CatalogController(object):
                 )
             except Exception, e:
                 return INVALID_CREDENTIALS.detailed(
-                    _("Error decoding JWT: %s") % e.message
+                    _("Error decoding JWT: %(message)s", message=e.message)
                 )
 
             # The ability to create a valid JWT indicates control over

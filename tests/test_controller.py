@@ -721,7 +721,8 @@ class TestCatalogController(ControllerTest):
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=error_get)
 
-        eq_(REMOTE_INTEGRATION_ERROR, response)
+        eq_(REMOTE_INTEGRATION_ERROR.uri, response.uri)
+        eq_("Could not retrieve public key URL %s" % url, response.detail)
 
     def test_register_fails_when_public_key_document_is_invalid(self):
         document_url = 'https://test.org/'
@@ -743,11 +744,15 @@ class TestCatalogController(ControllerTest):
             )
 
         # A ProblemDetail is returned when there is no public key document.
-        self.http.responses.append(MockRequestsResponse(200, content=''))
+        self.http.responses.append(
+            MockRequestsResponse(200, content='hi there')
+        )
         request_args = self.create_register_request_args(document_url)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-        assert_invalid_key_document(response)
+        assert_invalid_key_document(
+            response, "Not an integration document: hi there"
+        )
 
         # A ProblemDetail is returned when the public key document doesn't
         # have an id.
