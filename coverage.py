@@ -335,9 +335,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             # CoverageProvider didn't try to create a Work, or that a
             # preexisting Work has been removed. In the name of
             # resiliency, we might as well try creating a Work.
-            work, is_new = license_pool.calculate_work(
-                even_if_no_author=True, even_if_no_title=True
-            )
+            work, is_new = license_pool.calculate_work(even_if_no_title=True)
             if work:
                 # If we were able to create a Work, it should be made
                 # presentation-ready immediately so people can see the
