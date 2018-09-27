@@ -11,6 +11,9 @@ python:
 
 cache: pip
 
+env:
+  - SIMPLIFIED_TEST_DATABASE="postgres://simplified_test:test@localhost:5432/simplified_metadata_test"
+
 git:
   submodules: false
 
@@ -21,8 +24,6 @@ before_install:
 install:
   - pip install -r requirements.txt
   - python -m textblob.download_corpora
-  - cp config.json.sample config.json
-  - export SIMPLIFIED_CONFIGURATION_FILE="$TRAVIS_BUILD_DIR/config.json"
 
 before_script:
   - psql -c 'create user simplified_test;' -U postgres

@@ -89,9 +89,7 @@ class CalculatesWorkPresentation(object):
         license_pools = identifier.licensed_through
         if license_pools:
             pool = license_pools[0]
-            work, created = pool.calculate_work(
-                even_if_no_author=True, exclude_search=True,
-            )
+            work, created = pool.calculate_work(exclude_search=True)
             if work:
                 return work
 

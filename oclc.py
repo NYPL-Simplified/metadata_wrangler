@@ -1130,9 +1130,7 @@ class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
 
         license_pool = license_pools[0]
         license_pools = license_pools[1:]
-        work, is_new = license_pool.calculate_work(
-            even_if_no_author=True, exclude_search=True
-        )
+        work, is_new = license_pool.calculate_work(exclude_search=True)
         if work and license_pools:
             for lp in license_pools:
                 lp.work = work
