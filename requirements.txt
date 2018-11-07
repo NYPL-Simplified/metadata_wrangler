@@ -21,6 +21,8 @@ cairosvg==1.0.22
 Flask-Babel
 money
 pymarc
+accept-types
+watchtower # for cloudwatch logging
 
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
