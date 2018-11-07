@@ -57,13 +57,16 @@ class TestWorkPresentationCoverageProvider(DatabaseTest):
         work = self._work()
         eq_(None, work.simple_opds_entry)
         eq_(None, work.verbose_opds_entry)
+        eq_(False, work.presentation_ready)
 
-        self.provider.process_item(work)
+        eq_(work, self.provider.process_item(work))
 
         # The OPDS entries have been calculated.
         assert work.simple_opds_entry != None
         assert work.verbose_opds_entry != None
 
+        # The work has been made presentation-ready.
+        eq_(True, work.presentation_ready)
 
 class TestCalculatesWorkPresentation(DatabaseTest):
 

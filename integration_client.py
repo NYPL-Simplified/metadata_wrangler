@@ -57,6 +57,7 @@ class WorkPresentationCoverageProvider(WorkCoverageProvider):
             default_fiction=None, default_audience=None,
         )
         work.set_presentation_ready(exclude_search=True)
+        return work
 
 
 class CalculatesWorkPresentation(object):
