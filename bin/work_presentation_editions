@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+"""Re-generate presentation editions of any Works that need it.
+
+This script is mainly triggered by
+migrations. work_presentation_editions is responsible for most of the
+presentation editions generated for works.
+"""
+import os
+import sys
+bin_dir = os.path.split(__file__)[0]
+package_dir = os.path.join(bin_dir, "..")
+sys.path.append(os.path.abspath(package_dir))
+from core.coverage import WorkPresentationEditionCoverageProvider
+from core.scripts import RunWorkCoverageProviderScript
+RunWorkCoverageProviderScript(WorkPresentationEditionCoverageProvider).run()

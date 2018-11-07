@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Calculate Work presentation for registered works."""
+"""Calculate Work presentation for registered works.
+
+Unlike work_presentation_editions, this will run even on Works
+that are not yet presentation-ready.
+"""
 import os
 import sys
 bin_dir = os.path.split(__file__)[0]
