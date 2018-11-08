@@ -44,4 +44,4 @@ for rep in qu:
         edition.cover_thumbnail_url = edition.cover_full_url = None
         if edition.work:
             edition.work.calculate_presentation(policy)
-    
+    _db.commit()
