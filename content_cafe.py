@@ -1,5 +1,6 @@
 from collections import Counter
 import datetime
+import os
 import requests
 import logging
 from nose.tools import set_trace
@@ -37,6 +38,14 @@ from core.mirror import MirrorUploader
 
 from coverage_utils import MetadataWranglerBibliographicCoverageProvider
 
+def load_file(filename):
+    """Load a file from the Content Cafe subdirectory of files/."""
+    this_dir = os.path.split(__file__)[0]
+    content_dir = os.path.join(this_dir, "files", "content-cafe")
+    path = os.path.join(content_dir, filename)
+    return open(path).read()
+
+
 class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
     """Create bare-bones Editions for ISBN-type Identifiers.
 
@@ -48,7 +57,7 @@ class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider)
     SERVICE_NAME = "Content Cafe Coverage Provider"
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
-    
+
     def __init__(self, collection, api=None, replacement_policy=None, **kwargs):
         """Constructor.
 
@@ -124,6 +133,8 @@ class ContentCafeAPI(object):
     # This URL is not used -- it just links to the other URLs.
     overview_url= BASE_URL + "ContentCafeClient/ContentCafe.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
+    STAND_IN_IMAGE_PREFIX = load_file("stand-in-prefix.png")
+
     log = logging.getLogger("Content Cafe API")
 
     @classmethod
@@ -186,13 +197,15 @@ class ContentCafeAPI(object):
             self.data_source, primary_identifier=isbn_identifier
         )
         
-        # Add the cover image to it.
-        metadata.links.append(
-            LinkData(
-                rel=Hyperlink.IMAGE, href=image_url, media_type=media_type,
-                content=response.content
+        # Add the cover image to it
+        image = response.content
+        if self.is_suitable_image(image):
+            metadata.links.append(
+                LinkData(
+                    rel=Hyperlink.IMAGE, href=image_url, media_type=media_type,
+                    content=response.content
+                )
             )
-        )
 
         for annotator in (
             self.add_descriptions, self.add_excerpt,
@@ -295,6 +308,13 @@ class ContentCafeAPI(object):
         # store that information in the database.
         if value is not None:
             return MeasurementData(Measurement.POPULARITY, value)
+
+    @classmethod
+    def is_suitable_image(cls, image):
+        """Is this a real cover image, or does it look like a stand-in image
+        which should be ignored?
+        """
+        return not image.startswith(cls.STAND_IN_IMAGE_PREFIX)
 
     @classmethod
     def _scrape_list(cls, soup):

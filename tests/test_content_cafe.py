@@ -128,6 +128,10 @@ class TestContentCafeAPI(DatabaseTest):
                 self.measure_popularity_called_with = args
                 return self.popularity_measurement
 
+            def is_suitable_image(self, image):
+                self.is_suitable_image_called_with = image
+                return True
+
         api = Mock(self._db, 'uid', 'pw', self.soap, self.http.do_get)
         m = api.create_metadata
 
@@ -159,6 +163,10 @@ class TestContentCafeAPI(DatabaseTest):
         eq_(image_url, image.href)
         eq_('image/png', image.media_type)
         eq_('an image!', image.content)
+
+        # We ran the image through our mocked version of is_suitable_image,
+        # and it said it was fine.
+        eq_(image.content, api.is_suitable_image_called_with)
 
         # Here's the popularity measurement.
         eq_([api.popularity_measurement], metadata.measurements)
@@ -307,6 +315,18 @@ class TestContentCafeAPI(DatabaseTest):
         result = self.api.measure_popularity(self.identifier, cutoff)
         eq_(expect, self.soap.estimated_popularity_calls.pop())
         eq_(None, result)
+
+    def test_is_suitable_image(self):
+        # Images are rejected if we can tell they are Content Cafe's
+        # stand-in images.
+        m = ContentCafeAPI.is_suitable_image
+
+        content = self.data_file("stand-in-image.png")
+        eq_(False, m(content))
+
+        # Otherwise, it's fine. We don't check that the image is
+        # valid, only that it's not a stand-in image.
+        eq_(True, m("I'm not a stand-in image."))
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):
