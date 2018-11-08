@@ -23,12 +23,13 @@ qu = _db.query(Representation).filter(
     Representation.image_height==120).filter(
         Representation.image_width==80).filter(
             Representation.url.like("http://contentcafe2.btol.com/%")
-        )
+        ).order_by(Representation.id)
 policy = PresentationCalculationPolicy.recalculate_everything()
 for rep in qu:
     identifiers = [h.identifier for h in rep.resource.links]
     fix_editions = []
     for identifier in identifiers:
+        print identifier
         for edition in identifier.primarily_identifies:
             if 'Content' in edition.cover_thumbnail_url or 'Content' in edition.cover_full_url:
                 fix_editions.append(edition)
