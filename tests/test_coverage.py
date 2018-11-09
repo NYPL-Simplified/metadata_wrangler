@@ -18,7 +18,7 @@ from core.overdrive import MockOverdriveAPI
 from content_cafe import ContentCafeCoverageProvider
 from coverage import IdentifierResolutionCoverageProvider
 from integration_client import IntegrationClientCoverImageCoverageProvider
-from oclc_classify import OCLCClassifyCoverageProvider
+from oclc.classify import OCLCClassifyCoverageProvider
 from overdrive import OverdriveBibliographicCoverageProvider
 from viaf import VIAFClient
 

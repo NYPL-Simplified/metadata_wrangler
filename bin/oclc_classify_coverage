@@ -6,7 +6,7 @@ bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
 
-from oclc_classify import OCLCClassifyCoverageProvider
+from oclc.classify import OCLCClassifyCoverageProvider
 from core.scripts import RunCoverageProviderScript
 
 RunCoverageProviderScript(OCLCClassifyCoverageProvider).run()
