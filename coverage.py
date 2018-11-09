@@ -43,14 +43,6 @@ from content_cafe import (
     ContentCafeAPI,
 )
 
-from oclc.classify import (
-    OCLCClassifyCoverageProvider,
-)
-
-from oclc.linked_data import (
-    LinkedDataCoverageProvider,
-)
-
 from viaf import (
     VIAFClient,
 )
@@ -232,40 +224,19 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # These CoverageProviders can handle items from any kind of
         # collection, so long as the Identifier is of the right type.
 
-        # TODO: This is temporarily disabled -- it needs to become
-        # a CollectionCoverageProvider.
-        #
-        # There's no rush to get this working again because
-        # it was primarily intended for use with Project Gutenberg titles,
-        # which we've downplayed in favor of Feedbooks titles, which
-        # have much better metadata.
-        #
-        #oclc_classify = instantiate(
-        #    OCLCClassifyCoverageProvider, providers, provider_kwargs,
-        #    _db=self._db
-        #)
-
         content_cafe = instantiate(
             ContentCafeCoverageProvider, providers, provider_kwargs,
             collection=self.collection,
             replacement_policy=self.replacement_policy
         )
 
-        # TODO: This is temporarily disabled because its process_item doesn't
-        # work directly on ISBNs -- it assumes the ISBN has already been
-        # associated with OCLC Numbers in some other step. The best
-        # solution is to rearchitect LinkedDataCoverageProvider
-        # to make it assume it's processing ISBNs.
+        # NOTE: The coverage providers for OCLC Linked Data and
+        # the title/author version of OCLC Classify used to be in
+        # here.
         #
-        # This is fine for now because the main things we need out of the
-        # metadata wrangler are cover images and descriptions, which
-        # we can get from ContentCafeCoverageProvider.
-        #
-        #linked_data = instantiate(
-        #    LinkedDataCoverageProvider, providers, provider_kwargs,
-        #    collection=self.collection, replacement_policy=self.policy,
-        #    viaf=self.viaf
-        #)
+        # Those providers need to be rearchitected (and the
+        # title/author lookup one might just need to be removed), so
+        # they're gone for now.
 
         # All books identified by Overdrive ID must be looked up via
         # the Overdrive API. We don't enforce that the collection
