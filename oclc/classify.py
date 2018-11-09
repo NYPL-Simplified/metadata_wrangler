@@ -591,7 +591,7 @@ class OCLCClassifyAPI(object):
         return representation.content
 
 
-class OCLCClassifyTitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
+class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
 
     NOTE: This code is no longer used. It was designed to get extra
@@ -619,7 +619,7 @@ class OCLCClassifyTitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     DATA_SOURCE_NAME = DataSource.OCLC
     
     def __init__(self, _db, api=None, **kwargs):
-        super(OCLCClassifyCoverageProvider, self).__init__(
+        super(TitleAuthorLookupCoverageProvider, self).__init__(
             _db, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)

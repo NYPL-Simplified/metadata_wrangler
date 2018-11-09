@@ -17,7 +17,7 @@ from core.model import (
 
 from oclc.classify import (
     OCLCXMLParser,
-    OCLCClassifyCoverageProvider
+    TitleAuthorLookupCoverageProvider
 )
 from testing import MockOCLCClassifyAPI
 
@@ -338,16 +338,16 @@ class TestAuthorParser(DatabaseTest):
         self.assert_parse(s, s, Contributor.PRIMARY_AUTHOR_ROLE)
 
 
-class TestOCLCClassifyCoverageProvider(DatabaseTest):
+class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
 
     def setup(self):
-        super(TestOCLCClassifyCoverageProvider, self).setup()
+        super(TestTitleAuthorLookupCoverageProvider, self).setup()
         self.edition, ignore = self._edition(
             with_license_pool=True, data_source_name=DataSource.GUTENBERG
         )
         self.identifier = self.edition.primary_identifier
         self.api = MockOCLCClassifyAPI()
-        self.provider = OCLCClassifyCoverageProvider(self._db, api=self.api)
+        self.provider = TitleAuthorLookupCoverageProvider(self._db, api=self.api)
 
     def sample_data(self, filename):
         return sample_data(filename, 'oclc_classify')
@@ -395,7 +395,7 @@ class TestOCLCClassifyCoverageProvider(DatabaseTest):
         eq_(result, self.identifier)
 
     def test_process_item_when_parsing_error_occurs(self):
-        class AlwaysErrorsClassifyProvider(OCLCClassifyCoverageProvider):
+        class AlwaysErrorsClassifyProvider(TitleAuthorLookupCoverageProvider):
             def parse_edition_data(self, *args, **kwargs):
                 raise IOError('It broke!')
 
