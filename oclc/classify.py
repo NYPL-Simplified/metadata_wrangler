@@ -592,11 +592,7 @@ class OCLCClassifyAPI(object):
 
 
 class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
-    """Does title/author lookups using OCLC Classify.
-
-    NOTE: This code is no longer used. It was designed for Project Gutenberg,
-    where 
-    """
+    """Does title/author lookups using OCLC Classify."""
 
     # Strips most non-alphanumerics from the title.
     # 'Alphanumerics' includes alphanumeric characters
