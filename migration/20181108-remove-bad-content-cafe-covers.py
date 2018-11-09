@@ -24,14 +24,18 @@ qu = _db.query(Representation).filter(
         Representation.image_width==80).filter(
             Representation.url.like("http://contentcafe2.btol.com/%")
         ).order_by(Representation.id)
-policy = PresentationCalculationPolicy.recalculate_everything()
+policy = PresentationCalculationPolicy(
+    regenerate_opds_entries=True, classify=False,
+    choose_summary=False, calculate_quality=False
+)
 for rep in qu:
+    print rep.id
     identifiers = [h.identifier for h in rep.resource.links]
     fix_editions = []
     for identifier in identifiers:
         print identifier
         for edition in identifier.primarily_identifies:
-            if 'Content' in edition.cover_thumbnail_url or 'Content' in edition.cover_full_url:
+            if (edition.cover_thumbnail_url and 'Content' in edition.cover_thumbnail_url) or (edition.cover_full_url and 'Content' in edition.cover_full_url):
                 fix_editions.append(edition)
 
     # Delete the hyperlinks so we don't use these images anymore.
