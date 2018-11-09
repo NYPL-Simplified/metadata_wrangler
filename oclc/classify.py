@@ -591,8 +591,19 @@ class OCLCClassifyAPI(object):
         return representation.content
 
 
-class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
-    """Does title/author lookups using OCLC Classify."""
+class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
+    """Does title/author lookups using OCLC Classify.
+
+    NOTE: This code is no longer used. It was designed to get extra
+    metadata for titles from Project Gutenberg/Standard
+    Ebooks/unglue.it/Feedbooks, where the title and author are known
+    but there is no ISBN associated with the work.
+
+    Most of these data sources provide adequate metadata, except for
+    Project Gutenberg, which (generally speaking) we no longer use.
+    So for now we're focused on coverage providers that are more
+    reliable and give bigger bang for the (processing time) buck.
+    """
 
     # Strips most non-alphanumerics from the title.
     # 'Alphanumerics' includes alphanumeric characters
@@ -608,7 +619,7 @@ class OCLCClassifyCoverageProvider(IdentifierCoverageProvider):
     DATA_SOURCE_NAME = DataSource.OCLC
     
     def __init__(self, _db, api=None, **kwargs):
-        super(OCLCClassifyCoverageProvider, self).__init__(
+        super(TitleAuthorLookupCoverageProvider, self).__init__(
             _db, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)

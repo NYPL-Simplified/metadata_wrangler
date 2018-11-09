@@ -45,7 +45,6 @@ from core.util.permanent_work_id import WorkIDCalculator
 from core.util.personal_names import contributor_name_match_ratio
 
 from oclc.linked_data import LinkedDataCoverageProvider
-from oclc.classify import OCLCClassifyCoverageProvider
 from viaf import VIAFClient
 
 
