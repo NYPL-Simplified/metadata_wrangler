@@ -43,11 +43,11 @@ from content_cafe import (
     ContentCafeAPI,
 )
 
-from oclc_classify import (
+from oclc.classify import (
     OCLCClassifyCoverageProvider,
 )
 
-from oclc import (
+from oclc.linked_data import (
     LinkedDataCoverageProvider,
 )
 

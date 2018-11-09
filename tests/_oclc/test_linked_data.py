@@ -18,7 +18,7 @@ from core.metadata_layer import (
 )
 from core.coverage import CoverageFailure
 
-from oclc import (
+from oclc.linked_data import (
     OCLCLinkedData,
     LinkedDataCoverageProvider,
 )
@@ -28,7 +28,7 @@ from testing import (
     MockVIAFClient,
 )
 
-from . import (
+from .. import (
     DatabaseTest,
     sample_data
 )

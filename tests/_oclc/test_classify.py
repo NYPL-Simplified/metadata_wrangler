@@ -2,7 +2,7 @@
 
 from nose.tools import eq_, set_trace
 
-from . import (
+from .. import (
     DatabaseTest,
     sample_data,
 )
@@ -15,7 +15,7 @@ from core.model import (
     Subject,
 )
 
-from oclc_classify import (
+from oclc.classify import (
     OCLCXMLParser,
     OCLCClassifyCoverageProvider
 )
