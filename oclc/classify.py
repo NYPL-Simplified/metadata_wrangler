@@ -590,8 +590,44 @@ class OCLCClassifyAPI(object):
         representation, cached = Representation.get(self._db, url)
         return representation.content
 
+class OCLCLookupCoverageProvider(IdentifierCoverageProvider):
 
-class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
+    def __init__(self, _db, api=None, **kwargs):
+        super(OCLCLookupCoverageProvider, self).__init__(
+            _db, registered_only=False, **kwargs
+        )
+        self.api = api or OCLCClassifyAPI(self._db)
+
+
+class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
+    """Does identifier (specifically, ISBN) lookups using OCLC Classify.
+    """
+    SERVICE_NAME = "OCLC Classify Identifier Lookup"
+    INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
+    DATA_SOURCE_NAME = DataSource.OCLC
+
+    def process_item(self, identifier):
+        """Ask OCLC Classify about a single ISBN and create an Edition
+        based on what it says.
+        """
+        # Perform a title/author lookup.
+        edition = self.edition(identifier)
+        set_trace()
+
+        parser = OCLCXMLParser()
+
+        try:
+            xml = self.api.lookup_by(isbn=identifier.identifier)
+            representation_type, records = parser.parse(self._db, xml)
+        except IOError as e:
+            return self.failure(identifier, e.message)
+        set_trace()
+        self.merge_contributors(edition, records)
+        self.log.info("Created %s records(s).", len(records))
+        return identifier
+
+
+class TitleAuthorLookupCoverageProvider(OCLCLookupCoverageProvider):
     """Does title/author lookups using OCLC Classify.
 
     NOTE: This code is no longer used. It was designed to get extra
