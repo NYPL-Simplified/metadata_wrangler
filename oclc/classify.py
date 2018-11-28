@@ -32,7 +32,14 @@ class OCLC(object):
     HOLDING_COUNT = "OCLC.holdings"
     FORMAT = "OCLC.format"
 
-class AuthorXMLParser(XMLParser):
+class OCLCClassifyXMLParser(XMLParser):
+    """Turn the output of the OCLC Classify API into a Metadata object.
+
+    This object includes ContributorData for the book's contributors,
+    ClassificationData representing the most common classifications for
+    the book, and MeasurementData describing how many libraries have
+    collected the book.
+    """
     NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
     ROLES = re.compile("\[([^]]+)\]$")
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
@@ -743,7 +750,7 @@ class OCLCClassifyAPI(object):
         representation, cached = Representation.get(self._db, url)
         return representation.content
 
-class OCLCLookupCoverageProvider(IdentifierCoverageProvider):
+class OCLCLookupCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
 
     def __init__(self, _db, api=None, **kwargs):
         super(OCLCLookupCoverageProvider, self).__init__(
@@ -765,14 +772,19 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         """
         # Perform a title/author lookup.
         edition = self.edition(identifier)
+        work = self.work(edition.primary_identifier)
         # set_trace()
-        parser = AuthorXMLParser()
+        parser = OCLCClassifyXMLParser()
 
         try:
             xml = self.api.lookup_by(isbn=identifier.identifier)
-            contributors = parser.contributors(self._db, xml)
-            # set_trace()
-            # representation_type, records = parser.parse(self._db, xml)
+            metadata = parser.parse(self._db, xml)
+            metadata.apply(
+                edition, collection=None #, replace=self.replacement_policy
+            )
+            
+            # TODO: flag the work as needing presentation recalculation,
+            # assuming it wasn't done in metadata.apply()
         except IOError as e:
             return self.failure(identifier, e.message)
 
