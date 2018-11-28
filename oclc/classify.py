@@ -58,48 +58,54 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def contributors(cls, _db, xml):
-        all_contributors = []
+        """Returns a list of ContributorData objects"""
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
         # We prefer to get author information out of the <authors> tag,
         # but sometimes all we have is a <work> tag.
-        authors = cls.get_authors(_db, tree) or cls.get_authors_from_work_tag(_db, tree)
-        # Each author in the list of authors is a tuple containing a string (from which
-        # the rest of the information is about to be extracted), and an lc and viaf if present.
-        if authors:
-            for author in authors:
-                # Make a new ContributorData object
-                contributor_data = cls._parse_single_author(_db, author, tree)
-                all_contributors.append(contributor_data)
-
-        return all_contributors
+        return cls.get_authors(_db, tree) or cls.get_authors_from_work_tag(_db, tree)
 
     @classmethod
     def get_authors_from_work_tag(cls, _db, tree):
         # Sometimes, different versions of the same book get grouped together
         # as individual <work> tags under a <works> list.
-        results = []
+        author_lists = []
         work_tags = cls._xpath(tree, "//oclc:work")
         if work_tags is not None:
             for work_tag in work_tags:
                 author_string = work_tag.get('author')
                 if author_string:
-                    authors = cls.authors_from_string(_db, tree, author_string)
-                    results.append(authors)
+                    author_lists.append(cls.authors_from_string(_db, tree, author_string))
 
         # If there are multiple lists of authors (as a result of multiple <work> tags),
         # use the shortest list.
-        shortest_list = sorted(results, key=len)[0]
-        return shortest_list
+        shortest_list = sorted(author_lists, key=len)[0]
+        results = cls.process_author_list(_db, shortest_list, tree)
+        return results
+
 
     @classmethod
     def get_authors(cls, _db, tree):
         # Returns a list of tuples, each of which contains basic information about one author.
         authors_tag = cls._xpath1(tree, "//oclc:authors")
-        return cls.extract_authors_from_tag(_db, authors_tag, tree)
+        authors  = cls.extract_authors_from_tag(_db, authors_tag)
+        results = cls.process_author_list(_db, authors, tree)
+        return results
 
     @classmethod
-    def extract_authors_from_tag(cls, _db, authors_tag, tree):
+    def process_author_list(cls, _db, authors, tree):
+        # Each author in the list of authors is a tuple containing a string (from which
+        # the rest of the information is about to be extracted), and an lc and viaf if present.
+        results = []
+        for author in authors:
+            # Make a new ContributorData object
+            contributor_data = cls._parse_single_author(_db, author, tree)
+            results.append(contributor_data)
+        return results
+
+
+    @classmethod
+    def extract_authors_from_tag(cls, _db, authors_tag):
         results = []
         if authors_tag:
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
@@ -768,6 +774,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         try:
             xml = self.api.lookup_by(isbn=identifier.identifier)
             metadata = parser.parse(self._db, xml)
+            set_trace()
             metadata.apply(
                 edition, collection=None #, replace=self.replacement_policy
             )
