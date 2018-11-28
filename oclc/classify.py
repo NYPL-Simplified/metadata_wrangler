@@ -10,7 +10,10 @@ from core.coverage import (
     IdentifierCoverageProvider,
     CoverageFailure,
 )
-from core.metadata_layer import ContributorData
+from core.metadata_layer import (
+    ContributorData,
+    Metadata,
+)
 from core.model import (
     get_one_or_create,
     Contribution,
@@ -24,6 +27,7 @@ from core.model import (
 )
 from core.util import MetadataSimilarity
 from core.util.xmlparser import XMLParser
+from coverage_utils import MetadataWranglerBibliographicCoverageProvider
 
 
 class OCLC(object):
@@ -45,6 +49,14 @@ class OCLCClassifyXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
+    def parse(cls, _db, xml):
+        contributors = cls.contributors(_db, xml)
+        return Metadata(
+            data_source=DataSource.OCLC,
+            contributors=contributors,
+        )
+
+    @classmethod
     def contributors(cls, _db, xml):
         all_contributors = []
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
@@ -52,19 +64,12 @@ class OCLCClassifyXMLParser(XMLParser):
         # We prefer to get author information out of the <authors> tag,
         # but sometimes all we have is a <work> tag.
         authors = cls.get_authors(_db, tree) or cls.get_authors_from_work_tag(_db, tree)
-
+        # Each author in the list of authors is a tuple containing a string (from which
+        # the rest of the information is about to be extracted), and an lc and viaf if present.
         if authors:
             for author in authors:
-                if not author["viaf"] or not author["lc"]:
-                    # Try to fill in missing information by querying the database
-                    lookup, is_new = Contributor.lookup(_db, author["sort_name"])
-                    if not author["lc"]:
-                        author["lc"] = lookup.lc.name
-                    if not author["viaf"]:
-                        author["viaf"] = lookup.viaf.name
-
                 # Make a new ContributorData object
-                contributor_data = cls.make_contributor_data(author)
+                contributor_data = cls._parse_single_author(_db, author, tree)
                 all_contributors.append(contributor_data)
 
         return all_contributors
@@ -74,19 +79,22 @@ class OCLCClassifyXMLParser(XMLParser):
         # Sometimes, different versions of the same book get grouped together
         # as individual <work> tags under a <works> list.
         results = []
-        works_tag = cls._xpath(tree, "//oclc:works") or [cls._xpath1(tree, "//oclc:work")]
-        if works_tag is not None:
-            for work_tag in works_tag:
+        work_tags = cls._xpath(tree, "//oclc:work")
+        if work_tags is not None:
+            for work_tag in work_tags:
                 author_string = work_tag.get('author')
                 if author_string:
                     authors = cls.authors_from_string(_db, tree, author_string)
-                    results = results + authors
-        return results
+                    results.append(authors)
+
+        # If there are multiple lists of authors (as a result of multiple <work> tags),
+        # use the shortest list.
+        shortest_list = sorted(results, key=len)[0]
+        return shortest_list
 
     @classmethod
     def get_authors(cls, _db, tree):
-        # Returns a list of objects, each of which contains basic information
-        # about one author
+        # Returns a list of tuples, each of which contains basic information about one author.
         authors_tag = cls._xpath1(tree, "//oclc:authors")
         return cls.extract_authors_from_tag(_db, authors_tag, tree)
 
@@ -97,45 +105,32 @@ class OCLCClassifyXMLParser(XMLParser):
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
                 lc = author_tag.get('lc', None)
                 viaf = author_tag.get('viaf', None)
-
-                # An object containing the author's name, roles, dates, lc, and viaf:
-                contributor = cls._parse_single_author(
-                    _db, author_tag.text, tree, lc=lc, viaf=viaf,
-                )
-                if contributor:
-                    results.append(contributor)
-
+                results.append((author_tag.text, lc, viaf))
         return results
 
     @classmethod
-    def _parse_single_author(cls, _db, author_text, tree, lc=None, viaf=None):
-        # Takes an author string and returns an object.  The author string initially contains
-        # not only the author's name, but also, potentially, information about roles and birth/death dates -- e.g.
-        # "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
-        author_text = author_text.strip()
+    def _parse_single_author(cls, _db, author, tree):
+        string, lc, viaf = author
 
-        # An object containing a list of roles, and the author string
-        # with the content about roles removed (e.g. "Giles, Lionel, 1875-1958")
-        roles_info = cls._get_roles(_db, author_text, tree)
+        # Takes a tuple and returns a ContributorData object. The string initially contains
+        # not only the author's name, but also, potentially, information about roles
+        # and birth/death dates -- e.g. "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
+        string = string.strip()
 
-        # An object containing the author's birth and/or death dates if available,
-        # and the author string with the content about dates also removed; the
-        # author string should now just be the author's name, and maybe a trailing
+        # Get a list of roles, and the author string with the content about roles removed (e.g. "Giles, Lionel, 1875-1958")
+        name_without_roles, roles = cls._get_roles(_db, string, tree)
+
+        # Get the author's birth and/or death dates if available, and the author string with the
+        # content about dates also removed; the author string should now just be the author's name, and maybe a trailing
         # comma (which we're about to get rid of) -- e.g. "Giles, Lionel,"
-        lifespan_info = cls._get_lifespan(roles_info["name"])
+        name_without_lifespan, birth, death = cls._get_lifespan(name_without_roles)
 
-        name = lifespan_info["name"]
+        name = name_without_lifespan
         if name.endswith(","):
             name = name[:-1]
 
-        return {
-            "sort_name": name,
-            "birth": lifespan_info["birth"],
-            "death": lifespan_info["death"],
-            "roles": roles_info["roles"],
-            "lc": lc,
-            "viaf": viaf,
-        }
+        contributor_data = cls.make_contributor_data(name, birth, death, roles, lc, viaf)
+        return contributor_data
 
     @classmethod
     def _get_lifespan(cls, author_text):
@@ -148,48 +143,42 @@ class OCLCClassifyXMLParser(XMLParser):
             name_without_lifespan = author_text[:match.start()].strip()
             birth, death = match.groups()
 
-        return {
-            "name": name_without_lifespan,
-            "birth": birth,
-            "death": death,
-        }
+        return name_without_lifespan, birth, death
 
     @classmethod
     def _get_roles(cls, _db, author_text, tree, default_role=Contributor.AUTHOR_ROLE):
-        default_role_used = False
         name_without_roles = author_text
-        m = cls.ROLES.search(author_text)
-        if m:
-            name_without_roles = author_text[:m.start()].strip()
-            role_string = m.groups()[0]
+        match = cls.ROLES.search(author_text)
+        if match:
+            name_without_roles = author_text[:match.start()].strip()
+            role_string = match.groups()[0]
             roles = [x.strip() for x in role_string.split(";")]
         elif default_role:
             roles = [default_role]
-            default_role_used = True
         else:
             roles = []
 
-        return { "name": name_without_roles, "roles": roles }
+        return name_without_roles, roles
 
     @classmethod
     def authors_from_string(cls, _db, tree, author_string):
         # Extract and parse the names of the authors from the <work> tag,
-        # in cases where there was no <authors> tag.
-        default_role = Contributor.PRIMARY_AUTHOR_ROLE
+        # in cases where there was no <authors> tag.  Returns a list of
+        # tuples.  The author's lc and viaf are set to None,
+        # since the <work> tag doesn't provide that information.
         authors = []
         for author in author_string.split("|"):
-            author = cls._parse_single_author(_db, author, tree)
-            authors.append(author)
+            authors.append((author, None, None))
         return authors
 
     @classmethod
-    def make_contributor_data(cls, author):
+    def make_contributor_data(cls, name, birth, death, roles, lc, viaf):
         return ContributorData(
-            sort_name=author["sort_name"],
-            roles=author["roles"],
-            lc=author["lc"],
-            viaf=author["viaf"],
-            extra=(author["birth"], author["death"]),
+            sort_name=name,
+            roles=roles,
+            lc=lc,
+            viaf=viaf,
+            extra=(birth, death),
         )
 
 # class OCLCXMLParser(XMLParser):
@@ -752,9 +741,10 @@ class OCLCClassifyAPI(object):
 
 class OCLCLookupCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
 
-    def __init__(self, _db, api=None, **kwargs):
+    def __init__(self, collection, api=None, **kwargs):
+        # set_trace()
         super(OCLCLookupCoverageProvider, self).__init__(
-            _db, registered_only=False, **kwargs
+            collection, registered_only=False, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)
 
@@ -773,7 +763,6 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         # Perform a title/author lookup.
         edition = self.edition(identifier)
         work = self.work(edition.primary_identifier)
-        # set_trace()
         parser = OCLCClassifyXMLParser()
 
         try:
@@ -782,7 +771,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             metadata.apply(
                 edition, collection=None #, replace=self.replacement_policy
             )
-            
+
             # TODO: flag the work as needing presentation recalculation,
             # assuming it wasn't done in metadata.apply()
         except IOError as e:
@@ -880,7 +869,7 @@ class TitleAuthorLookupCoverageProvider(OCLCLookupCoverageProvider):
         """Transforms the OCLC XML files into usable bibliographic records,
         including making additional API calls as necessary.
         """
-        parser = AuthorXMLParser()
+        parser = OCLCClassifyXMLParser()
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
         # different language from this record, there's no need to
