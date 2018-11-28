@@ -3,6 +3,7 @@ from oclc.classify import (
     IdentifierLookupCoverageProvider
 )
 
+from core.lane import Lane
 from core.model import (
     production_session,
     Identifier,
