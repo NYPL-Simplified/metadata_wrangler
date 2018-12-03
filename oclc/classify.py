@@ -12,6 +12,7 @@ from core.coverage import (
 )
 from core.metadata_layer import (
     ContributorData,
+    MeasurementData,
     Metadata,
 )
 from core.model import (
@@ -50,17 +51,25 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def parse(cls, _db, xml):
-        contributors = cls.contributors(_db, xml)
+        tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
+        contributors = cls.contributors(_db, tree)
+        measurements = cls.measurements(_db, tree)
         return Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
+            measurements=measurements,
         )
 
-    @classmethod
-    def contributors(cls, _db, xml):
-        """Returns a list of ContributorData objects"""
-        tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
+    @classmethod
+    def get_work_tags(cls, tree):
+        return cls._xpath(tree, "//oclc:work")
+
+    # CONTRIBUTORS:
+
+    @classmethod
+    def contributors(cls, _db, tree):
+        """Returns a list of ContributorData objects"""
         # We prefer to get author information out of the <authors> tag,
         # but sometimes all we have is a <work> tag.
         return cls.get_authors(_db, tree) or cls.get_authors_from_work_tag(_db, tree)
@@ -70,7 +79,7 @@ class OCLCClassifyXMLParser(XMLParser):
         # Sometimes, different versions of the same book get grouped together
         # as individual <work> tags under a <works> list.
         author_lists = []
-        work_tags = cls._xpath(tree, "//oclc:work")
+        work_tags = cls.get_work_tags(tree)
         if work_tags is not None:
             for work_tag in work_tags:
                 author_string = work_tag.get('author')
@@ -186,6 +195,51 @@ class OCLCClassifyXMLParser(XMLParser):
             viaf=viaf,
             extra=(birth, death),
         )
+
+
+    # MEASUREMENTS:
+
+    @classmethod
+    def measurements(cls, _db, tree):
+        """Returns a list of MeasurementData objects"""
+        work_tags = cls.get_work_tags(tree)
+        return cls.get_measurements(work_tags)
+
+    @classmethod
+    def get_measurements(cls, work_tags):
+
+        data = {
+            "holdings": 0,
+            "editions": 0,
+        }
+
+        # In some cases, there are different versions of the book, each
+        # listed under a different work tag with its own measurements; for each
+        # type of measurement, we need to add up the numbers for each work tag.
+        for work_tag in work_tags:
+            cls._update_data(work_tag, data)
+
+        measurement_data_objects = cls.make_measurement_data(data)
+        return measurement_data_objects
+
+    @classmethod
+    def _update_data(cls, work_tag, data):
+        for item in data:
+            data[item] += int(work_tag.get(item))
+
+    @classmethod
+    def make_measurement_data(cls, data):
+        results = []
+        for item in data:
+            results.append(
+                MeasurementData(
+                    quantity_measured=item,
+                    value=data[item]
+                )
+            )
+        return results
+
+
 
 # class OCLCXMLParser(XMLParser):
 #
@@ -774,7 +828,6 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         try:
             xml = self.api.lookup_by(isbn=identifier.identifier)
             metadata = parser.parse(self._db, xml)
-            set_trace()
             metadata.apply(
                 edition, collection=None #, replace=self.replacement_policy
             )
