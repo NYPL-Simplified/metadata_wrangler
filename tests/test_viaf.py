@@ -9,9 +9,11 @@ from . import (
 )
 
 from core.metadata_layer import ContributorData
+from core.model import Contributor
 
 from testing import MockVIAFClient
 from viaf import (
+    NameParser,
     VIAFParser,
     VIAFClient
 )
