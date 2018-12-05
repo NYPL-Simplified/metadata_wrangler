@@ -12,7 +12,7 @@ from core.metadata_layer import ContributorData
 
 from testing import MockVIAFClient
 from viaf import (
-    VIAFParser, 
+    VIAFParser,
     VIAFClient
 )
 
@@ -131,17 +131,17 @@ class TestVIAFNameParser(DatabaseTest):
         # family name we get back is "Twain", because we give very
         # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
-        
+
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Sam Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Mark_Twain", contributor_data.wikipedia_name)
         eq_("Twain", contributor_data.family_name)
 
-        
+
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
-        
+
         # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
@@ -149,9 +149,9 @@ class TestVIAFNameParser(DatabaseTest):
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Twain", contributor_data.family_name)
         eq_(None, contributor_data.wikipedia_name)
-        
+
         # NOTE:  Old behavior:  Even if we go in expecting something like "Sam Clemens", we get the consensus result.
-        # New behavior:  If the wikipedia name is not there to correct our working_display_name for us, 
+        # New behavior:  If the wikipedia name is not there to correct our working_display_name for us,
         # then either "Samuel Langhorne Clemens" or "Mark Twain" is acceptable to us here now.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", contributor_data.viaf)
@@ -203,14 +203,14 @@ class TestVIAFNameParser(DatabaseTest):
 
 
     def test_library_popularity(self):
-        # A good match higher in the list (in terms of library popularity) penalizes a match lower in the list, 
+        # A good match higher in the list (in terms of library popularity) penalizes a match lower in the list,
         # but a bad match high in the list doesn't penalize matches below it.
 
-        # our correct match Amy Levin is 4th down the list, so without the title, she should be penalized 
+        # our correct match Amy Levin is 4th down the list, so without the title, she should be penalized
         xml = self.sample_data("amy_levin_all_viaf.xml")
         name = "Levin, Amy"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '215866998')
@@ -220,8 +220,8 @@ class TestVIAFNameParser(DatabaseTest):
                 eq_(match_confidences['library_popularity'], 4)
 
         # with the title, the right Amy is selected, despite the library unpopularity
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["Faithfully Feminist"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '315591707')
@@ -236,15 +236,15 @@ class TestVIAFNameParser(DatabaseTest):
         xml = self.sample_data("john_jewel_all_viaf.xml")
         name = "Jewel, John"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["The Apology of the Church of England"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_("176145857856923020062", contributor_data.viaf)
         eq_(match_confidences['library_popularity'], 4)
 
         # without using the title, we still get the right John Jewel, even though he's 4th down the list, he hasn't suffered
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_("176145857856923020062", contributor_data.viaf)
@@ -258,14 +258,14 @@ class TestVIAFNameParser(DatabaseTest):
         name = "Levin, Amy"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
 
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '215866998')
         # make sure birthdate is 1957
 
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["Faithfully Feminist"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '315591707')
