@@ -70,6 +70,7 @@ class OCLCClassifyXMLParser(XMLParser):
         contributors = cls.contributors(_db, tree)
         measurements = cls.measurements(_db, tree)
         subjects = cls.subjects(_db, tree)
+
         return Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
@@ -89,7 +90,7 @@ class OCLCClassifyXMLParser(XMLParser):
         """Returns a list of ContributorData objects"""
         # We prefer to get author information out of the <authors> tag,
         # but sometimes all we have is a <work> tag.
-        return cls.get_authors(_db, tree) or cls.get_authors_from_work_tag(_db, tree)
+        return cls.get_authors(tree) or cls.get_authors_from_work_tag(_db, tree)
 
     @classmethod
     def get_authors_from_work_tag(cls, _db, tree):
@@ -101,118 +102,24 @@ class OCLCClassifyXMLParser(XMLParser):
             for work_tag in work_tags:
                 author_string = work_tag.get('author')
                 if author_string:
-                    author_lists.append(cls.authors_from_string(_db, tree, author_string))
+                    author_lists.append(NameParser.parse_multiple(author_string))
 
         # If there are multiple lists of authors (as a result of multiple <work> tags),
         # use the shortest list.
-        shortest_list = sorted(author_lists, key=len)[0]
-        results = cls.process_author_list(_db, shortest_list, tree)
-        return results
-
+        return sorted(author_lists, key=len)[0]
 
     @classmethod
-    def get_authors(cls, _db, tree):
-        # Returns a list of tuples, each of which contains basic information about one author.
+    def get_authors(cls, tree):
         authors_tag = cls._xpath1(tree, "//oclc:authors")
-        authors  = cls.extract_authors_from_tag(_db, authors_tag)
-        results = cls.process_author_list(_db, authors, tree)
-        return results
-
-    @classmethod
-    def process_author_list(cls, _db, authors, tree):
-        # Each author in the list of authors is a tuple containing a string (from which
-        # the rest of the information is about to be extracted), and an lc and viaf if present.
         results = []
-        for author in authors:
-            # Make a new ContributorData object
-            contributor_data = cls._parse_single_author(_db, author, tree)
-            results.append(contributor_data)
+
+        for tag in authors_tag:
+            contributor, default_role_used = NameParser.parse(tag.text)
+            contributor.lc = tag.get("lc")
+            contributor.viaf = tag.get("viaf")
+            results.append(contributor)
+
         return results
-
-
-    @classmethod
-    def extract_authors_from_tag(cls, _db, authors_tag):
-        results = []
-        if authors_tag:
-            for author_tag in cls._xpath(authors_tag, "//oclc:author"):
-                lc = author_tag.get('lc', None)
-                viaf = author_tag.get('viaf', None)
-                results.append((author_tag.text, lc, viaf))
-        return results
-
-    @classmethod
-    def _parse_single_author(cls, _db, author, tree):
-        string, lc, viaf = author
-
-        # Takes a tuple and returns a ContributorData object. The string initially contains
-        # not only the author's name, but also, potentially, information about roles
-        # and birth/death dates -- e.g. "Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]"
-        string = string.strip()
-
-        # Get a list of roles, and the author string with the content about roles removed (e.g. "Giles, Lionel, 1875-1958")
-        name_without_roles, roles = cls._get_roles(_db, string, tree)
-
-        # Get the author's birth and/or death dates if available, and the author string with the
-        # content about dates also removed; the author string should now just be the author's name, and maybe a trailing
-        # comma (which we're about to get rid of) -- e.g. "Giles, Lionel,"
-        name_without_lifespan, birth, death = cls._get_lifespan(name_without_roles)
-
-        name = name_without_lifespan
-        if name.endswith(","):
-            name = name[:-1]
-
-        contributor_data = cls.make_contributor_data(name, birth, death, roles, lc, viaf)
-        return contributor_data
-
-    @classmethod
-    def _get_lifespan(cls, author_text):
-        birth = None
-        death = None
-        name_without_lifespan = author_text
-        match = cls.LIFESPAN.search(author_text)
-
-        if match:
-            name_without_lifespan = author_text[:match.start()].strip()
-            birth, death = match.groups()
-
-        return name_without_lifespan, birth, death
-
-    @classmethod
-    def _get_roles(cls, _db, author_text, tree, default_role=Contributor.AUTHOR_ROLE):
-        name_without_roles = author_text
-        match = cls.ROLES.search(author_text)
-        if match:
-            name_without_roles = author_text[:match.start()].strip()
-            role_string = match.groups()[0]
-            roles = [x.strip() for x in role_string.split(";")]
-        elif default_role:
-            roles = [default_role]
-        else:
-            roles = []
-
-        return name_without_roles, roles
-
-    @classmethod
-    def authors_from_string(cls, _db, tree, author_string):
-        # Extract and parse the names of the authors from the <work> tag,
-        # in cases where there was no <authors> tag.  Returns a list of
-        # tuples.  The author's lc and viaf are set to None,
-        # since the <work> tag doesn't provide that information.
-        authors = []
-        for author in author_string.split("|"):
-            authors.append((author, None, None))
-        return authors
-
-    @classmethod
-    def make_contributor_data(cls, name, birth, death, roles, lc, viaf):
-        return ContributorData(
-            sort_name=name,
-            roles=roles,
-            lc=lc,
-            viaf=viaf,
-            extra=(birth, death),
-        )
-
 
     # MEASUREMENTS:
 
@@ -343,34 +250,34 @@ class NameParser(VIAFNameParser):
     # defined in Contributor.
     ROLE_MAPPING = {
         "Author": Contributor.AUTHOR_ROLE,
-	"Translator": Contributor.TRANSLATOR_ROLE,
-	"Illustrator": Contributor.ILLUSTRATOR_ROLE,
-	"Editor": Contributor.EDITOR_ROLE,
-	"Unknown": Contributor.UNKNOWN_ROLE,
-	"Contributor": Contributor.CONTRIBUTOR_ROLE,
-	"Author of introduction": Contributor.INTRODUCTION_ROLE,
-	"Other": Contributor.UNKNOWN_ROLE,
-	"Creator": Contributor.AUTHOR_ROLE,
-	"Artist": Contributor.ARTIST_ROLE,
-	"Associated name": Contributor.ASSOCIATED_ROLE,
-	"Photographer": Contributor.PHOTOGRAPHER_ROLE,
-	"Compiler": Contributor.COMPILER_ROLE,
-	"Adapter": Contributor.ADAPTER_ROLE,
-	"Editor of compilation": Contributor.EDITOR_ROLE,
-	"Narrator": Contributor.NARRATOR_ROLE,
-	"Author of afterword, colophon, etc.": Contributor.AFTERWORD_ROLE,
-	"Performer": Contributor.PERFORMER_ROLE,
-	"Author of screenplay": Contributor.AUTHOR_ROLE,
-	"Writer of added text": Contributor.AUTHOR_ROLE,
-	"Composer": Contributor.COMPOSER_ROLE,
-	"Lyricist": Contributor.LYRICIST_ROLE,
-	"Author of dialog": Contributor.AUTHOR_ROLE,
-	"Film director": Contributor.DIRECTOR_ROLE,
-	"Actor": Contributor.ACTOR_ROLE,
-	"Musician": Contributor.MUSICIAN_ROLE,
-	"Filmmaker": Contributor.DIRECTOR_ROLE,
-	"Producer": Contributor.PRODUCER_ROLE,
-	"Director": Contributor.DIRECTOR_ROLE,
+    	"Translator": Contributor.TRANSLATOR_ROLE,
+    	"Illustrator": Contributor.ILLUSTRATOR_ROLE,
+    	"Editor": Contributor.EDITOR_ROLE,
+    	"Unknown": Contributor.UNKNOWN_ROLE,
+    	"Contributor": Contributor.CONTRIBUTOR_ROLE,
+    	"Author of introduction": Contributor.INTRODUCTION_ROLE,
+    	"Other": Contributor.UNKNOWN_ROLE,
+    	"Creator": Contributor.AUTHOR_ROLE,
+    	"Artist": Contributor.ARTIST_ROLE,
+    	"Associated name": Contributor.ASSOCIATED_ROLE,
+    	"Photographer": Contributor.PHOTOGRAPHER_ROLE,
+    	"Compiler": Contributor.COMPILER_ROLE,
+    	"Adapter": Contributor.ADAPTER_ROLE,
+    	"Editor of compilation": Contributor.EDITOR_ROLE,
+    	"Narrator": Contributor.NARRATOR_ROLE,
+    	"Author of afterword, colophon, etc.": Contributor.AFTERWORD_ROLE,
+    	"Performer": Contributor.PERFORMER_ROLE,
+    	"Author of screenplay": Contributor.AUTHOR_ROLE,
+    	"Writer of added text": Contributor.AUTHOR_ROLE,
+    	"Composer": Contributor.COMPOSER_ROLE,
+    	"Lyricist": Contributor.LYRICIST_ROLE,
+    	"Author of dialog": Contributor.AUTHOR_ROLE,
+    	"Film director": Contributor.DIRECTOR_ROLE,
+    	"Actor": Contributor.ACTOR_ROLE,
+    	"Musician": Contributor.MUSICIAN_ROLE,
+    	"Filmmaker": Contributor.DIRECTOR_ROLE,
+    	"Producer": Contributor.PRODUCER_ROLE,
+    	"Director": Contributor.DIRECTOR_ROLE,
     }
 
     @classmethod
