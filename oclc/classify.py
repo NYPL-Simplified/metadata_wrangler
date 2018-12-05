@@ -14,6 +14,7 @@ from core.metadata_layer import (
     ContributorData,
     MeasurementData,
     Metadata,
+    SubjectData,
 )
 from core.model import (
     get_one_or_create,
@@ -61,15 +62,19 @@ class OCLCClassifyXMLParser(XMLParser):
     ROLES = re.compile("\[([^]]+)\]$")
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
+    CLASSIFIERS = {"fast": Subject.FAST, "lcc": Subject.LCC, "ddc": Subject.DDC}
+
     @classmethod
     def parse(cls, _db, xml):
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         contributors = cls.contributors(_db, tree)
         measurements = cls.measurements(_db, tree)
+        subjects = cls.subjects(_db, tree)
         return Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
             measurements=measurements,
+            subjects=subjects,
         )
 
 
@@ -230,6 +235,8 @@ class OCLCClassifyXMLParser(XMLParser):
         # type of measurement, we need to add up the numbers for each work tag.
         for work_tag in work_tags:
             cls._update_data(work_tag, data)
+            if work_tag.get("eholdings"):
+                data["holdings"] += int(work_tag.get("eholdings"))
 
         measurement_data_objects = cls.make_measurement_data(data)
         return measurement_data_objects
@@ -251,7 +258,68 @@ class OCLCClassifyXMLParser(XMLParser):
             )
         return results
 
+    # SUBJECTS
 
+    @classmethod
+    def subjects(cls, _db, tree):
+        """Returns a list of SubjectData objects"""
+        names, parent_tags = cls.get_classifier_names_and_parent_tags(tree)
+        subjects = cls.get_subjects(zip(names, parent_tags))
+        return subjects
+
+    @classmethod
+    def get_classifier_names_and_parent_tags(cls, tree):
+        # Extracts the <ddc>, <lcc>, and <fast> tags.
+        classifier_names = cls.CLASSIFIERS.keys()
+        classifier_tags = [cls._xpath1(tree, "//oclc:%s" % name) for name in classifier_names]
+        return classifier_names, classifier_tags
+
+    @classmethod
+    def get_subjects(cls, classifiers):
+        # :classifiers is a list of tuples, each of which contains the tag for a particular type of
+        # classifier--DDC, LCC, or Fast--and the name of the type of classifier.  The element tags
+        # are formatted such that the names are buried in a longer string (e.g. "{http://classify.oclc.org}ddc"),
+        # so it's easiest to just keep track of them separately, rather than having to extract them every time.
+        subtags_info = [cls._extract_subtags(classifier) for classifier in classifiers]
+        subject_data_objects = cls.make_subject_data(subtags_info)
+        return subject_data_objects
+
+    @classmethod
+    def _extract_subtags(cls, classifier):
+        # :classifier is a tuple containing the name of a classifier type (e.g. "ddc") and
+        # the corresponding tag.
+        name, parent_tag = classifier
+        search_terms = [("//oclc:%s//oclc:%s" % (name, item)) for item in ["heading", "mostPopular"]]
+        subtags = [cls._xpath(parent_tag, term) for term in search_terms]
+        # Flatten and scrub the list of tags:
+        subtags_list = [tag for subtag in subtags for tag in subtag if len(subtag)]
+        return name, subtags_list
+
+    @classmethod
+    def make_subject_data(cls, subtags_info):
+        results = []
+        for item in subtags_info:
+            type, tags = item
+            for tag in tags:
+                weight, identifier, name = cls._parse_subject_tag(tag)
+                subject_data = SubjectData(
+                    type=cls.CLASSIFIERS[type],
+                    weight=weight,
+                    identifier=identifier,
+                    name=name,
+                )
+                results.append(subject_data)
+        return results
+
+
+    @classmethod
+    def _parse_subject_tag(cls, tag):
+        # The names of the attributes vary depending on which type of classifier
+        # the tag is for.  Only Fast tags have a name.
+        weight = tag.get("holdings") or tag.get("heldby")
+        identifier = tag.get("ident") or tag.get("nsfa") or tag.get("sfa")
+        name = tag.text or None
+        return int(weight), identifier, name
 
 class OCLCTitleAuthorLookupXMLParser(XMLParser):
 
