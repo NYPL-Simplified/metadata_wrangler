@@ -60,6 +60,13 @@ class TestNameParser(object):
         # Death year is known but birth year is not.
         m("Mace, Daniel, -1753", "Mace, Daniel", None, "1753")
 
+        # Neither year is known.
+        m("Anonymous, ?-?", "Anonymous", None, None)
+
+        # Neither year is known with certainty.
+        # It's accurate enough for our purposes so we just go with it.
+        m("Bach, P. D. Q., 1807?-1742?", "Bach, P. D. Q.", "1807", "1742")
+
         # Nameparser doesn't interpret these names as containing any
         # extra data -- they just stored directly in
         # ContributorData.sort_name.
