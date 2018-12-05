@@ -16,12 +16,74 @@ from viaf import (
     VIAFClient
 )
 
+class TestNameParser(object):
+    """Test the NameParser class."""
+
+    def test_parse(self):
+        """Test the behavior of NameParser.parse.
+
+        In many cases this demonstrates that NameParser.parse doesn't
+        do as much as we might like -- it doesn't try to convert sort
+        names to display names, and it doesn't handle imprecisely
+        recorded birth and death dates.
+        """
+
+        def assert_parses_as(to_parse, sort_name=None, birth=None, death=None):
+            """Assert that a given string parses into a ContributorData
+            object with the given sort_name, birth and death dates.
+            """
+            sort_name = sort_name or to_parse
+
+            contributor = NameParser.parse(to_parse)
+            assert isinstance(contributor, ContributorData)
+            eq_(sort_name, contributor.sort_name)
+            if birth is not None:
+                eq_(birth, contributor.extra[Contributor.BIRTH_DATE])
+            if death is not None:
+                eq_(death, contributor.extra[Contributor.DEATH_DATE])
+        m = assert_parses_as
+
+        # NameParser extracts the birth and/or death dates from these
+        # strings.
+        m("Baxter, Charles, 1947-", "Baxter, Charles", "1947")
+        m("Schlesinger, Arthur M., Jr. (Arthur Meier), 1917-2007",
+          "Schlesinger, Arthur M., Jr. (Arthur Meier)", "1917", "2007")
+        m("William, Prince, Duke of Cambridge, 1982-",
+          "William, Prince, Duke of Cambridge", "1982")
+        m("Windsor, Edward, Duke of, 1894-1972",
+          "Windsor, Edward, Duke of", "1894", "1972")
+        m("Augustine, of Hippo, Saint, 354-430.",
+          "Augustine, of Hippo, Saint", "354", "430")
+
+        # Death year is known but birth year is not.
+        m("Mace, Daniel, -1753", "Mace, Daniel", None, "1753")
+
+        # Nameparser doesn't interpret these names as containing any
+        # extra data -- they just stored directly in
+        # ContributorData.sort_name.
+        #
+        # In some cases we would rather do without the stuff in
+        # parentheses, but without getting more detailed data from
+        # VIAF we don't know for sure whether it's a description of
+        # the person or part of their name.
+        m("Korman, Gordon")
+        m("Smythe, J. P. (James P.)")
+        m("Bernstein, Albert J.", "Bernstein, Albert J.")
+        m("Lifetime Television (Firm)")
+        m("Wang, Wei (Writer on the Chinese People's Liberation Army)")
+
+        # TODO: This is definitely a date, but it's too vague to use
+        # and we don't parse it out.
+        m("Sunzi, active 6th century B.C.")
 
 
-class TestNameParser(DatabaseTest):
+class TestVIAFNameParser(DatabaseTest):
+    """Test the name parsing code built into VIAFParser (as opposed to the
+    simpler standalone code in the NameParser class).
+    """
 
     def setup(self):
-        super(TestNameParser, self).setup()
+        super(TestVIAFNameParser, self).setup()
         self.parser = VIAFParser()
 
     def sample_data(self, filename):
