@@ -1,3 +1,4 @@
+# encoding: utf-8
 import logging
 
 from nose.tools import set_trace, eq_
@@ -50,6 +51,8 @@ class TestNameParser(object):
         m("Baxter, Charles, 1947-", "Baxter, Charles", "1947")
         m("Schlesinger, Arthur M., Jr. (Arthur Meier), 1917-2007",
           "Schlesinger, Arthur M., Jr. (Arthur Meier)", "1917", "2007")
+        m("Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV, 1935-",
+          "Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV", "1935", None)
         m("William, Prince, Duke of Cambridge, 1982-",
           "William, Prince, Duke of Cambridge", "1982")
         m("Windsor, Edward, Duke of, 1894-1972",
