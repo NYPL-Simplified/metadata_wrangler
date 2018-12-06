@@ -250,34 +250,34 @@ class NameParser(VIAFNameParser):
     # defined in Contributor.
     ROLE_MAPPING = {
         "Author": Contributor.AUTHOR_ROLE,
-    	"Translator": Contributor.TRANSLATOR_ROLE,
-    	"Illustrator": Contributor.ILLUSTRATOR_ROLE,
-    	"Editor": Contributor.EDITOR_ROLE,
-    	"Unknown": Contributor.UNKNOWN_ROLE,
-    	"Contributor": Contributor.CONTRIBUTOR_ROLE,
-    	"Author of introduction": Contributor.INTRODUCTION_ROLE,
-    	"Other": Contributor.UNKNOWN_ROLE,
-    	"Creator": Contributor.AUTHOR_ROLE,
-    	"Artist": Contributor.ARTIST_ROLE,
-    	"Associated name": Contributor.ASSOCIATED_ROLE,
-    	"Photographer": Contributor.PHOTOGRAPHER_ROLE,
-    	"Compiler": Contributor.COMPILER_ROLE,
-    	"Adapter": Contributor.ADAPTER_ROLE,
-    	"Editor of compilation": Contributor.EDITOR_ROLE,
-    	"Narrator": Contributor.NARRATOR_ROLE,
-    	"Author of afterword, colophon, etc.": Contributor.AFTERWORD_ROLE,
-    	"Performer": Contributor.PERFORMER_ROLE,
-    	"Author of screenplay": Contributor.AUTHOR_ROLE,
-    	"Writer of added text": Contributor.AUTHOR_ROLE,
-    	"Composer": Contributor.COMPOSER_ROLE,
-    	"Lyricist": Contributor.LYRICIST_ROLE,
-    	"Author of dialog": Contributor.AUTHOR_ROLE,
-    	"Film director": Contributor.DIRECTOR_ROLE,
-    	"Actor": Contributor.ACTOR_ROLE,
-    	"Musician": Contributor.MUSICIAN_ROLE,
-    	"Filmmaker": Contributor.DIRECTOR_ROLE,
-    	"Producer": Contributor.PRODUCER_ROLE,
-    	"Director": Contributor.DIRECTOR_ROLE,
+        "Translator": Contributor.TRANSLATOR_ROLE,
+        "Illustrator": Contributor.ILLUSTRATOR_ROLE,
+        "Editor": Contributor.EDITOR_ROLE,
+        "Unknown": Contributor.UNKNOWN_ROLE,
+        "Contributor": Contributor.CONTRIBUTOR_ROLE,
+        "Author of introduction": Contributor.INTRODUCTION_ROLE,
+        "Other": Contributor.UNKNOWN_ROLE,
+        "Creator": Contributor.AUTHOR_ROLE,
+        "Artist": Contributor.ARTIST_ROLE,
+        "Associated name": Contributor.ASSOCIATED_ROLE,
+        "Photographer": Contributor.PHOTOGRAPHER_ROLE,
+        "Compiler": Contributor.COMPILER_ROLE,
+        "Adapter": Contributor.ADAPTER_ROLE,
+        "Editor of compilation": Contributor.EDITOR_ROLE,
+        "Narrator": Contributor.NARRATOR_ROLE,
+        "Author of afterword, colophon, etc.": Contributor.AFTERWORD_ROLE,
+        "Performer": Contributor.PERFORMER_ROLE,
+        "Author of screenplay": Contributor.AUTHOR_ROLE,
+        "Writer of added text": Contributor.AUTHOR_ROLE,
+        "Composer": Contributor.COMPOSER_ROLE,
+        "Lyricist": Contributor.LYRICIST_ROLE,
+        "Author of dialog": Contributor.AUTHOR_ROLE,
+        "Film director": Contributor.DIRECTOR_ROLE,
+        "Actor": Contributor.ACTOR_ROLE,
+        "Musician": Contributor.MUSICIAN_ROLE,
+        "Filmmaker": Contributor.DIRECTOR_ROLE,
+        "Producer": Contributor.PRODUCER_ROLE,
+        "Director": Contributor.DIRECTOR_ROLE,
     }
 
     @classmethod
@@ -295,27 +295,61 @@ class NameParser(VIAFNameParser):
             return contributors
         for author in author_string.split("|"):
             contributor, default_role_used = cls.parse(author, default_role)
-            if contributor.roles:
-                if Contributor.PRIMARY_AUTHOR_ROLE in contributor.roles:
-                    # That was the primary author, or at least the
-                    # first author listed. If we see someone with no
-                    # explicit role after this point, assume they're
-                    # just a regular author.
-                    default_role = Contributor.AUTHOR_ROLE
-                elif not default_role_used:
-                    # We're dealing with someone whose role was
-                    # explicitly specified. If we see someone with no
-                    # explicit role after this point, it's probably
-                    # because their role is so minor as to not be
-                    # worth mentioning, not because it's so major that
-                    # we can assume they're an author.
-                    default_role = Contributor.UNKNOWN_ROLE
-            else:
-                # No explicit role was provided. Assign the default
-                # role.
-                contributor.roles = [default_role]
             contributors.append(contributor)
+
+            # Start using a new default role if necessary.
+            default_role = cls._default_role_transition(
+                contributor.roles, default_role_used
+            )
         return contributors
+
+    @classmethod
+    def _default_role_transition(cls, contributor_roles,
+                                 contributor_role_is_default):
+        """Modify the default role to be used from this point on.
+
+        :param contributor_roles: The list of roles assigned to the
+        most recent contributor.
+
+        :param contributor_role_is_default: If this is True, the
+        contributor's roles came from the default. If this is False,
+        they were explicitly specified in the original.
+
+        :return: The role to use in the future when a user has no
+        explicitly specified role.
+        """
+        if Contributor.PRIMARY_AUTHOR_ROLE in contributor_roles:
+            # There can only be one primary author. No matter what,
+            # the default role becomes AUTHOR_ROLE beyond this point.
+            return Contributor.AUTHOR_ROLE
+
+        if not any(
+            role in contributor_roles for role in Contributor.AUTHOR_ROLES
+        ):
+            # The current contributor is not any kind of author. If
+            # we see someone with no explicit role after this point,
+            # it's probably because their role is so minor as to not
+            # be worth mentioning, not because it's so major that we
+            # can assume they're an author.
+            return Contributor.UNKNOWN_ROLE
+
+        # The only possibility now is that the user has one of the
+        # AUTHOR_ROLES other than PRIMARY_AUTHOR.
+        #
+        # Now it matters whether the roles were assigned explicitly or
+        # whether the default was used.
+        if contributor_role_is_default:
+            # This author-like contributor was not given an explicit
+            # role, so if the next contributor has no explicit role
+            # they are probably also an author.
+            return Contributor.AUTHOR_ROLE
+        else:
+            # This author-like contributor was given an explicit role.
+            # If the next contributor has no explicit role given, we
+            # can assume they're not an author -- if they were, they
+            # would also have an explicit role.
+            return Contributor.UNKNOWN_ROLE
+
 
     @classmethod
     def parse(cls, string, default_role=Contributor.AUTHOR_ROLE):
