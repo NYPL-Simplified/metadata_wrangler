@@ -22,26 +22,18 @@ from overdrive import OverdriveBibliographicCoverageProvider
 from viaf import VIAFClient
 
 
+class MockProvider(IdentifierResolutionCoverageProvider):
+    """Mock IdentifierResolutionCoverageProvider.gather_providers
+    so that it's easier to test the constructor.
+    """
+    def gather_providers(self, provider_kwargs):
+        return ["a provider"]
+
+
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
     def setup(self):
         super(TestIdentifierResolutionCoverageProvider, self).setup()
-
-        # Set up a sitewide storage integration.
-        storage = self._external_integration(
-            goal=ExternalIntegration.STORAGE_GOAL,
-            protocol=ExternalIntegration.S3,
-            username="a",
-            password="b"
-        )
-
-        # Set up a Content Cafe integration
-        content_cafe = self._external_integration(
-            goal=ExternalIntegration.METADATA_GOAL,
-            protocol=ExternalIntegration.CONTENT_CAFE,
-            username="a",
-            password="b"
-        )
 
     def test_constructor(self):
         """Test that the constructor does the right thing when
@@ -49,13 +41,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         Other tests will invoke the constructor with mock objects.
         """
-        class Mock(IdentifierResolutionCoverageProvider):
-            def gather_providers(self, provider_kwargs):
-                return ["a provider"]
-
         immediate = object()
         force = object()
-        provider = Mock(
+        provider = MockProvider(
             self._default_collection, provide_coverage_immediately=immediate,
             force=force, batch_size=93
         )
@@ -78,14 +66,32 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             policy.presentation_calculation_policy.regenerate_opds_entries
         )
 
-        # An S3Uploader was instantiated from our storage integration.
-        assert isinstance(policy.mirror, S3Uploader)
+        # Since no storage integration is configured, we will not be mirroring
+        # content anywhere.
+        eq_(None, policy.mirror)
 
         # A VIAFClient was instantiated as well.
         assert isinstance(provider.viaf, VIAFClient)
 
         # The sub-providers were set up by calling gather_providers().
         eq_(["a provider"], provider.providers)
+
+    def test_constructor_with_storage_configuration(self):
+        # Set up a sitewide storage integration.
+        storage = self._external_integration(
+            goal=ExternalIntegration.STORAGE_GOAL,
+            protocol=ExternalIntegration.S3,
+            username="a",
+            password="b"
+        )
+        provider = MockProvider(self._default_collection)
+
+        # An S3Uploader was instantiated from our storage integration
+        # and stored in the ReplacementPolicy used by this
+        # CoverageProvider.
+        policy = provider.replacement_policy
+        assert isinstance(policy.mirror, S3Uploader)
+        eq_("b", policy.mirror.client._request_signer._credentials.token)
 
     def test_unaffiliated_collection(self):
         """A special collection exists to track Identifiers not affiliated
@@ -119,7 +125,34 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(4, len(providers))
         eq_(unaffiliated, providers[-1].collection)
 
+    def test_gather_providers_nothing_configured(self):
+        # When nothing is configured, IdentifierResolutionCoverageProvider
+        # can't configure any CoverageProviders.
+        eq_(
+            [],
+            IdentifierResolutionCoverageProvider(
+                self._default_collection
+            ).providers
+        )
+
+    def test_gather_providers_content_cafe(self):
+        # Set up a Content Cafe integration
+        content_cafe = self._external_integration(
+            goal=ExternalIntegration.METADATA_GOAL,
+            protocol=ExternalIntegration.CONTENT_CAFE,
+            username="a",
+            password="b"
+        )
+
+        # The only working CoverageProvider is the
+        # ContentCafeCoverageProvider.
+        [content_cafe] = IdentifierResolutionCoverageProvider(
+            self._default_collection
+        ).providers
+        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+
     def test_gather_providers_overdrive(self):
+        # Set up an Overdrive integration.
         overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
         provider_kwargs = {
             OverdriveBibliographicCoverageProvider : dict(
@@ -130,11 +163,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             overdrive_collection, provider_kwargs=provider_kwargs
         )
 
-        # We got two CoverageProviders -- one that can handle a collection
-        # based on any protocol, and one that can only handle a collection
-        # based on the Overdrive protocol.
-        content_cafe, overdrive = provider.providers
-        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        # The only working CoverageProvider is the
+        # OverdriveBibliographicCoverageProvider.
+        [overdrive] = provider.providers
         assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
 
         # The MockOverdriveAPI we passed in as part of provider_kwargs
@@ -159,11 +190,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         provider = IdentifierResolutionCoverageProvider(collection)
 
-        # We got two subproviders -- one that can handle a collection
-        # based on any protocol, and one that can only handle a
-        # collection based on the OPDS For Distributors protocol.
-        content_cafe, integration_client = provider.providers
-        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        # The only configured CoverageProvider here is the
+        # IntegrationClientCoverImageCoverageProvider.
+        [integration_client] = provider.providers
         assert isinstance(
             integration_client, IntegrationClientCoverImageCoverageProvider
         )
