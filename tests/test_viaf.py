@@ -1,3 +1,4 @@
+# encoding: utf-8
 import logging
 
 from nose.tools import set_trace, eq_
@@ -9,19 +10,94 @@ from . import (
 )
 
 from core.metadata_layer import ContributorData
+from core.model import Contributor
 
 from testing import MockVIAFClient
 from viaf import (
-    VIAFParser, 
+    NameParser,
+    VIAFParser,
     VIAFClient
 )
 
+class TestNameParser(object):
+    """Test the NameParser class."""
 
+    def test_parse(self):
+        """Test the behavior of NameParser.parse.
 
-class TestNameParser(DatabaseTest):
+        In many cases this demonstrates that NameParser.parse doesn't
+        do as much as we might like -- it doesn't try to convert sort
+        names to display names, and it doesn't handle imprecisely
+        recorded birth and death dates.
+        """
+
+        def assert_parses_as(to_parse, sort_name=None, birth=None, death=None):
+            """Assert that a given string parses into a ContributorData
+            object with the given sort_name, birth and death dates.
+            """
+            sort_name = sort_name or to_parse
+
+            contributor = NameParser.parse(to_parse)
+            assert isinstance(contributor, ContributorData)
+            eq_(sort_name, contributor.sort_name)
+            if birth is not None:
+                eq_(birth, contributor.extra[Contributor.BIRTH_DATE])
+            if death is not None:
+                eq_(death, contributor.extra[Contributor.DEATH_DATE])
+        m = assert_parses_as
+
+        # NameParser extracts the birth and/or death dates from these
+        # strings.
+        m("Baxter, Charles, 1947-", "Baxter, Charles", "1947")
+        m("Schlesinger, Arthur M., Jr. (Arthur Meier), 1917-2007",
+          "Schlesinger, Arthur M., Jr. (Arthur Meier)", "1917", "2007")
+        m("Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV, 1935-",
+          "Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV", "1935", None)
+        m("William, Prince, Duke of Cambridge, 1982-",
+          "William, Prince, Duke of Cambridge", "1982")
+        m("Windsor, Edward, Duke of, 1894-1972",
+          "Windsor, Edward, Duke of", "1894", "1972")
+        m("Augustine, of Hippo, Saint, 354-430.",
+          "Augustine, of Hippo, Saint", "354", "430")
+
+        # Death year is known but birth year is not.
+        m("Mace, Daniel, -1753", "Mace, Daniel", None, "1753")
+
+        # Neither year is known.
+        m("Anonymous, ?-?", "Anonymous", None, None)
+
+        # Neither year is known with certainty.
+        # It's accurate enough for our purposes so we just go with it.
+        m("Bach, P. D. Q., 1807?-1742?", "Bach, P. D. Q.", "1807", "1742")
+
+        # Nameparser doesn't interpret these names as containing any
+        # extra data -- they just stored directly in
+        # ContributorData.sort_name.
+        #
+        # In some cases we would rather do without the stuff in
+        # parentheses, but without getting more detailed data from
+        # VIAF we don't know for sure whether it's a description of
+        # the person or part of their name.
+        m("Korman, Gordon")
+        m("Smythe, J. P. (James P.)")
+        m("Bernstein, Albert J.", "Bernstein, Albert J.")
+        m("Lifetime Television (Firm)")
+        m("Wang, Wei (Writer on the Chinese People's Liberation Army)")
+
+        # TODO: This is definitely a date, but it's too vague to use
+        # and we don't parse it out.
+        m("Sunzi, active 6th century B.C.")
+
+        # TODO: This is a date but not in the format we expect.
+        # m("Fisher, David, 1946 April 16-")
+
+class TestVIAFNameParser(DatabaseTest):
+    """Test the name parsing code built into VIAFParser (as opposed to the
+    simpler standalone code in the NameParser class).
+    """
 
     def setup(self):
-        super(TestNameParser, self).setup()
+        super(TestVIAFNameParser, self).setup()
         self.parser = VIAFParser()
 
     def sample_data(self, filename):
@@ -69,17 +145,17 @@ class TestNameParser(DatabaseTest):
         # family name we get back is "Twain", because we give very
         # high consideration to the Wikipedia name.
         xml = self.sample_data("mark_twain.xml")
-        
+
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Sam Clemens")
         eq_("50566653", contributor_data.viaf)
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Mark_Twain", contributor_data.wikipedia_name)
         eq_("Twain", contributor_data.family_name)
 
-        
+
         # Let's try again without the Wikipedia name.
         xml = self.sample_data("mark_twain_no_wikipedia.xml")
-        
+
         # The author is better known as Mark Twain, so this
         # name wins by popularity if we don't specify a name going in.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, None)
@@ -87,9 +163,9 @@ class TestNameParser(DatabaseTest):
         eq_("Mark Twain", contributor_data.display_name)
         eq_("Twain", contributor_data.family_name)
         eq_(None, contributor_data.wikipedia_name)
-        
+
         # NOTE:  Old behavior:  Even if we go in expecting something like "Sam Clemens", we get the consensus result.
-        # New behavior:  If the wikipedia name is not there to correct our working_display_name for us, 
+        # New behavior:  If the wikipedia name is not there to correct our working_display_name for us,
         # then either "Samuel Langhorne Clemens" or "Mark Twain" is acceptable to us here now.
         (contributor_data, match_confidences, contributor_titles) = self.parser.parse(xml, working_display_name="Samuel Langhorne Clemens")
         eq_("50566653", contributor_data.viaf)
@@ -141,14 +217,14 @@ class TestNameParser(DatabaseTest):
 
 
     def test_library_popularity(self):
-        # A good match higher in the list (in terms of library popularity) penalizes a match lower in the list, 
+        # A good match higher in the list (in terms of library popularity) penalizes a match lower in the list,
         # but a bad match high in the list doesn't penalize matches below it.
 
-        # our correct match Amy Levin is 4th down the list, so without the title, she should be penalized 
+        # our correct match Amy Levin is 4th down the list, so without the title, she should be penalized
         xml = self.sample_data("amy_levin_all_viaf.xml")
         name = "Levin, Amy"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '215866998')
@@ -158,8 +234,8 @@ class TestNameParser(DatabaseTest):
                 eq_(match_confidences['library_popularity'], 4)
 
         # with the title, the right Amy is selected, despite the library unpopularity
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["Faithfully Feminist"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '315591707')
@@ -174,15 +250,15 @@ class TestNameParser(DatabaseTest):
         xml = self.sample_data("john_jewel_all_viaf.xml")
         name = "Jewel, John"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["The Apology of the Church of England"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_("176145857856923020062", contributor_data.viaf)
         eq_(match_confidences['library_popularity'], 4)
 
         # without using the title, we still get the right John Jewel, even though he's 4th down the list, he hasn't suffered
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_("176145857856923020062", contributor_data.viaf)
@@ -196,14 +272,14 @@ class TestNameParser(DatabaseTest):
         name = "Levin, Amy"
         contributor_candidates = self.parser.parse_multiple(xml, working_sort_name=name)
 
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
             contributor_candidates=contributor_candidates)
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '215866998')
         # make sure birthdate is 1957
 
-        contributor_candidates = self.parser.order_candidates(working_sort_name=name, 
-            contributor_candidates=contributor_candidates, 
+        contributor_candidates = self.parser.order_candidates(working_sort_name=name,
+            contributor_candidates=contributor_candidates,
             known_titles=["Faithfully Feminist"])
         (contributor_data, match_confidences, contributor_titles) = contributor_candidates[0]
         eq_(contributor_data.viaf, '315591707')

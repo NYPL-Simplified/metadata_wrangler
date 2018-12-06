@@ -10,6 +10,9 @@ from core.coverage import (
     IdentifierCoverageProvider,
     CoverageFailure,
 )
+from core.metadata_layer import (
+    ContributorData,
+)
 from core.model import (
     get_one_or_create,
     Contribution,
@@ -23,6 +26,7 @@ from core.model import (
 )
 from core.util import MetadataSimilarity
 from core.util.xmlparser import XMLParser
+from viaf import NameParser as VIAFNameParser
 
 
 class OCLC(object):
@@ -30,6 +34,181 @@ class OCLC(object):
     EDITION_COUNT = "OCLC.editionCount"
     HOLDING_COUNT = "OCLC.holdings"
     FORMAT = "OCLC.format"
+
+
+class NameParser(VIAFNameParser):
+    """Parse the name format used by OCLC Classify.
+
+    This is like the VIAF format with the addition of optional roles
+    for authors.
+
+    Example:
+     Giles, Lionel, 1875-1958 [Writer of added commentary; Translator]
+
+    In addition, multiple authors are sometimes given in one string,
+    separated by the pipe character.
+
+    Example:
+     Leodhas, Sorche Nic, 1898-1969 | Ness, Evaline [Illustrator]
+    """
+
+    ROLES = re.compile("\[([^]]+)\]$")
+
+    # Map the roles defined in OCLC Classify to the constants
+    # defined in Contributor.
+    ROLE_MAPPING = {
+        "Author": Contributor.AUTHOR_ROLE,
+        "Translator": Contributor.TRANSLATOR_ROLE,
+        "Illustrator": Contributor.ILLUSTRATOR_ROLE,
+        "Editor": Contributor.EDITOR_ROLE,
+        "Unknown": Contributor.UNKNOWN_ROLE,
+        "Contributor": Contributor.CONTRIBUTOR_ROLE,
+        "Author of introduction": Contributor.INTRODUCTION_ROLE,
+        "Other": Contributor.UNKNOWN_ROLE,
+        "Creator": Contributor.AUTHOR_ROLE,
+        "Artist": Contributor.ARTIST_ROLE,
+        "Associated name": Contributor.ASSOCIATED_ROLE,
+        "Photographer": Contributor.PHOTOGRAPHER_ROLE,
+        "Compiler": Contributor.COMPILER_ROLE,
+        "Adapter": Contributor.ADAPTER_ROLE,
+        "Editor of compilation": Contributor.EDITOR_ROLE,
+        "Narrator": Contributor.NARRATOR_ROLE,
+        "Author of afterword, colophon, etc.": Contributor.AFTERWORD_ROLE,
+        "Performer": Contributor.PERFORMER_ROLE,
+        "Author of screenplay": Contributor.AUTHOR_ROLE,
+        "Writer of added text": Contributor.AUTHOR_ROLE,
+        "Composer": Contributor.COMPOSER_ROLE,
+        "Lyricist": Contributor.LYRICIST_ROLE,
+        "Author of dialog": Contributor.AUTHOR_ROLE,
+        "Film director": Contributor.DIRECTOR_ROLE,
+        "Actor": Contributor.ACTOR_ROLE,
+        "Musician": Contributor.MUSICIAN_ROLE,
+        "Filmmaker": Contributor.DIRECTOR_ROLE,
+        "Producer": Contributor.PRODUCER_ROLE,
+        "Director": Contributor.DIRECTOR_ROLE,
+    }
+
+    @classmethod
+    def parse_multiple(cls, author_string):
+        """Parse a list of people.
+
+        :return: A list of ContributorData objects.
+        """
+
+        # We start off assuming that someone with no explicit role
+        # is the primary author.
+        default_role = Contributor.PRIMARY_AUTHOR_ROLE
+        contributors = []
+        if not author_string:
+            return contributors
+        for author in author_string.split("|"):
+            contributor, default_role_used = cls.parse(author, default_role)
+            contributors.append(contributor)
+
+            # Start using a new default role if necessary.
+            default_role = cls._default_role_transition(
+                contributor.roles, default_role_used
+            )
+        return contributors
+
+    @classmethod
+    def _default_role_transition(cls, contributor_roles,
+                                 contributor_role_is_default):
+        """Modify the default role to be used from this point on.
+
+        :param contributor_roles: The list of roles assigned to the
+        most recent contributor.
+
+        :param contributor_role_is_default: If this is True, the
+        contributor's roles came from the default. If this is False,
+        they were explicitly specified in the original.
+
+        :return: The role to use in the future when a user has no
+        explicitly specified role.
+        """
+        if Contributor.PRIMARY_AUTHOR_ROLE in contributor_roles:
+            # There can only be one primary author. No matter what,
+            # the default role becomes AUTHOR_ROLE beyond this point.
+            return Contributor.AUTHOR_ROLE
+
+        if not any(
+            role in contributor_roles for role in Contributor.AUTHOR_ROLES
+        ):
+            # The current contributor is not any kind of author. If
+            # we see someone with no explicit role after this point,
+            # it's probably because their role is so minor as to not
+            # be worth mentioning, not because it's so major that we
+            # can assume they're an author.
+            return Contributor.UNKNOWN_ROLE
+
+        # The only possibility now is that the user has one of the
+        # AUTHOR_ROLES other than PRIMARY_AUTHOR.
+        #
+        # Now it matters whether the roles were assigned explicitly or
+        # whether the default was used.
+        if contributor_role_is_default:
+            # This author-like contributor was not given an explicit
+            # role, so if the next contributor has no explicit role
+            # they are probably also an author.
+            return Contributor.AUTHOR_ROLE
+        else:
+            # This author-like contributor was given an explicit role.
+            # If the next contributor has no explicit role given, we
+            # can assume they're not an author -- if they were, they
+            # would also have an explicit role.
+            return Contributor.UNKNOWN_ROLE
+
+
+    @classmethod
+    def parse(cls, string, default_role=Contributor.AUTHOR_ROLE):
+        """Parse the a person's name as found in OCLC Classify into a
+        ContributorData object.
+
+        :return: A 2-tuple (Contributor, default_role_used).
+        default_role_used is true if the Contributor was assigned
+        the default role, as opposed to that role being
+        explicitly specified.
+        """
+        string = string.strip()
+        name_without_roles, roles, default_role_used = cls._parse_roles(
+            string, default_role
+        )
+        contributor = VIAFNameParser.parse(name_without_roles)
+        contributor.roles = roles
+        return contributor, default_role_used
+
+    @classmethod
+    def _parse_roles(cls, name, default_role=Contributor.AUTHOR_ROLE):
+        default_role_used = False
+        name_without_roles = name
+        match = cls.ROLES.search(name)
+        if match:
+            name_without_roles = name[:match.start()].strip()
+            role_string = match.groups()[0]
+            roles = list(set(cls._map_roles(role_string.split(";"))))
+        elif default_role:
+            roles = [default_role]
+            default_role_used = True
+        else:
+            roles = []
+
+        return name_without_roles, roles, default_role_used
+
+    @classmethod
+    def _map_roles(cls, roles):
+        """Map the names of roles from OCLC Classify to the corresponding
+        Contributor constants.
+
+        Roles that don't have a mapping will become UNKNOWN_ROLE.
+
+        :yield: A sequence of Contributor constants.
+        """
+        for role in roles:
+            role = role.strip()
+            if role in cls.ROLE_MAPPING:
+                yield cls.ROLE_MAPPING[role]
+            else:
+                yield Contributor.UNKNOWN_ROLE
 
 
 class OCLCXMLParser(XMLParser):
@@ -589,7 +768,6 @@ class OCLCClassifyAPI(object):
         url = self.BASE_URL + query_string
         representation, cached = Representation.get(self._db, url)
         return representation.content
-
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
