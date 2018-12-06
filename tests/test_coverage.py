@@ -91,7 +91,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # CoverageProvider.
         policy = provider.replacement_policy
         assert isinstance(policy.mirror, S3Uploader)
-        eq_("b", policy.mirror.client._request_signer._credentials.token)
+        eq_("b", policy.mirror.client._request_signer._credentials.secret_key)
 
     def test_unaffiliated_collection(self):
         """A special collection exists to track Identifiers not affiliated
