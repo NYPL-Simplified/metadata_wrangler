@@ -88,6 +88,8 @@ class TestNameParser(object):
         # and we don't parse it out.
         m("Sunzi, active 6th century B.C.")
 
+        # TODO: This is a date but not in the format we expect.
+        # m("Fisher, David, 1946 April 16-")
 
 class TestVIAFNameParser(DatabaseTest):
     """Test the name parsing code built into VIAFParser (as opposed to the
