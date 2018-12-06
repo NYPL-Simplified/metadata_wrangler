@@ -126,7 +126,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
 
         # Since we are the metadata wrangler, any resources we find,
         # we mirror using the sitewide MirrorUploader.
-        mirror = mirror or MirrorUploader.sitewide(_db)
+        if not mirror:
+            try:
+                mirror = MirrorUploader.sitewide(_db)
+            except CannotLoadConfiguration, e:
+                logging.error(
+                    "No storage integration is configured. Cover images will not be stored anywhere.",
+                    exc_info=e
+                )
         self.mirror = mirror
 
         # We're going to be aggressive about recalculating the presentation
@@ -216,7 +223,14 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             this_provider_kwargs = provider_kwargs.get(cls, {})
             kwargs.update(this_provider_kwargs)
 
-            add_to.append(cls(**kwargs))
+            try:
+                provider = cls(**kwargs)
+                add_to.append(provider)
+            except CannotLoadConfiguration, e:
+                logging.error(
+                    "Ignoring CoverageProvider which I could not instantiate: %r",
+                    cls, exc_info=e,
+                )
 
         protocol = self.collection.protocol
         providers = []
@@ -242,16 +256,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # the Overdrive API. We don't enforce that the collection
         # is an Overdrive collection, because we want to allow
         # unauthenticated lookups in the 'unaffiliated' collection.
-        try:
-            overdrive = instantiate(
-                OverdriveBibliographicCoverageProvider, providers,
-                provider_kwargs, collection=self.collection,
-                viaf=self.viaf, replacement_policy=self.replacement_policy
-            )
-        except CannotLoadConfiguration, e:
-            # No Overdrive collection is configured -- we can't
-            # handle Overdrive lookups, as much as we'd like to.
-            pass
+        overdrive = instantiate(
+            OverdriveBibliographicCoverageProvider, providers,
+            provider_kwargs, collection=self.collection,
+            viaf=self.viaf, replacement_policy=self.replacement_policy
+        )
 
         # We already have metadata for books we heard about from an
         # IntegrationClient, but we need to make sure the covers get
