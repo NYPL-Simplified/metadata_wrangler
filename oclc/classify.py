@@ -12,6 +12,7 @@ from core.coverage import (
 )
 from core.metadata_layer import (
     ContributorData,
+    IdentifierData,
     MeasurementData,
     Metadata,
     SubjectData,
@@ -66,18 +67,43 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def parse(cls, _db, xml):
+        results = []
+
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
-        contributors = cls.contributors(_db, tree)
+        response = cls._xpath1(tree, "oclc:response")
+        code = int(response.get('code'))
+
+        if code in [0, 2]:
+            results.append(cls.make_metadata(_db, tree))
+
+        elif code == 4:
+            work_tags = cls.get_work_tags(tree)
+            for work_tag in work_tags:
+                results.append(cls.make_metadata(_db, tree, work_tag))
+
+        return (code, results)
+
+
+    @classmethod
+    def make_metadata(cls, _db, tree, work_tag=None):
+        contributor_info = cls.contributors(_db, tree, work_tag)
+        contributors = contributor_info.get("authors")
+        identifier = contributor_info.get("identifier")
         measurements = cls.measurements(_db, tree)
         subjects = cls.subjects(_db, tree)
-
-        return Metadata(
+        
+        metadata = Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
             measurements=measurements,
             subjects=subjects,
+            identifiers=identifier,
         )
 
+        if identifier:
+            metadata.identifiers = [identifier]
+
+        return metadata
 
     @classmethod
     def get_work_tags(cls, tree):
@@ -86,40 +112,67 @@ class OCLCClassifyXMLParser(XMLParser):
     # CONTRIBUTORS:
 
     @classmethod
-    def contributors(cls, _db, tree):
+    def contributors(cls, _db, tree, work_tag=None):
         """Returns a list of ContributorData objects"""
         # We prefer to get author information out of the <authors> tag,
         # but sometimes all we have is a <work> tag.
-        return cls.get_authors(tree) or cls.get_authors_from_work_tag(_db, tree)
+        if work_tag is None:
+            return cls.get_authors(tree)
+        else:
+            return cls.extract_authors_from_work_tag(_db, work_tag)
 
     @classmethod
-    def get_authors_from_work_tag(cls, _db, tree):
-        # Sometimes, different versions of the same book get grouped together
-        # as individual <work> tags under a <works> list.
-        author_lists = []
-        work_tags = cls.get_work_tags(tree)
-        if work_tags is not None:
-            for work_tag in work_tags:
-                author_string = work_tag.get('author')
-                if author_string:
-                    author_lists.append(NameParser.parse_multiple(author_string))
+    def extract_authors_from_work_tag(cls, _db, work_tag):
+        results = []
 
-        # If there are multiple lists of authors (as a result of multiple <work> tags),
-        # use the shortest list.
-        return sorted(author_lists, key=len)[0]
+        author_string = work_tag.get('author')
+        authors = NameParser.parse_multiple(author_string)
+
+        # The <work> tag doesn't contain the author's LC or VIAF; we'll use the
+        # OWI to get a document that does contain them.
+
+        tree_from_owi, owi = cls._look_up_owi(_db, work_tag)
+
+        identifier = IdentifierData(
+            type=Identifier.OCLC_WORK,
+            identifier=owi,
+        )
+
+        tags = cls._get_author_tags(tree_from_owi)
+        authors_and_tags = zip(authors, tags)
+
+        for item in authors_and_tags:
+            author, tag = item
+            results.append(cls._add_lc_viaf(author, tag))
+
+        return dict(authors=results, identifier=identifier)
 
     @classmethod
     def get_authors(cls, tree):
-        authors_tag = cls._xpath1(tree, "//oclc:authors")
         results = []
-
-        for tag in authors_tag:
+        for tag in cls._get_author_tags(tree):
             contributor, default_role_used = NameParser.parse(tag.text)
-            contributor.lc = tag.get("lc")
-            contributor.viaf = tag.get("viaf")
-            results.append(contributor)
+            results.append(cls._add_lc_viaf(contributor, tag))
 
-        return results
+        return dict(authors=results)
+
+    @classmethod
+    def _get_author_tags(cls, tree):
+        return [tag for tag in cls._xpath1(tree, "//oclc:authors")]
+
+    @classmethod
+    def _add_lc_viaf(cls, author, tag):
+        author.lc = tag.get("lc") or None
+        author.viaf = tag.get("viaf") or None
+        return author
+
+    @classmethod
+    def _look_up_owi(cls, _db, work_tag):
+        owi = work_tag.get('owi')
+        url = 'http://classify.oclc.org/classify2/Classify?owi=' + owi
+        representation, cached = Representation.get(_db, url)
+        tree_from_owi = etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
+        return tree_from_owi, owi
 
     # MEASUREMENTS:
 
@@ -197,7 +250,7 @@ class OCLCClassifyXMLParser(XMLParser):
         # the corresponding tag.
         name, parent_tag = classifier
         search_terms = [("//oclc:%s//oclc:%s" % (name, item)) for item in ["heading", "mostPopular"]]
-        subtags = [cls._xpath(parent_tag, term) for term in search_terms]
+        subtags = [cls._xpath(parent_tag, term) for term in search_terms if parent_tag]
         # Flatten and scrub the list of tags:
         subtags_list = [tag for subtag in subtags for tag in subtag if len(subtag)]
         return name, subtags_list
@@ -952,10 +1005,11 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
         try:
             xml = self.api.lookup_by(isbn=identifier.identifier)
-            metadata = parser.parse(self._db, xml)
-            metadata.apply(
-                edition, collection=None #, replace=self.replacement_policy
-            )
+            code, metadata_list = parser.parse(self._db, xml)
+            for metadata in metadata_list:
+                metadata.apply(
+                    edition, collection=None #, replace=self.replacement_policy
+                )
             return identifier
 
         except IOError as e:
