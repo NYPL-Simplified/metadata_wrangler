@@ -53,6 +53,40 @@ class TestNameParser(object):
         eq_(rando, r.sort_name)
         eq_([Contributor.UNKNOWN_ROLE], r.roles)
 
+    def _test_default_role_transition(self):
+        # Test the state machine that governs changes in the role
+        # assigned to contributors who have no explicit role in the
+        # data.
+        m = NameParser._default_role_transition
+
+        primary_author = [
+            Contributor.PRIMARY_AUTHOR_ROLE, Contributor.ILLUSTRATOR_ROLE
+        ]
+
+        nonprimary_author = [
+            Contributor.AUTHOR_ROLE, Contributor.ILLUSTRATOR_ROLE
+        ]
+
+        not_an_author = [Contributor.ILLUSTRATOR]
+
+        # No matter what, the PRIMARY_AUTHOR role can only be used once
+        # -- it transitions to AUTHOR.
+        eq_(Contributor.AUTHOR_ROLE, m(primary_author, True))
+        eq_(Contributor.AUTHOR_ROLE, m(primary_author, False))
+
+        # If the current contributor was given AUTHOR because AUTHOR
+        # is the current default, then AUTHOR remains the default.
+        eq_(Contributor.AUTHOR_ROLE, m(primary_author, True))
+
+        # If the current contributor was given AUTHOR and AUTHOR is
+        # *not* the current default, then AUTHOR transitions to
+        # UNKNOWN.
+        eq_(Contributor.UNKNOWN_ROLE, m(primary_author, False))
+
+        # Any other role transitions to UNKNOWN.
+        eq_(Contributor.UNKNOWN_ROLE, m(not_an_author, True))
+        eq_(Contributor.UNKNOWN_ROLE, m(not_an_author, False))
+
     def test_parse_multiple_real_case(self):
         # Test parse_multiple in a real, very complicated situation.
         x = "Barrie, J. M. (James Matthew), 1860-1937 | Unwin, Nora S. 1907-1982 [Illustrator] | Bedford, F. D. [Illustrator] | Zallinger, Jean [Illustrator] | Barrie, J. M. 1860-1937 [Author; Contributor; Creator; Bibliographic antecedent; Author of screenplay; Other] | McKowen, Scott [Illustrator]"

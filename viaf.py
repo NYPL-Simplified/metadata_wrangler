@@ -48,7 +48,7 @@ class NameParser(object):
     bases need to be merged.
     """
 
-    LIFESPAN = re.compile("([0-9]*)?-([0-9]*)?[.;]?$")
+    LIFESPAN = re.compile("([0-9]*)\??-([0-9]*)[?.;]*$")
 
     @classmethod
     def parse(cls, string):

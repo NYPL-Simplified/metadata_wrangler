@@ -1,3 +1,4 @@
+# encoding: utf-8
 import logging
 
 from nose.tools import set_trace, eq_
@@ -50,6 +51,8 @@ class TestNameParser(object):
         m("Baxter, Charles, 1947-", "Baxter, Charles", "1947")
         m("Schlesinger, Arthur M., Jr. (Arthur Meier), 1917-2007",
           "Schlesinger, Arthur M., Jr. (Arthur Meier)", "1917", "2007")
+        m("Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV, 1935-",
+          "Bstan-ʼdzin-rgya-mtsho, Dalai Lama XIV", "1935", None)
         m("William, Prince, Duke of Cambridge, 1982-",
           "William, Prince, Duke of Cambridge", "1982")
         m("Windsor, Edward, Duke of, 1894-1972",
@@ -59,6 +62,13 @@ class TestNameParser(object):
 
         # Death year is known but birth year is not.
         m("Mace, Daniel, -1753", "Mace, Daniel", None, "1753")
+
+        # Neither year is known.
+        m("Anonymous, ?-?", "Anonymous", None, None)
+
+        # Neither year is known with certainty.
+        # It's accurate enough for our purposes so we just go with it.
+        m("Bach, P. D. Q., 1807?-1742?", "Bach, P. D. Q.", "1807", "1742")
 
         # Nameparser doesn't interpret these names as containing any
         # extra data -- they just stored directly in
@@ -78,6 +88,8 @@ class TestNameParser(object):
         # and we don't parse it out.
         m("Sunzi, active 6th century B.C.")
 
+        # TODO: This is a date but not in the format we expect.
+        # m("Fisher, David, 1946 April 16-")
 
 class TestVIAFNameParser(DatabaseTest):
     """Test the name parsing code built into VIAFParser (as opposed to the
