@@ -66,11 +66,10 @@ class OCLCClassifyXMLParser(XMLParser):
     CLASSIFIERS = {"fast": Subject.FAST, "lcc": Subject.LCC, "ddc": Subject.DDC}
 
     @classmethod
-    def initial_look_up(cls, _db, xml):
-        tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
+    def initial_look_up(cls, _db, tree):
         code = int(cls._xpath1(tree, "oclc:response").get('code'))
 
-        return tree, code, cls._owi_numbers(_db, tree)
+        return code, cls._owi_numbers(_db, tree)
 
     @classmethod
     def _owi_numbers(cls, _db, tree):
@@ -969,6 +968,10 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
     parser = OCLCClassifyXMLParser()
 
+    def _get_tree(self, **kwargs):
+        xml = self.api.lookup_by(**kwargs)
+        return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
+
     def process_item(self, identifier):
         """Ask OCLC Classify about a single ISBN and create an Edition
         based on what it says.
@@ -978,8 +981,8 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         metadata_list = []
 
         try:
-            xml = self.api.lookup_by(isbn=identifier.identifier)
-            tree, code, owi_numbers = self.parser.initial_look_up(self._db, xml)
+            tree = self._get_tree(isbn=identifier.identifier)
+            code, owi_numbers = self.parser.initial_look_up(self._db, tree)
 
             if code in [0, 2]:
                 metadata_list = self._single(self._db, tree, identifier)
@@ -1002,8 +1005,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         for number in owi_numbers:
             owi, is_new = Identifier.for_foreign_id(_db, Identifier.OCLC_WORK, number)
             owi.weight = 1
-            xml = self.api.lookup_by(owi=owi.identifier)
-            tree_from_owi = etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
+            tree_from_owi = self._get_tree(owi=owi.identifier)
 
             results.append(self.parser.parse(self._db, tree_from_owi, [identifier, owi]))
 
