@@ -69,12 +69,17 @@ class OCLCClassifyXMLParser(XMLParser):
     def initial_look_up(cls, _db, tree):
         code = int(cls._xpath1(tree, "oclc:response").get('code'))
 
-        return code, cls._owi_numbers(_db, tree)
+        return code, cls._owi_data(_db, tree)
 
     @classmethod
-    def _owi_numbers(cls, _db, tree):
+    def _owi_data(cls, _db, tree):
+        results = []
         work_tags = cls._get_tags(tree, "work", cls._xpath)
-        return [tag.get("owi") for tag in work_tags]
+        owi_numbers = [tag.get("owi") for tag in work_tags]
+        for number in owi_numbers:
+            data = IdentifierData(Identifier.OCLC_WORK, number)
+            results.append(data)
+        return results
 
     @classmethod
     def parse(cls, _db, tree, identifiers):
@@ -982,12 +987,12 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
         try:
             tree = self._get_tree(isbn=identifier.identifier)
-            code, owi_numbers = self.parser.initial_look_up(self._db, tree)
+            code, owi_data = self.parser.initial_look_up(self._db, tree)
 
             if code in [0, 2]:
                 metadata_list = self._single(self._db, tree, identifier)
             elif code == 4:
-                metadata_list = self._multiple(self._db, owi_numbers, identifier)
+                metadata_list = self._multiple(self._db, owi_data, identifier)
 
             for metadata in metadata_list:
                 self._apply(metadata, identifier)
@@ -1000,14 +1005,11 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
     def _single(self, _db, tree, identifier):
         return [self.parser.parse(self._db, tree, [identifier])]
 
-    def _multiple(self, _db, owi_numbers, identifier):
+    def _multiple(self, _db, owi_data, identifier):
         results = []
-        for number in owi_numbers:
-            owi, is_new = Identifier.for_foreign_id(_db, Identifier.OCLC_WORK, number)
-            owi.weight = 1
-            tree_from_owi = self._get_tree(owi=owi.identifier)
-
-            results.append(self.parser.parse(self._db, tree_from_owi, [identifier, owi]))
+        for item in owi_data:
+            tree_from_owi = self._get_tree(owi=item.identifier)
+            results.append(self.parser.parse(self._db, tree_from_owi, [identifier, item]))
 
         return results
 
