@@ -74,8 +74,9 @@ class OCLCClassifyXMLParser(XMLParser):
     @classmethod
     def _owi_data(cls, _db, tree):
         results = []
-        work_tags = cls._get_tags(tree, "work", cls._xpath)
-        owi_numbers = [tag.get("owi") for tag in work_tags]
+        tags = cls._xpath(tree, "//oclc:work")
+
+        owi_numbers = [tag.get("owi") for tag in tags]
         for number in owi_numbers:
             data = IdentifierData(Identifier.OCLC_WORK, number)
             results.append(data)
@@ -96,17 +97,14 @@ class OCLCClassifyXMLParser(XMLParser):
 
         return metadata
 
-    @classmethod
-    def _get_tags(cls, tree, tag_name, method):
-        return [tag for tag in method(tree, "//oclc:" + tag_name)]
-
     # CONTRIBUTORS:
 
     @classmethod
     def contributors(cls, _db, tree):
         """Returns a list of ContributorData objects"""
         results = []
-        for tag in cls._get_tags(tree, "authors", cls._xpath1):
+        tags = cls._xpath(tree, "//oclc:authors/oclc:author")
+        for tag in tags:
             contributor, default_role_used = NameParser.parse(tag.text)
             results.append(cls._add_lc_viaf(contributor, tag))
 
@@ -123,7 +121,8 @@ class OCLCClassifyXMLParser(XMLParser):
     @classmethod
     def measurements(cls, _db, tree):
         """Returns a list of MeasurementData objects"""
-        return cls.get_measurements(cls._get_tags(tree, "work", cls._xpath))
+        tags = cls._xpath(tree, "//oclc:work")
+        return cls.get_measurements(tags)
 
     @classmethod
     def get_measurements(cls, work_tags):
