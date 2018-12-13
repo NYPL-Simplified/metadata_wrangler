@@ -1002,15 +1002,12 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         for number in owi_numbers:
             owi, is_new = Identifier.for_foreign_id(_db, Identifier.OCLC_WORK, number)
             owi.weight = 1
-            tree_from_owi = self._get_new_tree(owi)
+            xml = self.api.lookup_by(owi=owi.identifier)
+            tree_from_owi = etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
+
             results.append(self.parser.parse(self._db, tree_from_owi, [identifier, owi]))
 
         return results
-
-    def _get_new_tree(self, owi):
-        url = 'http://classify.oclc.org/classify2/Classify?owi=' + owi.identifier
-        representation, cached = Representation.get(self._db, url)
-        return etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
 
     def _apply(self, metadata, identifier):
         edition = self.edition(identifier)
