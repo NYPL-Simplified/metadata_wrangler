@@ -66,99 +66,47 @@ class OCLCClassifyXMLParser(XMLParser):
     CLASSIFIERS = {"fast": Subject.FAST, "lcc": Subject.LCC, "ddc": Subject.DDC}
 
     @classmethod
-    def parse(cls, _db, xml):
-        results = []
-
+    def initial_look_up(cls, _db, xml):
         tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
-        response = cls._xpath1(tree, "oclc:response")
-        code = int(response.get('code'))
+        code = int(cls._xpath1(tree, "oclc:response").get('code'))
 
-        if code in [0, 2]:
-            results.append(cls.make_metadata(_db, tree))
-
-        elif code == 4:
-            work_tags = cls.get_work_tags(tree)
-            for work_tag in work_tags:
-                results.append(cls.make_metadata(_db, tree, work_tag))
-
-        return (code, results)
-
+        return tree, code, cls._owi_numbers(_db, tree)
 
     @classmethod
-    def make_metadata(cls, _db, tree, work_tag=None):
-        contributor_info = cls.contributors(_db, tree, work_tag)
-        contributors = contributor_info.get("authors")
-        identifier = contributor_info.get("identifier")
+    def _owi_numbers(cls, _db, tree):
+        work_tags = cls._get_tags(tree, "work", cls._xpath)
+        return [tag.get("owi") for tag in work_tags]
+
+    @classmethod
+    def parse(cls, _db, tree, identifiers):
+        contributors = cls.contributors(_db, tree)
         measurements = cls.measurements(_db, tree)
         subjects = cls.subjects(_db, tree)
-        
         metadata = Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
             measurements=measurements,
             subjects=subjects,
-            identifiers=identifier,
+            identifiers=identifiers,
         )
-
-        if identifier:
-            metadata.identifiers = [identifier]
 
         return metadata
 
     @classmethod
-    def get_work_tags(cls, tree):
-        return cls._xpath(tree, "//oclc:work")
+    def _get_tags(cls, tree, tag_name, method):
+        return [tag for tag in method(tree, "//oclc:" + tag_name)]
 
     # CONTRIBUTORS:
 
     @classmethod
-    def contributors(cls, _db, tree, work_tag=None):
+    def contributors(cls, _db, tree):
         """Returns a list of ContributorData objects"""
-        # We prefer to get author information out of the <authors> tag,
-        # but sometimes all we have is a <work> tag.
-        if work_tag is None:
-            return cls.get_authors(tree)
-        else:
-            return cls.extract_authors_from_work_tag(_db, work_tag)
-
-    @classmethod
-    def extract_authors_from_work_tag(cls, _db, work_tag):
         results = []
-
-        author_string = work_tag.get('author')
-        authors = NameParser.parse_multiple(author_string)
-
-        # The <work> tag doesn't contain the author's LC or VIAF; we'll use the
-        # OWI to get a document that does contain them.
-
-        tree_from_owi, owi = cls._look_up_owi(_db, work_tag)
-
-        identifier = IdentifierData(
-            type=Identifier.OCLC_WORK,
-            identifier=owi,
-        )
-
-        tags = cls._get_author_tags(tree_from_owi)
-        authors_and_tags = zip(authors, tags)
-
-        for item in authors_and_tags:
-            author, tag = item
-            results.append(cls._add_lc_viaf(author, tag))
-
-        return dict(authors=results, identifier=identifier)
-
-    @classmethod
-    def get_authors(cls, tree):
-        results = []
-        for tag in cls._get_author_tags(tree):
+        for tag in cls._get_tags(tree, "authors", cls._xpath1):
             contributor, default_role_used = NameParser.parse(tag.text)
             results.append(cls._add_lc_viaf(contributor, tag))
 
-        return dict(authors=results)
-
-    @classmethod
-    def _get_author_tags(cls, tree):
-        return [tag for tag in cls._xpath1(tree, "//oclc:authors")]
+        return results
 
     @classmethod
     def _add_lc_viaf(cls, author, tag):
@@ -166,21 +114,12 @@ class OCLCClassifyXMLParser(XMLParser):
         author.viaf = tag.get("viaf") or None
         return author
 
-    @classmethod
-    def _look_up_owi(cls, _db, work_tag):
-        owi = work_tag.get('owi')
-        url = 'http://classify.oclc.org/classify2/Classify?owi=' + owi
-        representation, cached = Representation.get(_db, url)
-        tree_from_owi = etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
-        return tree_from_owi, owi
-
     # MEASUREMENTS:
 
     @classmethod
     def measurements(cls, _db, tree):
         """Returns a list of MeasurementData objects"""
-        work_tags = cls.get_work_tags(tree)
-        return cls.get_measurements(work_tags)
+        return cls.get_measurements(cls._get_tags(tree, "work", cls._xpath))
 
     @classmethod
     def get_measurements(cls, work_tags):
@@ -1028,26 +967,58 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.OCLC
 
+    parser = OCLCClassifyXMLParser()
+
     def process_item(self, identifier):
         """Ask OCLC Classify about a single ISBN and create an Edition
         based on what it says.
         """
         # Perform a title/author lookup.
-        edition = self.edition(identifier)
-        work = self.work(edition.primary_identifier)
-        parser = OCLCClassifyXMLParser()
+
+        metadata_list = []
 
         try:
             xml = self.api.lookup_by(isbn=identifier.identifier)
-            code, metadata_list = parser.parse(self._db, xml)
+            tree, code, owi_numbers = self.parser.initial_look_up(self._db, xml)
+
+            if code in [0, 2]:
+                metadata_list = self._single(self._db, tree, identifier)
+            elif code == 4:
+                metadata_list = self._multiple(self._db, owi_numbers, identifier)
+
             for metadata in metadata_list:
-                metadata.apply(
-                    edition, collection=None #, replace=self.replacement_policy
-                )
+                self._apply(metadata, identifier)
+
             return identifier
 
         except IOError as e:
             return self.failure(identifier, e.message)
+
+    def _single(self, _db, tree, identifier):
+        return [self.parser.parse(self._db, tree, [identifier])]
+
+    def _multiple(self, _db, owi_numbers, identifier):
+        results = []
+        for number in owi_numbers:
+            owi, is_new = Identifier.for_foreign_id(_db, Identifier.OCLC_WORK, number)
+            owi.weight = 1
+            tree_from_owi = self._get_new_tree(owi)
+            results.append(self.parser.parse(self._db, tree_from_owi, [identifier, owi]))
+
+        return results
+
+    def _get_new_tree(self, owi):
+        url = 'http://classify.oclc.org/classify2/Classify?owi=' + owi.identifier
+        representation, cached = Representation.get(self._db, url)
+        return etree.fromstring(representation.content, parser=etree.XMLParser(recover=True))
+
+    def _apply(self, metadata, identifier):
+        edition = self.edition(identifier)
+        work = self.work(edition.primary_identifier)
+        metadata.apply(
+            edition, collection=None #, replace=self.replacement_policy
+        )
+
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
