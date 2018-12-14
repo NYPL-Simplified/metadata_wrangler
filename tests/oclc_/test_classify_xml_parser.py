@@ -7,20 +7,48 @@ from .. import (
     sample_data
 )
 from lxml import etree
-from core.model import Contributor
+from core.model import Contributor, Identifier
 from oclc.classify import OCLCClassifyXMLParser
 
 class TestOCLCClassifyXMLParser(DatabaseTest):
 
+    parser =  OCLCClassifyXMLParser()
+
     def sample_data(self, filename):
         return sample_data(filename, 'oclc_classify')
 
+    def tree(self, filename):
+        xml = self.sample_data(filename)
+        return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
+
+    def test_initial_look_up(self):
+        single_tree = self.tree("single_work_response.xml")
+        code, owi_data = self.parser.initial_look_up(self._db, single_tree)
+        eq_(2, code)
+        eq_(1, len(owi_data))
+        eq_(Identifier.OCLC_WORK, owi_data[0].type)
+        eq_(None, owi_data[0].identifier)
+        eq_(1, owi_data[0].weight)
+
+        multi_tree = self.tree("multi_work_with_owis.xml")
+        code, owi_data = self.parser.initial_look_up(self._db, multi_tree)
+        eq_(4, code)
+        eq_(2, len(owi_data))
+        [id_1, id_2] = owi_data
+
+        eq_(Identifier.OCLC_WORK, id_1.type)
+        eq_("48446512", id_1.identifier)
+        eq_(1, id_1.weight)
+
+        eq_(Identifier.OCLC_WORK, id_2.type)
+        eq_("48525129", id_2.identifier)
+        eq_(1, id_2.weight)
+
+
     def test_parse(self):
-        parser = OCLCClassifyXMLParser()
-        xml = self.sample_data("single_work_response.xml")
-        tree = etree.fromstring(xml, parser=etree.XMLParser(recover=True))
         identifier = self._identifier()
-        result = parser.parse(self._db, tree, identifier)
+        tree = self.tree("single_work_response.xml")
+        result = self.parser.parse(self._db, tree, identifier)
 
         eq_(identifier, result.identifiers)
 
@@ -34,13 +62,13 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
         eq_('n79059764', tanner.lc)
         eq_(set([Contributor.UNKNOWN_ROLE, Contributor.EDITOR_ROLE,
                  Contributor.INTRODUCTION_ROLE, Contributor.AUTHOR_ROLE]),
-            tanner.roles
+            set(tanner.roles)
         )
 
         eq_('34482742', hayford.viaf)
         eq_('n50025038', hayford.lc)
         eq_(set([Contributor.ASSOCIATED_ROLE, Contributor.EDITOR_ROLE]),
-            hayford.roles)
+            set(hayford.roles))
 
         eq_('27068555', melville.viaf)
         eq_('n79006936', melville.lc)

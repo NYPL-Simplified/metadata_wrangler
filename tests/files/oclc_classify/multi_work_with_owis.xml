@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="4"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <workCount>2</workCount>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <orderBy>thold desc</orderBy>
+  <input type="isbn">0345391837</input>
+  <works>
+    <work author="Adams, Douglas, 1952-2001" editions="112" format="Book" holdings="3786" hyr="2017" itemtype="itemtype-book" lyr="1982" owi="48446512" schemes="DDC LCC" title="So long, and thanks for all the fish" wi="1003820587"/>
+    <work author="Adams, Douglas, 1952-2001 | Gaiman, Neil" editions="41" format="Book" holdings="2170" hyr="2010" itemtype="itemtype-book" lyr="1979" owi="48525129" schemes="DDC LCC" title="The ultimate hitchhiker's guide to the galaxy" wi="1001678183"/>
+  </works>
+</classify>
