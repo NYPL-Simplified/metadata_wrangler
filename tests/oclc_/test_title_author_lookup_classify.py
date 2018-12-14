@@ -16,7 +16,7 @@ from core.model import (
 )
 
 from oclc.classify import (
-    OCLCXMLParser,
+    OCLCTitleAuthorLookupXMLParser,
     TitleAuthorLookupCoverageProvider
 )
 from testing import MockOCLCClassifyAPI
@@ -31,8 +31,8 @@ class TestParser(DatabaseTest):
         """We can turn a multi-work response into a list of SWIDs."""
         xml = self.sample_data("multi_work_response.xml")
 
-        status, swids = OCLCXMLParser.parse(self._db, xml, languages=["eng"])
-        eq_(OCLCXMLParser.MULTI_WORK_STATUS, status)
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(self._db, xml, languages=["eng"])
+        eq_(OCLCTitleAuthorLookupXMLParser.MULTI_WORK_STATUS, status)
 
         eq_(25, len(swids))
         eq_(['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'], sorted(swids))
@@ -48,24 +48,24 @@ class TestParser(DatabaseTest):
         # This will only accept titles that contain exactly the same
         # words as "Dick Moby". Only four titles in the sample data
         # meet that criterion.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=1)
         eq_(4, len(swids))
 
         # Stopwords "a", "an", and "the" are removed before
         # consideration.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="A an the Moby-Dick", title_similarity=1)
         eq_(4, len(swids))
 
         # This is significantly more lax, so it finds more results.
         # The exact number isn't important.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0.5)
         assert len(swids) > 4
 
         # This is so lax as to be meaningless. It accepts everything.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0)
         eq_(25, len(swids))
 
@@ -73,20 +73,20 @@ class TestParser(DatabaseTest):
         # prohibit one work whose title contains ' ; ' (these are
         # usually anthologies) and three works whose titles have no
         # words in common with the title we're looking for.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0.00000000001)
         eq_(21, len(swids))
 
         # Add a semicolon to the title we're looking for, and the
         # work whose title contains ' ; ' is acceptable again.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick ; Moby", title_similarity=0.000000001)
         eq_(22, len(swids))
 
         # This isn't particularly strict, but none of the books in
         # this dataset have titles that resemble this title, so none
         # of their SWIDs show up here.
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="None Of These Words Show Up Whatsoever")
         eq_(0, len(swids))
 
@@ -96,14 +96,14 @@ class TestParser(DatabaseTest):
         xml = self.sample_data("multi_work_response.xml")
 
         [wrong_author], ignore = Contributor.lookup(self._db, sort_name="Wrong Author")
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
         eq_(0, len(swids))
 
         [melville], ignore = Contributor.lookup(self._db, sort_name="Melville, Herman")
-        status, swids = OCLCXMLParser.parse(
+        status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
 
         # We picked up 11 of the 25 works in the dataset.
@@ -119,10 +119,10 @@ class TestParser(DatabaseTest):
             assert missing not in swids
 
     def test_primary_author_name(self):
-        melville = OCLCXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
+        melville = OCLCTitleAuthorLookupXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
         eq_("Melville, Herman", melville.sort_name)
 
-        eq_(None, OCLCXMLParser.primary_author_from_author_string(
+        eq_(None, OCLCTitleAuthorLookupXMLParser.primary_author_from_author_string(
             self._db,
             "Melville, Herman, 1819-1891 [Author] | Hayford, Harrison [Associated name; Editor]"))
 
@@ -132,9 +132,9 @@ class TestParser(DatabaseTest):
 
         xml = self.sample_data("single_work_response.xml")
 
-        status, records = OCLCXMLParser.parse(
+        status, records = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
 
         # We expect 1 work record for the OCLC work. The two
         # edition records do not become work records.
@@ -164,7 +164,7 @@ class TestParser(DatabaseTest):
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            [None, None, u'n50025038', u'n50050335', u'n79006936', 
+            [None, None, u'n50025038', u'n50050335', u'n79006936',
              u'n79059764'],
             sorted([x.lc for x in work.contributors])
         )
@@ -222,18 +222,18 @@ class TestParser(DatabaseTest):
         # but there's no work ID. We use the document anyway.
         xml = self.sample_data("missing_pswid.xml")
 
-        status, [record] = OCLCXMLParser.parse(
+        status, [record] = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
         eq_("The Europeans. Washington Square.", record.title)
 
     def test_no_contributors(self):
         # This document has no contributors listed.
         xml = self.sample_data("single_work_no_authors.xml")
 
-        status, records = OCLCXMLParser.parse(
+        status, records = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
         # We parsed the work, but it had no contributors listed.
         eq_([set()], [r.contributors for r in records])
 
@@ -261,7 +261,7 @@ class TestAuthorParser(DatabaseTest):
 
     def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE,
                      birthdate=None, deathdate=None):
-        [res] = OCLCXMLParser.parse_author_string(self._db, string)
+        [res] = OCLCTitleAuthorLookupXMLParser.parse_author_string(self._db, string)
         self.assert_author(res, name, role, birthdate, deathdate)
 
     def test_authors(self):
@@ -280,7 +280,7 @@ class TestAuthorParser(DatabaseTest):
             u"Карролл, Лувис", Contributor.PRIMARY_AUTHOR_ROLE,
             birthdate="1832", deathdate="1898")
 
-        kerry, melville = OCLCXMLParser.parse_author_string(
+        kerry, melville = OCLCTitleAuthorLookupXMLParser.parse_author_string(
             self._db,
             "McSweeney, Kerry, 1941- | Melville, Herman, 1819-1891")
         self.assert_author(kerry, "McSweeney, Kerry",
@@ -295,7 +295,7 @@ class TestAuthorParser(DatabaseTest):
         # Check out this mess.
         s = "Sunzi, active 6th century B.C. | Giles, Lionel, 1875-1958 [Writer of added commentary; Translator] | Griffith, Samuel B. [Editor; Author of introduction; Translator] | Cleary, Thomas F., 1949- [Editor; Translator] | Sawyer, Ralph D. [Editor; Author of introduction; Translator] | Clavell, James"
         sunzi, giles, griffith, cleary, sawyer, clavell = (
-            OCLCXMLParser.parse_author_string(self._db, s))
+            OCLCTitleAuthorLookupXMLParser.parse_author_string(self._db, s))
 
         # This one could be better.
         self.assert_author(sunzi, "Sunzi, active 6th century B.C.",
@@ -347,7 +347,7 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
         )
         self.identifier = self.edition.primary_identifier
         self.api = MockOCLCClassifyAPI()
-        self.provider = TitleAuthorLookupCoverageProvider(self._db, api=self.api)
+        self.provider = TitleAuthorLookupCoverageProvider(self._db, api=self.api, collection=self._collection())
 
     def sample_data(self, filename):
         return sample_data(filename, 'oclc_classify')
