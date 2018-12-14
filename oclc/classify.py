@@ -184,6 +184,7 @@ class OCLCClassifyXMLParser(XMLParser):
         # so it's easiest to just keep track of them separately, rather than having to extract them every time.
         subtags_info = [cls._extract_subtags(classifier) for classifier in classifiers]
         subject_data_objects = cls.make_subject_data(subtags_info)
+        # set_trace()
         return subject_data_objects
 
     @classmethod
