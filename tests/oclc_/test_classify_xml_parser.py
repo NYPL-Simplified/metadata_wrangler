@@ -44,7 +44,6 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
         eq_("48525129", id_2.identifier)
         eq_(1, id_2.weight)
 
-
     def test_parse(self):
         identifier = self._identifier()
         tree = self.tree("single_work_response.xml")
@@ -74,7 +73,6 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
         eq_('n79006936', melville.lc)
         eq_([Contributor.AUTHOR_ROLE], melville.roles)
         eq_({'deathDate': '1891', 'birthDate': '1819'}, melville.extra)
-
 
         # Measurements
         def get_measurement(quantity):

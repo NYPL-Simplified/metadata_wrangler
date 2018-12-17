@@ -68,7 +68,6 @@ class OCLCClassifyXMLParser(XMLParser):
     @classmethod
     def initial_look_up(cls, _db, tree):
         code = int(cls._xpath1(tree, "oclc:response").get('code'))
-
         return code, cls._owi_data(_db, tree)
 
     @classmethod
@@ -993,9 +992,9 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
                 metadata_list = self._single(self._db, tree, identifier)
             elif code == 4:
                 metadata_list = self._multiple(self._db, owi_data, identifier)
-
-            for metadata in metadata_list:
-                self._apply(metadata, identifier)
+            if metadata_list:
+                for metadata in metadata_list:
+                    self._apply(metadata, identifier)
 
             return identifier
 
