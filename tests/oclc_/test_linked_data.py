@@ -37,7 +37,7 @@ from .. import (
 class TestOCLCLinkedData(DatabaseTest):
 
     def sample_data(self, filename):
-        return sample_data(filename, 'oclc_classify')
+        return sample_data(filename, 'oclc')
 
     def test_creator_names_picks_up_contributors(self):
         graph = json.loads(
