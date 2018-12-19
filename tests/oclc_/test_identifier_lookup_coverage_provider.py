@@ -20,16 +20,16 @@ class MockParser(OCLCClassifyXMLParser):
         self.call_count = 0
         self.called_with = []
 
-    def parse(self, db, tree, identifiers):
+    def parse(self, tree, identifiers):
         self.call_count += 1
         self.called_with.append(identifiers)
 
 class MockParserSingle(MockParser):
-    def initial_look_up(self, db, tree):
+    def initial_look_up(self, tree):
         return 2, []
 
 class MockParserMulti(MockParser):
-    def initial_look_up(self, db, tree):
+    def initial_look_up(self, tree):
         results = []
         owi_numbers = ["48446512", "48525129"]
         for number in owi_numbers:
@@ -43,11 +43,11 @@ class MockProvider(IdentifierLookupCoverageProvider):
         self.apply_called_with = []
         super(MockProvider, self).__init__(collection)
 
-    def _single(self, db, tree, identifier):
+    def _single(self, tree, identifier):
         self.called_with = dict(tree=tree, identifier=identifier)
         return [Metadata(identifiers=identifier, data_source=DataSource.OCLC)]
 
-    def _multiple(self, db, owi_data, identifier):
+    def _multiple(self, owi_data, identifier):
         self.called_with = dict(owi_data=owi_data, identifier=identifier)
         return([
             Metadata(identifiers=[identifier, owi_data[0]], data_source=DataSource.OCLC),
@@ -158,7 +158,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.parser = MockParserSingle()
         tree, identifier = self._tree("single"), self._id("single")
 
-        provider._single(self._db, tree, identifier)[0]
+        provider._single(tree, identifier)[0]
         [result] = provider.parser.called_with[0]
 
         eq_((result.type, result.identifier), (Identifier.ISBN, self.SINGLE_ISBN))
@@ -172,8 +172,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.parser = MockParserMulti()
         tree, identifier = self._tree("multi"), self._id("multi")
 
-        code, owi_data = provider.parser.initial_look_up(self._db, tree)
-        provider._multiple(self._db, owi_data, identifier)
+        code, owi_data = provider.parser.initial_look_up(tree)
+        provider._multiple(owi_data, identifier)
         result_1, result_2 = provider.parser.called_with
         # Make sure parse was called twice--once for each of the two OWIs.
         eq_(provider.parser.call_count, 2)
@@ -197,7 +197,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         tree, identifier = self._tree("single"), self._id("single")
-        [result] = provider._single(self._db, tree, identifier)
+        [result] = provider._single(tree, identifier)
 
         assert isinstance(result, Metadata)
         eq_(result._data_source, "OCLC Classify")
@@ -214,8 +214,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         tree, identifier = self._tree("multi"), self._id("multi")
-        code, owi_data = provider.parser.initial_look_up(self._db, tree)
-        results = provider._multiple(self._db, owi_data, identifier)
+        code, owi_data = provider.parser.initial_look_up(tree)
+        results = provider._multiple(owi_data, identifier)
 
         # The document contained two <work> tags and therefore two OWIs, so we
         # end up with two results.  They should both be Metadata objects, and

@@ -40,12 +40,14 @@ class OCLC(object):
     FORMAT = "OCLC.format"
 
 class OCLCClassifyXMLParser(XMLParser):
-    """Turn the output of the OCLC Classify API into a Metadata object.
+    """Turn the output of the OCLC Classify API into a Metadata object
+    (if the ISBN identifies a single work) or a list of OCLC Work IDs
+    (if the ISBN identifies multiple works).
 
-    This object includes ContributorData for the book's contributors,
-    ClassificationData representing the most common classifications for
-    the book, and MeasurementData describing how many libraries have
-    collected the book.
+    The Metadata object includes ContributorData for the book's
+    contributors, SubjectData representing the most common
+    classifications for the book, and MeasurementData describing how
+    many libraries have collected the book.
     """
 
     # OCLC in-representation 'status codes'
@@ -57,8 +59,6 @@ class OCLCClassifyXMLParser(XMLParser):
     NOT_FOUND_STATUS = 102
     UNEXPECTED_ERROR_STATUS = 200
 
-    INTS = set([OCLC.HOLDING_COUNT, OCLC.EDITION_COUNT])
-
     NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
     ROLES = re.compile("\[([^]]+)\]$")
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
@@ -66,12 +66,15 @@ class OCLCClassifyXMLParser(XMLParser):
     CLASSIFIERS = {"fast": Subject.FAST, "lcc": Subject.LCC, "ddc": Subject.DDC}
 
     @classmethod
-    def initial_look_up(cls, _db, tree):
+    def initial_look_up(cls, tree):
+        """Extract the internal 'status code' and any OWI identifiers
+        from the given (preparsed) XML document.
+        """
         code = int(cls._xpath1(tree, "oclc:response").get('code'))
-        return code, cls._owi_data(_db, tree)
+        return code, cls._owi_data(tree)
 
     @classmethod
-    def _owi_data(cls, _db, tree):
+    def _owi_data(cls, tree):
         results = []
         tags = cls._xpath(tree, "//oclc:work")
 
@@ -82,10 +85,10 @@ class OCLCClassifyXMLParser(XMLParser):
         return results
 
     @classmethod
-    def parse(cls, _db, tree, identifiers):
-        contributors = cls.contributors(_db, tree)
-        measurements = cls.measurements(_db, tree)
-        subjects = cls.subjects(_db, tree)
+    def parse(cls, tree, identifiers):
+        contributors = cls.contributors(tree)
+        measurements = cls.measurements(tree)
+        subjects = cls.subjects(tree)
         metadata = Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
@@ -99,7 +102,7 @@ class OCLCClassifyXMLParser(XMLParser):
     # CONTRIBUTORS:
 
     @classmethod
-    def contributors(cls, _db, tree):
+    def contributors(cls, tree):
         """Returns a list of ContributorData objects"""
         results = []
         tags = cls._xpath(tree, "//oclc:authors/oclc:author")
@@ -118,7 +121,7 @@ class OCLCClassifyXMLParser(XMLParser):
     # MEASUREMENTS:
 
     @classmethod
-    def measurements(cls, _db, tree):
+    def measurements(cls, tree):
         """Returns a list of MeasurementData objects"""
         tags = cls._xpath(tree, "//oclc:work")
         return cls.get_measurements(tags)
@@ -162,7 +165,7 @@ class OCLCClassifyXMLParser(XMLParser):
     # SUBJECTS
 
     @classmethod
-    def subjects(cls, _db, tree):
+    def subjects(cls, tree):
         """Returns a list of SubjectData objects"""
         names, parent_tags = cls.get_classifier_names_and_parent_tags(tree)
         subjects = cls.get_subjects(zip(names, parent_tags))
@@ -416,7 +419,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
     log = logging.getLogger("OCLC XML Parser")
 
     @classmethod
-    def parse(cls, _db, xml, **restrictions):
+    def parse(cls, xml, **restrictions):
         """Turn XML data from the OCLC lookup service into a list of SWIDs
         (for a multi-work response) or a list of Edition
         objects (for a single-work response).
@@ -444,15 +447,15 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             work_tag = cls._xpath1(tree, "//oclc:work")
             if work_tag is not None:
                 author_string = work_tag.get('author')
-                primary_author = cls.primary_author_from_author_string(_db, author_string)
+                primary_author = cls.primary_author_from_author_string(author_string)
 
             existing_authors = cls.extract_authors(
-                _db, authors_tag, primary_author=primary_author)
+                authors_tag, primary_author=primary_author)
 
             # The representation lists a single work, its authors, its editions,
             # plus summary classification information for the work.
             edition, ignore = cls.extract_edition(
-                _db, work_tag, existing_authors, **restrictions)
+                work_tag, existing_authors, **restrictions)
             if edition:
                 cls.log.info("EXTRACTED %r", edition)
             records = []
@@ -468,7 +471,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             # The representation lists a set of works that match the
             # search query.
             cls.log.debug("Extracting SWIDs from search results.")
-            records = cls.extract_swids(_db, tree, **restrictions)
+            records = cls.extract_swids(tree, **restrictions)
         elif representation_type == cls.NOT_FOUND_STATUS:
             # No problem; OCLC just doesn't have any data.
             records = []
@@ -479,7 +482,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         return representation_type, records
 
     @classmethod
-    def extract_swids(cls, _db, tree, **restrictions):
+    def extract_swids(cls, tree, **restrictions):
         """Turn a multi-work response into a list of SWIDs."""
 
         swids = []
@@ -488,8 +491,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             # the info, we're calling it to make sure this work meets
             # the restriction. If this work meets the restriction,
             # we'll store its info when we look up the SWID.
-            response = cls._extract_basic_info(
-                _db, work_tag, **restrictions)
+            response = cls._extract_basic_info(work_tag, **restrictions)
             if response:
                 title, author_names, language = response
                 # TODO: 'swid' is what it's called in older representations.
@@ -506,14 +508,14 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def extract_authors(cls, _db, authors_tag, primary_author=None):
+    def extract_authors(cls, authors_tag, primary_author=None):
         results = []
         if authors_tag is not None:
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
                 lc = author_tag.get('lc', None)
                 viaf = author_tag.get('viaf', None)
                 contributor, roles, default_role_used = cls._parse_single_author(
-                    _db, author_tag.text, lc=lc, viaf=viaf,
+                    author_tag.text, lc=lc, viaf=viaf,
                     primary_author=primary_author)
                 if contributor:
                     results.append(contributor)
@@ -529,7 +531,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         )
 
     @classmethod
-    def _parse_single_author(cls, _db, author,
+    def _parse_single_author(cls, author,
                              lc=None, viaf=None,
                              existing_authors=[],
                              default_role=Contributor.AUTHOR_ROLE,
@@ -595,7 +597,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
 
         if not contributor:
             contributor, was_new = Contributor.lookup(
-                _db, author, viaf, lc, extra=kwargs)
+                author, viaf, lc, extra=kwargs)
         if isinstance(contributor, list):
             # We asked for an author based solely on the name, which makes
             # Contributor.lookup() return a list.
@@ -623,7 +625,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         return contributor, roles, default_role_used
 
     @classmethod
-    def primary_author_from_author_string(cls, _db, author_string):
+    def primary_author_from_author_string(cls, author_string):
         # If the first author mentioned in the author string
         # does not have an explicit role set, treat them as the primary
         # author.
@@ -633,13 +635,13 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         if not authors:
             return None
         author, roles, default_role_used = cls._parse_single_author(
-            _db, authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
+            authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
         if roles == [Contributor.PRIMARY_AUTHOR_ROLE]:
             return author
         return None
 
     @classmethod
-    def parse_author_string(cls, _db, author_string, existing_authors=[],
+    def parse_author_string(cls, author_string, existing_authors=[],
                             primary_author=None):
         default_role = Contributor.PRIMARY_AUTHOR_ROLE
         authors = []
@@ -647,7 +649,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             return authors
         for author in author_string.split("|"):
             author, roles, default_role_used = cls._parse_single_author(
-                _db, author, existing_authors=existing_authors,
+                author, existing_authors=existing_authors,
                 default_role=default_role,
                 primary_author=primary_author)
             if roles:
@@ -670,13 +672,13 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         return authors
 
     @classmethod
-    def _extract_basic_info(cls, _db, tag, existing_authors=None,
+    def _extract_basic_info(cls, tag, existing_authors=None,
                             **restrictions):
         """Extract information common to work tag and edition tag."""
         title = tag.get('title')
         author_string = tag.get('author')
         authors_and_roles = cls.parse_author_string(
-            _db, author_string, existing_authors)
+            author_string, existing_authors)
         if 'language' in tag.keys():
             language = tag.get('language')
         else:
@@ -986,11 +988,11 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
         try:
             tree = self._get_tree(isbn=identifier.identifier)
-            code, owi_data = self.parser.initial_look_up(self._db, tree)
+            code, owi_data = self.parser.initial_look_up(tree)
             if code in [self.parser.SINGLE_WORK_DETAIL_STATUS, self.parser.SINGLE_WORK_SUMMARY_STATUS]:
-                metadata_list = self._single(self._db, tree, identifier)
+                metadata_list = self._single(tree, identifier)
             elif code == self.parser.MULTI_WORK_STATUS:
-                metadata_list = self._multiple(self._db, owi_data, identifier)
+                metadata_list = self._multiple(owi_data, identifier)
             elif code == self.parser.NOT_FOUND_STATUS:
                 message = ("The work with %s %s was not found." % (identifier.type, identifier.identifier))
                 return self.failure(identifier, message)
@@ -1003,18 +1005,18 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         except IOError as e:
             return self.failure(identifier, e.message)
 
-    def _single(self, _db, tree, identifier):
+    def _single(self, tree, identifier):
         """In the case of a single work response, go ahead and create a metadata object."""
-        return [self.parser.parse(self._db, tree, [identifier])]
+        return [self.parser.parse(tree, [identifier])]
 
-    def _multiple(self, _db, owi_data, identifier):
+    def _multiple(self, owi_data, identifier):
         """In the case of a multi-work response, we don't have enough information to create
         the metadata object right away; instead, for each work, we get a more complete document
         by looking up the OWI, and create a metadata object based on that."""
         results = []
         for item in owi_data:
             tree_from_owi = self._get_tree(owi=item.identifier)
-            results.append(self.parser.parse(self._db, tree_from_owi, [identifier, item]))
+            results.append(self.parser.parse(tree_from_owi, [identifier, item]))
 
         return results
 
