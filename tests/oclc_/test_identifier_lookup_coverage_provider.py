@@ -96,7 +96,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         result = provider.process_item(id)
         eq_(etree.tostring(provider.called_with["tree"]), etree.tostring(provider._get_tree(self.SINGLE_ISBN)))
         eq_(provider.called_with["identifier"], id)
-        eq_(result, (id, None))
+        eq_(result, id)
 
     def test_process_item_multi(self):
         # Testing that, when process_item finds out that a document's status code is 4,
@@ -111,14 +111,13 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         result = provider.process_item(id)
         eq_([x.identifier for x in provider.called_with["owi_data"]], ["48446512", "48525129"])
         eq_(provider.called_with["identifier"], id)
-        eq_(result, (id, None))
+        eq_(result, id)
 
     def test_process_item_failure(self):
         # If the ISBN is not found--i.e. the status code is 102--the provider should throw an error.
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         bad_id = self._identifier(Identifier.ISBN, "9781429984171")
-        result_id, failure = provider.process_item(bad_id)
-        eq_(bad_id.identifier, result_id.identifier)
+        failure = provider.process_item(bad_id)
         assert isinstance(failure, CoverageFailure)
 
     def test__apply_single(self):

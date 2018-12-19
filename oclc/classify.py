@@ -993,11 +993,11 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             elif code == self.parser.MULTI_WORK_STATUS:
                 metadata_list = self._multiple(self._db, owi_data, identifier)
             elif code == self.parser.NOT_FOUND_STATUS:
-                failure = CoverageFailure(identifier, traceback.format_exc(), data_source=DataSource.OCLC, transient=True)
+                return CoverageFailure(identifier, traceback.format_exc(), data_source=DataSource.OCLC, transient=True)
             if metadata_list:
                 for metadata in metadata_list:
                     self._apply(metadata, identifier)
-            return identifier, failure
+            return identifier
 
         except IOError as e:
             return self.failure(identifier, e.message)
