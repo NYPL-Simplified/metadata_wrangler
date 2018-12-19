@@ -67,14 +67,23 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def initial_look_up(cls, tree):
-        """Extract the internal 'status code' and any OWI identifiers
-        from the given (preparsed) XML document.
+        """Extract the internal 'status code' and any OCLC Work IDs
+        from a preparsed XML document.
+
+        :param tree: An XML document parsed with etree
+        :return A 2-tuple (code, [owis]). Each item in `owis` is
+            an IdentifierData describing an OCLC Work ID.
         """
         code = int(cls._xpath1(tree, "oclc:response").get('code'))
         return code, cls._owi_data(tree)
 
     @classmethod
     def _owi_data(cls, tree):
+        """Extract OCLC Work IDs from a preparsed XML document.
+
+        :param tree: An XML document parsed with etree
+        :return A list of IdentifierData
+        """
         results = []
         tags = cls._xpath(tree, "//oclc:work")
 
@@ -86,6 +95,15 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def parse(cls, tree, identifiers):
+        """Process a preparsed XML document into Metadata.
+
+        :param tree: An XML document parsed with etree
+        :param identifiers: A list of Identifier and IdentifierData
+           objects representing the known identifiers associated
+           with a given book. The first object is the ISBN to be used
+           as the book's primary identifier.
+        :return A Metadata
+        """
         contributors = cls.contributors(tree)
         measurements = cls.measurements(tree)
         subjects = cls.subjects(tree)
@@ -114,6 +132,9 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def _add_lc_viaf(cls, author, tag):
+        """Annotate a ContributorData object with LC and VIAF identifiers
+        found in an <author> tag from an OCLC CLassify document.
+        """
         author.lc = tag.get("lc") or None
         author.viaf = tag.get("viaf") or None
         return author
@@ -122,13 +143,24 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def measurements(cls, tree):
-        """Returns a list of MeasurementData objects"""
+        """Extract MeasurementData from a parsed XML document.
+
+        :return: A list of MeasurementData objects
+        """
         tags = cls._xpath(tree, "//oclc:work")
         return cls.get_measurements(tags)
 
     @classmethod
     def get_measurements(cls, work_tags):
+        """Extract MeasurementData representing values
+        measured from a list of <work> tags.
 
+        The MeasurementData returned are totals; their number
+        is independent of the number of <work> tags.
+
+        :param work_tags: A list of preparsed <work> tags.
+        :return: A list of MeasurementData objects
+        """
         data = {
             "holdings": 0,
             "editions": 0,
@@ -147,11 +179,20 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def _update_data(cls, work_tag, data):
+        """Update a dictionary based on integer values found in
+        a <work> tag.
+
+        :param work_tag: A preparsed <work> tag.
+        :param data: A dictionary containing totals.
+        """
         for item in data:
             data[item] += int(work_tag.get(item))
 
     @classmethod
     def make_measurement_data(cls, data):
+        """Convert a dictionary containing totals to a list of
+        MeasurementData objects.
+        """
         results = []
         for item in data:
             results.append(
@@ -166,39 +207,60 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def subjects(cls, tree):
-        """Returns a list of SubjectData objects"""
+        """Extract SubjectData from a parsed XML document.
+
+        :return: A list of SubjectData objects
+        """
         names, parent_tags = cls.get_classifier_names_and_parent_tags(tree)
         subjects = cls.get_subjects(zip(names, parent_tags))
         return subjects
 
     @classmethod
     def get_classifier_names_and_parent_tags(cls, tree):
-        # Extracts the <ddc>, <lcc>, and <fast> tags.
+        """Extracts the <ddc>, <lcc>, and <fast> tags from an XML
+        document representing a single work.
+        """
         classifier_names = cls.CLASSIFIERS.keys()
         classifier_tags = [cls._xpath1(tree, "//oclc:%s" % name) for name in classifier_names]
         return classifier_names, classifier_tags
 
     @classmethod
     def get_subjects(cls, classifiers):
-        # :classifiers is a list of tuples, each of which contains the tag for a particular type of
-        # classifier--DDC, LCC, or Fast--and the name of the type of classifier.  The element tags
-        # are formatted such that the names are buried in a longer string (e.g. "{http://classify.oclc.org}ddc"),
-        # so it's easiest to just keep track of them separately, rather than having to extract them every time.
-        subtags_info = [cls._extract_subtags(classifier) for classifier in classifiers]
+        """Convert a list of tags from an XML document into a corresponding
+        list of SubjectData objects.
+        
+        :param classifiers: A list of 2-tuples (classifier name, tag).
+        The classifier name is the type of classifier--DDC, LCC, or
+        Fast-- and the tag is the original etree tag containing the
+        classification data. The element tags are formatted such that
+        the names are buried in a longer string
+        (e.g. "{http://classify.oclc.org}ddc"), so it's easiest to
+        just keep track of them separately, rather than having to
+        extract them every time.
+        """
+        subtags_info = [
+            cls._extract_subtags(classifier_name, classifier_tag)
+            for (classifier_name, classifier_tag) in classifiers
+        ]
         subject_data_objects = cls.make_subject_data(subtags_info)
-        # set_trace()
         return subject_data_objects
 
     @classmethod
-    def _extract_subtags(cls, classifier):
-        # :classifier is a tuple containing the name of a classifier type (e.g. "ddc") and
-        # the corresponding tag.
-        name, parent_tag = classifier
-        search_terms = [("//oclc:%s//oclc:%s" % (name, item)) for item in ["heading", "mostPopular"]]
-        subtags = [cls._xpath(parent_tag, term) for term in search_terms if parent_tag]
-        # Flatten and scrub the list of tags:
-        subtags_list = [tag for subtag in subtags for tag in subtag if len(subtag)]
-        return name, subtags_list
+    def _extract_subtags(cls, classifier_name, classifier_tag):
+        """
+        :param classifier_name: the name of a classifier type (e.g. "ddc")
+        :param classifier_tag: An etree tag containing classification
+           data.
+        """
+
+        # Some classifier types use 'heading', some use 'mostPopular'.
+        # Try it both ways and see which one works.
+        for item in ("heading", "mostPopular"):
+            search_term = "//oclc:%s//oclc:%s" % (classifier_name, item)
+            matches = cls._xpath(classifier_tag, search_term)
+            if matches:
+                break
+        return classifier_name, matches
 
     @classmethod
     def make_subject_data(cls, subtags_info):
@@ -1126,7 +1188,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = parser.parse(
-            self._db, xml, **restrictions
+            xml, **restrictions
         )
 
         if representation_type == parser.MULTI_WORK_STATUS:
