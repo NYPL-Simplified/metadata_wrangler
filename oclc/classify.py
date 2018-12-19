@@ -1,5 +1,6 @@
 import logging
 import re
+import traceback
 import urllib
 
 from lxml import etree
@@ -981,22 +982,22 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         based on what it says.
         """
         # Perform a title/author lookup.
-
         metadata_list = []
+        failure = None
 
         try:
             tree = self._get_tree(isbn=identifier.identifier)
             code, owi_data = self.parser.initial_look_up(self._db, tree)
-
-            if code in [0, 2]:
+            if code in [self.parser.SINGLE_WORK_DETAIL_STATUS, self.parser.SINGLE_WORK_SUMMARY_STATUS]:
                 metadata_list = self._single(self._db, tree, identifier)
-            elif code == 4:
+            elif code == self.parser.MULTI_WORK_STATUS:
                 metadata_list = self._multiple(self._db, owi_data, identifier)
+            elif code == self.parser.NOT_FOUND_STATUS:
+                failure = CoverageFailure(identifier, traceback.format_exc(), data_source=DataSource.OCLC, transient=True)
             if metadata_list:
                 for metadata in metadata_list:
                     self._apply(metadata, identifier)
-
-            return identifier
+            return identifier, failure
 
         except IOError as e:
             return self.failure(identifier, e.message)

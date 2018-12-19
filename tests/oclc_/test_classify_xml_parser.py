@@ -23,16 +23,15 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
 
     def test_initial_look_up(self):
         single_tree = self.tree("single_work_response.xml")
-        code, owi_data = self.parser.initial_look_up(self._db, single_tree)
-        eq_(2, code)
-        eq_(1, len(owi_data))
-        eq_(Identifier.OCLC_WORK, owi_data[0].type)
-        eq_(None, owi_data[0].identifier)
-        eq_(1, owi_data[0].weight)
+        code, [owi_data] = self.parser.initial_look_up(self._db, single_tree)
+        eq_(self.parser.SINGLE_WORK_DETAIL_STATUS, code)
+        eq_(Identifier.OCLC_WORK, owi_data.type)
+        eq_(None, owi_data.identifier)
+        eq_(1, owi_data.weight)
 
         multi_tree = self.tree("multi_work_with_owis.xml")
         code, owi_data = self.parser.initial_look_up(self._db, multi_tree)
-        eq_(4, code)
+        eq_(self.parser.MULTI_WORK_STATUS, code)
         eq_(2, len(owi_data))
         [id_1, id_2] = owi_data
 
