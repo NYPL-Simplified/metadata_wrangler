@@ -1096,7 +1096,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
                 return self.failure(identifier, message)
             if metadata_list:
                 for metadata in metadata_list:
-                    self._apply(metadata, identifier)
+                    self._apply(metadata)
                 self.work(identifier)
             return identifier
 
@@ -1118,11 +1118,9 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
         return results
 
-    def _apply(self, metadata, identifier):
-        """Create an edition (based on the metadata that we collected by parsing the tree).
-
-        :param identifier: An Identifier representing the ISBN for this
-        book.
+    def _apply(self, metadata):
+        """Create an edition based on a Metadata object we
+        obtained by parsing a tree.
         """
         edition = self.edition(metadata.primary_identifier)
         metadata.apply(edition, collection=None)

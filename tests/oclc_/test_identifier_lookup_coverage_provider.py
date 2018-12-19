@@ -54,7 +54,7 @@ class MockProvider(IdentifierLookupCoverageProvider):
             Metadata(identifiers=[identifier, owi_data[1]], data_source=DataSource.OCLC)
         ])
 
-    def _apply(self, metadata, identifier):
+    def _apply(self, metadata):
         self.apply_called_with.append(metadata.identifiers)
 
 class MockProviderSingle(MockProvider):
