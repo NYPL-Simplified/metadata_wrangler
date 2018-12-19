@@ -1078,9 +1078,8 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
     def process_item(self, identifier):
         """Ask OCLC Classify about a single ISBN. Based on what
-        it says, create some number of Editions (either one for the
-        ISBN or one for every OWI associated with the ISBN),
-        and, hopefully, a single Work.
+        it says, create some number of Editions--either one for the
+        ISBN or one for every OWI associated with the ISBN.
         """
         metadata_list = []
         failure = None
@@ -1098,7 +1097,6 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             if metadata_list:
                 for metadata in metadata_list:
                     self._apply(metadata)
-                self.work(identifier)
             return identifier
 
         except IOError as e:

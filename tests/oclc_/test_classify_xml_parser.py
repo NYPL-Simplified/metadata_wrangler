@@ -46,7 +46,7 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
     def test_parse(self):
         identifier = self._identifier()
         tree = self.tree("single_work_response.xml")
-        result = self.parser.parse(tree, identifier)
+        result = self.parser.parse(tree, [identifier])
 
         eq_(identifier, result.identifiers)
 
