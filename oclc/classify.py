@@ -1,6 +1,5 @@
 import logging
 import re
-import traceback
 import urllib
 
 from lxml import etree
@@ -1055,7 +1054,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
 
     def __init__(self, _db, api=None, **kwargs):
         super(TitleAuthorLookupCoverageProvider, self).__init__(
-            _db, **kwargs
+            _db, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)
 
