@@ -219,6 +219,9 @@ class OCLCClassifyXMLParser(XMLParser):
     def get_classifier_names_and_parent_tags(cls, tree):
         """Extracts the <ddc>, <lcc>, and <fast> tags from an XML
         document representing a single work.
+
+        :return: A dictionary mapping a classifier name to all the
+        tags representing subjects for that classifier.
         """
         mapping = dict()
         for name in cls.CLASSIFIERS.keys():
@@ -232,14 +235,14 @@ class OCLCClassifyXMLParser(XMLParser):
         """Convert a list of tags from an XML document into a corresponding
         list of SubjectData objects.
         
-        :param classifiers: A list of 2-tuples (classifier name, tag).
-        The classifier name is the type of classifier--DDC, LCC, or
-        Fast-- and the tag is the original etree tag containing the
-        classification data. The element tags are formatted such that
-        the names are buried in a longer string
-        (e.g. "{http://classify.oclc.org}ddc"), so it's easiest to
-        just keep track of them separately, rather than having to
-        extract them every time.
+        :param classifiers: A dictionary mapping classifier names to
+        etree tags. The classifier name is the type of classifier--DDC, LCC, or
+        Fast.
+
+        The element tags are formatted such that the names are buried
+        in a longer string (e.g. "{http://classify.oclc.org}ddc"), so
+        it's easiest to just keep track of them separately, rather
+        than having to extract them every time.
         """
         subjects = []
         for classifier_name, classifier_tags in classifiers.items():
@@ -270,6 +273,14 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def make_subject_data(cls, classifier_name, classifier_tags):
+        """Create a SubjectData object for every tag.
+
+        :param classifier_name: The name of the classifier to use
+        when determining what this SubjectData means.
+
+        :param classifier_tags: A list of etree tags, each containing
+        a single classification.
+        """
         results = []
         for tag in classifier_tags:
             weight, identifier, name = cls._parse_subject_tag(tag)
@@ -285,12 +296,16 @@ class OCLCClassifyXMLParser(XMLParser):
 
     @classmethod
     def _parse_subject_tag(cls, tag):
+        """Extract from an etree tag the information necessary to
+        create a SubjectData.
+        """
         # The names of the attributes vary depending on which type of classifier
         # the tag is for.  Only Fast tags have a name.
         weight = tag.get("holdings") or tag.get("heldby")
         identifier = tag.get("ident") or tag.get("nsfa") or tag.get("sfa")
         name = tag.text or None
         return int(weight), identifier, name
+
 
 class NameParser(VIAFNameParser):
     """Parse the name format used by OCLC Classify.
