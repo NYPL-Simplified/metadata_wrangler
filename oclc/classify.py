@@ -974,6 +974,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
     parser = OCLCClassifyXMLParser()
 
     def _get_tree(self, **kwargs):
+        """Look up either an ISBN or an OWI, and return a tree generated from the resulting XML."""
         xml = self.api.lookup_by(**kwargs)
         return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
@@ -981,7 +982,6 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         """Ask OCLC Classify about a single ISBN and create an Edition
         based on what it says.
         """
-        # Perform a title/author lookup.
         metadata_list = []
         failure = None
 
@@ -993,7 +993,8 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             elif code == self.parser.MULTI_WORK_STATUS:
                 metadata_list = self._multiple(self._db, owi_data, identifier)
             elif code == self.parser.NOT_FOUND_STATUS:
-                return CoverageFailure(identifier, traceback.format_exc(), data_source=DataSource.OCLC, transient=True)
+                message = ("The work with %s %s was not found." % (identifier.type, identifier.identifier))
+                return self.failure(identifier, message)
             if metadata_list:
                 for metadata in metadata_list:
                     self._apply(metadata, identifier)
@@ -1003,9 +1004,13 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             return self.failure(identifier, e.message)
 
     def _single(self, _db, tree, identifier):
+        """In the case of a single work response, go ahead and create a metadata object."""
         return [self.parser.parse(self._db, tree, [identifier])]
 
     def _multiple(self, _db, owi_data, identifier):
+        """In the case of a multi-work response, we don't have enough information to create
+        the metadata object right away; instead, for each work, we get a more complete document
+        by looking up the OWI, and create a metadata object based on that."""
         results = []
         for item in owi_data:
             tree_from_owi = self._get_tree(owi=item.identifier)
@@ -1014,12 +1019,12 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         return results
 
     def _apply(self, metadata, identifier):
+        """Create an edition (based on the metadata that we collected by parsing the tree)."""
         edition = self.edition(identifier)
         work = self.work(edition.primary_identifier)
         metadata.apply(
-            edition, collection=None #, replace=self.replacement_policy
+            edition, collection=None
         )
-
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.

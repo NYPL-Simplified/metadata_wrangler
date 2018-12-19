@@ -119,6 +119,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         bad_id = self._identifier(Identifier.ISBN, "9781429984171")
         failure = provider.process_item(bad_id)
         assert isinstance(failure, CoverageFailure)
+        eq_(failure.exception, "The work with ISBN 9781429984171 was not found.")
 
     def test__apply_single(self):
         # Testing that, in the case of a single-work response, _apply is called with the return value of _single.
