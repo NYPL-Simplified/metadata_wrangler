@@ -201,7 +201,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         assert isinstance(result, Metadata)
         eq_(result._data_source, "OCLC Classify")
-        eq_(result.identifiers[0], identifier)
+        eq_(result.primary_identifier, identifier)
 
         self._check_measurements(result.measurements, [41932, 1])
 
@@ -225,7 +225,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         for result in results:
             assert isinstance(result, Metadata)
             eq_(result._data_source, "OCLC Classify")
-            eq_(result.identifiers[0], identifier)
+            eq_(result.primary_identifier, identifier)
 
         result_1, result_2 = results
 

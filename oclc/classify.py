@@ -107,11 +107,13 @@ class OCLCClassifyXMLParser(XMLParser):
         contributors = cls.contributors(tree)
         measurements = cls.measurements(tree)
         subjects = cls.subjects(tree)
+        primary_identifier = identifiers[0]
         metadata = Metadata(
             data_source=DataSource.OCLC,
             contributors=contributors,
             measurements=measurements,
             subjects=subjects,
+            primary_identifier=primary_identifier,
             identifiers=identifiers,
         )
 
@@ -450,6 +452,19 @@ class NameParser(VIAFNameParser):
 
     @classmethod
     def _parse_roles(cls, name, default_role=Contributor.AUTHOR_ROLE):
+        """Remove role information from a person's name.
+
+        :param name: A person's name as given by OCLC classify.
+        :param default_role: If no role is present inside the person's
+            name, use this role.
+        :return: A 3-tuple (name_without_roles, roles,
+            default_role_used).  `name_without_roles` is the person's
+            name with the role information removed. `roles` is a list
+            of Contributor role constants corresponding to the removed
+            information. `default_role_used` indicates whether
+            role information was found in the person's name or whether
+            `roles` is the `default_role` passed in.
+        """
         default_role_used = False
         name_without_roles = name
         match = cls.ROLES.search(name)
@@ -1041,7 +1056,7 @@ class OCLCLookupCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
 
     def __init__(self, collection, api=None, **kwargs):
         super(OCLCLookupCoverageProvider, self).__init__(
-            collection, registered_only=False, **kwargs
+            collection, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)
 
@@ -1061,8 +1076,10 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
     def process_item(self, identifier):
-        """Ask OCLC Classify about a single ISBN and create an Edition
-        based on what it says.
+        """Ask OCLC Classify about a single ISBN. Based on what
+        it says, create some number of Editions (either one for the
+        ISBN or one for every OWI associated with the ISBN),
+        and, hopefully, a single Work.
         """
         metadata_list = []
         failure = None
@@ -1092,8 +1109,8 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
 
     def _multiple(self, owi_data, identifier):
         """In the case of a multi-work response, we don't have enough information to create
-        the metadata object right away; instead, for each work, we get a more complete document
-        by looking up the OWI, and create a metadata object based on that."""
+        the metadata object right away; instead, for each <work> tag, we get a more complete document
+        by looking up the OWI, and create a Metadata object based on that."""
         results = []
         for item in owi_data:
             tree_from_owi = self._get_tree(owi=item.identifier)
@@ -1102,11 +1119,13 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         return results
 
     def _apply(self, metadata, identifier):
-        """Create an edition (based on the metadata that we collected by parsing the tree)."""
-        edition = self.edition(identifier)
-        metadata.apply(
-            edition, collection=None
-        )
+        """Create an edition (based on the metadata that we collected by parsing the tree).
+
+        :param identifier: An Identifier representing the ISBN for this
+        book.
+        """
+        edition = self.edition(metadata.primary_identifier)
+        metadata.apply(edition, collection=None)
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
