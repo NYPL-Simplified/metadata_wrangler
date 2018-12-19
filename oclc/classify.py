@@ -211,8 +211,8 @@ class OCLCClassifyXMLParser(XMLParser):
 
         :return: A list of SubjectData objects
         """
-        names, parent_tags = cls.get_classifier_names_and_parent_tags(tree)
-        subjects = cls.get_subjects(zip(names, parent_tags))
+        classifiers = cls.get_classifier_names_and_parent_tags(tree)
+        subjects = cls.get_subjects(classifiers)
         return subjects
 
     @classmethod
@@ -220,9 +220,12 @@ class OCLCClassifyXMLParser(XMLParser):
         """Extracts the <ddc>, <lcc>, and <fast> tags from an XML
         document representing a single work.
         """
-        classifier_names = cls.CLASSIFIERS.keys()
-        classifier_tags = [cls._xpath1(tree, "//oclc:%s" % name) for name in classifier_names]
-        return classifier_names, classifier_tags
+        mapping = dict()
+        for name in cls.CLASSIFIERS.keys():
+            tags = cls._xpath(tree, "//oclc:%s" % name)
+            if tags:
+                mapping[name] = tags
+        return mapping
 
     @classmethod
     def get_subjects(cls, classifiers):
@@ -238,12 +241,14 @@ class OCLCClassifyXMLParser(XMLParser):
         just keep track of them separately, rather than having to
         extract them every time.
         """
-        subtags_info = [
-            cls._extract_subtags(classifier_name, classifier_tag)
-            for (classifier_name, classifier_tag) in classifiers
-        ]
-        subject_data_objects = cls.make_subject_data(subtags_info)
-        return subject_data_objects
+        subjects = []
+        for classifier_name, classifier_tags in classifiers.items():
+            for tag in classifier_tags:
+                subtags = cls._extract_subtags(classifier_name, tag)
+                subjects.extend(
+                    cls.make_subject_data(classifier_name, subtags)
+                )
+        return subjects
 
     @classmethod
     def _extract_subtags(cls, classifier_name, classifier_tag):
@@ -255,27 +260,26 @@ class OCLCClassifyXMLParser(XMLParser):
 
         # Some classifier types use 'heading', some use 'mostPopular'.
         # Try it both ways and see which one works.
+        matches = None
         for item in ("heading", "mostPopular"):
             search_term = "//oclc:%s//oclc:%s" % (classifier_name, item)
             matches = cls._xpath(classifier_tag, search_term)
             if matches:
                 break
-        return classifier_name, matches
+        return matches
 
     @classmethod
-    def make_subject_data(cls, subtags_info):
+    def make_subject_data(cls, classifier_name, classifier_tags):
         results = []
-        for item in subtags_info:
-            type, tags = item
-            for tag in tags:
-                weight, identifier, name = cls._parse_subject_tag(tag)
-                subject_data = SubjectData(
-                    type=cls.CLASSIFIERS[type],
-                    weight=weight,
-                    identifier=identifier,
-                    name=name,
-                )
-                results.append(subject_data)
+        for tag in classifier_tags:
+            weight, identifier, name = cls._parse_subject_tag(tag)
+            subject_data = SubjectData(
+                type=cls.CLASSIFIERS[classifier_name],
+                weight=weight,
+                identifier=identifier,
+                name=name,
+            )
+            results.append(subject_data)
         return results
 
 
