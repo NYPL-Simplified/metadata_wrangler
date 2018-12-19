@@ -997,6 +997,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             if metadata_list:
                 for metadata in metadata_list:
                     self._apply(metadata, identifier)
+                self.work(identifier)
             return identifier
 
         except IOError as e:
@@ -1020,7 +1021,6 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
     def _apply(self, metadata, identifier):
         """Create an edition (based on the metadata that we collected by parsing the tree)."""
         edition = self.edition(identifier)
-        work = self.work(edition.primary_identifier)
         metadata.apply(
             edition, collection=None
         )
