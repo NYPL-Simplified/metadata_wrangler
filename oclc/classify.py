@@ -578,7 +578,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         return representation_type, records
 
     @classmethod
-    def extract_swids(cls, _Db, tree, **restrictions):
+    def extract_swids(cls, _db, tree, **restrictions):
         """Turn a multi-work response into a list of SWIDs."""
 
         swids = []
@@ -587,7 +587,8 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             # the info, we're calling it to make sure this work meets
             # the restriction. If this work meets the restriction,
             # we'll store its info when we look up the SWID.
-            response = cls._extract_basic_info(_db, work_tag, **restrictions)
+            response = cls._extract_basic_info(
+                _db, work_tag, **restrictions)
             if response:
                 title, author_names, language = response
                 # TODO: 'swid' is what it's called in older representations.
@@ -604,7 +605,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
     LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
 
     @classmethod
-    def extract_authors(cls, authors_tag, primary_author=None):
+    def extract_authors(cls, _db, authors_tag, primary_author=None):
         results = []
         if authors_tag is not None:
             for author_tag in cls._xpath(authors_tag, "//oclc:author"):
@@ -731,7 +732,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         if not authors:
             return None
         author, roles, default_role_used = cls._parse_single_author(
-            authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
+            _db, authors[0], default_role=Contributor.PRIMARY_AUTHOR_ROLE)
         if roles == [Contributor.PRIMARY_AUTHOR_ROLE]:
             return author
         return None
@@ -745,7 +746,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
             return authors
         for author in author_string.split("|"):
             author, roles, default_role_used = cls._parse_single_author(
-                author, existing_authors=existing_authors,
+                _db, author, existing_authors=existing_authors,
                 default_role=default_role,
                 primary_author=primary_author)
             if roles:
