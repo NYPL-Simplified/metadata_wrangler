@@ -7,6 +7,6 @@ package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
 
 from oclc.classify import IdentifierLookupCoverageProvider
-from core.scripts import RunCoverageProviderScript
+from core.scripts import RunCollectionCoverageProviderScript
 
-RunCoverageProviderScript(IdentifierLookupCoverageProvider).run()
+RunCollectionCoverageProviderScript(IdentifierLookupCoverageProvider).run()
