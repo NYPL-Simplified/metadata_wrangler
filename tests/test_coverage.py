@@ -18,6 +18,7 @@ from core.overdrive import MockOverdriveAPI
 from content_cafe import ContentCafeCoverageProvider
 from coverage import IdentifierResolutionCoverageProvider
 from integration_client import IntegrationClientCoverImageCoverageProvider
+from oclc.classify import IdentifierLookupCoverageProvider
 from overdrive import OverdriveBibliographicCoverageProvider
 from viaf import VIAFClient
 
@@ -47,7 +48,6 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             self._default_collection, provide_coverage_immediately=immediate,
             force=force, batch_size=93
         )
-
         # We aim to resolve all the identifiers in a given collection.
         eq_(self._default_collection, provider.collection)
 
