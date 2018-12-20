@@ -34,6 +34,8 @@ from core.mirror import MirrorUploader
 
 from core.util import fast_query_count
 
+from oclc.classify import IdentifierLookupCoverageProvider
+
 from overdrive import (
     OverdriveBibliographicCoverageProvider,
 )
@@ -251,6 +253,11 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         # Those providers need to be rearchitected (and the
         # title/author lookup one might just need to be removed), so
         # they're gone for now.
+
+        oclc = instantiate(
+            IdentifierLookupCoverageProvider, providers, provider_kwargs,
+            collection=self.collection, replacement_policy=self.replacement_policy
+        )
 
         # All books identified by Overdrive ID must be looked up via
         # the Overdrive API. We don't enforce that the collection
