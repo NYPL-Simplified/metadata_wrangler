@@ -125,15 +125,12 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         eq_(4, len(providers))
         eq_(unaffiliated, providers[-1].collection)
 
-    def test_gather_providers_nothing_configured(self):
-        # When nothing is configured, IdentifierResolutionCoverageProvider
-        # can't configure any CoverageProviders.
-        eq_(
-            [],
-            IdentifierResolutionCoverageProvider(
-                self._default_collection
-            ).providers
-        )
+    def test_gather_providers_no_credentials(self):
+        # The OCLC provider should be there from the beginning, but the other CoverageProviders
+        # require credentials, so IdentifierResolutionCoverageProvider can't configure them.
+        providers = IdentifierResolutionCoverageProvider(self._default_collection).providers
+        [oclc] = providers
+        assert isinstance(oclc, IdentifierLookupCoverageProvider)
 
     def test_gather_providers_content_cafe(self):
         # Set up a Content Cafe integration
@@ -144,12 +141,11 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             password="b"
         )
 
-        # The only working CoverageProvider is the
-        # ContentCafeCoverageProvider.
-        [content_cafe] = IdentifierResolutionCoverageProvider(
-            self._default_collection
-        ).providers
-        assert isinstance(content_cafe, ContentCafeCoverageProvider)
+        # The OCLC provider was already configured; now there is also a ContentCafeCoverageProvider.
+        provider = IdentifierResolutionCoverageProvider(self._default_collection)
+        eq_(len(provider.providers), 2)
+        [content_cafe] = [x for x in provider.providers if isinstance(x, ContentCafeCoverageProvider)]
+        assert content_cafe
 
     def test_gather_providers_overdrive(self):
         # Set up an Overdrive integration.
@@ -163,11 +159,10 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             overdrive_collection, provider_kwargs=provider_kwargs
         )
 
-        # The only working CoverageProvider is the
-        # OverdriveBibliographicCoverageProvider.
-        [overdrive] = provider.providers
-        assert isinstance(overdrive, OverdriveBibliographicCoverageProvider)
-
+        # The OCLC provider was already configured; now there is also an OverdriveBibliographicCoverageProvider.
+        eq_(len(provider.providers), 2)
+        [overdrive] = [x for x in provider.providers if isinstance(x, OverdriveBibliographicCoverageProvider)]
+        assert overdrive
         # The MockOverdriveAPI we passed in as part of provider_kwargs
         # was instantiated as part of the
         # OverdriveBibliographicCoverageProvider instantiation.
@@ -190,12 +185,11 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         collection.protocol = ExternalIntegration.OPDS_FOR_DISTRIBUTORS
         provider = IdentifierResolutionCoverageProvider(collection)
 
-        # The only configured CoverageProvider here is the
-        # IntegrationClientCoverImageCoverageProvider.
-        [integration_client] = provider.providers
-        assert isinstance(
-            integration_client, IntegrationClientCoverImageCoverageProvider
-        )
+        # The OCLC provider was already configured; now there is also an IntegrationClientCoverImageCoverageProvider.
+        eq_(len(provider.providers), 2)
+        [integration_client] = [x for x in provider.providers if isinstance(x, IntegrationClientCoverImageCoverageProvider)]
+        assert integration_client
+
         # All subproviders are associated with the collection used in the
         # main provider, and they all have the same replacement policy.
         # (And thus the same MirrorUploader.)
