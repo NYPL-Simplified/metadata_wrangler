@@ -47,8 +47,7 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
         identifier = self._identifier()
         tree = self.tree("single_work_response.xml")
         result = self.parser.parse(tree, [identifier])
-
-        eq_(identifier, result.identifiers)
+        eq_([identifier], result.identifiers)
 
         # Contributors
         [parker, tanner, hayford, melville] = result.contributors

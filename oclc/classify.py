@@ -236,7 +236,7 @@ class OCLCClassifyXMLParser(XMLParser):
     def get_subjects(cls, classifiers):
         """Convert a list of tags from an XML document into a corresponding
         list of SubjectData objects.
-        
+
         :param classifiers: A dictionary mapping classifier names to
         etree tags. The classifier name is the type of classifier--DDC, LCC, or
         Fast.
@@ -1223,7 +1223,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
 
         # Turn the raw XML into some number of bibliographic records.
         representation_type, records = parser.parse(
-            xml, **restrictions
+            self._db, xml, **restrictions
         )
 
         if representation_type == parser.MULTI_WORK_STATUS:
