@@ -58,12 +58,12 @@ class MockProvider(IdentifierLookupCoverageProvider):
         self.apply_called_with.append(metadata.identifiers)
 
 class MockProviderSingle(MockProvider):
-    def _get_tree(self, isbn):
+    def _get_tree(self, **kwargs):
         xml = sample_data("single_work_with_isbn.xml", "oclc_classify")
         return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
 class MockProviderMulti(MockProvider):
-    def _get_tree(self, isbn):
+    def _get_tree(self, **kwargs):
         xml = sample_data("multi_work_with_owis.xml", "oclc_classify")
         return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
@@ -74,9 +74,9 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
     def _tree(self, type):
         if type == "single":
-            return MockProviderSingle(self._default_collection)._get_tree(self.SINGLE_ISBN)
+            return MockProviderSingle(self._default_collection)._get_tree(isbn=self.SINGLE_ISBN)
         else:
-            return MockProviderMulti(self._default_collection)._get_tree(self.MULTI_ISBN)
+            return MockProviderMulti(self._default_collection)._get_tree(isbn=self.MULTI_ISBN)
 
     def _id(self, type):
         if type == "single":
@@ -94,7 +94,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.parser = MockParserSingle()
         id = self._id("single")
         result = provider.process_item(id)
-        eq_(etree.tostring(provider.called_with["tree"]), etree.tostring(provider._get_tree(self.SINGLE_ISBN)))
+        eq_(etree.tostring(provider.called_with["tree"]), etree.tostring(provider._get_tree(isbn=self.SINGLE_ISBN)))
         eq_(provider.called_with["identifier"], id)
         eq_(result, id)
 
