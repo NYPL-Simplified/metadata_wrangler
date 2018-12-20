@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="2"/>
+   <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <work author="Melville, Herman, 1819-1891" editions="1" eholdings="7958" format="eBook" holdings="33974" itemtype="itemtype-book-digital" owi="4687" title="Moby Dick">1000072582</work>
+  <authors>
+    <author lc="n79006936" viaf="27068555">Melville, Herman, 1819-1891</author>
+  </authors>
+  <orderBy>thold desc</orderBy>
+  <input type="isbn">9781620281932</input>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <editions>
+    <edition author="Melville, Herman, 1819-1891" eholdings="1771" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="44955177" title="Moby Dick : or the whale">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PS2384" tag="050"/>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="813" tag="082"/>
+      </classifications>
+    </edition>
+  </editions>
+</classify>

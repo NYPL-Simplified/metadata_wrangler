@@ -12,6 +12,10 @@ from core.coverage import (
 )
 from core.metadata_layer import (
     ContributorData,
+    IdentifierData,
+    MeasurementData,
+    Metadata,
+    SubjectData,
 )
 from core.model import (
     get_one_or_create,
@@ -26,14 +30,283 @@ from core.model import (
 )
 from core.util import MetadataSimilarity
 from core.util.xmlparser import XMLParser
+from coverage_utils import MetadataWranglerBibliographicCoverageProvider
 from viaf import NameParser as VIAFNameParser
-
 
 class OCLC(object):
     """Repository for OCLC-related constants."""
     EDITION_COUNT = "OCLC.editionCount"
     HOLDING_COUNT = "OCLC.holdings"
     FORMAT = "OCLC.format"
+
+class OCLCClassifyXMLParser(XMLParser):
+    """Turn the output of the OCLC Classify API into a Metadata object
+    (if the ISBN identifies a single work) or a list of OCLC Work IDs
+    (if the ISBN identifies multiple works).
+
+    The Metadata object includes ContributorData for the book's
+    contributors, SubjectData representing the most common
+    classifications for the book, and MeasurementData describing how
+    many libraries have collected the book.
+    """
+
+    # OCLC in-representation 'status codes'
+    SINGLE_WORK_SUMMARY_STATUS = 0
+    SINGLE_WORK_DETAIL_STATUS = 2
+    MULTI_WORK_STATUS = 4
+    NO_INPUT_STATUS = 100
+    INVALID_INPUT_STATUS = 101
+    NOT_FOUND_STATUS = 102
+    UNEXPECTED_ERROR_STATUS = 200
+
+    NAMESPACES = {'oclc' : 'http://classify.oclc.org'}
+    ROLES = re.compile("\[([^]]+)\]$")
+    LIFESPAN = re.compile("([0-9]+)-([0-9]*)[.;]?$")
+
+    CLASSIFIERS = {"fast": Subject.FAST, "lcc": Subject.LCC, "ddc": Subject.DDC}
+
+    @classmethod
+    def initial_look_up(cls, tree):
+        """Extract the internal 'status code' and any OCLC Work IDs
+        from a preparsed XML document.
+
+        :param tree: An XML document parsed with etree
+        :return A 2-tuple (code, [owis]). Each item in `owis` is
+            an IdentifierData describing an OCLC Work ID.
+        """
+        code = int(cls._xpath1(tree, "oclc:response").get('code'))
+        return code, cls._owi_data(tree)
+
+    @classmethod
+    def _owi_data(cls, tree):
+        """Extract OCLC Work IDs from a preparsed XML document.
+
+        :param tree: An XML document parsed with etree
+        :return A list of IdentifierData
+        """
+        results = []
+        tags = cls._xpath(tree, "//oclc:work")
+
+        owi_numbers = [tag.get("owi") for tag in tags]
+        for number in owi_numbers:
+            data = IdentifierData(Identifier.OCLC_WORK, number)
+            results.append(data)
+        return results
+
+    @classmethod
+    def parse(cls, tree, identifiers):
+        """Process a preparsed XML document into Metadata.
+
+        :param tree: An XML document parsed with etree
+        :param identifiers: A list of Identifier and IdentifierData
+           objects representing the known identifiers associated
+           with a given book. The first object is the ISBN to be used
+           as the book's primary identifier.
+        :return A Metadata
+        """
+        contributors = cls.contributors(tree)
+        measurements = cls.measurements(tree)
+        subjects = cls.subjects(tree)
+        primary_identifier = identifiers[0]
+        metadata = Metadata(
+            data_source=DataSource.OCLC,
+            contributors=contributors,
+            measurements=measurements,
+            subjects=subjects,
+            primary_identifier=primary_identifier,
+            identifiers=identifiers,
+        )
+
+        return metadata
+
+    # CONTRIBUTORS:
+
+    @classmethod
+    def contributors(cls, tree):
+        """Returns a list of ContributorData objects"""
+        results = []
+        tags = cls._xpath(tree, "//oclc:authors/oclc:author")
+        for tag in tags:
+            contributor, default_role_used = NameParser.parse(tag.text)
+            results.append(cls._add_lc_viaf(contributor, tag))
+
+        return results
+
+    @classmethod
+    def _add_lc_viaf(cls, author, tag):
+        """Annotate a ContributorData object with LC and VIAF identifiers
+        found in an <author> tag from an OCLC CLassify document.
+        """
+        author.lc = tag.get("lc") or None
+        author.viaf = tag.get("viaf") or None
+        return author
+
+    # MEASUREMENTS:
+
+    @classmethod
+    def measurements(cls, tree):
+        """Extract MeasurementData from a parsed XML document.
+
+        :return: A list of MeasurementData objects
+        """
+        tags = cls._xpath(tree, "//oclc:work")
+        return cls.get_measurements(tags)
+
+    @classmethod
+    def get_measurements(cls, work_tags):
+        """Extract MeasurementData representing values
+        measured from a list of <work> tags.
+
+        The MeasurementData returned are totals; their number
+        is independent of the number of <work> tags.
+
+        :param work_tags: A list of preparsed <work> tags.
+        :return: A list of MeasurementData objects
+        """
+        data = {
+            "holdings": 0,
+            "editions": 0,
+        }
+
+        # In some cases, there are different versions of the book, each
+        # listed under a different work tag with its own measurements; for each
+        # type of measurement, we need to add up the numbers for each work tag.
+        for work_tag in work_tags:
+            cls._update_data(work_tag, data)
+            if work_tag.get("eholdings"):
+                data["holdings"] += int(work_tag.get("eholdings"))
+
+        measurement_data_objects = cls.make_measurement_data(data)
+        return measurement_data_objects
+
+    @classmethod
+    def _update_data(cls, work_tag, data):
+        """Update a dictionary based on integer values found in
+        a <work> tag.
+
+        :param work_tag: A preparsed <work> tag.
+        :param data: A dictionary containing totals.
+        """
+        for item in data:
+            data[item] += int(work_tag.get(item))
+
+    @classmethod
+    def make_measurement_data(cls, data):
+        """Convert a dictionary containing totals to a list of
+        MeasurementData objects.
+        """
+        results = []
+        for item in data:
+            results.append(
+                MeasurementData(
+                    quantity_measured=item,
+                    value=data[item]
+                )
+            )
+        return results
+
+    # SUBJECTS
+
+    @classmethod
+    def subjects(cls, tree):
+        """Extract SubjectData from a parsed XML document.
+
+        :return: A list of SubjectData objects
+        """
+        classifiers = cls.get_classifier_names_and_parent_tags(tree)
+        subjects = cls.get_subjects(classifiers)
+        return subjects
+
+    @classmethod
+    def get_classifier_names_and_parent_tags(cls, tree):
+        """Extracts the <ddc>, <lcc>, and <fast> tags from an XML
+        document representing a single work.
+
+        :return: A dictionary mapping a classifier name to all the
+        tags representing subjects for that classifier.
+        """
+        mapping = dict()
+        for name in cls.CLASSIFIERS.keys():
+            tags = cls._xpath(tree, "//oclc:%s" % name)
+            if tags:
+                mapping[name] = tags
+        return mapping
+
+    @classmethod
+    def get_subjects(cls, classifiers):
+        """Convert a list of tags from an XML document into a corresponding
+        list of SubjectData objects.
+
+        :param classifiers: A dictionary mapping classifier names to
+        etree tags. The classifier name is the type of classifier--DDC, LCC, or
+        Fast.
+
+        The element tags are formatted such that the names are buried
+        in a longer string (e.g. "{http://classify.oclc.org}ddc"), so
+        it's easiest to just keep track of them separately, rather
+        than having to extract them every time.
+        """
+        subjects = []
+        for classifier_name, classifier_tags in classifiers.items():
+            for tag in classifier_tags:
+                subtags = cls._extract_subtags(classifier_name, tag)
+                subjects.extend(
+                    cls.make_subject_data(classifier_name, subtags)
+                )
+        return subjects
+
+    @classmethod
+    def _extract_subtags(cls, classifier_name, classifier_tag):
+        """
+        :param classifier_name: the name of a classifier type (e.g. "ddc")
+        :param classifier_tag: An etree tag containing classification
+           data.
+        """
+
+        # Some classifier types use 'heading', some use 'mostPopular'.
+        # Try it both ways and see which one works.
+        matches = None
+        for item in ("heading", "mostPopular"):
+            search_term = "//oclc:%s//oclc:%s" % (classifier_name, item)
+            matches = cls._xpath(classifier_tag, search_term)
+            if matches:
+                break
+        return matches
+
+    @classmethod
+    def make_subject_data(cls, classifier_name, classifier_tags):
+        """Create a SubjectData object for every tag.
+
+        :param classifier_name: The name of the classifier to use
+        when determining what this SubjectData means.
+
+        :param classifier_tags: A list of etree tags, each containing
+        a single classification.
+        """
+        results = []
+        for tag in classifier_tags:
+            weight, identifier, name = cls._parse_subject_tag(tag)
+            subject_data = SubjectData(
+                type=cls.CLASSIFIERS[classifier_name],
+                weight=weight,
+                identifier=identifier,
+                name=name,
+            )
+            results.append(subject_data)
+        return results
+
+
+    @classmethod
+    def _parse_subject_tag(cls, tag):
+        """Extract from an etree tag the information necessary to
+        create a SubjectData.
+        """
+        # The names of the attributes vary depending on which type of classifier
+        # the tag is for.  Only Fast tags have a name.
+        weight = tag.get("holdings") or tag.get("heldby")
+        identifier = tag.get("ident") or tag.get("nsfa") or tag.get("sfa")
+        name = tag.text or None
+        return int(weight), identifier, name
 
 
 class NameParser(VIAFNameParser):
@@ -179,6 +452,19 @@ class NameParser(VIAFNameParser):
 
     @classmethod
     def _parse_roles(cls, name, default_role=Contributor.AUTHOR_ROLE):
+        """Remove role information from a person's name.
+
+        :param name: A person's name as given by OCLC classify.
+        :param default_role: If no role is present inside the person's
+            name, use this role.
+        :return: A 3-tuple (name_without_roles, roles,
+            default_role_used).  `name_without_roles` is the person's
+            name with the role information removed. `roles` is a list
+            of Contributor role constants corresponding to the removed
+            information. `default_role_used` indicates whether
+            role information was found in the person's name or whether
+            `roles` is the `default_role` passed in.
+        """
         default_role_used = False
         name_without_roles = name
         match = cls.ROLES.search(name)
@@ -211,8 +497,7 @@ class NameParser(VIAFNameParser):
                 yield Contributor.UNKNOWN_ROLE
 
 
-class OCLCXMLParser(XMLParser):
-
+class OCLCTitleAuthorLookupXMLParser(XMLParser):
     # OCLC in-representation 'status codes'
     SINGLE_WORK_SUMMARY_STATUS = 0
     SINGLE_WORK_DETAIL_STATUS = 2
@@ -740,7 +1025,6 @@ class OCLCXMLParser(XMLParser):
             edition_record.add_contributor(author, roles)
         return edition_record, new
 
-
 class OCLCClassifyAPI(object):
 
     BASE_URL = 'http://classify.oclc.org/classify2/Classify?'
@@ -769,6 +1053,77 @@ class OCLCClassifyAPI(object):
         representation, cached = Representation.get(self._db, url)
         return representation.content
 
+class OCLCLookupCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
+
+    def __init__(self, collection, api=None, **kwargs):
+        super(OCLCLookupCoverageProvider, self).__init__(
+            collection, registered_only=True, **kwargs
+        )
+        self.api = api or OCLCClassifyAPI(self._db)
+
+
+class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
+    """Does identifier (specifically, ISBN) lookups using OCLC Classify.
+    """
+    SERVICE_NAME = "OCLC Classify Identifier Lookup"
+    INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
+    DATA_SOURCE_NAME = DataSource.OCLC
+
+    parser = OCLCClassifyXMLParser()
+
+    def _get_tree(self, **kwargs):
+        """Look up either an ISBN or an OWI, and return a tree generated from the resulting XML."""
+        xml = self.api.lookup_by(**kwargs)
+        return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
+
+    def process_item(self, identifier):
+        """Ask OCLC Classify about a single ISBN. Based on what
+        it says, create some number of Editions--either one for the
+        ISBN or one for every OWI associated with the ISBN.
+        """
+        metadata_list = []
+        failure = None
+
+        try:
+            tree = self._get_tree(isbn=identifier.identifier)
+            code, owi_data = self.parser.initial_look_up(tree)
+            if code in [self.parser.SINGLE_WORK_DETAIL_STATUS, self.parser.SINGLE_WORK_SUMMARY_STATUS]:
+                metadata_list = self._single(tree, identifier)
+            elif code == self.parser.MULTI_WORK_STATUS:
+                metadata_list = self._multiple(owi_data, identifier)
+            elif code == self.parser.NOT_FOUND_STATUS:
+                message = ("The work with %s %s was not found." % (identifier.type, identifier.identifier))
+                return self.failure(identifier, message)
+            if metadata_list:
+                for metadata in metadata_list:
+                    self._apply(metadata)
+            return identifier
+
+        except IOError as e:
+            return self.failure(identifier, e.message)
+
+    def _single(self, tree, identifier):
+        """In the case of a single work response, go ahead and create a metadata object."""
+        return [self.parser.parse(tree, [identifier])]
+
+    def _multiple(self, owi_data, identifier):
+        """In the case of a multi-work response, we don't have enough information to create
+        the metadata object right away; instead, for each <work> tag, we get a more complete document
+        by looking up the OWI, and create a Metadata object based on that."""
+        results = []
+        for item in owi_data:
+            tree_from_owi = self._get_tree(owi=item.identifier)
+            results.append(self.parser.parse(tree_from_owi, [identifier, item]))
+
+        return results
+
+    def _apply(self, metadata):
+        """Create an edition based on a Metadata object we
+        obtained by parsing a tree.
+        """
+        edition = self.edition(metadata.primary_identifier)
+        metadata.apply(edition, collection=None)
+
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
 
@@ -795,7 +1150,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     SERVICE_NAME = "OCLC Classify Coverage Provider"
     INPUT_IDENTIFIER_TYPES = [Identifier.GUTENBERG_ID, Identifier.URI]
     DATA_SOURCE_NAME = DataSource.OCLC
-    
+
     def __init__(self, _db, api=None, **kwargs):
         super(TitleAuthorLookupCoverageProvider, self).__init__(
             _db, registered_only=True, **kwargs
@@ -849,7 +1204,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
         """Transforms the OCLC XML files into usable bibliographic records,
         including making additional API calls as necessary.
         """
-        parser = OCLCXMLParser()
+        parser = OCLCTitleAuthorLookupXMLParser()
         # For now, the only restriction we apply is the language
         # restriction. If we know that a given OCLC record is in a
         # different language from this record, there's no need to
