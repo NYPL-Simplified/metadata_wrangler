@@ -7,7 +7,8 @@ from .. import (
     sample_data
 )
 from lxml import etree
-from core.model import Contributor, Identifier
+from core.model import Contributor, DataSource, Identifier
+from core.metadata_layer import Metadata
 from oclc.classify import OCLCClassifyXMLParser
 
 class TestOCLCClassifyXMLParser(DatabaseTest):
@@ -46,7 +47,11 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
     def test_parse(self):
         identifier = self._identifier()
         tree = self.tree("single_work_response.xml")
-        result = self.parser.parse(tree, [identifier])
+        metadata = Metadata(
+            data_source=DataSource.OCLC,
+            primary_identifier=identifier
+        )
+        result = self.parser.parse(tree, metadata)
         eq_([identifier], result.identifiers)
 
         # Contributors
@@ -72,9 +77,10 @@ class TestOCLCClassifyXMLParser(DatabaseTest):
         eq_([Contributor.AUTHOR_ROLE], melville.roles)
         eq_({'deathDate': '1891', 'birthDate': '1819'}, melville.extra)
 
+
         # Measurements
         def get_measurement(quantity):
-            [measurement] = [m.value for m in result.measurements if m.quantity_measured == quantity]
+            [measurement] = [m.value for m in result.measurements if m.quantity_measured == self.parser.MEASUREMENT_MAPPING[quantity]]
             return measurement
 
         eq_(46983, get_measurement("holdings"))

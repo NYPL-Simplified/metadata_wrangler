@@ -125,6 +125,8 @@ class OCLCClassifyXMLParser(XMLParser):
             existing_measurements[measurement.quantity_measured] = measurement
         cls.add_measurements(tree, metadata, existing_measurements)
 
+        return metadata
+
     # CONTRIBUTORS:
 
     @classmethod
@@ -189,7 +191,6 @@ class OCLCClassifyXMLParser(XMLParser):
         data = dict()
         for rel in set(cls.MEASUREMENT_MAPPING.values()):
             data[rel] = 0
-
         # In some cases, there are different versions of the book, each
         # listed under a different work tag with its own measurements; for each
         # type of measurement, we need to add up the numbers for each work tag.
@@ -208,7 +209,8 @@ class OCLCClassifyXMLParser(XMLParser):
         :param data: A dictionary containing totals.
         """
         for key, rel in cls.MEASUREMENT_MAPPING.items():
-            data[rel] += int(work_tag.get(key))
+            if work_tag.get(key):
+                data[rel] += int(work_tag.get(key))
 
     @classmethod
     def make_measurement_data(cls, data):
@@ -1127,14 +1129,13 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             data_source=DataSource.OCLC,
             primary_identifier=identifier
         )
-
         try:
             tree = self._get_tree(isbn=identifier.identifier)
             code, owi_data = self.parser.initial_look_up(tree)
             if code in [self.parser.SINGLE_WORK_DETAIL_STATUS, self.parser.SINGLE_WORK_SUMMARY_STATUS]:
-                self._single(tree, metadata)
+                metadata = self._single(tree, metadata)
             elif code == self.parser.MULTI_WORK_STATUS:
-                self._multiple(owi_data, metadata)
+                metadata = self._multiple(owi_data, metadata)
             elif code == self.parser.NOT_FOUND_STATUS:
                 message = ("The work with %s %s was not found." % (identifier.type, identifier.identifier))
                 return self.failure(identifier, message)
@@ -1148,7 +1149,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         """In the case of a single work response, annotate
         `metadata` with the information it returned.
         """
-        self.parser.parse(tree, metadata)
+        return self.parser.parse(tree, metadata)
 
     def _multiple(self, owi_data, metadata):
         """In the case of a multi-work response, the document we got is
@@ -1158,10 +1159,10 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         by looking up the OWI, and annotate `metadata` based on
         that.
         """
-        results = []
         for item in owi_data:
             tree_from_owi = self._get_tree(owi=item.identifier)
-            self.parser.parse(tree_from_owi, metadata)
+            metadata = self.parser.parse(tree_from_owi, metadata)
+        return metadata
 
     def _apply(self, metadata):
         """Create an edition based on a Metadata object we
