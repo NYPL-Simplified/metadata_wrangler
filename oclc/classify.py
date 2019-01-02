@@ -157,7 +157,7 @@ class OCLCClassifyXMLParser(XMLParser):
         and update a list of existing MeasurementData.
         """
         tags = cls._xpath(tree, "//oclc:work")
-        for measurement in cls.get_measurements(tags, existing_measurements):
+        for measurement in cls.get_measurements(tags):
             key = measurement.quantity_measured
             if key in existing_measurements:
                 # We don't need another MeasurementData -- just add it to
@@ -177,7 +177,7 @@ class OCLCClassifyXMLParser(XMLParser):
     }
 
     @classmethod
-    def get_measurements(cls, work_tags, existing_measurements):
+    def get_measurements(cls, work_tags):
         """Extract MeasurementData representing values
         measured from a list of <work> tags.
 
