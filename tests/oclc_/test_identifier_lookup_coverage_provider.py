@@ -8,7 +8,7 @@ from .. import (
 )
 from lxml import etree
 from core.coverage import CoverageFailure
-from core.model import Contributor, Identifier
+from core.model import Contributor, Identifier, Measurement
 from core.metadata_layer import *
 from oclc.classify import (
     IdentifierLookupCoverageProvider,
@@ -20,9 +20,10 @@ class MockParser(OCLCClassifyXMLParser):
         self.call_count = 0
         self.called_with = []
 
-    def parse(self, tree, identifiers):
+    def parse(self, tree, metadata):
         self.call_count += 1
-        self.called_with.append(identifiers)
+        self.called_with = metadata
+        return self.called_with
 
 class MockParserSingle(MockParser):
     def initial_look_up(self, tree):
@@ -41,21 +42,21 @@ class MockProvider(IdentifierLookupCoverageProvider):
 
     def __init__(self, collection):
         self.apply_called_with = []
+        self.apply_call_count = 0
         super(MockProvider, self).__init__(collection)
 
-    def _single(self, tree, identifier):
-        self.called_with = dict(tree=tree, identifier=identifier)
-        return [Metadata(identifiers=identifier, data_source=DataSource.OCLC)]
+    def _single(self, tree, metadata):
+        self.called_with = dict(tree=tree, metadata=metadata)
+        metadata.data_source = DataSource.OCLC
+        return metadata
 
-    def _multiple(self, owi_data, identifier):
-        self.called_with = dict(owi_data=owi_data, identifier=identifier)
-        return([
-            Metadata(identifiers=[identifier, owi_data[0]], data_source=DataSource.OCLC),
-            Metadata(identifiers=[identifier, owi_data[1]], data_source=DataSource.OCLC)
-        ])
+    def _multiple(self, owi_data, metadata):
+        self.called_with = dict(owi_data=owi_data, metadata=metadata)
+        return metadata
 
     def _apply(self, metadata):
-        self.apply_called_with.append(metadata.identifiers)
+        self.apply_called_with = metadata.primary_identifier
+        self.apply_call_count += 1
 
 class MockProviderSingle(MockProvider):
     def _get_tree(self, **kwargs):
@@ -86,7 +87,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
     def test_process_item_single(self):
         # Testing that, when process_item finds out that a document's status code is 2,
-        # it calls _single, passes in the correct tree and identifier as arguments,
+        # it calls _single, passes in the correct tree and blank metadata object as arguments,
         # and returns the original ISBN.  Uses mocked versions of _get_tree,
         # initial_look_up, and _single.
 
@@ -95,7 +96,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         id = self._id("single")
         result = provider.process_item(id)
         eq_(etree.tostring(provider.called_with["tree"]), etree.tostring(provider._get_tree(isbn=self.SINGLE_ISBN)))
-        eq_(provider.called_with["identifier"], id)
+        assert isinstance(provider.called_with["metadata"], Metadata)
+        eq_(provider.called_with["metadata"].primary_identifier, id)
         eq_(result, id)
 
     def test_process_item_multi(self):
@@ -110,7 +112,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         result = provider.process_item(id)
         eq_([x.identifier for x in provider.called_with["owi_data"]], ["48446512", "48525129"])
-        eq_(provider.called_with["identifier"], id)
+        assert isinstance(provider.called_with["metadata"], Metadata)
+        eq_(provider.called_with["metadata"].primary_identifier, id)
         eq_(result, id)
 
     def test_process_item_failure(self):
@@ -128,139 +131,124 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         id = self._id("single")
         provider.process_item(id)
 
-        [result] = provider.apply_called_with
+        result = provider.apply_called_with
         eq_(result.identifier, id.identifier)
+        eq_(provider.apply_call_count, 1)
 
     def test__apply_multiple(self):
-        # Testing that, in the case of a multi-work response, _apply is called for each of the results from _multiple.
+        # Testing that, even in the case of a multi-work response, _apply is only called once;
+        # we only want to end up with one Metadata object (and one corresponding edition).
         provider = MockProviderMulti(self._default_collection)
         provider.parser = MockParserMulti()
         id = self._id("multi")
         provider.process_item(id)
 
-        results = provider.apply_called_with
-        eq_(len(results), 2)
-
-        isbn_1, owi_1 = results[0]
-        eq_(isbn_1.identifier, id.identifier)
-        eq_(owi_1.identifier, "48446512")
-
-        isbn_2, owi_2 = results[1]
-        eq_(isbn_2.identifier, id.identifier)
-        eq_(owi_2.identifier, "48525129")
+        result = provider.apply_called_with
+        eq_(result, id)
+        eq_(provider.apply_call_count, 1)
 
     def test__single(self):
         # Testing that _single calls parse, passes in the correct tree and
         # identifier as arguments, and returns the resulting value.  Uses a mocked
         # version of parse.
-
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         provider.parser = MockParserSingle()
         tree, identifier = self._tree("single"), self._id("single")
+        metadata = self._blank_metadata(identifier)
 
-        provider._single(tree, identifier)[0]
-        [result] = provider.parser.called_with[0]
+        provider._single(tree, metadata)
+        result = provider.parser.called_with
 
-        eq_((result.type, result.identifier), (Identifier.ISBN, self.SINGLE_ISBN))
+        eq_((result.primary_identifier.type, result.primary_identifier.identifier), (Identifier.ISBN, self.SINGLE_ISBN))
 
     def test__multiple(self):
         # Testing that _multiple calls parse, passes in the correct OWIs, and
         # returns the resulting value.  Uses mocked versions of
         # initial_look_up (to get the list of OWIs) and parse.
-
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         provider.parser = MockParserMulti()
         tree, identifier = self._tree("multi"), self._id("multi")
+        metadata = self._blank_metadata(identifier)
 
         code, owi_data = provider.parser.initial_look_up(tree)
-        provider._multiple(owi_data, identifier)
-        result_1, result_2 = provider.parser.called_with
+        provider._multiple(owi_data, metadata)
+        result = provider.parser.called_with
         # Make sure parse was called twice--once for each of the two OWIs.
         eq_(provider.parser.call_count, 2)
 
-        # Each result is a list containing one ISBN and one OWI.
-        eq_(len(result_1), 2)
-        eq_(len(result_2), 2)
-
-        for isbn in [result_1[0], result_2[0]]:
-            eq_(isbn.type, Identifier.ISBN)
-            eq_(isbn.identifier, self.MULTI_ISBN)
-            assert isinstance(isbn, Identifier)
-
-        for idx, owi in enumerate([result_1[1], result_2[1]]):
-            eq_(owi.type, Identifier.OCLC_WORK)
-            eq_(owi.identifier, owi_data[idx].identifier)
-            assert isinstance(owi, IdentifierData)
+        eq_(result.primary_identifier.identifier, self.MULTI_ISBN)
+        assert isinstance(result.primary_identifier, Identifier)
 
     def test__single_with_real_parser(self):
         # Testing that calling _single actually returns the correct metadata object.
-
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         tree, identifier = self._tree("single"), self._id("single")
-        [result] = provider._single(tree, identifier)
+        metadata = self._blank_metadata(identifier)
+        result = provider._single(tree, metadata)
 
         assert isinstance(result, Metadata)
         eq_(result._data_source, "OCLC Classify")
         eq_(result.primary_identifier, identifier)
-
-        self._check_measurements(result.measurements, [41932, 1])
+        self._check_measurements(result.measurements, "single")
 
         [author] = result.contributors
         assert isinstance(author, ContributorData)
         eq_(self._get_contributor_info(author), ("Melville, Herman", "n79006936", "27068555", ["Author"], {"deathDate": "1891", "birthDate": "1819"}))
 
     def test__multiple_with_real_parser(self):
-        # Testing that calling _multiple actually returns the correct metadata objects.
-
+        # Testing that calling _multiple actually returns the correct metadata object.
         provider = IdentifierLookupCoverageProvider(self._default_collection)
         tree, identifier = self._tree("multi"), self._id("multi")
+        metadata = self._blank_metadata(identifier)
         code, owi_data = provider.parser.initial_look_up(tree)
-        results = provider._multiple(owi_data, identifier)
+        result = provider._multiple(owi_data, metadata)
 
-        # The document contained two <work> tags and therefore two OWIs, so we
-        # end up with two results.  They should both be Metadata objects, and
-        # should have the same data source and ISBN.
+        # The document contained two <work> tags and therefore two OWIs, but we still end up with
+        # only one Metadata object, which contains information derived from looking up both OWIs.
+        assert isinstance(result, Metadata)
+        eq_(result._data_source, "OCLC Classify")
+        eq_(result.primary_identifier, identifier)
 
-        eq_(len(results), 2)
-        for result in results:
-            assert isinstance(result, Metadata)
-            eq_(result._data_source, "OCLC Classify")
-            eq_(result.primary_identifier, identifier)
-
-        result_1, result_2 = results
-
-        # Result 1:
-        eq_(result_1.identifiers[1], owi_data[0])
-
+        # The author info just comes from the first work.
         expected_author_info = ("Adams, Douglas", "n80076765", "113230702", ["Author"], {"deathDate": "2001", "birthDate": "1952"})
-        [author] = result_1.contributors
+        [author] = result.contributors
         author_info = self._get_contributor_info(author)
         eq_(author_info, expected_author_info)
 
-        self._check_measurements(result_1.measurements, [3786, 112])
+        # Measurement info is also just from the first work.
+        self._check_measurements(result.measurements, "multi")
 
-        [ddc], [lcc], fast = self._get_subjects(result_1.subjects)
+        # The subject data is collected from both works.  We prove this by making sure
+        # that the list of Fast identifiers consists of the unique union of the Fast identifiers
+        # obtained by looking up each of the two <work> tags by its OWI.
+        [ddc], [lcc], fast = self._get_subjects(result.subjects)
         eq_(ddc.identifier, "823.914")
         eq_(lcc.identifier, "PR6051.D3352")
-        eq_(len(fast), 5)
-        eq_([x.identifier for x in fast], ['890366', '1075077', '977455', '977550', '923709'])
 
-        # Result 2:
-        eq_(result_2.identifiers[1], owi_data[1])
+        # We got 5 Fast subject classifications from the first <work> tag:
+        fast_work_1 = set([
+            "Dent, Arthur (Fictitious character)",
+            "Prefect, Ford",
+            "Interplanetary voyages",
+            "Interstellar travel",
+            "Fiction",
+        ])
 
-        eq_(len(result_2.contributors), 2)
-        author_1, author_2 = result_2.contributors
+        # And 6 from the second <work> tag, 4 of which overlap with the ones from the first <work> tag:
+        fast_work_2 = set([
+            "Dent, Arthur (Fictitious character)",
+            "Prefect, Ford",
+            "Interplanetary voyages",
+            "Interstellar travel",
+            "Science fiction, English",
+            "Humorous stories, English",
+        ])
 
-        eq_(self._get_contributor_info(author_1), ("Gaiman, Neil", "n90640849", "103859257", ["Author"], {}))
-        eq_(self._get_contributor_info(author_2), expected_author_info)
-
-        self._check_measurements(result_2.measurements, [2170, 41])
-
-        [ddc], [lcc], fast = self._get_subjects(result_2.subjects)
-        eq_(ddc.identifier, "823.914")
-        eq_(lcc.identifier, "PR6051.D3352")
-        eq_(len(fast), 6)
-        eq_([x.identifier for x in fast], ['963836', '1108670', '1075077', '890366', '977455', '977550'])
+        # So, our Metadata object should end up with 7 Fast subject classifications--the 4 shared ones,
+        # plus 1 unique one from work #1 and 2 unique ones from work #2.
+        eq_(len(fast), 7)
+        fast_subject_names = set([x.name for x in fast])
+        eq_(fast_subject_names, fast_work_1.union(fast_work_2))
 
     def _get_subjects(self, subjects):
         # Everything in the list of subjects should be a SubjectData object.
@@ -271,14 +259,24 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         eq_((len(sublists[0]), len(sublists[1])), (1, 1))
         return sublists
 
-    def _check_measurements(self, measurements, values):
+    def _check_measurements(self, measurements, type):
+        values = {
+            "single": {
+                Measurement.HOLDINGS: 41932,
+                Measurement.PUBLISHED_EDITIONS: 1
+            },
+            "multi": {
+                Measurement.HOLDINGS: 5956,
+                Measurement.PUBLISHED_EDITIONS: 153
+            }
+        }
         eq_(len(measurements), 2)
-        eq_(measurements[0].quantity_measured, "holdings")
-        eq_(measurements[1].quantity_measured, "editions")
-        for idx, m in enumerate(measurements):
+        [holdings], [editions] = [[x for x in measurements if y in x.quantity_measured] for y in ["holdings", "editions"]]
+        for m in [holdings, editions]:
             assert isinstance(m, MeasurementData)
+            expected_value = values[type][m.quantity_measured]
             eq_(m.weight, 1)
-            eq_(m.value, values[idx])
+            eq_(m.value, expected_value)
 
     def _get_contributor_info(self, contributor):
         return (
@@ -288,3 +286,10 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
             contributor.roles,
             contributor.extra
         )
+
+    def _blank_metadata(self, identifier):
+        metadata = Metadata(
+            data_source=DataSource.OCLC,
+            primary_identifier=identifier
+        )
+        return metadata

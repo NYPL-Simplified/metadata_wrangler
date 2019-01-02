@@ -94,28 +94,36 @@ class OCLCClassifyXMLParser(XMLParser):
         return results
 
     @classmethod
-    def parse(cls, tree, identifiers):
-        """Process a preparsed XML document into Metadata.
+    def parse(cls, tree, metadata):
+        """Process a preparsed XML document and annotate a
+        preexisting Metadata with the result.
 
         :param tree: An XML document parsed with etree
-        :param identifiers: A list of Identifier and IdentifierData
-           objects representing the known identifiers associated
-           with a given book. The first object is the ISBN to be used
-           as the book's primary identifier.
-        :return A Metadata
+        :param metadata: A Metadata to be improved with the information
+            from the XML document.
         """
-        contributors = cls.contributors(tree)
-        measurements = cls.measurements(tree)
-        subjects = cls.subjects(tree)
-        primary_identifier = identifiers[0]
-        metadata = Metadata(
-            data_source=DataSource.OCLC,
-            contributors=contributors,
-            measurements=measurements,
-            subjects=subjects,
-            primary_identifier=primary_identifier,
-            identifiers=identifiers,
-        )
+        # If the Metadata already has ContributorData objects, do
+        # nothing -- otherwise we're likely to add duplicate or
+        # irrelevant information.
+        if not metadata.contributors:
+            metadata.contributors = cls.contributors(tree)
+
+        # SubjectData and MeasurementData are additive. If two OWIs
+        # have the same classification the Metadata should get one
+        # SubjectData with the total weight.
+
+        # Build a dictionary mapping (type, identifier) to SubjectData,
+        # so that add_subjects() has an easier job.
+        existing_subjects = dict()
+        for subject in metadata.subjects:
+            existing_subjects[(subject.type, subject.identifier)] = subject
+        cls.add_subjects(tree, metadata, existing_subjects)
+
+        # Similarly for MeasurementData and add_measurements().
+        existing_measurements = dict()
+        for measurement in metadata.measurements:
+            existing_measurements[measurement.quantity_measured] = measurement
+        cls.add_measurements(tree, metadata, existing_measurements)
 
         return metadata
 
@@ -144,13 +152,29 @@ class OCLCClassifyXMLParser(XMLParser):
     # MEASUREMENTS:
 
     @classmethod
-    def measurements(cls, tree):
-        """Extract MeasurementData from a parsed XML document.
-
-        :return: A list of MeasurementData objects
+    def add_measurements(cls, tree, metadata, existing_measurements):
+        """Extract MeasurementData from a parsed XML document
+        and update a list of existing MeasurementData.
         """
         tags = cls._xpath(tree, "//oclc:work")
-        return cls.get_measurements(tags)
+        for measurement in cls.get_measurements(tags):
+            key = measurement.quantity_measured
+            if key in existing_measurements:
+                # We don't need another MeasurementData -- just add it to
+                # the preexisting value.
+                existing_measurements[key].value += measurement.value
+            else:
+                # We do need another MeasurementData -- add it to the
+                # Metadata.
+                metadata.measurements.append(measurement)
+
+    # Maps OCLC attribute names to the link relations we use when
+    # creating Measurements.
+    MEASUREMENT_MAPPING = {
+        "holdings" : Measurement.HOLDINGS,
+        "eholdings" : Measurement.HOLDINGS,
+        "editions" : Measurement.PUBLISHED_EDITIONS,
+    }
 
     @classmethod
     def get_measurements(cls, work_tags):
@@ -163,18 +187,15 @@ class OCLCClassifyXMLParser(XMLParser):
         :param work_tags: A list of preparsed <work> tags.
         :return: A list of MeasurementData objects
         """
-        data = {
-            "holdings": 0,
-            "editions": 0,
-        }
-
+        # Start with all possible values set to zero.
+        data = dict()
+        for rel in set(cls.MEASUREMENT_MAPPING.values()):
+            data[rel] = 0
         # In some cases, there are different versions of the book, each
         # listed under a different work tag with its own measurements; for each
         # type of measurement, we need to add up the numbers for each work tag.
         for work_tag in work_tags:
             cls._update_data(work_tag, data)
-            if work_tag.get("eholdings"):
-                data["holdings"] += int(work_tag.get("eholdings"))
 
         measurement_data_objects = cls.make_measurement_data(data)
         return measurement_data_objects
@@ -187,8 +208,9 @@ class OCLCClassifyXMLParser(XMLParser):
         :param work_tag: A preparsed <work> tag.
         :param data: A dictionary containing totals.
         """
-        for item in data:
-            data[item] += int(work_tag.get(item))
+        for key, rel in cls.MEASUREMENT_MAPPING.items():
+            if work_tag.get(key):
+                data[rel] += int(work_tag.get(key))
 
     @classmethod
     def make_measurement_data(cls, data):
@@ -208,13 +230,23 @@ class OCLCClassifyXMLParser(XMLParser):
     # SUBJECTS
 
     @classmethod
-    def subjects(cls, tree):
-        """Extract SubjectData from a parsed XML document.
-
-        :return: A list of SubjectData objects
+    def add_subjects(cls, tree, metadata, existing_subjects):
+        """Extract SubjectData from a parsed XML document
+        and update a list of existing SubjectData.
         """
         classifiers = cls.get_classifier_names_and_parent_tags(tree)
         subjects = cls.get_subjects(classifiers)
+        for subject in subjects:
+            key = (subject.type, subject.identifier)
+            if key in existing_subjects:
+                # We don't need another SubjectData -- just bump up
+                # the weight on this old one.
+                existing_subjects[key].weight += subject.weight
+            else:
+                # We do need another SubjectData -- add it to the
+                # Metadata.
+                metadata.subjects.append(subject)
+
         return subjects
 
     @classmethod
@@ -1077,45 +1109,60 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         return etree.fromstring(xml, parser=etree.XMLParser(recover=True))
 
     def process_item(self, identifier):
-        """Ask OCLC Classify about a single ISBN. Based on what
-        it says, create some number of Editions--either one for the
-        ISBN or one for every OWI associated with the ISBN.
+        """Ask OCLC Classify about a single ISBN. Create an Edition based on
+        what it says. This may involve consolidating information from
+        multiple OWIs.
+
+        TODO: Ideally we would create a distinct Metadata for each
+        OWI, and consolidate them into a presentation edition for the
+        ISBN. Unfortunately, a presentation edition only takes into account
+        information from different sources for the same Identifier.
+
+        Subject classification can be gathered across Identifiers, but
+        information such as author and measurements currently can not.
         """
         metadata_list = []
         failure = None
 
+        # Start with an empty Metadata. We're going to fill this out.
+        metadata = Metadata(
+            data_source=DataSource.OCLC,
+            primary_identifier=identifier
+        )
         try:
             tree = self._get_tree(isbn=identifier.identifier)
             code, owi_data = self.parser.initial_look_up(tree)
             if code in [self.parser.SINGLE_WORK_DETAIL_STATUS, self.parser.SINGLE_WORK_SUMMARY_STATUS]:
-                metadata_list = self._single(tree, identifier)
+                metadata = self._single(tree, metadata)
             elif code == self.parser.MULTI_WORK_STATUS:
-                metadata_list = self._multiple(owi_data, identifier)
+                metadata = self._multiple(owi_data, metadata)
             elif code == self.parser.NOT_FOUND_STATUS:
                 message = ("The work with %s %s was not found." % (identifier.type, identifier.identifier))
                 return self.failure(identifier, message)
-            if metadata_list:
-                for metadata in metadata_list:
-                    self._apply(metadata)
+            self._apply(metadata)
             return identifier
 
         except IOError as e:
             return self.failure(identifier, e.message)
 
-    def _single(self, tree, identifier):
-        """In the case of a single work response, go ahead and create a metadata object."""
-        return [self.parser.parse(tree, [identifier])]
+    def _single(self, tree, metadata):
+        """In the case of a single work response, annotate
+        `metadata` with the information it returned.
+        """
+        return self.parser.parse(tree, metadata)
 
-    def _multiple(self, owi_data, identifier):
-        """In the case of a multi-work response, we don't have enough information to create
-        the metadata object right away; instead, for each <work> tag, we get a more complete document
-        by looking up the OWI, and create a Metadata object based on that."""
-        results = []
+    def _multiple(self, owi_data, metadata):
+        """In the case of a multi-work response, the document we got is
+        itself useless for annotating `metadata`.
+
+        Instead, for each <work> tag, we get a more complete document
+        by looking up the OWI, and annotate `metadata` based on
+        that.
+        """
         for item in owi_data:
             tree_from_owi = self._get_tree(owi=item.identifier)
-            results.append(self.parser.parse(tree_from_owi, [identifier, item]))
-
-        return results
+            metadata = self.parser.parse(tree_from_owi, metadata)
+        return metadata
 
     def _apply(self, metadata):
         """Create an edition based on a Metadata object we
