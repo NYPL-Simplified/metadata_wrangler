@@ -15,6 +15,7 @@ from core.metadata_layer import (
     IdentifierData,
     MeasurementData,
     Metadata,
+    ReplacementPolicy,
     SubjectData,
 )
 from core.model import (
@@ -1169,7 +1170,10 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         obtained by parsing a tree.
         """
         edition = self.edition(metadata.primary_identifier)
-        metadata.apply(edition, collection=None)
+        metadata.apply(
+            edition, collection=None, replace=self.replacement_policy
+        )
+
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
@@ -1203,6 +1207,13 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
             _db, registered_only=True, **kwargs
         )
         self.api = api or OCLCClassifyAPI(self._db)
+
+        # OCLC Classify never offers cover images, so there is no need
+        # for the ReplacementPolicy to be aware of whatever mirror
+        # is defined.
+        self.replacement_policy = ReplacementPolicy.from_metadata_source(
+            _db=self._db
+        )
 
     def oclc_safe_title(self, title):
         if not title:
