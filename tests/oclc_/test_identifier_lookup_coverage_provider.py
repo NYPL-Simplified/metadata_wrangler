@@ -124,6 +124,26 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         assert isinstance(failure, CoverageFailure)
         eq_(failure.exception, "The work with ISBN 9781429984171 was not found.")
 
+    def test__apply_propagates_replacement_policy(self):
+        # When IdentifierLookupCoverageProvider applies metadata
+        # to the database, it uses the replacement policy associated with
+        # the coverage provider.
+        class MockMetadata(Metadata):
+            def apply(self, *args, **kwargs):
+                self.called_with = (args, kwargs)
+
+        metadata = MockMetadata(data_source=DataSource.OCLC,
+                                primary_identifier=self._identifier())
+
+        provider = IdentifierLookupCoverageProvider(
+            self._default_collection, replacement_policy=object()
+        )
+        provider._apply(metadata)
+
+        args, kwargs = metadata.called_with
+        eq_(kwargs['replace'], provider.replacement_policy)
+
+
     def test__apply_single(self):
         # Testing that, in the case of a single-work response, _apply is called with the return value of _single.
         provider = MockProviderSingle(self._default_collection)
