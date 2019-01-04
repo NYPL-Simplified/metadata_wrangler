@@ -10,9 +10,11 @@ from core.model import (
 
 class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvider):
 
-    COVERAGE_COUNTS_FOR_EVERY_COLLECTION = True
-
     def work(self, identifier):
+        """Create or find a Work for the given Identifier.
+
+        If necessary, create a LicensePool for it as well.
+        """
         # There should already be a dummy LicensePool, created by
         # IdentifierResolutionCoverageProvider, which we can use as a
         # basis for a work.
@@ -22,6 +24,10 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
         else:
             # Even if not, we can create our own LicensePool -- it's just
             # a stand-in and doesn't represent any actual licenses.
+            #
+            # This may happen because a migration script created work
+            # for this Identifier without going through
+            # IdentifierResolutionCoverageProvider.
             license_pool = self.license_pool(
                 identifier, data_source=DataSource.INTERNAL_PROCESSING
             )
@@ -33,32 +39,49 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
         # all share a Work.
         license_pool.open_access = True
 
+        # If the Identifier is already associated with a Work (because
+        # we went through this process for another LicensePool for the
+        # same identifier), we can reuse that Work and avoid a super()
+        # call, which will wastefully destroying the old Work and
+        # create a new one.
+        #
+        # Normally this isn't necessary because
+        # COVERAGE_COUNTS_FOR_EVERY_COLLECTION. But migration scripts
+        # may register seemingly redundant work to be done, and if
+        # that happens, we don't need to create a whole other Work
+        # -- we just need to recalculcate its presentation, which will
+        # happen in handle_success().
         existing_work = identifier.work
         if existing_work:
-            # We know which Work the LicensePool belongs to -- it's
-            # the one already associated with this identifier.
-            #
-            # This will avoid an expensive step where we create a new
-            # work unnecessarily.
-            license_pool.work = identifier.work
+            license_pool.work = existing_work
+            return existing_work
 
         return super(
             MetadataWranglerBibliographicCoverageProvider, self).work(
                 identifier, license_pool, even_if_no_title=True
             )
 
-
     def handle_success(self, identifier):
-        work = super(MetadataWranglerBibliographicCoverageProvider, self).work(identifier)
+        """Try to create a new presentation-ready Work based on metadata
+        obtained during process_item().
+
+        If a Work already existed, recalculate its presentation to
+        incorporate the new metadata.
+        """
+        work = super(
+            MetadataWranglerBibliographicCoverageProvider, self
+        ).work(identifier)
 
         if not isinstance(work, Work):
             return work
+
         if work.presentation_ready:
             # This work was already presentation-ready, which means
-            # its presentation probably just changed and it needs to
-            # be recalculated.
+            # its presentation probably just changed and needs to be
+            # recalculated.
             work.calculate_presentation()
         self.set_presentation_ready(identifier)
+
 
 class ResolveVIAFOnSuccessCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
     """A mix-in class for metadata wrangler BibliographicCoverageProviders
