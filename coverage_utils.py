@@ -25,10 +25,9 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
         try:
             mirror = MirrorUploader.sitewide(_db)
         except CannotLoadConfiguration, e:
-            # It's not a fatal error if there's no MirrorUploader
+            # It's not a problem if there's no MirrorUploader
             # configured -- it just means we can't mirror cover images
             # when they show up.
-            self.log.error("No sitewide uploader configured", exc_info=e)
             mirror = None
         return ReplacementPolicy.from_metadata_source(mirror=mirror)
 
