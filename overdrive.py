@@ -37,8 +37,7 @@ class OverdriveBibliographicCoverageProvider(
     # 'unaffiliated' collection, which is not an Overdrive collection.
     PROTOCOL = None
 
-    def __init__(self, collection, viaf=None, replacement_policy=None,
-                 **kwargs):
+    def __init__(self, collection, viaf=None, **kwargs):
         _db = Session.object_session(collection)
         api_class = kwargs.pop('api_class', OverdriveAPI)
         if callable(api_class):
@@ -53,15 +52,9 @@ class OverdriveBibliographicCoverageProvider(
 
         self.viaf = viaf or VIAFClient(_db)
 
-        if not replacement_policy:
-            replacement_policy = ReplacementPolicy.from_metadata_source(
-                mirror=MirrorUploader.sitewide(_db)
-            )
-
         kwargs['registered_only'] = True
         super(OverdriveBibliographicCoverageProvider, self).__init__(
-            collection, api_class=api, replacement_policy=replacement_policy,
-            **kwargs
+            collection, api_class=api, **kwargs
         )
 
     @classmethod

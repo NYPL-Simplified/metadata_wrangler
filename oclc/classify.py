@@ -1208,13 +1208,6 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
         )
         self.api = api or OCLCClassifyAPI(self._db)
 
-        # OCLC Classify never offers cover images, so there is no need
-        # for the ReplacementPolicy to be aware of whatever mirror
-        # is defined.
-        self.replacement_policy = ReplacementPolicy.from_metadata_source(
-            _db=self._db
-        )
-
     def oclc_safe_title(self, title):
         if not title:
             return ''

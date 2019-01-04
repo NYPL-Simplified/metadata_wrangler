@@ -1,14 +1,36 @@
 from nose.tools import set_trace
+
+from sqlalchemy.orm.session import Session
+
+from core.config import CannotLoadConfiguration
 from core.coverage import (
     BibliographicCoverageProvider,
     CoverageFailure
 )
+from core.metadata_layer import ReplacementPolicy
+from core.mirror import MirrorUploader
 from core.model import (
     DataSource,
     Work,
 )
 
 class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvider):
+
+    def _default_replacement_policy(self, _db):
+        """In general, data used by the metadata wrangler is a reliable source
+        of metadata but not of licensing information. We always
+        provide the MirrorUploader in case a data source has cover
+        images available.
+        """
+        try:
+            mirror = MirrorUploader.sitewide(_db)
+        except CannotLoadConfiguration, e:
+            # It's not a fatal error if there's no MirrorUploader
+            # configured -- it just means we can't mirror cover images
+            # when they show up.
+            self.log.error("No sitewide uploader configured", exc_info=e)
+            mirror = None
+        return ReplacementPolicy.from_metadata_source(mirror=mirror)
 
     def work(self, identifier):
         """Create or find a Work for the given Identifier.
