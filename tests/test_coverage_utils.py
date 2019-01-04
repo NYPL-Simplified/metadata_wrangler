@@ -7,6 +7,8 @@ from . import (
     DatabaseTest,
 )
 
+from core.coverage import CoverageFailure
+
 from core.model import (
     DataSource
 )
@@ -15,6 +17,14 @@ from coverage_utils import (
     MetadataWranglerBibliographicCoverageProvider,
     ResolveVIAFOnSuccessCoverageProvider,
 )
+
+class MockProvider(MetadataWranglerBibliographicCoverageProvider):
+    """A simple MetadataWranglerBibliographicCoverageProvider
+    for use in tests.
+    """
+    SERVICE_NAME = "Mock"
+    DATA_SOURCE_NAME = DataSource.GUTENBERG
+
 
 class TestMetadataWranglerBibliographicCoverageProvider(DatabaseTest):
 
@@ -38,6 +48,72 @@ class TestMetadataWranglerBibliographicCoverageProvider(DatabaseTest):
         work = provider.work(edition.primary_identifier)
         [pool] = work.license_pools
         eq_(DataSource.INTERNAL_PROCESSING, pool.data_source.name)
+
+        # The dummy pool is created as an open-access LicensePool so
+        # that multiple LicensePools can share the same work.
+        eq_(True, pool.open_access)
+
+    def test_handle_success_fails_if_work_cant_be_created(self):
+
+        class CantCreateWork(MetadataWranglerBibliographicCoverageProvider):
+            SERVICE_NAME = "Mock"
+            DATA_SOURCE_NAME = DataSource.GUTENBERG
+
+            def work(self, identifier):
+                return self.failure(identifier, "Can't create work.")
+
+        provider = CantCreateWork(self._default_collection)
+        pool = self._licensepool(None)
+
+        # We successfully processed the Identifier...
+        failure = provider.handle_success(pool.identifier)
+
+        # ...but were unable to create the Work. The result is failure.
+        assert isinstance(failure, CoverageFailure)
+        eq_("Can't create work.", failure.exception)
+
+    def test_handle_success_sets_new_work_presentation_ready(self):
+        provider = MockProvider(self._default_collection)
+        pool = self._licensepool(None)
+        pool.open_access = False
+        provider.handle_success(pool.identifier)
+
+        # The LicensePool was forced to be open-access.
+        eq_(True, pool.open_access)
+
+        # A presentation-ready work was created for it.
+        work = pool.work
+        eq_(True, work.presentation_ready)
+
+    def test_handle_success_recalculates_presentation_of_existing_work(self):
+        """If work() returns a Work that's already presentation-ready,
+        calculate_presentation() is called on the Work.
+        """
+
+        class MockWork(object):
+            """Act like a presentation-ready work that just needs
+            calculate_presentation() to be called.
+            """
+            def __init__(self):
+                self.presentation_ready = True
+                self.calculate_presentation_called = False
+
+            def calculate_presentation(self):
+                self.calculate_presentation_called = True
+
+        work = MockWork()
+
+        class Mock(MockProvider):
+            def work(self):
+                return work
+
+        provider = Mock(self._default_collection)
+        pool = self._licensepool(None)
+        provider.handle_success(pool.identifier)
+
+        # Since work.presentation_ready was already True,
+        # work.calculate_presentation() was called.
+        eq_(True, work.calculate_presentation_called)
 
 
 class MockResolveVIAF(ResolveVIAFOnSuccessCoverageProvider):

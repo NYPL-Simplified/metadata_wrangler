@@ -42,8 +42,8 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
         # If the Identifier is already associated with a Work (because
         # we went through this process for another LicensePool for the
         # same identifier), we can reuse that Work and avoid a super()
-        # call, which will wastefully destroying the old Work and
-        # create a new one.
+        # call, which will wastefully destroy the old Work and create
+        # an identical new one.
         #
         # Normally this isn't necessary because
         # COVERAGE_COUNTS_FOR_EVERY_COLLECTION. But migration scripts
@@ -68,10 +68,7 @@ class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvide
         If a Work already existed, recalculate its presentation to
         incorporate the new metadata.
         """
-        work = super(
-            MetadataWranglerBibliographicCoverageProvider, self
-        ).work(identifier)
-
+        work = self.work(identifier)
         if not isinstance(work, Work):
             return work
 
