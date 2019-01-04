@@ -345,33 +345,19 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
         # If no ContentCafeAPI is provided, the output of
         # ContentCafeAPI.from_config is used.
-        #
-        # If no MirrorUploader is provided, the output of
-        # S3Uploader.sitewide is used.
         class MockContentCafeAPI(ContentCafeAPI):
             @classmethod
             def from_config(cls, *args, **kwargs):
                 return mock_api
         content_cafe.ContentCafeAPI = MockContentCafeAPI
 
-        class MockUploader(MirrorUploader):
-            @classmethod
-            def sitewide(cls, *args, **kwargs):
-                return mock_mirror
-        # The content_cafe module has already imported MirrorUploader
-        # from core/mirror, so we need to mock it there rather than
-        # mocking mirror.
-        content_cafe.MirrorUploader = MockUploader
-
         # Now we can invoke the constructor with no special arguments
-        # and our mocked defaults will be used.
+        # and our mocked default will be used.
         provider = ContentCafeCoverageProvider(self._default_collection)
-        eq_(mock_mirror, provider.replacement_policy.mirror)
         eq_(mock_api, provider.content_cafe)
 
         # Restore mocked classes
         content_cafe.ContentCafeAPI = ContentCafeAPI
-        content_cafe.MirroUploader = MirrorUploader
 
     def test_process_item_success(self):
         class MockMetadata(object):
@@ -389,7 +375,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         api = MockContentCafeAPI()
 
         provider = ContentCafeCoverageProvider(
-            self._default_collection, api, object()
+            self._default_collection, api
         )
         identifier = self._identifier()
 
