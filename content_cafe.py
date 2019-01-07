@@ -34,8 +34,6 @@ from core.model import (
 from core.util.http import HTTP
 from core.util.summary import SummaryEvaluator
 
-from core.mirror import MirrorUploader
-
 from coverage_utils import MetadataWranglerBibliographicCoverageProvider
 
 def load_file(filename):
@@ -58,7 +56,7 @@ class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider)
     INPUT_IDENTIFIER_TYPES = [Identifier.ISBN]
     DATA_SOURCE_NAME = DataSource.CONTENT_CAFE
 
-    def __init__(self, collection, api=None, replacement_policy=None, **kwargs):
+    def __init__(self, collection, api=None, **kwargs):
         """Constructor.
 
         :param collection: A Collection.
@@ -67,19 +65,12 @@ class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider)
         :param kwargs: Any extra arguments to be passed into the
             BibliographicCoverageProvider superconstructor.
         """
-        _db = Session.object_session(collection)
-        if not replacement_policy:
-            mirror = MirrorUploader.sitewide(_db)
-            replacement_policy = ReplacementPolicy.from_metadata_source(
-                mirror=mirror
-            )
-
         # Any ISBN-type identifier cataloged in a Collection needs to
         # be processed, whether or not it was explicitly registered.
         super(ContentCafeCoverageProvider, self).__init__(
-            collection=collection, replacement_policy=replacement_policy,
-            **kwargs
+            collection=collection, **kwargs
         )
+        _db = Session.object_session(collection)
         self.content_cafe = api or ContentCafeAPI.from_config(self._db)
 
     def process_item(self, identifier):

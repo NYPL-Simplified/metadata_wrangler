@@ -15,6 +15,7 @@ from core.metadata_layer import (
     IdentifierData,
     MeasurementData,
     Metadata,
+    ReplacementPolicy,
     SubjectData,
 )
 from core.model import (
@@ -1169,7 +1170,10 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
         obtained by parsing a tree.
         """
         edition = self.edition(metadata.primary_identifier)
-        metadata.apply(edition, collection=None)
+        metadata.apply(
+            edition, collection=None, replace=self.replacement_policy
+        )
+
 
 class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
     """Does title/author lookups using OCLC Classify.
