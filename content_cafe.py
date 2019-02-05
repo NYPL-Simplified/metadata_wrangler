@@ -124,7 +124,15 @@ class ContentCafeAPI(object):
     # This URL is not used -- it just links to the other URLs.
     overview_url= BASE_URL + "ContentCafeClient/ContentCafe.aspx?UserID=%(userid)s&Password=%(password)s&ItemKey=%(isbn)s"
 
+    # An image file that starts with this bytestring is a placeholder
+    # and should not be treated as a real book cover.
     STAND_IN_IMAGE_PREFIX = load_file("stand-in-prefix.png")
+
+    # These pieces of text show up where a title normally would, but
+    # they are Content Cafe status messages, not real book titles.
+    KNOWN_BAD_TITLES = set([
+        'No content currently exists for this item',
+    ])
 
     log = logging.getLogger("Content Cafe API")
 
@@ -335,7 +343,10 @@ class ContentCafeAPI(object):
         title_header = soup.find('span', class_='PageHeader2')
         if not title_header or not title_header.string:
             return
-        return title_header.string
+        title = title_header.string
+        if title in cls.KNOWN_BAD_TITLES:
+            title = None
+        return title
 
 class ContentCafeSOAPError(IOError):
     pass
