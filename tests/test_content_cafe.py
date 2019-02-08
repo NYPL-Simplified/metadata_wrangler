@@ -1,3 +1,5 @@
+from bs4 import BeautifulSoup
+
 from nose.tools import (
     set_trace,
     eq_,
@@ -246,6 +248,21 @@ class TestContentCafeAPI(DatabaseTest):
         eq_(None, link.href)
         eq_("text/html", link.media_type)
         eq_("Here you go", link.content)
+
+    def test__extract_title(self):
+        # Standalone test of the _extract_title helper method.
+
+        def assert_title(title, expect):
+            markup = '<html><span class="PageHeader2">%s</span><content>Description</content>' % title
+            soup = BeautifulSoup(markup, 'lxml')
+            eq_(expect, ContentCafeAPI._extract_title(soup))
+
+
+        # A normal book title is successfully extracted.
+        assert_title("A great book", "A great book")
+
+        # A supposed title that's in KNOWN_BAD_TITLES is ignored.
+        assert_title("No content currently exists for this item", None)
 
     def test_add_reviews(self):
         """Verify that add_reviews works in a real case."""
