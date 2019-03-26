@@ -46,11 +46,16 @@ from core.testing import (
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
 
+from canonicalize import (
+    AuthorNameCanonicalizer,
+    SimpleMockAuthorNameCanonicalizer,
+)
 from content_cafe import (
     ContentCafeCoverageProvider,
     MockContentCafeAPI,
 )
 from controller import (
+    CanonicalizationController,
     CatalogController,
     IndexController,
     URNLookupController,
@@ -1303,3 +1308,68 @@ class TestURNLookupController(ControllerTest):
         eq_([], controller.works)
         eq_((urn, identifier), controller.status_message)
 
+
+class TestCanonicalizationController(ControllerTest):
+
+    def setup(self):
+        super(TestCanonicalizationController, self).setup()
+        self.canonicalizer = SimpleMockAuthorNameCanonicalizer()
+        self.controller = CanonicalizationController(
+            self._db, self.canonicalizer
+        )
+
+    def test_constructor(self):
+        # The default CanonicalizationController (which we don't use
+        # except in this test) creates a real AuthorNameCanonicalizer
+        # that's ready to make requests against real APIs.
+        controller = CanonicalizationController(self._db)
+        assert isinstance(controller.canonicalizer, AuthorNameCanonicalizer)
+
+    def test_parse_identifier(self):
+        # Test our slight specialization of Identifier.parse_urn.
+        m = self.controller.parse_identifier
+        eq_(None, m(None))
+
+        # parse_urn will raise a ValueError here, but we just return None.
+        eq_(None, m('urn:isbn:DBKACX0122823'))
+
+        isbn = m('urn:isbn:9780743593601')
+        eq_("9780743593601", isbn.identifier)
+        eq_(Identifier.ISBN, isbn.type)
+
+    def test_canonicalize_author_name(self):
+        m = self.controller.canonicalize_author_name
+
+        # Test the success case.
+        identifier = self._identifier()
+        input_name = "Bell Hooks"
+        output_name = "hooks, bell"
+        self.canonicalizer.register(identifier, input_name, output_name)
+        with self.app.test_request_context(
+                '/?urn=%s&display_name=%s' % (identifier.urn, input_name)
+        ):
+            response = self.controller.canonicalize_author_name()
+
+            # The mock canonicalizer was asked about this
+            # Identifier/name pair.
+            call = self.canonicalizer.canonicalize_author_name_calls.pop()
+            eq_((identifier, input_name), call)
+
+            # And it returned the (predefined) right answer.
+            eq_(200, response.status_code)
+            eq_("text/plain", response.headers['Content-Type'])
+            eq_("hooks, bell", response.data)
+
+        # Now test the failure case.
+        with self.app.test_request_context('/?urn=error&display_name=nobody'):
+            response = self.controller.canonicalize_author_name()
+
+            call = self.canonicalizer.canonicalize_author_name_calls.pop()
+            # We were not able to turn 'error' into a Identifier, so
+            # None was passed in instead.
+            eq_((None, "nobody"), call)
+
+            # Since there was no predefined right answer for (None, "nobody"),
+            # we get a 404 error.
+            eq_(404, response.status_code)
+            eq_("", response.data)
