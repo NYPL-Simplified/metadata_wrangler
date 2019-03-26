@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="2"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <work author="Adams, Douglas, 1952-2001 | Gaiman, Neil" editions="45" eholdings="169" format="Book" holdings="2016" itemtype="itemtype-book" owi="48525129" title="The ultimate hitchhiker's guide to the galaxy">32924588</work>
+  <authors>
+    <author lc="n90640849" viaf="103859257">Gaiman, Neil</author>
+    <author lc="n80076765" viaf="113230702">Adams, Douglas, 1952-2001</author>
+  </authors>
+  <orderBy>thold desc</orderBy>
+  <input type="owi">48525129</input>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <editions>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="869" itemtype="itemtype-book" language="eng" oclc="49710059" title="The ultimate hitchhiker's guide to the galaxy">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="752" itemtype="itemtype-book" language="eng" oclc="32924588" title="The ultimate hitchhiker's guide">
+      <classifications>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+        <class edition="20" ind1="0" ind2="0" sf2="20" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="152" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="698461621" title="The ultimate hitchhiker's guide to the galaxy">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="141" itemtype="itemtype-book" language="eng" oclc="57529697" title="The ultimate hitchhiker's guide : five complete novels and one story">
+      <classifications>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="0" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="83" itemtype="itemtype-book" language="eng" oclc="37719730" title="The ultimate hitchhiker's guide">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="0" ind1="0" ind2="4" sf2="00" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="51" itemtype="itemtype-book" language="eng" oclc="830119017" title="The ultimate hitchhiker's guide to the galaxy">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="24" itemtype="itemtype-book" language="eng" oclc="793307001" title="The ultimate hitchhiker's guide to the galaxy ; : The hitchhiker's guide to the galaxy ; The restaurant at the end of the universe ; Life, the universe, and everything ; So long, and thanks for all the fish ; Mostly harmless">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="15" itemtype="itemtype-book" language="eng" oclc="228438424" title="The ultimate hitchhiker's guide to the galaxy">
+      <classifications>
+        <class edition="20" ind1="0" ind2="0" sf2="20" sfa="823.914" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="12" itemtype="itemtype-book" language="eng" oclc="438964133" title="The ultimate hitchhiker's guide to the galaxy"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="8" itemtype="itemtype-book" language="eng" oclc="781903119" title="The ultimate hitchhiker's guide">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="6" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="843017559" title="The ultimate hitchhiker's guide to the galaxy">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="5" itemtype="itemtype-book" language="eng" oclc="774132763" title="The ultimate hitchhiker's guide to the galaxy"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="5" itemtype="itemtype-book" language="eng" oclc="635808837" title="The ultimate hitchhiker's guide : five complete novels and one story">
+      <classifications>
+        <class ind1=" " ind2=" " sfa="PR6051.D3352" tag="050"/>
+        <class edition="0" ind1="0" ind2=" " sf2="00" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="5" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="1002082716" title="The Ultimate Hitchhiker's Guide to the Galaxy">
+      <classifications>
+        <class edition="0" ind1="1" ind2="4" sf2="00" sfa="E" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="4" itemtype="itemtype-book" language="eng" oclc="978546998" title="Ultimate hitchhiker's guide">
+      <classifications>
+        <class edition="22" ind1="0" ind2="0" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="4" itemtype="itemtype-book" language="eng" oclc="786495978" title="Ultimate hitchhiker's guide : five complete novels and one story"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="4" itemtype="itemtype-book" language="eng" oclc="800257039" title="The ultimate hitchhiker's guide to the galaxy"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="3" itemtype="itemtype-book" language="eng" oclc="456586869" title="The ultimate hitchhiker's guide : complete &amp;amp; unabridged"/>
+    <edition eholdings="0" format="Book" holdings="3" itemtype="itemtype-book" language="eng" oclc="502043117" title="The Ultimate Hitchhiker's Guide to the Galaxy"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="3" itemtype="itemtype-book" language="eng" oclc="474519778" title="The ultimate hitchhiker's guide to the galaxy"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="3" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="851576446" title="The Ultimate Hitchhiker's Guide to the Galaxy : Entering the Tibetan Buddhist Path">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="2" itemtype="itemtype-book" language="eng" oclc="493165947" title="The ultimate hitchhiker's guide"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="2" itemtype="itemtype-book" language="eng" oclc="762164452" title="The ultimate hitchhiker's guide : complete &amp;amp; unabridged"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="2" itemtype="itemtype-book" language="eng" oclc="832565957" title="The ultimate hitchhiker's guide">
+      <classifications>
+        <class edition="0" ind1="0" ind2="4" sf2="00" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="2" itemtype="itemtype-book" language="eng" oclc="1010967270" title="The ultimate hitchhiker's guide to the galaxy"/>
+  </editions>
+  <recommendations>
+    <graph>http://chart.apis.google.com/chart?cht=p&amp;chd=e:-tBS&amp;chs=350x200&amp;chts=000000,16&amp;chtt=All+Editions&amp;chco=0D0399,124DBA&amp;chdl=Classified|Unclassified</graph>
+    <fast>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chs=475x175&amp;chd=e:NzNzMhMhFsFs&amp;chco=0D0399,124DBA,278BD8,38C9E2,4DEADD,6DF9A8&amp;chdl=Humorous+stories%2C+English|Science+fiction%2C+English|Prefect%2C+Ford|Dent%2C+Arthur+%28Fictitious+character%29|Interplanetary+voyages|Interstellar+travel</graph>
+      <headings>
+        <heading heldby="2120" ident="963836" src="fast">Humorous stories, English</heading>
+        <heading heldby="2117" ident="1108670" src="fast">Science fiction, English</heading>
+        <heading heldby="1922" ident="1075077" src="fast">Prefect, Ford</heading>
+        <heading heldby="1922" ident="890366" src="fast">Dent, Arthur (Fictitious character)</heading>
+        <heading heldby="871" ident="977455" src="fast">Interplanetary voyages</heading>
+        <heading heldby="869" ident="977550" src="fast">Interstellar travel</heading>
+      </headings>
+    </fast>
+    <ddc>
+      <mostPopular holdings="2092" nsfa="823.914" sfa="823.914"/>
+      <mostRecent holdings="2092" sfa="823.914"/>
+      <latestEdition holdings="1177" sf2="22" sfa="823.914"/>
+      <latestEdition holdings="1" sf2="14" sfa="FIC"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chtt=DDC&amp;chs=350x200&amp;chts=000000,16&amp;chd=e:9bAAAACk&amp;chdl=823.914|E|FIC|Unclassified&amp;chco=0D0399,124DBA,278BD8,38C9E2</graph>
+    </ddc>
+    <lcc>
+      <mostPopular holdings="2127" nsfa="PR6051.D3352" sfa="PR6051.D3352"/>
+      <mostRecent holdings="2127" sfa="PR6051.D3352"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chtt=LCC&amp;chs=350x200&amp;chd=e:-EAAB7&amp;chts=000000,16&amp;chco=0D0399,124DBA,278BD8&amp;chdl=PR6051.D3352|PR6051|Unclassified</graph>
+    </lcc>
+  </recommendations>
+  <navigation>
+    <pages>
+      <page>
+        <label>1</label>
+      </page>
+      <page>
+        <label>2</label>
+        <link>25</link>
+      </page>
+    </pages>
+    <next>25</next>
+    <last>25</last>
+  </navigation>
+</classify>

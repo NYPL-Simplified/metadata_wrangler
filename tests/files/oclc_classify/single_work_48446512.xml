@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<classify xmlns="http://classify.oclc.org">
+  <response code="2"/>
+  <!--Classify is a product of OCLC Online Computer Library Center: http://classify.oclc.org-->
+  <work author="Adams, Douglas, 1952-2001" editions="115" eholdings="359" format="Book" holdings="3432" itemtype="itemtype-book" owi="48446512" title="So long, and thanks for all the fish">11235977</work>
+  <authors>
+    <author lc="n80076765" viaf="113230702">Adams, Douglas, 1952-2001</author>
+  </authors>
+  <orderBy>thold desc</orderBy>
+  <input type="owi">48446512</input>
+  <start>0</start>
+  <maxRecs>25</maxRecs>
+  <editions>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="1514" itemtype="itemtype-book" language="eng" oclc="11235977" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="19" ind1="0" ind2="0" sf2="19" sfa="823.914" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="367" itemtype="itemtype-book" language="eng" oclc="41169823" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="823.914" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="267" itemtype="itemtype-book" language="eng" oclc="59818112" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="22" ind1="0" ind2="0" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1="0" ind2="0" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="259" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="464224528" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="159" itemtype="itemtype-book" language="eng" oclc="12122646" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="134" itemtype="itemtype-book" language="eng" oclc="69244356" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="19" ind1="0" ind2=" " sf2="19" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="133" itemtype="itemtype-book" language="eng" oclc="60425169" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="0" ind1="0" ind2="4" sf2="00" sfa="823" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="129" itemtype="itemtype-book" language="eng" oclc="27784832" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="126" itemtype="itemtype-book" language="eng" oclc="12973955" title="So long, and thanks for all the fish : the hitchhikers' guide to the galaxy 4">
+      <classifications>
+        <class edition="19" ind1="0" ind2="4" sf2="19" sfa="823.914" tag="082"/>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="19" ind1="0" ind2="4" sf2="19" sfa="FIC" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="102" itemtype="itemtype-book" language="eng" oclc="373479708" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="69" itemtype="itemtype-book" language="eng" oclc="12487784" title="So long, and thanks for all the fish : the hitch hiker's guide to the galaxy 4">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="19" ind1="0" ind2="4" sf2="19" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="69" itemtype="itemtype-book" language="eng" oclc="48486855" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="69" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="53140822" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="53" itemtype="itemtype-book" language="eng" oclc="48363310" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="21" ind1="0" ind2="4" sf2="21" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="50" itemtype="itemtype-book" language="eng" oclc="456550749" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="28" itemtype="itemtype-book" language="eng" oclc="638190101" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="20" ind1="0" ind2="4" sf2="20" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="23" itemtype="itemtype-book" language="eng" oclc="958125349" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="23" ind1="0" ind2="4" sf2="23" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="14" format="eBook" holdings="0" itemtype="itemtype-book-digital" language="eng" oclc="920686057" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1=" " ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="13" itemtype="itemtype-book" language="eng" oclc="156801618" title="So long, and thanks for all the fish">
+      <classifications>
+        <class ind1="1" ind2="4" sfa="PR6051.D3352" tag="050"/>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="813.6" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="9" itemtype="itemtype-book" language="ger" oclc="64259913" title="Macht's gut und danke für den Fisch"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="8" itemtype="itemtype-book" language="ger" oclc="76008698" title="Macht's gut, und danke für den Fisch"/>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="7" itemtype="itemtype-book" language="eng" oclc="379478111" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="22" ind1="0" ind2="4" sf2="22" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="7" itemtype="itemtype-book" language="eng" oclc="971546960" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="0" ind1="0" ind2="4" sf2="00" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="6" itemtype="itemtype-book" language="eng" oclc="670302570" title="So Long and Thanks For All the Fish">
+      <classifications>
+        <class edition="19" ind1="0" ind2="4" sf2="19" sfa="823.914" tag="082"/>
+      </classifications>
+    </edition>
+    <edition author="Adams, Douglas, 1952-2001" eholdings="0" format="Book" holdings="6" itemtype="itemtype-book" language="heb" oclc="59901796" title="So long, and thanks for all the fish">
+      <classifications>
+        <class edition="0" ind1="0" ind2="4" sf2="00" sfa="892.43" tag="082"/>
+      </classifications>
+    </edition>
+  </editions>
+  <recommendations>
+    <graph>http://chart.apis.google.com/chart?cht=p&amp;chd=e:-EB7&amp;chs=350x200&amp;chts=000000,16&amp;chtt=All+Editions&amp;chco=0D0399,124DBA&amp;chdl=Classified|Unclassified</graph>
+    <fast>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chs=475x175&amp;chd=e:VBUkTbCSAs&amp;chco=0D0399,124DBA,278BD8,38C9E2,4DEADD&amp;chdl=Dent%2C+Arthur+%28Fictitious+character%29|Prefect%2C+Ford|Interplanetary+voyages|Interstellar+travel|Fiction</graph>
+      <headings>
+        <heading heldby="3504" ident="890366" src="fast">Dent, Arthur (Fictitious character)</heading>
+        <heading heldby="3413" ident="1075077" src="fast">Prefect, Ford</heading>
+        <heading heldby="3219" ident="977455" src="fast">Interplanetary voyages</heading>
+        <heading heldby="368" ident="977550" src="fast">Interstellar travel</heading>
+        <heading heldby="126" ident="923709" src="fast">Fiction</heading>
+      </headings>
+    </fast>
+    <ddc>
+      <mostPopular holdings="3500" nsfa="823.914" sfa="823.914"/>
+      <mostRecent holdings="3500" sfa="823.914"/>
+      <latestEdition holdings="32" sf2="23" sfa="823.914"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chtt=DDC&amp;chs=350x200&amp;chts=000000,16&amp;chd=e:5uChB4AAAAAAB4&amp;chco=0D0399,124DBA,278BD8,38C9E2,4DEADD,6DF9A8,4DCC82&amp;chdl=823.914|823|FIC|813.6|892.43+%2F+B|830+%2F+820|Unclassified</graph>
+    </ddc>
+    <lcc>
+      <mostPopular holdings="3363" nsfa="PR6051.D3352" sfa="PR6051.D3352"/>
+      <mostRecent holdings="3363" sfa="PR6051.D3352"/>
+      <graph>http://chart.apis.google.com/chart?cht=p&amp;chtt=LCC&amp;chs=350x200&amp;chd=e:4YB6Ft&amp;chts=000000,16&amp;chco=0D0399,124DBA,278BD8&amp;chdl=PR6051.D3352|PR6051|Unclassified</graph>
+    </lcc>
+  </recommendations>
+  <navigation>
+    <pages>
+      <page>
+        <label>1</label>
+      </page>
+      <page>
+        <label>2</label>
+        <link>25</link>
+      </page>
+      <page>
+        <label>3</label>
+        <link>50</link>
+      </page>
+    </pages>
+    <next>25</next>
+    <last>100</last>
+  </navigation>
+</classify>
