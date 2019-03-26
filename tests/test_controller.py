@@ -1341,10 +1341,14 @@ class TestCanonicalizationController(ControllerTest):
         m = self.controller.canonicalize_author_name
 
         # Test the success case.
+
+        # First, set up a predefined right answer for an
+        # Identifier/display name pair.
         identifier = self._identifier()
         input_name = "Bell Hooks"
         output_name = "hooks, bell"
         self.canonicalizer.register(identifier, input_name, output_name)
+
         with self.app.test_request_context(
                 '/?urn=%s&display_name=%s' % (identifier.urn, input_name)
         ):
@@ -1355,10 +1359,10 @@ class TestCanonicalizationController(ControllerTest):
             call = self.canonicalizer.canonicalize_author_name_calls.pop()
             eq_((identifier, input_name), call)
 
-            # And it returned the (predefined) right answer.
+            # And it returned the predefined right answer.
             eq_(200, response.status_code)
             eq_("text/plain", response.headers['Content-Type'])
-            eq_("hooks, bell", response.data)
+            eq_(output_name, response.data)
 
         # Now test the failure case.
         with self.app.test_request_context('/?urn=error&display_name=nobody'):
