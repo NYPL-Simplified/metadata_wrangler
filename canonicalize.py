@@ -263,6 +263,10 @@ class AuthorNameCanonicalizer(object):
 
 class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
 
+    """Mocks the services used by the author name canonicalizer, but
+    leaves the logic alone.
+    """
+
     def __init__(self, _db, oclcld=None, viaf=None):
         super(MockAuthorNameCanonicalizer, self).__init__(_db)
         self._db = _db
@@ -324,3 +328,25 @@ class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
             return self.non_response_results.pop()
         else:
             return None
+
+
+class SimpleMockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
+    """Mocks the entire logic of AuthorNameCanonicalizer, allowing
+    the tester to simply define the 'correct' answers ahead of time.
+    """
+    def __init__(self):
+        self.mapping = {}
+        self.canonicalize_author_name_calls = []
+
+    def register(self, identifier, display_name, value):
+        """Register the canonical author name for an
+        (identifier, display_name) pair.
+        """
+        self.mapping[(identifier, display_name)] = value
+
+    def canonicalize_author_name(self, identifier, display_name):
+        """Record the fact that the method was called, and return
+        the predefined 'correct' answer.
+        """
+        self.canonicalize_author_name_calls.append((identifier, display_name))
+        return self.mapping.get((identifier, display_name), None)

@@ -183,20 +183,15 @@ class CanonicalizationController(object):
 
     log = logging.getLogger("Canonicalization Controller")
 
-    def __init__(self, _db):
+    def __init__(self, _db, canonicalizer=None):
         self._db = _db
-        self.canonicalizer = AuthorNameCanonicalizer(self._db)
+        self.canonicalizer = canonicalizer or AuthorNameCanonicalizer(self._db)
 
     def canonicalize_author_name(self):
         urn = request.args.get('urn')
-        display_name = request.args.get('display_name')
-        if urn:
-            identifier, is_new = Identifier.parse_urn(self._db, urn, False)
-            if not isinstance(identifier, Identifier):
-                return INVALID_URN
-        else:
-            identifier = None
+        identifier = self.parse_identifier(urn)
 
+        display_name = request.args.get('display_name')
         author_name = self.canonicalizer.canonicalize_author_name(
             identifier, display_name
         )
@@ -207,7 +202,32 @@ class CanonicalizationController(object):
 
         if not author_name:
             return make_response("", HTTP_NOT_FOUND)
-        return make_response(author_name, HTTP_OK, {"Content-Type": "text/plain"})
+        return make_response(
+            author_name, HTTP_OK, {"Content-Type": "text/plain"}
+        )
+
+    def parse_identifier(self, urn):
+        """Try to parse a URN into an identifier.
+
+        :return: An Identifier if possible; otherwise None.
+        """
+        if not urn:
+            return None
+        try:
+            result = Identifier.parse_urn(self._db, urn, False)
+        except ValueError, e:
+            # The identifier is parseable but invalid, e.g. an
+            # ASIN used as an ISBN. Ignore it.
+            return None
+
+        if not result:
+            # Identifier.for_foreign_id can return None, but I don't
+            # think that can happen through parse_urn. This is just to
+            # be safe.
+            return None
+
+        identifier, is_new = result
+        return identifier
 
 
 class CatalogController(object):

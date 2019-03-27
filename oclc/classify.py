@@ -1083,8 +1083,27 @@ class OCLCClassifyAPI(object):
         """Perform an OCLC Classify lookup."""
         query_string = self.query_string(**kwargs)
         url = self.BASE_URL + query_string
+        return self._make_request(url)
+
+    def _make_request(self, url):
         representation, cached = Representation.get(self._db, url)
         return representation.content
+
+
+class MockOCLCClassifyAPI(OCLCClassifyAPI):
+
+    def __init__(self, _db):
+        super(MockOCLCClassifyAPI, self).__init__(_db)
+        self.requests = []
+        self.responses = []
+
+    def queue_response(self, content):
+        self.responses.append(content)
+
+    def _make_request(self, url):
+        self.requests.append(url)
+        return self.responses.pop(0)
+
 
 class OCLCLookupCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
 

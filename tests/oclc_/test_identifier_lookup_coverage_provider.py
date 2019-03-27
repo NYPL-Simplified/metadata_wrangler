@@ -13,6 +13,7 @@ from core.metadata_layer import *
 from oclc.classify import (
     IdentifierLookupCoverageProvider,
     OCLCClassifyXMLParser,
+    MockOCLCClassifyAPI,
 )
 
 class MockParser(OCLCClassifyXMLParser):
@@ -118,9 +119,16 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
     def test_process_item_failure(self):
         # If the ISBN is not found--i.e. the status code is 102--the provider should throw an error.
-        provider = IdentifierLookupCoverageProvider(self._default_collection)
+        api = MockOCLCClassifyAPI(self._db)
+        api.queue_response(sample_data("isbn_not_found.xml", "oclc_classify"))
+        provider = IdentifierLookupCoverageProvider(self._default_collection, api=api)
         bad_id = self._identifier(Identifier.ISBN, "9781429984171")
         failure = provider.process_item(bad_id)
+
+        # We asked OCLC about the ISBN...
+        eq_(['http://classify.oclc.org/classify2/Classify?isbn=9781429984171'], api.requests)
+
+        # ...but we didn't get anything useful.
         assert isinstance(failure, CoverageFailure)
         eq_(failure.exception, "The work with ISBN 9781429984171 was not found.")
 
@@ -185,7 +193,14 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         # Testing that _multiple calls parse, passes in the correct OWIs, and
         # returns the resulting value.  Uses mocked versions of
         # initial_look_up (to get the list of OWIs) and parse.
-        provider = IdentifierLookupCoverageProvider(self._default_collection)
+        api = MockOCLCClassifyAPI(self._db)
+        for filename in (
+            'single_work_48446512.xml',
+            'single_work_48525129.xml',
+        ):
+            api.queue_response(sample_data(filename, "oclc_classify"))
+        provider = IdentifierLookupCoverageProvider(self._default_collection, api=api)
+
         provider.parser = MockParserMulti()
         tree, identifier = self._tree("multi"), self._id("multi")
         metadata = self._blank_metadata(identifier)
@@ -217,14 +232,32 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
     def test__multiple_with_real_parser(self):
         # Testing that calling _multiple actually returns the correct metadata object.
-        provider = IdentifierLookupCoverageProvider(self._default_collection)
+        api = MockOCLCClassifyAPI(self._db)
+        for filename in (
+            'single_work_48446512.xml',
+            'single_work_48525129.xml',
+        ):
+            api.queue_response(sample_data(filename, "oclc_classify"))
+        provider = IdentifierLookupCoverageProvider(
+            self._default_collection, api=api
+        )
         tree, identifier = self._tree("multi"), self._id("multi")
         metadata = self._blank_metadata(identifier)
         code, owi_data = provider.parser.initial_look_up(tree)
         result = provider._multiple(owi_data, metadata)
 
-        # The document contained two <work> tags and therefore two OWIs, but we still end up with
-        # only one Metadata object, which contains information derived from looking up both OWIs.
+        # Two requests were made to the mock API -- one for each of the OWIs we had to look up
+        # while parsing the multi-OWI document.
+        eq_(
+            [
+                'http://classify.oclc.org/classify2/Classify?owi=48446512',
+                'http://classify.oclc.org/classify2/Classify?owi=48525129',
+            ],
+            api.requests
+        )
+
+        # We ended up with a single Metadata object, which contains
+        # information derived from looking up both OWIs.
         assert isinstance(result, Metadata)
         eq_(result._data_source, "OCLC Classify")
         eq_(result.primary_identifier, identifier)
@@ -286,8 +319,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
                 Measurement.PUBLISHED_EDITIONS: 1
             },
             "multi": {
-                Measurement.HOLDINGS: 5956,
-                Measurement.PUBLISHED_EDITIONS: 153
+                Measurement.HOLDINGS: 5976,
+                Measurement.PUBLISHED_EDITIONS: 160
             }
         }
         eq_(len(measurements), 2)
