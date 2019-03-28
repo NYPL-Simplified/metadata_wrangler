@@ -970,6 +970,7 @@ class TestURNLookupController(ControllerTest):
 
         self.overdrive_collection = MockOverdriveAPI.mock_collection(self._db)
         self.overdrive = MockOverdriveAPI(self._db, self.overdrive_collection)
+        self.overdrive.queue_collection_token()
 
         self.viaf = MockVIAFClient(self._db)
 

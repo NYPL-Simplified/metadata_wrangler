@@ -31,9 +31,11 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         replacement_policy = ReplacementPolicy.from_metadata_source(
             mirror=mirror
         )
+        api = MockOverdriveAPI(self._db, collection)
+        api.queue_collection_token()
         provider = OverdriveBibliographicCoverageProvider(
             collection, replacement_policy=replacement_policy,
-            api_class=MockOverdriveAPI
+            api_class=api
         )
         
         # Any resources discovered by Overdrive will be
