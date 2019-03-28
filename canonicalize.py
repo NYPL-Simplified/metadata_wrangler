@@ -51,8 +51,10 @@ class AuthorNameCanonicalizer(object):
         This is intended to extract e.g. "Bill O'Reilly" from
         "Bill O'Reilly with Martin Dugard".
 
-        TODO: When the author is "Ryan and Josh Shook" I really have no clue
-        what to do.
+        TODO: Cases we can't handle:
+         van Damme, Jean Claude
+         Madonna, Cher
+         Ryan and Josh Shook
         """
         if not author_name:
             return None
@@ -61,8 +63,27 @@ class AuthorNameCanonicalizer(object):
         for splitter in (' with ', ' and '):
             if splitter in author_name:
                 author_name = author_name.split(splitter)[0]
-        author_name = author_name.split(", ")[0]
 
+        author_names = author_name.split(", ")
+        if len(author_names) == 2 and any(
+            ' ' not in name for name in author_names
+        ):
+            # There are two putative author names, and one of them doesn't
+            # have a space in it. The most likely scenario is that
+            # this is the sort name of a single person
+            # (e.g. "Tolkien, J. R. R."), not two different display names.
+            # In that situation the best we can do is return the
+            # sort name as-is.
+            pass
+        else:
+            # Either there is no comma here, or the comma really does seem to
+            # separate multiple peoples' names. Pick the first one.
+            author_name = author_names[0]
+
+        if author_name.endswith(','):
+            # Sometimes peoples' sort names end with a period, but
+            # commas, not so much.
+            author_name = author_name[:-1]
         return author_name
 
     def canonicalize_author_name(self, identifier, display_name):
@@ -88,7 +109,11 @@ class AuthorNameCanonicalizer(object):
 
         # If we can canonicalize that shortened name, great. If not,
         # try again with the full name.
-        for n in shortened_name, display_name:
+        candidates = [shortened_name]
+        if display_name != shortened_name:
+            candidates.append(display_name)
+
+        for n in candidates:
             v = self._canonicalize(identifier, n)
             if v:
                 return v

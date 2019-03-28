@@ -48,11 +48,36 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
 
 
     def test_primary_author_name(self):
-        # Make sure only the first human's name is used.
-        name = "Mindy Kaling, Bob Saget and Co"
-        extracted_name = self.canonicalizer.primary_author_name(name)
-        eq_("Mindy Kaling", extracted_name)
+        # Test our ability to turn a freeform string that identifies
+        # one or more people into the likely name of one person.
+        #
+        # TODO: Cases we can't handle:
+        #  van Damme, Jean Claude
+        #  Madonna, Cher
+        #  Ryan and Josh Shook
+        m = self.canonicalizer.primary_author_name
 
+        # Test the simplest case.
+        eq_("Mindy Kaling", "Mindy Kaling")
+
+        # Make sure only the first human's name is used.
+        eq_("Mindy Kaling", m("Mindy Kaling, Bob Saget and Co"))
+        eq_("Bill O'Reilly", m("Bill O'Reilly with Martin Dugard"))
+
+        # In most cases, when a sort name is passed in as a display
+        # name, the situation is correctly diagnosed and the name is
+        # returned as-is.
+        for sort_name in (
+            'Kaling, Mindy',
+            'Tolkien, J. R. R.',
+            'van Damme, Jean-Claude',
+        ):
+            eq_(sort_name, m(sort_name))
+
+        # These are not likely to show up in real usage, but we can
+        # handle them.
+        eq_("Rand, Ayn", m('Rand, Ayn, and Cher'))
+        eq_("Rand, Ayn", m('Rand, Ayn, and Kaling, Mindy'))
 
     def test_found_contributor(self):
         # If we find a matching contributor already in our database, 
