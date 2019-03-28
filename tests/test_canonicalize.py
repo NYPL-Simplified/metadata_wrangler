@@ -53,11 +53,13 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         m = self.canonicalizer.primary_author_name
 
         # Test the simplest case.
-        eq_("Mindy Kaling", "Mindy Kaling")
+        eq_("Mindy Kaling", m("Mindy Kaling"))
 
         # Make sure only the first human's name is used.
         eq_("Mindy Kaling", m("Mindy Kaling, Bob Saget and Co"))
         eq_("Bill O'Reilly", m("Bill O'Reilly with Martin Dugard"))
+        eq_("Clare Verbeek",
+            m("Clare Verbeek, Thembani Dladla, Zanele Buthelezi"))
 
         # In most cases, when a sort name is passed in as a display
         # name, the situation is correctly diagnosed and the name is
@@ -66,6 +68,15 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
             'Kaling, Mindy',
             'Tolkien, J. R. R.',
             'van Damme, Jean-Claude',
+        ):
+            eq_(sort_name, m(sort_name))
+
+        # Similarly when there is no distinction between display
+        # and sort name.
+        for sort_name in (
+            'Cher',
+            'Various',
+            'Anonymous',
         ):
             eq_(sort_name, m(sort_name))
 
