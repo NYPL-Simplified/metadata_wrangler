@@ -50,11 +50,6 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
     def test_primary_author_name(self):
         # Test our ability to turn a freeform string that identifies
         # one or more people into the likely name of one person.
-        #
-        # TODO: Cases we can't handle:
-        #  van Damme, Jean Claude
-        #  Madonna, Cher
-        #  Ryan and Josh Shook
         m = self.canonicalizer.primary_author_name
 
         # Test the simplest case.
