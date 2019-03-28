@@ -85,6 +85,26 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         eq_("Rand, Ayn", m('Rand, Ayn, and Cher'))
         eq_("Rand, Ayn", m('Rand, Ayn, and Kaling, Mindy'))
 
+    def test__canonicalize_single_name(self):
+        # For single-named entities, the sort name and display name
+        # are identical. We don't need to ask VIAF.
+        self.canonicalizer.viaf.queue_lookup("bad data")
+
+        for one_name in (
+            'Various',
+            'Anonymous',
+            'Cher',
+        ):
+            eq_(
+                one_name,
+                self.canonicalizer._canonicalize(
+                    identifier=None, display_name=one_name
+                )
+            )
+
+        # We didn't ask the mock VIAF about anything.
+        eq_(["bad data"], self.canonicalizer.viaf.results)
+
     def test_found_contributor(self):
         # If we find a matching contributor already in our database, 
         # then don't bother looking at OCLC or VIAF.

@@ -129,6 +129,11 @@ class AuthorNameCanonicalizer(object):
 
 
     def _canonicalize(self, identifier, display_name):
+        if not ' ' in display_name:
+            # This is a one-named entity, like 'Cher' or 'Various'.
+            # The display name and sort name are identical.
+            return display_name
+
         # The best outcome would be that we already have a Contributor
         # with this exact display name and a known sort name.
         self.log.debug("Attempting to canonicalize %s", display_name)
