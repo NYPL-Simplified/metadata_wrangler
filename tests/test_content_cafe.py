@@ -473,7 +473,7 @@ class MockSession(DummyHTTPClient):
         self.headers = {}
 
     def get(self, address, *args, **kwargs):
-        # No need to explicitly queu up requests for the WSDL URL --
+        # No need to explicitly queue up requests for the WSDL URL --
         # we know they'll happen a lot.
         if address == ContentCafeSOAPClient.WSDL_URL:
             return MockRequestsResponse(200, {}, self.wsdl)
@@ -495,7 +495,10 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
 
 
     def test_estimated_popularity_demand_when_info_present(self):
-
+        # When Content Cafe has information about demand for the
+        # requested book from various sources, we're able to get that
+        # data through a SOAP request and tabulate it to estimate
+        # total demand.
         info = self.data_file("demand_info_present.xml")
         def queue():
             # Queue up the demand info.
