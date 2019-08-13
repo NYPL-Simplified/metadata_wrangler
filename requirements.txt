@@ -25,6 +25,7 @@ money
 pymarc
 accept-types
 watchtower # for cloudwatch logging
+spellchecker
 
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
