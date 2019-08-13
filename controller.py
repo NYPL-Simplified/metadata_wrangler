@@ -1,3 +1,4 @@
+import base64 as stdlib_base64
 from nose.tools import set_trace
 from datetime import datetime
 from flask import request, make_response
@@ -11,7 +12,6 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.expression import and_
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-import base64
 import feedparser
 import json
 import jwt
@@ -63,6 +63,7 @@ from core.util.authentication_for_opds import AuthenticationForOPDSDocument
 from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
+from core.util.string_helpers import base64
 
 from coverage import (
     IdentifierResolutionCoverageProvider,
@@ -741,7 +742,7 @@ class CatalogController(object):
                 )
             except Exception, e:
                 return INVALID_CREDENTIALS.detailed(
-                    _("Error decoding JWT: %(message)s", message=e.message)
+                    _("Error decoding JWT: %(message)s", message=str(e))
                 )
 
             # The ability to create a valid JWT indicates control over
@@ -762,13 +763,15 @@ class CatalogController(object):
                 )
             except ValueError as e:
                 log.error("Error in IntegrationClient.register", exc_info=e)
-                return INVALID_CREDENTIALS.detailed(e.message)
+                return INVALID_CREDENTIALS.detailed(str(e))
 
         # Now that we have an IntegrationClient with a shared
         # secret, encrypt the shared secret with the provided public key
         # and send it back.
-        encrypted_secret = encryptor.encrypt(str(client.shared_secret))
-        shared_secret = base64.b64encode(encrypted_secret)
+        encrypted_secret = encryptor.encrypt(
+            client.shared_secret.encode("utf8")
+        )
+        shared_secret = stdlib_base64.b64encode(encrypted_secret).decode("utf8")
         auth_data = dict(
             id=url,
             metadata=dict(shared_secret=shared_secret)

@@ -284,7 +284,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         reviews = metadata.links
         eq_(6, len(reviews))
         assert all([x.rel==Hyperlink.REVIEW for x in reviews])
-        assert "isn't a myth!" in reviews[0].content
+        assert "isn't a myth!" in reviews[0].content.decode("utf8")
 
         # We incidentally figured out the book's title.
         eq_("Shadow Thieves", metadata.title)
@@ -298,7 +298,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         [notes] = metadata.links
         eq_(Hyperlink.AUTHOR, notes.rel)
-        assert 'Brenda researched turtles' in notes.content
+        assert 'Brenda researched turtles' in notes.content.decode("utf8")
 
         # We incidentally figured out the book's title.
         eq_("Franklin's Christmas Gift", metadata.title)
@@ -312,7 +312,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         [excerpt] = metadata.links
         eq_(Hyperlink.SAMPLE, excerpt.rel)
-        assert 'Franklin loved his marbles.' in excerpt.content
+        assert 'Franklin loved his marbles.' in excerpt.content.decode("utf8")
 
         # We incidentally figured out the book's title.
         eq_("Franklin's Christmas Gift", metadata.title)
@@ -352,7 +352,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         # Otherwise, it's fine. We don't check that the image is
         # valid, only that it's not a stand-in image.
-        eq_(True, m("I'm not a stand-in image."))
+        eq_(True, m(b"I'm not a stand-in image."))
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):

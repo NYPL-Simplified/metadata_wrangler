@@ -38,7 +38,7 @@ def load_file(filename):
     this_dir = os.path.split(__file__)[0]
     content_dir = os.path.join(this_dir, "files", "content-cafe")
     path = os.path.join(content_dir, filename)
-    return open(path).read()
+    return open(path, 'rb').read()
 
 
 class ContentCafeCoverageProvider(MetadataWranglerBibliographicCoverageProvider):
@@ -270,28 +270,28 @@ class ContentCafeAPI(object):
     def add_reviews(self, metadata, identifier, args):
         return self.annotate_with_web_resources(
             metadata, identifier, args, self.review_url,
-            'No review info exists for this item',
+            b'No review info exists for this item',
             Hyperlink.REVIEW, self._scrape_list
         )
 
     def add_descriptions(self, metadata, identifier, args):
         return self.annotate_with_web_resources(
             metadata, identifier, args, self.summary_url,
-            'No annotation info exists for this item',
+            b'No annotation info exists for this item',
             Hyperlink.DESCRIPTION, self._scrape_list
         )
 
     def add_author_notes(self, metadata, identifier, args):
         return self.annotate_with_web_resources(
             metadata, identifier, args, self.author_notes_url,
-            'No author notes info exists for this item',
+            b'No author notes info exists for this item',
             Hyperlink.AUTHOR, self._scrape_one
         )
 
     def add_excerpt(self, metadata, identifier, args):
         return self.annotate_with_web_resources(
             metadata, identifier, args, self.excerpt_url,
-            'No excerpt info exists for this item', Hyperlink.SAMPLE,
+            b'No excerpt info exists for this item', Hyperlink.SAMPLE,
             self._scrape_one
         )
 

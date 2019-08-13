@@ -64,17 +64,17 @@ class ldq(object):
 
     @classmethod
     def restrict_to_language(self, values, code_2):
-        if isinstance(values, basestring) or isinstance(values, dict):
+        if isinstance(values, (unicode, dict)):
             values = [values]
         for v in values:
-            if isinstance(v, basestring):
+            if isinstance(v, unicode):
                 yield v
             elif v and (not '@language' in v or v['@language'] == code_2):
                 yield v
 
     @classmethod
     def values(self, vs):
-        if isinstance(vs, basestring):
+        if isinstance(vs, unicode):
             yield vs
             return
         if isinstance(vs, dict) and '@value' in vs:
@@ -82,7 +82,7 @@ class ldq(object):
             return
 
         for v in vs:
-            if isinstance(v, basestring):
+            if isinstance(v, unicode):
                 yield v
             elif '@value' in v:
                 yield v['@value']
@@ -187,7 +187,9 @@ class OCLCLinkedData(object):
         """Perform an OCLC Open Data lookup for the given identifier."""
         type = None
         identifier = None
-        if isinstance(identifier_or_uri, basestring):
+        if isinstance(identifier_or_uri, bytes):
+            identifier_or_uri = identifier_or_uri.decode("utf8")
+        if isinstance(identifier_or_uri, unicode):
             # e.g. http://experiment.worldcat.org/oclc/1862341597.json
             match = self.URI_WITH_OCLC_NUMBER.search(identifier_or_uri)
             if match:
@@ -318,7 +320,7 @@ class OCLCLinkedData(object):
             return None
         try:
             document = json.loads(raw_data['document'])
-        except ValueError, e:
+        except ValueError as e:
             # We couldn't parse this JSON. It's _extremely_ rare from OCLC
             # but it does seem to happen.
             return dict()
@@ -372,7 +374,7 @@ class OCLCLinkedData(object):
             # a single name. (This is really fun, of course!)
             names = list()
             for name in name_list:
-                if isinstance(name, basestring):
+                if isinstance(name, unicode):
                     names.append(name)
                 if isinstance(name, dict):
                     more_names = list(ldq.restrict_to_language(name, 'en'))
@@ -441,7 +443,7 @@ class OCLCLinkedData(object):
             if isinstance(name_obj, dict):
                 if name_obj.get('@language', None) == 'en':
                     name_obj = name_obj.get('@value', None)
-            if isinstance(name_obj, basestring):
+            if isinstance(name_obj, unicode):
                 # Sometimes names in character-based languages are included,
                 # without indication. They're being removed below by ensuring
                 # some number of alphanumeric are present.
@@ -465,7 +467,7 @@ class OCLCLinkedData(object):
             return most_common[0]
         else:
             # Just pick the longest name to try to get the most data ¯\_(ツ)_/¯
-            most_common.sort(cmp=lambda a,b: cmp(-len(a), -len(b)))
+            most_common.sort(key=lambda x: -len(x))
             return most_common[0]
 
     @classmethod
@@ -519,11 +521,12 @@ class OCLCLinkedData(object):
 
         genres = book.get('genre', [])
         genres = list(ldq.values(ldq.restrict_to_language(genres, 'en')))
-        genres = set(filter(None, [cls._fix_tag(tag) for tag in genres]))
+        genres = [cls._fix_tag(tag) for tag in genres]
+        genres = set([x for x in genres if x])
         subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
         for uri in book.get('about', []):
-            if not isinstance(uri, basestring):
+            if not isinstance(uri, unicode):
                 continue
 
             subject_id = subject_type = subject_name = None
@@ -556,7 +559,7 @@ class OCLCLinkedData(object):
                     for potential_type in potential_types:
                         if isinstance(potential_type, dict):
                             type_objs.append(potential_type)
-                        elif isinstance(potential_type, basestring):
+                        elif isinstance(potential_type, unicode):
                             type_objs.append({'@id': potential_type})
                 for type_obj in type_objs:
                     type_id = type_obj['@id']
@@ -661,7 +664,7 @@ class OCLCLinkedData(object):
         for d in publication_dates:
             try:
                 metadata.published = datetime.datetime.strptime(d[:4], "%Y")
-            except Exception, e:
+            except Exception as e:
                 pass
 
         for description in descriptions:
@@ -756,7 +759,7 @@ class OCLCLinkedData(object):
             for this_type_obj in these_type_objs:
                 if isinstance(this_type_obj, dict):
                     type_objs.append(this_type_obj)
-                elif isinstance(this_type_obj, basestring):
+                elif isinstance(this_type_obj, unicode):
                     type_objs.append({"@id": this_type_obj})
         types = [i['@id'] for i in type_objs if
                  i['@id'] not in self.UNUSED_TYPES]
@@ -980,10 +983,10 @@ class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
                 self.apply_viaf_to_contributor_data(metadata)
                 # Remove any empty ContributorData objects that may have
                 # been created.
-                metadata.contributors = filter(
-                    lambda c: c.sort_name or c.display_name,
-                    metadata.contributors
-                )
+                metadata.contributors = [
+                    c for c in metadata.contributors
+                    if c.sort_name or c.display_name
+                ]
 
                 # When metadata is applied, it must be given a client that can
                 # response to 'canonicalize_author_name'. Usually this is an
@@ -1021,7 +1024,7 @@ class LinkedDataCoverageProvider(ResolveVIAFOnSuccessCoverageProvider):
                     new_info_counter
                 )
         except IOError as e:
-            if ", but couldn't find location" in e.message:
+            if u", but couldn't find location" in unicode(e):
                 exception = "OCLC doesn't know about this ISBN: %r" % e
                 transient = False
             else:

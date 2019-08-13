@@ -23,7 +23,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
 
     def data_file(self, path):
         """Return the contents of a test data file."""
-        return open(os.path.join(self.resource_path, path)).read()
+        return open(os.path.join(self.resource_path, path), 'rb').read()
 
     def test_replacement_policy_uses_provided_mirror(self):
         collection = MockOverdriveAPI.mock_collection(self._db)
