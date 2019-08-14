@@ -311,7 +311,9 @@ class CatalogController(object):
         precomposed_entries = []
         # Add entries for Works associated with the collection's catalog.
         updated_works = collection.works_updated_since(self._db, last_update_time)
-        works = pagination.apply(updated_works).all()
+        works = pagination.modify_database_query(
+            self._db, updated_works
+        ).all()
         annotator = VerboseAnnotator()
         works_for_feed = []
         for work, licensepool, identifier in works:
@@ -534,7 +536,9 @@ class CatalogController(object):
 
         # Add a message for each unresolved identifier
         pagination = load_pagination_from_request(default_size=25)
-        feed_identifiers = pagination.apply(unresolved_identifiers).all()
+        feed_identifiers = pagination.modify_database_query(
+            self._db, unresolved_identifiers
+        ).all()
         messages = list()
         for identifier in feed_identifiers:
             messages.append(OPDSMessage(

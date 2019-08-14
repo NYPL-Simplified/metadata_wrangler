@@ -1,0 +1,841 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tm="http://microsoft.com/wsdl/mime/textMatching/" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:tns="http://ContentCafe2.btol.com" xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" targetNamespace="http://ContentCafe2.btol.com" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <wsdl:types>
+    <s:schema elementFormDefault="qualified" targetNamespace="http://ContentCafe2.btol.com">
+      <s:element name="XmlPost">
+        <s:complexType />
+      </s:element>
+      <s:element name="XmlPostResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:complexType name="ContentCafeXML">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Error" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Search" type="tns:Search" />
+          <s:element minOccurs="0" maxOccurs="1" name="RequestItems" type="tns:RequestItems" />
+        </s:sequence>
+        <s:attribute name="DateTime" type="s:dateTime" use="required" />
+      </s:complexType>
+      <s:complexType name="Search">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="SearchOptions" type="tns:SearchOptions" />
+          <s:element minOccurs="0" maxOccurs="1" name="SearchGroups" type="tns:SearchGroups" />
+          <s:element minOccurs="0" maxOccurs="1" name="SearchResults" type="tns:SearchResults" />
+        </s:sequence>
+        <s:attribute name="UserID" type="s:string" />
+        <s:attribute name="Password" type="s:string" />
+      </s:complexType>
+      <s:complexType name="SearchOptions">
+        <s:sequence>
+          <s:element minOccurs="1" maxOccurs="1" name="MaxRecords" type="s:int" />
+          <s:element minOccurs="1" maxOccurs="1" name="Offset" type="s:int" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="SortBy" type="tns:SearchSortBy" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="SearchSortBy">
+        <s:simpleContent>
+          <s:extension base="tns:SearchSortField">
+            <s:attribute name="Order" type="tns:SearchSortOrderType" use="required" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:simpleType name="SearchSortField">
+        <s:restriction base="s:string">
+          <s:enumeration value="Undefined" />
+          <s:enumeration value="ISBN" />
+          <s:enumeration value="UPC" />
+          <s:enumeration value="Title" />
+          <s:enumeration value="Author" />
+          <s:enumeration value="Updated" />
+        </s:restriction>
+      </s:simpleType>
+      <s:simpleType name="SearchSortOrderType">
+        <s:restriction base="s:string">
+          <s:enumeration value="Ascending" />
+          <s:enumeration value="Descending" />
+        </s:restriction>
+      </s:simpleType>
+      <s:complexType name="SearchGroups">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="SearchGroup" type="tns:SearchGroup" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="SearchGroup">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="SearchItem" type="tns:SearchItem" />
+        </s:sequence>
+        <s:attribute name="Connector" type="tns:SearchConnectorType" use="required" />
+      </s:complexType>
+      <s:complexType name="SearchItem">
+        <s:sequence>
+          <s:element minOccurs="1" maxOccurs="1" name="Index" type="tns:SearchIndex" />
+          <s:element minOccurs="1" maxOccurs="1" name="Comparison" type="tns:SearchComparisonType" />
+          <s:element minOccurs="0" maxOccurs="1" name="Value" type="s:string" />
+        </s:sequence>
+        <s:attribute name="Connector" type="tns:SearchConnectorType" use="required" />
+      </s:complexType>
+      <s:simpleType name="SearchIndex">
+        <s:restriction base="s:string">
+          <s:enumeration value="Undefined" />
+          <s:enumeration value="ISBN_String" />
+          <s:enumeration value="UPC_String" />
+          <s:enumeration value="Title_String" />
+          <s:enumeration value="Author_String" />
+          <s:enumeration value="BTKey_String" />
+          <s:enumeration value="ISBN_Keyword" />
+          <s:enumeration value="UPC_Keyword" />
+          <s:enumeration value="Title_Keyword" />
+          <s:enumeration value="Author_Keyword" />
+          <s:enumeration value="GeneralSubject_Keyword" />
+          <s:enumeration value="LibrarySubject_Keyword" />
+          <s:enumeration value="Series_Keyword" />
+          <s:enumeration value="ALL_Keyword" />
+        </s:restriction>
+      </s:simpleType>
+      <s:simpleType name="SearchComparisonType">
+        <s:restriction base="s:string">
+          <s:enumeration value="Equals" />
+          <s:enumeration value="GreaterThan" />
+          <s:enumeration value="LessThan" />
+          <s:enumeration value="GreaterThanOrEqualTo" />
+          <s:enumeration value="LessThanOrEqualTo" />
+          <s:enumeration value="NotEqualTo" />
+          <s:enumeration value="NotLessThan" />
+          <s:enumeration value="NotGreaterThan" />
+          <s:enumeration value="Like" />
+          <s:enumeration value="In" />
+          <s:enumeration value="Between" />
+        </s:restriction>
+      </s:simpleType>
+      <s:simpleType name="SearchConnectorType">
+        <s:restriction base="s:string">
+          <s:enumeration value="AND" />
+          <s:enumeration value="OR" />
+          <s:enumeration value="NOT" />
+        </s:restriction>
+      </s:simpleType>
+      <s:complexType name="SearchResults">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ProductItem" type="tns:ProductItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ProductItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="ISBN" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="UPC" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Title" type="tns:Title" />
+          <s:element minOccurs="0" maxOccurs="1" name="Author" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Source" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Product" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Series" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="ListPrice" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="PubDate" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Format" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Report" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="BTKey" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Dewey" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="LCCN" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Edition" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Volume" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="LCClass" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="ISSN" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Language" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="RatingGradeLevel" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="GeneralSubject" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="LibrarySubject" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="Attribute" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ReviewCode" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="LexileCode" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Pagination" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Created" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Updated" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Active" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Returnable" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="DiscountKey" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Width" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Height" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Depth" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Weight" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="CPSIA_Warning" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="ESupplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="EFormat" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="PhysicalFormats">
+            <s:complexType mixed="true">
+              <s:sequence>
+                <s:any maxOccurs="unbounded" />
+              </s:sequence>
+              <s:anyAttribute />
+            </s:complexType>
+          </s:element>
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="Title">
+        <s:simpleContent>
+          <s:extension base="s:string">
+            <s:attribute name="LeadingArticle" type="s:string" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:complexType name="CodeLiteral">
+        <s:simpleContent>
+          <s:extension base="s:string">
+            <s:attribute name="Code" type="s:string" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:complexType name="RequestItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="RequestItem" type="tns:RequestItem" />
+        </s:sequence>
+        <s:attribute name="UserID" type="s:string" />
+        <s:attribute name="Password" type="s:string" />
+      </s:complexType>
+      <s:complexType name="RequestItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Key" type="tns:Key" />
+          <s:element minOccurs="0" maxOccurs="unbounded" name="Content" type="tns:Content" />
+          <s:element minOccurs="0" maxOccurs="1" name="MemberItem" type="tns:MemberItem" />
+          <s:element minOccurs="0" maxOccurs="1" name="MemberItems" type="tns:MemberItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="AvailableContent" type="tns:AvailableContent" />
+          <s:element minOccurs="0" maxOccurs="1" name="AnnotationItems" type="tns:AnnotationItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="ReviewItems" type="tns:ReviewItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="BiographyItems" type="tns:BiographyItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="FlapItems" type="tns:FlapItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="InventoryItems" type="tns:InventoryItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="DemandItems" type="tns:DemandItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="DemandHistoryItems" type="tns:DemandHistoryItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="JacketItems" type="tns:JacketItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="TocItems" type="tns:TocItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="ExcerptItems" type="tns:ExcerptItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="ProductItems" type="tns:ProductItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="Muze">
+            <s:complexType mixed="true">
+              <s:sequence>
+                <s:any maxOccurs="unbounded" />
+              </s:sequence>
+              <s:anyAttribute />
+            </s:complexType>
+          </s:element>
+        </s:sequence>
+        <s:attribute name="ID" type="s:string" />
+      </s:complexType>
+      <s:complexType name="Key">
+        <s:simpleContent>
+          <s:extension base="s:string">
+            <s:attribute name="Type" type="tns:KeyType" use="required" />
+            <s:attribute name="Original" type="s:string" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:simpleType name="KeyType">
+        <s:restriction base="s:string">
+          <s:enumeration value="Undefined" />
+          <s:enumeration value="ISBN" />
+          <s:enumeration value="UPC" />
+          <s:enumeration value="ID" />
+        </s:restriction>
+      </s:simpleType>
+      <s:complexType name="Content">
+        <s:simpleContent>
+          <s:extension base="tns:ContentType">
+            <s:attribute name="Type" type="s:string" />
+            <s:attribute name="Encoding" type="s:string" />
+            <s:attribute name="VendorID" type="s:string" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:simpleType name="ContentType">
+        <s:restriction base="s:string">
+          <s:enumeration value="Undefined" />
+          <s:enumeration value="Member" />
+          <s:enumeration value="AllMembers" />
+          <s:enumeration value="AvailableContent" />
+          <s:enumeration value="AnnotationBrief" />
+          <s:enumeration value="AnnotationDetail" />
+          <s:enumeration value="ReviewBrief" />
+          <s:enumeration value="ReviewDetail" />
+          <s:enumeration value="BiographyBrief" />
+          <s:enumeration value="BiographyDetail" />
+          <s:enumeration value="FlapBrief" />
+          <s:enumeration value="FlapDetail" />
+          <s:enumeration value="InventoryBrief" />
+          <s:enumeration value="InventoryDetail" />
+          <s:enumeration value="DemandBrief" />
+          <s:enumeration value="DemandDetail" />
+          <s:enumeration value="DemandHistoryBrief" />
+          <s:enumeration value="DemandHistoryDetail" />
+          <s:enumeration value="JacketBrief" />
+          <s:enumeration value="JacketDetail" />
+          <s:enumeration value="TocBrief" />
+          <s:enumeration value="TocDetail" />
+          <s:enumeration value="ExcerptBrief" />
+          <s:enumeration value="ExcerptDetail" />
+          <s:enumeration value="ProductBrief" />
+          <s:enumeration value="ProductDetail" />
+          <s:enumeration value="MuzeVideoRelease" />
+          <s:enumeration value="MuzeSimilarCinema" />
+          <s:enumeration value="MuzePopularMusic" />
+          <s:enumeration value="MuzeClassicalMusic" />
+          <s:enumeration value="MuzeEssentialArtists" />
+          <s:enumeration value="MuzeGames" />
+        </s:restriction>
+      </s:simpleType>
+      <s:complexType name="MemberItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="UserID" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Password" type="s:string" />
+          <s:element minOccurs="1" maxOccurs="1" name="Active" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Admin" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Annotation" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Biography" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Excerpt" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Flap" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Inventory" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Demand" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="DemandHistory" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Jacket" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Product" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Review" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="TOC" type="s:boolean" />
+          <s:element minOccurs="0" maxOccurs="1" name="ReviewPublicationItems" type="tns:ReviewPublicationItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="InventoryAvailabilityItems" type="tns:InventoryAvailabilityItems" />
+          <s:element minOccurs="0" maxOccurs="1" name="MemberLinkItems" type="tns:MemberLinkItems" />
+          <s:element minOccurs="1" maxOccurs="1" name="Search" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeVideoRelease" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeSimilarCinema" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzePopularMusic" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeClassicalMusic" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeEssentialArtists" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeGames" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeJacket" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeTunes" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeReels" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="ReserveInventory" type="s:boolean" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="ReviewPublicationItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ReviewPublicationItem" type="tns:CodeLiteral" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="InventoryAvailabilityItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="InventoryAvailabilityItem" type="tns:InventoryAvailabilityItem" />
+        </s:sequence>
+        <s:attribute name="Minimum" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="InventoryAvailabilityItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Warehouse" type="tns:CodeLiteral" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="MemberLinkItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="MemberLinkItem" type="tns:MemberLinkItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="MemberLinkItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Description" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="URL" type="s:string" />
+          <s:element minOccurs="1" maxOccurs="1" name="Active" type="s:boolean" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="MemberItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="MemberItem" type="tns:MemberItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="AvailableContent">
+        <s:sequence>
+          <s:element minOccurs="1" maxOccurs="1" name="Annotation" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Biography" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Excerpt" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Flap" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Inventory" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Demand" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="DemandHistory" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Jacket" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Product" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="Review" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="TOC" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeVideoRelease" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeSimilarCinema" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzePopularMusic" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeClassicalMusic" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeEssentialArtists" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeGames" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="MuzeJacket" type="s:boolean" />
+          <s:element minOccurs="1" maxOccurs="1" name="CPSIA_Warning" type="s:boolean" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="AnnotationItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="AnnotationItem" type="tns:AnnotationItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="AnnotationItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Annotation" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="ReviewItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ReviewItem" type="tns:ReviewItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ReviewItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Publication" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Issue" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Review" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="BiographyItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="BiographyItem" type="tns:BiographyItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="BiographyItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Biography" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="FlapItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="FlapItem" type="tns:FlapItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="FlapItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Flap" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="InventoryItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="InventoryItem" type="tns:InventoryItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="InventoryItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Warehouse" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="OnHand" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="OnOrder" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="DemandItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="DemandItem" type="tns:DemandItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="DemandItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Warehouse" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Demand" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="DemandHistoryItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="DemandHistoryItem" type="tns:DemandHistoryItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="DemandHistoryItem">
+        <s:sequence>
+          <s:element minOccurs="1" maxOccurs="1" name="Year" type="s:int" />
+          <s:element minOccurs="1" maxOccurs="1" name="Month" type="s:int" />
+          <s:element minOccurs="0" maxOccurs="1" name="Supplier" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Warehouse" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Demand" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="JacketItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="JacketItem" type="tns:JacketItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="JacketItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Type" type="tns:CodeLiteral" />
+          <s:element minOccurs="1" maxOccurs="1" name="Width" type="s:int" />
+          <s:element minOccurs="1" maxOccurs="1" name="Height" type="s:int" />
+          <s:element minOccurs="0" maxOccurs="1" name="Format" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Jacket" type="tns:JacketElement" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="JacketElement">
+        <s:simpleContent>
+          <s:extension base="s:string">
+            <s:attribute name="Encoding" type="s:string" />
+          </s:extension>
+        </s:simpleContent>
+      </s:complexType>
+      <s:complexType name="TocItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="TocItem" type="tns:TocItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="TocItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Type" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Toc" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="ExcerptItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ExcerptItem" type="tns:ExcerptItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ExcerptItem">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Type" type="tns:CodeLiteral" />
+          <s:element minOccurs="0" maxOccurs="1" name="Excerpt" type="s:string" />
+        </s:sequence>
+        <s:attribute name="ID" type="s:int" use="required" />
+      </s:complexType>
+      <s:complexType name="ProductItems">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ProductItem" type="tns:ProductItem" />
+        </s:sequence>
+      </s:complexType>
+      <s:element name="XmlString">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="xmlRequest" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="XmlStringResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="XmlClass">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="XmlClassResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="Single">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="userID" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="password" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="key" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="content" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="SingleResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="ContentCafe" nillable="true" type="tns:ContentCafeXML" />
+    </s:schema>
+  </wsdl:types>
+  <wsdl:message name="XmlPostSoapIn">
+    <wsdl:part name="parameters" element="tns:XmlPost" />
+  </wsdl:message>
+  <wsdl:message name="XmlPostSoapOut">
+    <wsdl:part name="parameters" element="tns:XmlPostResponse" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringSoapIn">
+    <wsdl:part name="parameters" element="tns:XmlString" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringSoapOut">
+    <wsdl:part name="parameters" element="tns:XmlStringResponse" />
+  </wsdl:message>
+  <wsdl:message name="XmlClassSoapIn">
+    <wsdl:part name="parameters" element="tns:XmlClass" />
+  </wsdl:message>
+  <wsdl:message name="XmlClassSoapOut">
+    <wsdl:part name="parameters" element="tns:XmlClassResponse" />
+  </wsdl:message>
+  <wsdl:message name="SingleSoapIn">
+    <wsdl:part name="parameters" element="tns:Single" />
+  </wsdl:message>
+  <wsdl:message name="SingleSoapOut">
+    <wsdl:part name="parameters" element="tns:SingleResponse" />
+  </wsdl:message>
+  <wsdl:message name="XmlPostHttpGetIn" />
+  <wsdl:message name="XmlPostHttpGetOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringHttpGetIn">
+    <wsdl:part name="xmlRequest" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringHttpGetOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:message name="SingleHttpGetIn">
+    <wsdl:part name="userID" type="s:string" />
+    <wsdl:part name="password" type="s:string" />
+    <wsdl:part name="key" type="s:string" />
+    <wsdl:part name="content" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="SingleHttpGetOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:message name="XmlPostHttpPostIn" />
+  <wsdl:message name="XmlPostHttpPostOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringHttpPostIn">
+    <wsdl:part name="xmlRequest" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="XmlStringHttpPostOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:message name="SingleHttpPostIn">
+    <wsdl:part name="userID" type="s:string" />
+    <wsdl:part name="password" type="s:string" />
+    <wsdl:part name="key" type="s:string" />
+    <wsdl:part name="content" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="SingleHttpPostOut">
+    <wsdl:part name="Body" element="tns:ContentCafe" />
+  </wsdl:message>
+  <wsdl:portType name="ContentCafeSoap">
+    <wsdl:operation name="XmlPost">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request in the content-area of the post</wsdl:documentation>
+      <wsdl:input message="tns:XmlPostSoapIn" />
+      <wsdl:output message="tns:XmlPostSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request as a string parameter</wsdl:documentation>
+      <wsdl:input message="tns:XmlStringSoapIn" />
+      <wsdl:output message="tns:XmlStringSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="XmlClass">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request as a class parameter</wsdl:documentation>
+      <wsdl:input message="tns:XmlClassSoapIn" />
+      <wsdl:output message="tns:XmlClassSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">Name/Value parameters for a single request</wsdl:documentation>
+      <wsdl:input message="tns:SingleSoapIn" />
+      <wsdl:output message="tns:SingleSoapOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:portType name="ContentCafeHttpGet">
+    <wsdl:operation name="XmlPost">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request in the content-area of the post</wsdl:documentation>
+      <wsdl:input message="tns:XmlPostHttpGetIn" />
+      <wsdl:output message="tns:XmlPostHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request as a string parameter</wsdl:documentation>
+      <wsdl:input message="tns:XmlStringHttpGetIn" />
+      <wsdl:output message="tns:XmlStringHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">Name/Value parameters for a single request</wsdl:documentation>
+      <wsdl:input message="tns:SingleHttpGetIn" />
+      <wsdl:output message="tns:SingleHttpGetOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:portType name="ContentCafeHttpPost">
+    <wsdl:operation name="XmlPost">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request in the content-area of the post</wsdl:documentation>
+      <wsdl:input message="tns:XmlPostHttpPostIn" />
+      <wsdl:output message="tns:XmlPostHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">XML request as a string parameter</wsdl:documentation>
+      <wsdl:input message="tns:XmlStringHttpPostIn" />
+      <wsdl:output message="tns:XmlStringHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <wsdl:documentation xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">Name/Value parameters for a single request</wsdl:documentation>
+      <wsdl:input message="tns:SingleHttpPostIn" />
+      <wsdl:output message="tns:SingleHttpPostOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ContentCafeSoap" type="tns:ContentCafeSoap">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="XmlPost">
+      <soap:operation soapAction="http://ContentCafe2.btol.com/XmlPost" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <soap:operation soapAction="http://ContentCafe2.btol.com/XmlString" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlClass">
+      <soap:operation soapAction="http://ContentCafe2.btol.com/XmlClass" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <soap:operation soapAction="http://ContentCafe2.btol.com/Single" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="ContentCafeSoap12" type="tns:ContentCafeSoap">
+    <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="XmlPost">
+      <soap12:operation soapAction="http://ContentCafe2.btol.com/XmlPost" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <soap12:operation soapAction="http://ContentCafe2.btol.com/XmlString" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlClass">
+      <soap12:operation soapAction="http://ContentCafe2.btol.com/XmlClass" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <soap12:operation soapAction="http://ContentCafe2.btol.com/Single" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="ContentCafeHttpGet" type="tns:ContentCafeHttpGet">
+    <http:binding verb="GET" />
+    <wsdl:operation name="XmlPost">
+      <http:operation location="/XmlPost" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <http:operation location="/XmlString" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <http:operation location="/Single" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="ContentCafeHttpPost" type="tns:ContentCafeHttpPost">
+    <http:binding verb="POST" />
+    <wsdl:operation name="XmlPost">
+      <http:operation location="/XmlPost" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="XmlString">
+      <http:operation location="/XmlString" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Single">
+      <http:operation location="/Single" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ContentCafe">
+    <wsdl:port name="ContentCafeSoap" binding="tns:ContentCafeSoap">
+      <soap:address location="http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx" />
+    </wsdl:port>
+    <wsdl:port name="ContentCafeSoap12" binding="tns:ContentCafeSoap12">
+      <soap12:address location="http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx" />
+    </wsdl:port>
+    <wsdl:port name="ContentCafeHttpGet" binding="tns:ContentCafeHttpGet">
+      <http:address location="http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx" />
+    </wsdl:port>
+    <wsdl:port name="ContentCafeHttpPost" binding="tns:ContentCafeHttpPost">
+      <http:address location="http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

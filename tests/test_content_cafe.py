@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import datetime
 
 from nose.tools import (
     set_trace,
@@ -7,6 +8,8 @@ from nose.tools import (
 )
 
 import os
+
+from zeep.transports import Transport
 
 from core import mirror
 from core.config import CannotLoadConfiguration
@@ -27,7 +30,10 @@ from core.s3 import (
     MockS3Uploader,
     S3Uploader,
 )
-from core.testing import DummyHTTPClient
+from core.testing import (
+    DummyHTTPClient,
+    MockRequestsResponse,
+)
 
 from . import (
     DatabaseTest,
@@ -35,6 +41,7 @@ from . import (
 from content_cafe import (
     ContentCafeAPI,
     ContentCafeCoverageProvider,
+    ContentCafeSOAPClient,
 )
 import content_cafe
 
@@ -50,14 +57,16 @@ class MockSOAPClient(object):
         self.estimated_popularity_calls.append((identifier, cutoff))
         return self.popularity_value
 
-class TestContentCafeAPI(DatabaseTest):
+class ContentCafeAPITest(object):
 
     base_path = os.path.split(__file__)[0]
     resource_path = os.path.join(base_path, "files", "content_cafe")
 
     def data_file(self, path):
         """Return the contents of a test data file."""
-        return open(os.path.join(self.resource_path, path)).read()
+        return open(os.path.join(self.resource_path, path), 'rb').read()
+
+class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
     def setup(self):
         super(TestContentCafeAPI, self).setup()
@@ -453,3 +462,117 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         eq_(True, isinstance(result, CoverageFailure))
         eq_(identifier, result.obj)
         assert "Oh no!" in result.exception
+
+
+class MockSession(DummyHTTPClient):
+    """Mock the requests Session object used by zeep.transports.Transport."""
+
+    def __init__(self, wsdl):
+        super(MockSession, self).__init__()
+        self.wsdl = wsdl
+        self.headers = {}
+
+    def get(self, address, *args, **kwargs):
+        # No need to explicitly queue up requests for the WSDL URL --
+        # we know they'll happen a lot.
+        if address == ContentCafeSOAPClient.WSDL_URL:
+            return MockRequestsResponse(200, {}, self.wsdl)
+        return super(MockSession, self).do_get(address)
+
+    def post(self, address, data, *args, **kwargs):
+        return super(MockSession, self).do_post(address, data)
+
+
+class TestContentCafeSOAPClient(ContentCafeAPITest):
+
+    def setup(self):
+        wsdl = self.data_file("service.wsdl")
+        self.session = MockSession(wsdl)
+        self.transport = Transport(session=self.session)
+        self.client = ContentCafeSOAPClient(
+            user_id="user id", password="password", transport=self.transport
+        )
+
+
+    def test_estimated_popularity_demand_when_info_present(self):
+        # When Content Cafe has information about demand for the
+        # requested book from various sources, we're able to get that
+        # data through a SOAP request and tabulate it to estimate
+        # total demand.
+        info = self.data_file("demand_info_present.xml")
+        def queue():
+            # Queue up the demand info.
+            self.session.queue_requests_response(
+                200, "application/xml", content=info
+            )
+        queue()
+
+        # Estimate this book's popularity as it was on the day the
+        # data was gathered.
+        data_gather_date = datetime.date(2019, 8, 4)
+        popularity = self.client.estimated_popularity(
+            "an isbn", as_of=data_gather_date
+        )
+
+        # Apart from the initial request to get the WSDL, a single
+        # POST request was made.
+        endpoint, post_data = self.session.requests.pop()
+        eq_([], self.session.requests)
+
+        # The target of the POST request was the endpoint specified in
+        # the WSDL file.
+        eq_('http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx',
+            endpoint)
+
+        # The entity-body was an XML document invoking the
+        # DemandHistoryDetail method with the arguments we expect.
+        for must_include in (
+            b'key>an isbn<',
+            b'userID>user id<',
+            b'password>password<',
+            b'content>DemandHistoryDetail<',
+        ):
+                assert must_include in post_data
+
+        # The answer given is the maximum total demand for a book in a
+        # single recent month.
+        base_popularity = 1347
+        eq_(base_popularity, popularity)
+
+        # Now let's imagine that it's six months later and no further
+        # popularity data has been gathered. This takes the period of
+        # popularity past our threshold of relevancy -- which, let's
+        # say, is three months.
+        queue()
+        six_months_later = data_gather_date + datetime.timedelta(days=180)
+        three_months = datetime.timedelta(days=90)
+
+        # The book's popularity is now given at half of its all-time
+        # greatest popularity.  This reflects the fact that it used to
+        # be very popular, and is probably still a book that library
+        # patrons
+        popularity = self.client.estimated_popularity(
+            "an isbn", as_of=six_months_later, cutoff=three_months
+        )
+        eq_(base_popularity/2.0, popularity)
+
+        # If our period of relevancy was longer, then six-month-old
+        # data would still be relevant, and that number would be used
+        # for its popularity
+        queue()
+        two_years = datetime.timedelta(days=365*2)
+        popularity = self.client.estimated_popularity(
+            "an isbn", as_of=six_months_later, cutoff=two_years
+        )
+        eq_(base_popularity, popularity)
+
+    def test_estimated_popularity_demand_when_info_absent(self):
+        # When demand info is missing, the book's popularity is given
+        # as None, representing a lack of data.  We don't get a crash.
+        info = self.data_file("demand_info_missing.xml")
+
+        self.session.queue_requests_response(
+            200, "application/xml", content=info
+        )
+        eq_(None, self.client.estimated_popularity("an isbn"))
+

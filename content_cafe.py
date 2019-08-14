@@ -5,10 +5,7 @@ import requests
 import logging
 from nose.tools import set_trace
 from bs4 import BeautifulSoup
-from suds.client import Client as SudsClient
-
-# Tone down the verbose Suds logging.
-logging.getLogger('suds').setLevel(logging.ERROR)
+from zeep import Client as SOAPClient
 
 from sqlalchemy.orm.session import Session
 
@@ -195,7 +192,7 @@ class ContentCafeAPI(object):
         metadata = Metadata(
             self.data_source, primary_identifier=isbn_identifier
         )
-        
+
         # Add the cover image to it
         image = response.content
         if self.is_suitable_image(image):
@@ -237,7 +234,7 @@ class ContentCafeAPI(object):
         self.log.debug("Getting associated resources for %s", url)
         response = self.do_get(url)
         content_type = response.headers['Content-Type']
-        if (phrase_indicating_missing_data and 
+        if (phrase_indicating_missing_data and
             phrase_indicating_missing_data in response.content):
             # There is no data; do nothing.
             self.log.debug("No data is present.")
@@ -354,40 +351,41 @@ class ContentCafeSOAPError(IOError):
 class ContentCafeSOAPClient(object):
     """Get historical sales information from Content Cafe through
     its SOAP interface.
-
-    NOTE: This class currently has no test coverage. It wouldn't be too
-    difficult to add coverage for estimate_popularity, at least.
     """
 
     WSDL_URL = "http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx?WSDL"
 
     DEMAND_HISTORY = "DemandHistoryDetail"
 
-    def __init__(self, user_id, password, wsdl_url=None):
+    def __init__(self, user_id, password, wsdl_url=None, transport=None):
         wsdl_url = wsdl_url or self.WSDL_URL
         self.user_id=user_id
         self.password = password
-        self.soap = SudsClient(wsdl_url)
+        kwargs = dict()
+        if transport:
+            kwargs['transport'] = transport
+        self.soap = SOAPClient(wsdl_url, **kwargs)
 
     def get_content(self, key, content):
         data = self.soap.service.Single(
             userID=self.user_id, password=self.password,
-            key=key, content=content)
-        if hasattr(data, 'Error'):
+            key=key, content=content
+        )
+        if data.Error:
             raise ContentCafeSOAPError(data.Error)
         else:
             return data
 
-    def estimated_popularity(self, key, cutoff=None):
+    def estimated_popularity(self, key, cutoff=None, as_of=None):
         data = self.get_content(key, self.DEMAND_HISTORY)
         gathered = self.gather_popularity(data)
-        return self.estimate_popularity(gathered, cutoff)
+        return self.estimate_popularity(gathered, cutoff, as_of)
 
     def gather_popularity(self, detail):
         by_year_and_month = Counter()
         [request_item] = detail.RequestItems.RequestItem
         items = request_item.DemandHistoryItems
-        if items == '':
+        if not items:
             # This ISBN is completely unknown.
             return None
         for history in items.DemandHistoryItem:
@@ -395,7 +393,7 @@ class ContentCafeSOAPClient(object):
             by_year_and_month[key] += int(history.Demand)
         return by_year_and_month
 
-    def estimate_popularity(self, by_year_and_month, cutoff=None):
+    def estimate_popularity(self, by_year_and_month, cutoff=None, as_of=None):
         """Turn demand data into a library-friendly estimate of popularity.
 
         :return: The book's maximum recent popularity, or one-half its
@@ -406,12 +404,13 @@ class ContentCafeSOAPClient(object):
 
         :param cutoff: The point at which "recent popularity" stops.
         """
+        as_of = as_of or datetime.date.today()
         lifetime = []
         recent = []
         if by_year_and_month is None:
             return None
         if isinstance(cutoff, datetime.timedelta):
-            cutoff = datetime.date.today() - cutoff
+            cutoff = as_of - cutoff
         for k, v in by_year_and_month.items():
             lifetime.append(v)
             if not cutoff or k >= cutoff:
