@@ -550,7 +550,7 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         # The book's popularity is now given at half of its all-time
         # greatest popularity.  This reflects the fact that it used to
         # be very popular, and is probably still a book that library
-        # patrons
+        # patrons want to borrow.
         popularity = self.client.estimated_popularity(
             "an isbn", as_of=six_months_later, cutoff=three_months
         )
