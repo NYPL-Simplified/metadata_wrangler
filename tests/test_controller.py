@@ -162,7 +162,7 @@ class TestCollectionHandling(ControllerTest):
 
         # The DataSource can also be set via arguments.
         eq_(None, collection.data_source)
-        # TODO PYTHON3 this will be urllib.parse
+        # TODO PYTHON3 this will be urllib.parse.quote
         source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
         with self.app.test_request_context('/?%s' % source):
             result = collection_from_details(self._db, self.client, details)

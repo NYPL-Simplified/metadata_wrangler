@@ -1072,7 +1072,7 @@ class OCLCClassifyAPI(object):
         return DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
-        # TODO PYTHON3 this will be urllib.parse
+        # TODO PYTHON3 this will be urllib.parse.urlencode
         return urllib.urlencode(sorted(kwargs.items()))
 
     def lookup_by(self, **kwargs):
