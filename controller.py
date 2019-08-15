@@ -1,7 +1,8 @@
 import base64 as stdlib_base64
 from nose.tools import set_trace
 from datetime import datetime
-from flask import request, make_response
+import flask
+from flask import make_response
 from flask_babel import lazy_gettext as _
 from lxml import etree
 from sqlalchemy import (
@@ -81,46 +82,136 @@ HTTP_INTERNAL_SERVER_ERROR = 500
 
 OPDS_2_MEDIA_TYPE = 'application/opds+json'
 
-
 def authenticated_client_from_request(_db, required=True):
-    header = request.headers.get('Authorization')
-    if header and 'bearer' in header.lower():
-        shared_secret = base64.b64decode(header.split(' ')[1])
+    """Look up the IntegrationClient that's making the active
+    request.
+
+    This function is used by controller code and by a decorator
+    applied to Flask routes.
+
+    :param required: True if a lack of authentication or bad
+                     authentication is an error condition.
+
+    :return: An IntegrationClient if one could be authenticated;
+             otherwise None (if authentication is not required)
+             or a ProblemDetail.
+    """
+    # Start with the assumption that there is no authenticated
+    # IntegrationClient.
+    flask.request.authenticated_client = None
+
+    header = flask.request.headers.get('Authorization')
+    if header:
+        if not 'bearer' in header.lower():
+            # No authentication mechanism other than a bearer token
+            # is supported
+            return INVALID_CREDENTIALS
+
+        # We can hopefully use the provided bearer token to
+        # authenticate an IntegrationClient.
+        try:
+            shared_secret = base64.b64decode(header.split(' ')[1])
+        except TypeError, e:
+            # The bearer token is ill-formed.
+            return INVALID_CREDENTIALS
         client = IntegrationClient.authenticate(_db, shared_secret)
+
         if client:
+            # Success!
+            flask.request.authenticated_client = client
             return client
-    if not required and not header:
-        # In the case that authentication is not required
-        # (i.e. URN lookup) return None instead of an error.
-        return None
-    return INVALID_CREDENTIALS
+        else:
+            # The bearer token doesn't identify any particular
+            # IntegrationClient.
+            return INVALID_CREDENTIALS
 
+    if required:
+        # No authentication was provided -- unfortuntely,
+        # it's required.
+        return INVALID_CREDENTIALS
 
-def collection_from_details(_db, client, collection_details):
-    if not (client and isinstance(client, IntegrationClient)):
-        return None
-
-    if collection_details:
-        # A DataSource may be sent for collections with the
-        # ExternalIntegration.OPDS_IMPORT protocol.
-        data_source_name = request.args.get('data_source')
-        if data_source_name:
-            data_source_name = urllib.unquote(data_source_name)
-
-        collection, ignore = Collection.from_metadata_identifier(
-            _db, collection_details, data_source=data_source_name
-        )
-        return collection
+    # No credentials were provided, but authentication is optional.
     return None
 
 
-class IndexController(object):
+class Controller(object):
+    """A generic controller superclass for the metadata wrangler."""
 
     def __init__(self, _db):
+        """Generic constructor.
+
+        :param _db: A scoped-session database connection.
+        """
         self._db = _db
+        self._default_collection_id = None
+
+    @property
+    def default_collection(self):
+        """Look up the 'unaffiliated' collection, which is used to register
+        identifiers referenced by unauthenticated clients in one-off tests.
+        """
+        if self._default_collection_id is None:
+            default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+            self._default_collection_id = default_collection.id
+        return get_one(self._db, Collection, id=self._default_collection_id)
+
+    def load_collection(self, metadata_identifier, authentication_required=True):
+        """Load or create a Collection from details provided in an incoming
+        request.
+
+        :param metadata_identifier: The metadata identifier for a Collection.
+
+        :param authentication_required: If this is True, then
+               unauthenticated or improperly authenticated requests
+               will result in a ProblemDetail. If this is False, then
+               unauthenticated requests are allowed, but they will always
+               be directed to the 'unaffiliated' collection.
+
+        :return: A Collection for the given metadata identifier, if
+                 one was found or created. A ProblemDetail, if no
+                 IntegrationClient could be authorized, or if the
+                 metadata identifier was invalid. None, if anonymous
+                 access is allowed and no authentication was provided.
+        """
+        # Only an authenticated IntegrationClient has any reason to
+        # look at a specific collection.
+        client = authenticated_client_from_request(self._db, authentication_required)
+        if isinstance(client, ProblemDetail):
+            return client
+
+        if authentication_required:
+            # If you authenticate, you must mention a specific
+            # Collection.
+            if not metadata_identifier:
+                return INVALID_INPUT.detailed(_("No metadata identifier provided."))
+        else:
+            # If you don't authenticate, you can't load or create a
+            # Collection. You always get the default collection.
+            return self.default_collection
+
+        # For collections with the ExternalIntegration.OPDS_IMPORT
+        # protocol, a DataSource as well as a metadata identifier may
+        # be sent.
+        data_source_name = flask.request.args.get('data_source')
+
+        # Load or create a Collection based on the metadata identifier
+        # and data source name.
+        try:
+            collection, ignore = Collection.from_metadata_identifier(
+                self._db, metadata_identifier, data_source=data_source_name
+            )
+        except ValueError as e:
+            return INVALID_INPUT.detailed(unicode(e))
+        return collection
+
+
+class IndexController(Controller):
 
     def opds_catalog(self):
-        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value_or_default(request.url)
+        """Produce an OPDS 2 catalog with an index of links to endpoints
+        offered by this server.
+        """
+        url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value_or_default(flask.request.url)
         catalog = dict(
             id=url,
             title='Library Simplified Metadata Wrangler',
@@ -180,19 +271,24 @@ class IndexController(object):
         )
 
 
-class CanonicalizationController(object):
+class CanonicalizationController(Controller):
 
     log = logging.getLogger("Canonicalization Controller")
 
     def __init__(self, _db, canonicalizer=None):
-        self._db = _db
+        """Constructor.
+
+        :param canonicalizer: A mock AuthorNameCanonicalizer, for use
+                              in tests.
+        """
+        super(CanonicalizationController, self).__init__(_db)
         self.canonicalizer = canonicalizer or AuthorNameCanonicalizer(self._db)
 
     def canonicalize_author_name(self):
-        urn = request.args.get('urn')
+        urn = flask.request.args.get('urn')
         identifier = self.parse_identifier(urn)
 
-        display_name = request.args.get('display_name')
+        display_name = flask.request.args.get('display_name')
         author_name = self.canonicalizer.canonicalize_author_name(
             identifier, display_name
         )
@@ -244,9 +340,6 @@ class CatalogController(object):
 
     TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-    def __init__(self, _db):
-        self._db = _db
-
     @classmethod
     def collection_feed_url(cls, endpoint, collection, page=None,
         **param_kwargs
@@ -286,16 +379,12 @@ class CatalogController(object):
                 feed.feed, rel="previous", href=href_for(previous_page)
             )
 
-    def updates_feed(self, collection_details):
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
+    def updates_feed(self, metadata_identifier):
+        collection = self.load_collection(metadata_identifier)
+        if isinstance(collection, ProblemDetail):
+            return collection
 
-        collection = collection_from_details(
-            self._db, client, collection_details
-        )
-
-        last_update_time = request.args.get('last_update_time', None)
+        last_update_time = flask.request.args.get('last_update_time', None)
         if last_update_time:
             try:
                 last_update_time = datetime.strptime(
@@ -357,16 +446,13 @@ class CatalogController(object):
 
         return feed_response(update_feed)
 
-    def add_items(self, collection_details):
+    def add_items(self, metadata_identifier):
         """Adds identifiers to a Collection's catalog"""
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
+        collection = self.load_collection(metadata_identifier)
+        if isinstance(collection, ProblemDetail):
+            return collection
 
-        collection = collection_from_details(
-            self._db, client, collection_details
-        )
-        urns = request.args.getlist('urn')
+        urns = flask.request.args.getlist('urn')
         messages = []
         identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
 
@@ -408,15 +494,11 @@ class CatalogController(object):
 
         return feed_response(addition_feed)
 
-    def add_with_metadata(self, collection_details):
+    def add_with_metadata(self, metadata_identifier):
         """Adds identifiers with their metadata to a Collection's catalog"""
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
-
-        collection = collection_from_details(
-            self._db, client, collection_details
-        )
+        collection = self.load_collection(metadata_identifier)
+        if isinstance(collection, ProblemDetail):
+            return collection
 
         data_source = DataSource.lookup(
             self._db, collection.name, autocreate=True
@@ -424,7 +506,7 @@ class CatalogController(object):
 
         messages = []
 
-        feed = feedparser.parse(request.data)
+        feed = feedparser.parse(flask.request.data)
         entries = feed.get("entries", [])
         entries_by_urn = { entry.get('id') : entry for entry in entries }
 
@@ -500,17 +582,13 @@ class CatalogController(object):
 
         return feed_response(addition_feed)
 
-    def metadata_needed_for(self, collection_details):
+    def metadata_needed_for(self, metadata_identifier):
         """Returns identifiers in the collection that could benefit from
         distributor metadata on the circulation manager.
         """
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
-
-        collection = collection_from_details(
-            self._db, client, collection_details
-        )
+        collection = self.load_collection(metadata_identifier)
+        if isinstance(collection, ProblemDetail):
+            return collection
 
         resolver = IdentifierResolutionCoverageProvider
         unresolved_identifiers = collection.unresolved_catalog(
@@ -563,17 +641,13 @@ class CatalogController(object):
 
         return feed_response(request_feed)
 
-    def remove_items(self, collection_details):
+    def remove_items(self, metadata_identifier):
         """Removes identifiers from a Collection's catalog"""
-        client = authenticated_client_from_request(self._db)
-        if isinstance(client, ProblemDetail):
-            return client
+        collection = self.load_collection(metadata_identifier)
+        if isinstance(collection, ProblemDetail):
+            return collection
 
-        collection = collection_from_details(
-            self._db, client, collection_details
-        )
-
-        urns = request.args.getlist('urn')
+        urns = flask.request.args.getlist('urn')
         messages = []
         identifiers_by_urn, failures = Identifier.parse_urns(self._db, urns)
 
@@ -654,7 +728,7 @@ class CatalogController(object):
 
         # 'url' points to a document containing a public key that
         # should be used to sign the secret.
-        public_key_url = request.form.get('url')
+        public_key_url = flask.request.form.get('url')
         if not public_key_url:
             return NO_AUTH_URL
 
@@ -669,7 +743,7 @@ class CatalogController(object):
         # provide a JWT, but it may lead to situations where
         # the client doesn't know their shared secret and can't reset
         # it.
-        jwt_token = request.form.get('jwt')
+        jwt_token = flask.request.form.get('jwt')
 
         try:
             response = do_get(
@@ -728,7 +802,7 @@ class CatalogController(object):
         encryptor = PKCS1_OAEP.new(public_key)
 
         submitted_secret = None
-        auth_header = request.headers.get('Authorization')
+        auth_header = flask.request.headers.get('Authorization')
         if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
             token = auth_header.split(' ')[1]
             submitted_secret = base64.b64decode(token)
@@ -786,7 +860,7 @@ class CatalogController(object):
         return make_response(content, status_code, headers)
 
 
-class URNLookupController(CoreURNLookupController):
+class URNLookupController(CoreURNLookupController, Controller):
 
     WORKING_TO_RESOLVE_IDENTIFIER = "I don't have enough information about this Identifier yet.\nDetailed work log:\n "
 
@@ -805,23 +879,22 @@ class URNLookupController(CoreURNLookupController):
 
     log = logging.getLogger("URN lookup controller")
 
-    def __init__(self, _db, coverage_provider_kwargs=None):
+    def __init__(
+            self, _db, identifier_resolver_class=IdentifierResolutionCoverageProvider,
+            coverage_provider_kwargs=None,
+    ):
         """Constructor.
 
-        :param coverage_provider_kwargs: When instantiating a
-        IdentifierResolutionCoverageProvider, pass in these keyword
-        arguments.  Used only in testing.
+        :param identifier_resolver_class: A class to instantiate instead
+            of IdentifierResolutionCoverageProvider during tests.
+        :param coverage_provider_kwargs: When instantiating
+            identifier_resolver_class, pass in these keyword
+            arguments. Used only in testing.
         """
         self._default_collection_id = None
         super(URNLookupController, self).__init__(_db)
+        self.identifier_resolver_class = identifier_resolver_class
         self.coverage_provider_kwargs = dict(coverage_provider_kwargs or {})
-
-    @property
-    def default_collection(self):
-        if getattr(self, '_default_collection_id', None) is None:
-            default_collection, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
-            self._default_collection_id = default_collection.id
-        return get_one(self._db, Collection, id=self._default_collection_id)
 
     def presentation_ready_work_for(self, identifier):
         """Either return an existing presentation-ready work associated with
@@ -832,7 +905,7 @@ class URNLookupController(CoreURNLookupController):
             return work
         return None
 
-    def process_urns(self, urns, collection_details=None, **kwargs):
+    def process_urns(self, urns, metadata_identifier=None, **kwargs):
         """Processes URNs submitted via lookup request
 
         An authenticated request can process up to 30 URNs at once,
@@ -849,24 +922,19 @@ class URNLookupController(CoreURNLookupController):
         :return: None or ProblemDetail
 
         """
-        client = authenticated_client_from_request(self._db, required=False)
-        if isinstance(client, ProblemDetail):
-            return client
-
-        resolve_now = request.args.get('resolve_now', None) is not None
-
-        collection = collection_from_details(
-            self._db, client, collection_details
+        collection = self.load_collection(
+            metadata_identifier, authentication_required=False
         )
+        if isinstance(collection, ProblemDetail):
+            return collection
 
-        if client:
-            # Authenticated access.
-            if not collection:
-                return INVALID_INPUT.detailed(_("No collection provided."))
+        if flask.request.authenticated_client:
+            # Authenticated access -- .authenticated_client was set
+            # inside load_collection().
             limit = 30
         else:
             # Anonymous access.
-            collection = self.default_collection
+            collection = self._default_collection
             limit = 1
 
         if resolve_now:
@@ -890,7 +958,7 @@ class URNLookupController(CoreURNLookupController):
         # ready.
         self.bulk_load_coverage_records(identifiers_by_urn.values())
 
-        resolver = IdentifierResolutionCoverageProvider(
+        resolver = self.identifier_resolver_class(
             collection, provide_coverage_immediately=resolve_now,
             **self.coverage_provider_kwargs
         )

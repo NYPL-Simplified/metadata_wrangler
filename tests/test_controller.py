@@ -1,4 +1,5 @@
 # encoding: utf-8
+from contextlib import contextmanager
 import base64 as stdlib_base64
 import os
 import feedparser
@@ -13,6 +14,9 @@ from io import BytesIO
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt
+
+import flask
+
 from lxml import etree
 from nose.tools import set_trace, eq_
 
@@ -58,6 +62,7 @@ from content_cafe import (
 from controller import (
     CanonicalizationController,
     CatalogController,
+    Controller,
     IndexController,
     URNLookupController,
     HTTP_OK,
@@ -67,7 +72,6 @@ from controller import (
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
     authenticated_client_from_request,
-    collection_from_details,
 )
 from coverage import (
     IdentifierResolutionCoverageProvider,
@@ -88,90 +92,193 @@ class ControllerTest(DatabaseTest):
         from app import app
         self.app = app
 
+        # Set up an IntegrationClient and a sample set of HTTP headers
+        # for authenticating as that client.
         self.client = self._integration_client()
-        valid_auth = 'Bearer ' + base64.b64encode(self.client.shared_secret)
-        self.valid_auth = dict(Authorization=valid_auth)
+        self.valid_auth = 'Bearer ' + base64.b64encode(self.client.shared_secret)
 
     def sample_data(self, filename):
         return sample_data(filename, 'controller')
 
+    @contextmanager
+    def authenticated_request(self, route, *args, **kwargs):
+        """Set up a test request context with an Authentication
+        header that identifies the IntegrationClient initialized in
+        setup().
+        """
+        headers = kwargs.pop("headers", {})
+        headers['Authorization'] = self.valid_auth
+        with self.app.test_request_context(
+            route, *args, headers=headers, **kwargs
+        ) as c:
+            yield c
 
-class TestIntegrationClientAuthentication(ControllerTest):
 
-    def test_authenticated_client_required(self):
-        # Returns catalog if authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
+class TestAuthenticatedClientFromRequest(ControllerTest):
+    """Tests of the authenticated_client_from_request function."""
+
+    def test_valid_authentication(self):
+        # If the credentials are valid, an IntegrationClient is
+        # returned and set to flask.request.authenticated_client.
+        with self.authenticated_request('/'):
             result = authenticated_client_from_request(self._db)
             eq_(result, self.client)
+            eq_(self.client, flask.request.authenticated_client)
 
-        # Returns error if authentication is invalid.
-        invalid_auth = 'Bearer ' + base64.b64encode('wrong_secret')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = authenticated_client_from_request(self._db)
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
+    def test_invalid_authentication(self):
+        # If the credentials are missing or invalid, but
+        # authentication is required, a ProblemDetail is returned.
 
-        # Returns errors without authentication.
-        with self.app.test_request_context('/'):
-            result = authenticated_client_from_request(self._db)
-            eq_(True, isinstance(result, ProblemDetail))
+        # Test various invalid authentications.
+        invalid_bearer = 'Bearer ' + base64.b64encode('wrong_secret')
+        invalid_basic = 'Basic ' + base64.b64encode('abc:defg')
+        not_base64_encoded = 'Bearer ' + self.client.shared_secret
+        invalid = [
+            dict(Authorization=x)
+            for x in invalid_bearer, invalid_basic, not_base64_encoded
+        ]
 
-    def test_authenticated_client_optional(self):
-        # Returns catalog of authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
-            result = authenticated_client_from_request(self._db, required=False)
-            eq_(result, self.client)
+        # Invalid credentials result in INVALID_CREDENTIALS whether or
+        # not authentication is required.
+        for invalid_auth in invalid:
+            with self.app.test_request_context('/', headers=invalid_auth):
+                for required in True, False:
+                    result = authenticated_client_from_request(self._db, required)
+                    eq_(INVALID_CREDENTIALS, result)
+                    eq_(None, flask.request.authenticated_client)
 
-        # Returns error if attempted authentication is invalid.
-        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = authenticated_client_from_request(self._db, required=False)
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
+        # Missing credentials result in INVALID_CREDENTIALS only if
+        # authentication is required. If authentication is not
+        # required, authenticated_client_from_request returns None.
+        with self.app.test_request_context('/', headers={}):
+            result = authenticated_client_from_request(
+                self._db, required=True
+            )
+            eq_(INVALID_CREDENTIALS, result)
+            eq_(None, flask.request.authenticated_client)
 
-        # Returns none if no authentication.
-        with self.app.test_request_context('/'):
-            result = authenticated_client_from_request(self._db, required=False)
+            result = authenticated_client_from_request(
+                self._db, required=False
+            )
             eq_(None, result)
+            eq_(None, flask.request.authenticated_client)
 
 
-class TestCollectionHandling(ControllerTest):
+class TestController(ControllerTest):
 
-    def test_collection_from_details(self):
-        mirrored_collection = self._collection(external_account_id=self._url)
-        details = mirrored_collection.metadata_identifier
+    def setup(self):
+        super(TestController, self).setup()
+        self.controller = Controller(self._db)
+
+    def test_default_collection(self):
+        # The default collection is the "unaffiliated" collection associated with
+        # the IdentifierResolutionCoverageProvider.
+        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+        eq_(unaffiliated, self.controller.default_collection)
+
+    def test_load_collection_success(self):
+        # Over on a circulation manager, we have an Overdrive collection.
+        remote_collection = self._collection(
+            external_account_id=self._str,
+            protocol=ExternalIntegration.OVERDRIVE
+        )
+        # A metadata_identifier can be calculated for it.
+        metadata_identifier = remote_collection.metadata_identifier
+
+        # Let's look up the corresponding Collection on this metadata
+        # wrangler.
+        url = '/?data_source=Some%20data%20source'
+        with self.authenticated_request(url):
+            # A new collection is created, named after the metadata identifier.
+            collection = self.controller.load_collection(metadata_identifier)
+            eq_(collection.name, remote_collection.metadata_identifier)
+
+            # The metadata wrangler collection has the same protocol as the
+            # one on the circulation manager.
+            eq_(remote_collection.protocol, collection.protocol)
+
+            # But it has no external_account_id, because it uses the
+            # Overdrive protocol, and we only care when the protocol
+            # is "OPDS Import".
+            eq_(None, collection.external_account_id)
+
+            # Its data_source is Overdrive -- that's where Overdrive
+            # collections are from -- not the string we passed in as
+            # the data_source request parameter.
+            eq_(DataSource.OVERDRIVE, collection.data_source.name)
+
+            # This is a brand new collection. It's not
+            # remote_collection. That's because remote_collection
+            # isn't _named_ after its metadata identifier. This isn't
+            # ideal, but it doesn't matter -- remember that
+            # remote_collection is 'really' on another server, a
+            # circulation manager.
+            assert remote_collection != collection
+
+        # Look up the metadata identifier again, and the previously
+        # created collection is reused.
+        with self.authenticated_request(url):
+            collection2 = self.controller.load_collection(metadata_identifier)
+            eq_(collection2, collection)
+
+        # Now try to look up an OPDS Import collection -- those are
+        # handled a little differently.
+        remote_collection = self._collection(
+            external_account_id=self._url,
+            protocol=ExternalIntegration.OPDS_IMPORT
+        )
+        metadata_identifier = remote_collection.metadata_identifier
+
+        with self.authenticated_request(url):
+            collection = self.controller.load_collection(metadata_identifier)
+
+            # Here, external_account_id is set to the value found on the
+            # remote collection, and data_source is set to a new DataSource based on
+            # the argument passed through the URL.
+            eq_(metadata_identifier, collection.name)
+            eq_(ExternalIntegration.OPDS_IMPORT, collection.protocol)
+            eq_(remote_collection.external_account_id, collection.external_account_id)
+            eq_("Some data source", collection.data_source.name)
+
+    def test_load_collection_unauthenticated(self):
+        # If no authentication is provided, then you can't look up a
+        # specific collection.
+
+        remote_collection = self._collection(
+            external_account_id=self._str,
+            protocol=ExternalIntegration.OVERDRIVE
+        )
+        metadata_identifier = remote_collection.metadata_identifier
+
+        # load_collection() will return a ProblemDetail if called with
+        # authentication_required=True, and the default collection if
+        # called with authentication_required=False.
+        with self.app.test_request_context('/'):
+            collection = self.controller.load_collection(metadata_identifier)
+            eq_(INVALID_CREDENTIALS, collection)
+
+            collection = self.controller.load_collection(
+                metadata_identifier, authentication_required=False
+            )
+            eq_(self.controller.default_collection, collection)
+
+    def test_load_collection_failure(self):
+        # If you don't provide a valid metadata identifier, you get a
+        # ProblemDetail.
 
         collection = None
-        with self.app.test_request_context('/'):
-            # Without a information, nothing is returned.
-            result = collection_from_details(self._db, None, None)
-            eq_(None, result)
 
-            result = collection_from_details(self._db, self.client, None)
-            eq_(None, result)
+        with self.authenticated_request('/'):
+            # No input.
+            result = self.controller.load_collection("")
+            eq_(INVALID_INPUT.uri, result.uri)
+            eq_("No metadata identifier provided.", result.detail)
 
-            result = collection_from_details(self._db, None, details)
-            eq_(None, result)
-
-            # It creates a collection if it doesn't exist.
-            result = collection_from_details(self._db, self.client, details)
-            assert isinstance(result, Collection)
-            collection = result
-
-        # The DataSource can also be set via arguments.
-        eq_(None, collection.data_source)
-        # TODO PYTHON3 this will be urllib.parse.quote
-        source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
-        with self.app.test_request_context('/?%s' % source):
-            result = collection_from_details(self._db, self.client, details)
-
-            # The previously-created collection is returned.
-            eq_(collection, result)
-
-            # It has a DataSource.
-            eq_(DataSource.OA_CONTENT_SERVER, collection.data_source.name)
+            # Invalid input.
+            result = self.controller.load_collection("not a real metadata identifier")
+            eq_(INVALID_INPUT.uri, result.uri)
+            eq_("Metadata identifier 'not a real metadata identifier' is invalid: Incorrect padding",
+                result.detail)
 
 
 class TestIndexController(ControllerTest):
