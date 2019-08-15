@@ -66,7 +66,7 @@ from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.util.string_helpers import base64
 
-from coverage import (
+from coverage_provider import (
     IdentifierResolutionCoverageProvider,
 )
 from canonicalize import AuthorNameCanonicalizer

@@ -19,7 +19,7 @@ from content_cafe import (
     ContentCafeCoverageProvider,
     MockContentCafeAPI,
 )
-from coverage import IdentifierResolutionCoverageProvider
+from coverage_provider import IdentifierResolutionCoverageProvider
 from integration_client import IntegrationClientCoverImageCoverageProvider
 from oclc.classify import IdentifierLookupCoverageProvider
 from overdrive import OverdriveBibliographicCoverageProvider
