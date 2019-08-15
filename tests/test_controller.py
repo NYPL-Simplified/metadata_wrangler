@@ -64,6 +64,7 @@ from controller import (
     CatalogController,
     Controller,
     IndexController,
+    IntegrationClientController,
     URNLookupController,
     HTTP_OK,
     HTTP_CREATED,
@@ -331,7 +332,6 @@ class TestCatalogController(ControllerTest):
     def setup(self):
         super(TestCatalogController, self).setup()
         self.controller = CatalogController(self._db)
-        self.http = DummyHTTPClient()
 
         # The collection as it exists on the circulation manager.
         remote_collection = self._collection(
@@ -581,6 +581,11 @@ class TestCatalogController(ControllerTest):
 
         other_collection = self._collection()
 
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.add_items(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         with self.authenticated_request(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
@@ -613,6 +618,11 @@ class TestCatalogController(ControllerTest):
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
 
     def test_add_with_metadata(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.add_with_metadata(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         # Pretend this OPDS came from a circulation manager.
         base_path = os.path.split(__file__)[0]
         resource_path = os.path.join(base_path, "files", "opds")
@@ -688,6 +698,11 @@ class TestCatalogController(ControllerTest):
         )
 
     def test_metadata_needed_for(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.metadata_needed_for(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         # A regular schmegular identifier: untouched, pure.
         pure_id = self._identifier()
 
@@ -733,13 +748,18 @@ class TestCatalogController(ControllerTest):
         with self.authenticated_request():
             response = self.controller.metadata_needed_for(self.collection.name)
 
-        m = messages = self.get_messages(response.get_data())
+        [m] = self.get_messages(response.get_data())
 
         # Only the failing identifier that doesn't have metadata submitted yet
         # is in the feed.
         self.assert_message(m, unresolved_id, 202, 'Metadata needed.')
 
     def test_remove_items(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.remove_items(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         unaffected_id = self._identifier()
@@ -809,6 +829,15 @@ class TestCatalogController(ControllerTest):
 
         # The catalogued identifier is still removed.
         assert catalogued_id not in self.collection.catalog
+
+
+class TestIntegrationClientController(ControllerTest):
+
+    def setup(self):
+        super(TestIntegrationClientController, self).setup()
+        self.controller = IntegrationClientController(self._db)
+
+        self.http = DummyHTTPClient()
 
     def create_register_request_args(self, url, token=None):
         data = dict(url=url)

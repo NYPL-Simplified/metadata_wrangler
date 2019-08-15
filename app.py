@@ -25,6 +25,7 @@ from controller import (
     CatalogController,
     CanonicalizationController,
     IndexController,
+    IntegrationClientController,
     URNLookupController
 )
 
@@ -159,7 +160,7 @@ def remove(collection_metadata_identifier):
 @app.route("/register", methods=["POST"])
 @returns_problem_detail
 def register():
-    return CatalogController(app._db).register()
+    return IntegrationClientController(app._db).register()
 
 def run(self, url=None, debug=False):
     base_url = url or u'http://localhost:5500/'

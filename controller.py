@@ -729,7 +729,14 @@ class CatalogController(Controller):
         matching_ids = [x[1] for x in qu]
         return matching_ids, identifier_match_clause
 
+class IntegrationClientController(Controller):
+
+    """A Controller for managing IntegrationClients -- the metadata
+    wrangler equivalent of 'user accounts',
+    """
+
     def register(self, do_get=HTTP.get_with_timeout):
+        """Register an IntegrationClient."""
 
         # 'url' points to a document containing a public key that
         # should be used to sign the secret.
