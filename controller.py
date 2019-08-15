@@ -422,7 +422,7 @@ class CatalogController(Controller):
                 precomposed_entries.append(entry)
             else:
                 # There is no cached OPDS entry. We'll create one later.
-                works_for_feed.append((work, identifier))
+                works_for_feed.append((identifier, work))
 
         client = flask.request.authenticated_client
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)

@@ -343,8 +343,14 @@ class TestCatalogController(ControllerTest):
             protocol=remote_collection.protocol
         )
 
+        # Create two works to use in tests.
         self.work1 = self._work(with_open_access_download=True)
         self.work2 = self._work(with_open_access_download=True)
+
+        # Clear the cached OPDS entries for one of these works -- this
+        # verifies that OPDS entries are created when needed.
+        self.work1.verbose_opds_entry = None
+        self.work1.simple_opds_entry = None
 
     @classmethod
     def get_root(cls, raw_feed):
@@ -457,8 +463,13 @@ class TestCatalogController(ControllerTest):
         identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(identifier)
 
-        # Ask for updates as though we had no information about what's in
-        # our catalog.
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.updates_feed(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
+        # Ask for updates as though the circulation manager had no
+        # information about what's in its catalog.
         with self.authenticated_request('/'):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
