@@ -179,15 +179,16 @@ class Controller(object):
         if isinstance(client, ProblemDetail):
             return client
 
-        if authentication_required:
-            # If you authenticate, you must mention a specific
-            # Collection.
-            if not metadata_identifier:
-                return INVALID_INPUT.detailed(_("No metadata identifier provided."))
-        else:
-            # If you don't authenticate, you can't load or create a
-            # Collection. You always get the default collection.
-            return self.default_collection
+        if not client:
+            if authentication_required:
+                # If you authenticate, you must mention a specific
+                # Collection.
+                if not metadata_identifier:
+                    return INVALID_INPUT.detailed(_("No metadata identifier provided."))
+            else:
+                # If you don't authenticate, you can't load or create a
+                # Collection. You always get the default collection.
+                return self.default_collection
 
         # For collections with the ExternalIntegration.OPDS_IMPORT
         # protocol, a DataSource as well as a metadata identifier may
@@ -201,6 +202,8 @@ class Controller(object):
                 self._db, metadata_identifier, data_source=data_source_name
             )
         except ValueError as e:
+            # This is caused by a problem decoding the metadata
+            # identifier.
             return INVALID_INPUT.detailed(unicode(e))
         return collection
 
@@ -946,9 +949,10 @@ class URNLookupController(CoreURNLookupController, Controller):
             limit = 30
         else:
             # Anonymous access.
-            collection = self._default_collection
+            collection = self.default_collection
             limit = 1
 
+        resolve_now = flask.request.args.get("resolve_now") == "True"
         if resolve_now:
             # You can't force-resolve more than one Identifier at a time.
             limit = 1

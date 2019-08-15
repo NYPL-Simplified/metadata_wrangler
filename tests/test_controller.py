@@ -1205,7 +1205,7 @@ class TestURNLookupController(ControllerTest):
         urn = identifier.urn.replace('changeme', 'abc-123-xyz')
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1247,7 +1247,7 @@ class TestURNLookupController(ControllerTest):
 
         # Processing the URN a second time will give the same result.
         self.controller.precomposed_entries = []
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1261,7 +1261,7 @@ class TestURNLookupController(ControllerTest):
         urn = self.ISBN_URN
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1281,10 +1281,10 @@ class TestURNLookupController(ControllerTest):
 
     @authenticated_request_context_resolve_now
     def test_process_urn_immediate_resolution_success(self):
-        """A start-to-finish test showing immediate and complete
-        resolution of an Overdrive identifier from within
-        this controller.
-        """
+        # A start-to-finish test showing immediate and complete
+        # resolution of an Overdrive identifier from within
+        # this controller.
+
         # Create an Overdrive URN, then modify it to the one the mock
         # Overdrive API will expect, without actually inserting the
         # corresponding Identifier into the database.
@@ -1303,7 +1303,7 @@ class TestURNLookupController(ControllerTest):
 
         cover = self.data_file("covers/test-book-cover.png")
         self.http.queue_response(200, "image/jpeg", content=cover)
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
 
         # A presentation-ready work with a LicensePool was immediately
         # created.
@@ -1332,32 +1332,30 @@ class TestURNLookupController(ControllerTest):
 
     @authenticated_request_context
     def test_process_urn_registration_failure(self):
-        """There are limits on how many URNs you can register at once, even if
-        you authenticate, but the limit depends on whether you
-        specified a collection.
-        """
+        # There are limits on how many URNs you can register at once, even if
+        # you authenticate, but the limit depends on whether you
+        # specified a collection.
         urn = self._identifier(identifier_type=Identifier.ISBN).urn
         name = self.overdrive_collection.metadata_identifier
 
         # Failure -- we didn't specify a collection.
         result = self.controller.process_urns([urn])
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"No collection provided.", result.detail)
+        eq_(u"No metadata identifier provided.", result.detail)
 
         # Failure - we sent too many URNs.
-        result = self.controller.process_urns([urn] * 31, collection_details=name)
+        result = self.controller.process_urns([urn] * 31, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
             result.detail)
 
     @authenticated_request_context_resolve_now
     def test_process_urn_registration_failure_resolving_too_much(self):
-        """Even when you authenticate, you can only ask that one identifier at
-        a time be immediately resolved.
-        """
+        # Even when you authenticate, you can only ask that one identifier at
+        # a time be immediately resolved.
         urn = self._identifier(identifier_type=Identifier.ISBN).urn
         name = self.overdrive_collection.metadata_identifier
-        result = self.controller.process_urns([urn] * 2, collection_details=name)
+        result = self.controller.process_urns([urn] * 2, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
@@ -1389,7 +1387,7 @@ class TestURNLookupController(ControllerTest):
         name = remote_collection.metadata_identifier
         urn2 = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier2"
         identifier2 = Identifier.parse_urn(self._db, urn)[0]
-        self.controller.process_urns([urn2], collection_details=name)
+        self.controller.process_urns([urn2], metadata_identifier=name)
         assert identifier2 in self.controller.default_collection.catalog
 
         # Failure -- we sent more than one URN with an unauthenticated request.
