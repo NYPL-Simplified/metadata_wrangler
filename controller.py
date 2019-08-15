@@ -327,7 +327,7 @@ class CanonicalizationController(Controller):
         return identifier
 
 
-class CatalogController(object):
+class CatalogController(Controller):
     """A controller to manage a Collection's catalog"""
 
     log = logging.getLogger("Catalog Controller")
@@ -424,6 +424,7 @@ class CatalogController(object):
                 # There is no cached OPDS entry. We'll create one later.
                 works_for_feed.append((work, identifier))
 
+        client = flask.request.authenticated_client
         title = "%s Collection Updates for %s" % (collection.protocol, client.url)
         url_params = dict()
         if last_update_time:
@@ -485,6 +486,7 @@ class CatalogController(object):
 
             messages.append(OPDSMessage(urn, status, description))
 
+        client = flask.request.authenticated_client
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = self.collection_feed_url('add', collection, urn=urns)
         addition_feed = AcquisitionFeed(
@@ -573,6 +575,7 @@ class CatalogController(object):
 
             messages.append(message)
 
+        client = flask.request.authenticated_client
         title = "%s Catalog Item Additions for %s" % (collection.protocol, client.url)
         url = self.collection_feed_url("add_with_metadata", collection)
         addition_feed = AcquisitionFeed(
@@ -624,6 +627,7 @@ class CatalogController(object):
                 identifier.urn, HTTP_ACCEPTED, "Metadata needed."
             ))
 
+        client = flask.request.authenticated_client
         title = "%s Metadata Requests for %s" % (collection.protocol, client.url)
         metadata_request_url = self.collection_feed_url(
             'metadata_needed_for', collection
@@ -684,6 +688,7 @@ class CatalogController(object):
             message = OPDSMessage(urn, status, description)
             messages.append(message)
 
+        client = flask.request.authenticated_client
         title = "%s Catalog Item Removal for %s" % (collection.protocol, client.url)
         url = self.collection_feed_url("remove", collection, urn=urns)
         removal_feed = AcquisitionFeed(

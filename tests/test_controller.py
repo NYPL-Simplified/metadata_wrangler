@@ -101,7 +101,7 @@ class ControllerTest(DatabaseTest):
         return sample_data(filename, 'controller')
 
     @contextmanager
-    def authenticated_request(self, route, *args, **kwargs):
+    def authenticated_request(self, *args, **kwargs):
         """Set up a test request context with an Authentication
         header that identifies the IntegrationClient initialized in
         setup().
@@ -109,7 +109,7 @@ class ControllerTest(DatabaseTest):
         headers = kwargs.pop("headers", {})
         headers['Authorization'] = self.valid_auth
         with self.app.test_request_context(
-            route, *args, headers=headers, **kwargs
+            *args, headers=headers, **kwargs
         ) as c:
             yield c
 
@@ -459,7 +459,7 @@ class TestCatalogController(ControllerTest):
 
         # Ask for updates as though we had no information about what's in
         # our catalog.
-        with self.app.test_request_context('/', headers=self.valid_auth):
+        with self.authenticated_request('/'):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
             eq_(HTTP_OK, response.status_code)
@@ -486,9 +486,8 @@ class TestCatalogController(ControllerTest):
 
         # If we ask for updates since before work1 was created,
         # we'll get work1.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -503,9 +502,8 @@ class TestCatalogController(ControllerTest):
 
         # If we ask for updates from a time later than work1 was created,
         # we'll get no results.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s' % tomorrow_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -515,9 +513,8 @@ class TestCatalogController(ControllerTest):
         # The feed can be paginated.
         identifier2 = self.work2.license_pools[0].identifier
         self.collection.catalog_identifier(identifier2)
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s&size=1' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -528,9 +525,8 @@ class TestCatalogController(ControllerTest):
             eq_(identifier.urn, entry['id'])
 
         # Page two contains work2.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s&size=1&after=1' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -541,17 +537,14 @@ class TestCatalogController(ControllerTest):
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
             self.collection.catalog_identifier(work.license_pools[0].identifier)
-        with self.app.test_request_context('/?size=1',
-            headers=self.valid_auth):
+        with self.authenticated_request('/?size=1'):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'next' for link in links])
             assert not any([link['rel'] == 'previous' for link in links])
             assert not any([link['rel'] == 'first' for link in links])
 
-        with self.app.test_request_context('/?size=1&after=1',
-            headers=self.valid_auth
-        ):
+        with self.authenticated_request('/?size=1&after=1'):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'previous' for link in links])
@@ -562,9 +555,7 @@ class TestCatalogController(ControllerTest):
         """Passing in a malformed timestamp for last_update_time
         results in a problem detail document.
         """
-        with self.app.test_request_context(
-                '/?last_update_time=wrong format', headers=self.valid_auth
-        ):
+        with self.authenticated_request('/?last_update_time=wrong format'):
             response = self.controller.updates_feed(self.collection.name)
             assert isinstance(response, ProblemDetail)
             eq_(400, response.status_code)
@@ -579,10 +570,10 @@ class TestCatalogController(ControllerTest):
 
         other_collection = self._collection()
 
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             response = self.controller.add_items(self.collection.name)
 
@@ -624,7 +615,7 @@ class TestCatalogController(ControllerTest):
         # And here's some OPDS with an invalid identifier.
         invalid_opds = "<feed><entry><id>invalid</id></entry></feed>"
 
-        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+        with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
         eq_(HTTP_OK, response.status_code)
@@ -658,7 +649,7 @@ class TestCatalogController(ControllerTest):
         assert isinstance(data_source, DataSource)
 
         # If we make the same request again, the identifier stays in the catalog.
-        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+        with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
         eq_(HTTP_OK, response.status_code)
@@ -675,7 +666,7 @@ class TestCatalogController(ControllerTest):
         self.assert_message(catalogued, identifier, '200', 'Already in catalog')
 
         # The invalid identifier returns a 400 error message.
-        with self.app.test_request_context(headers=self.valid_auth, data=invalid_opds):
+        with self.authenticated_request(data=invalid_opds):
             response = self.controller.add_with_metadata(self.collection.name)
         eq_(HTTP_OK, response.status_code)
 
@@ -728,7 +719,7 @@ class TestCatalogController(ControllerTest):
             metadata_already_id,
         ])
 
-        with self.app.test_request_context(headers=self.valid_auth):
+        with self.authenticated_request():
             response = self.controller.metadata_needed_for(self.collection.name)
 
         m = messages = self.get_messages(response.get_data())
@@ -749,9 +740,9 @@ class TestCatalogController(ControllerTest):
         other_collection.catalog_identifier(catalogued_id)
         other_collection.catalog_identifier(uncatalogued_id)
 
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
@@ -787,9 +778,9 @@ class TestCatalogController(ControllerTest):
 
         # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(catalogued_id)
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             response = self.controller.remove_items(self.collection.name)
             eq_(HTTP_OK, int(response.status_code))
