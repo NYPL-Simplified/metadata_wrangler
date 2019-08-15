@@ -15,10 +15,34 @@ from core.config import Configuration
 from core.log import LogConfiguration
 from core.model import SessionManager
 
+from controller import (
+    CatalogController,
+    CanonicalizationController,
+    IndexController,
+    IntegrationClientController,
+    URNLookupController
+)
+
 app = Flask(__name__)
 app._db = None
 app.debug = None
 babel = Babel(app)
+
+class MetadataWrangler(object):
+    """The metadata wrangler itself.
+
+    A simple grouping of controllers.
+    """
+
+    def __init__(self,_db):
+        self._db = _db
+        self.heartbeat = HeartbeatController()
+        self.canonicalization =  CanonicalizationController(self._db)
+        self.index = IndexController(self._db)
+        self.urn_lookup = URNLookupController(self._db)
+        self.catalog = CatalogController(self._db)
+        self.integration = IntegrationClientController(self._db)
+
 
 @app.before_first_request
 def initialize_database(autoinitialize=True):
@@ -51,6 +75,20 @@ def initialize_database(autoinitialize=True):
     @app.errorhandler(Exception)
     def exception_handler(exception):
         return h.handle(exception)
+
+@app.before_first_request
+def initialize_metadata_wrangler():
+    if getattr(app, 'wrangler', None) is None:
+        try:
+            app.wrangler = MetadataWrangler(app._db)
+        except Exception, e:
+            logging.error(
+                "Error instantiating metadata wrangler!", exc_info=e
+            )
+            raise e
+        # Make sure that any changes to the database (as might happen
+        # on initial setup) are committed before continuing.
+        app.wrangler._db.commit()
 
 @app.teardown_request
 def shutdown_session(exception):
