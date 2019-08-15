@@ -74,7 +74,7 @@ from controller import (
     HTTP_INTERNAL_SERVER_ERROR,
     authenticated_client_from_request,
 )
-from coverage import (
+from coverage_provider import (
     IdentifierResolutionCoverageProvider,
 )
 from integration_client import IntegrationClientCoverImageCoverageProvider
