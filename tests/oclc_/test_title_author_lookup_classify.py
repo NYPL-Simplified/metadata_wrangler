@@ -164,13 +164,13 @@ class TestParser(DatabaseTest):
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            [None, None, u'n50025038', u'n50050335', u'n79006936',
+            ['', '', u'n50025038', u'n50050335', u'n79006936',
              u'n79059764'],
-            sorted([x.lc for x in work.contributors])
+            sorted([x.lc or '' for x in work.contributors])
         )
         eq_(
-            [None, None, u'27068555', u'34482742', u'4947338', u'51716047'],
-            sorted([x.viaf for x in work.contributors]))
+            ['', '', u'27068555', u'34482742', u'4947338', u'51716047'],
+            sorted([x.viaf or '' for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
         # OCLC. Herman Melville is the primary author, and Tony Tanner is

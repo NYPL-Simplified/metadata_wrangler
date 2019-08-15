@@ -10,7 +10,7 @@ from . import (
 
 from core.metadata_layer import ContributorData
 
-from test_viaf import MockVIAFClientLookup
+from .test_viaf import MockVIAFClientLookup
 
 from canonicalize import (
     AuthorNameCanonicalizer, 

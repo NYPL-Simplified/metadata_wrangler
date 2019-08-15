@@ -297,7 +297,6 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
 
         provider.process_item(identifier)
 
-
         # Both VIAF-identified authors have had their information updated
         # with the VIAF results.
         filled_in = sorted(

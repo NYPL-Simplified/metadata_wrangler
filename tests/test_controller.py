@@ -1,6 +1,6 @@
 # encoding: utf-8
+import base64 as stdlib_base64
 import os
-import base64
 import feedparser
 import json
 import re
@@ -9,7 +9,7 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.PublicKey import RSA
-from StringIO import StringIO
+from io import BytesIO
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt
@@ -45,6 +45,7 @@ from core.testing import (
 )
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
+from core.util.string_helpers import base64
 
 from canonicalize import (
     AuthorNameCanonicalizer,
@@ -161,6 +162,7 @@ class TestCollectionHandling(ControllerTest):
 
         # The DataSource can also be set via arguments.
         eq_(None, collection.data_source)
+        # TODO PYTHON3 this will be urllib.parse.quote
         source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
         with self.app.test_request_context('/?%s' % source):
             result = collection_from_details(self._db, self.client, details)
@@ -240,13 +242,13 @@ class TestCatalogController(ControllerTest):
     @classmethod
     def get_root(cls, raw_feed):
         """Returns the root tag of an OPDS or XML feed."""
-        return etree.parse(StringIO(raw_feed))
+        return etree.parse(BytesIO(raw_feed))
 
     @classmethod
     def get_messages(cls, root):
         """Returns the OPDSMessages from a feed, given its root tag."""
         message_path = '/atom:feed/simplified:message'
-        if isinstance(root, basestring):
+        if isinstance(root, (bytes, str)):
             root = cls.get_root(root)
         return cls.XML_PARSE(root, message_path)
 
@@ -256,7 +258,7 @@ class TestCatalogController(ControllerTest):
 
     @classmethod
     def get_message_for(cls, identifier, messages):
-        if not isinstance(identifier, basestring):
+        if not isinstance(identifier, (bytes, str)):
             identifier = identifier.urn
         [message] = [m for m in messages
                      if cls.xml_value(m, 'atom:id')==identifier]
@@ -438,7 +440,7 @@ class TestCatalogController(ControllerTest):
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'next' for link in links])
             assert not any([link['rel'] == 'previous' for link in links])
-            assert not any([link['rel'] == 'first' for l in links])
+            assert not any([link['rel'] == 'first' for link in links])
 
         with self.app.test_request_context('/?size=1&after=1',
             headers=self.valid_auth
@@ -555,7 +557,7 @@ class TestCatalogController(ControllerTest):
         eq_(HTTP_OK, response.status_code)
 
         # It sends one message.
-        root = etree.parse(StringIO(response.data))
+        root = etree.parse(BytesIO(response.data))
         [catalogued] = self.get_messages(response.get_data())
 
         # The identifier in the OPDS feed is still in the catalog.
@@ -817,7 +819,7 @@ class TestCatalogController(ControllerTest):
 
         # Put the new key in the mock catalog.
         mock_auth_json = json.loads(self.sample_data('public_key_document.json'))
-        mock_auth_json['public_key']['value'] = key.exportKey()
+        mock_auth_json['public_key']['value'] = key.exportKey().decode("utf8")
         mock_public_key_doc = json.dumps(mock_auth_json)
         mock_doc_response = MockRequestsResponse(
             200, content=mock_public_key_doc,
@@ -841,8 +843,10 @@ class TestCatalogController(ControllerTest):
         catalog = json.loads(response.data)
         eq_(url, catalog.get('id'))
         shared_secret = catalog.get('metadata').get('shared_secret')
-        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
-        eq_(client.shared_secret, shared_secret)
+        decrypted_secret = encryptor.decrypt(
+            stdlib_base64.b64decode(shared_secret)
+        ).decode("utf8")
+        eq_(client.shared_secret, decrypted_secret)
 
         # If the client already has a shared_secret, a request cannot
         # succeed without providing it.
@@ -870,8 +874,10 @@ class TestCatalogController(ControllerTest):
         # It has a new shared_secret.
         assert client.shared_secret != 'token'
         shared_secret = catalog.get('metadata').get('shared_secret')
-        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
-        eq_(client.shared_secret, shared_secret)
+        decrypted_secret = encryptor.decrypt(
+            stdlib_base64.b64decode(shared_secret)
+        ).decode("utf8")
+        eq_(client.shared_secret, decrypted_secret)
 
     def test_register_with_jwt(self):
         # Create an encryptor so we can compare secrets later. :3
@@ -892,7 +898,7 @@ class TestCatalogController(ControllerTest):
 
         # Put the public key in the mock catalog.
         mock_auth_json = json.loads(self.sample_data('public_key_document.json'))
-        mock_auth_json['public_key']['value'] = key.publickey().exportKey()
+        mock_auth_json['public_key']['value'] = key.publickey().exportKey().decode("utf8")
         mock_public_key_doc = json.dumps(mock_auth_json)
         mock_doc_response = MockRequestsResponse(
             200, content=mock_public_key_doc,
@@ -919,8 +925,10 @@ class TestCatalogController(ControllerTest):
         catalog = json.loads(response.data)
         eq_(url, catalog.get('id'))
         shared_secret = catalog.get('metadata').get('shared_secret')
-        shared_secret = encryptor.decrypt(base64.b64decode(shared_secret))
-        eq_(client.shared_secret, shared_secret)
+        decrypted_secret = encryptor.decrypt(
+            stdlib_base64.b64decode(shared_secret)
+        ).decode("utf8")
+        eq_(client.shared_secret, decrypted_secret)
 
         # Since a JWT always proves ownership of test.org, we allow
         # clients who provide a JWT to modify an existing shared
@@ -960,7 +968,7 @@ class TestURNLookupController(ControllerTest):
 
     def data_file(self, path):
         """Return the contents of a test data file."""
-        return open(os.path.join(self.resource_path, path)).read()
+        return open(os.path.join(self.resource_path, path), 'rb').read()
 
     def setup(self):
         super(TestURNLookupController, self).setup()
@@ -1082,7 +1090,7 @@ class TestURNLookupController(ControllerTest):
         # The CoverageRecords exist on the Identifier -- it's not
         # something that was made up for the OPDS message.
         [overdrive_cr, resolver_cr] = sorted(
-            identifier.coverage_records, key=lambda x: x.operation
+            identifier.coverage_records, key=lambda x: x.operation or ""
         )
         eq_(DataSource.INTERNAL_PROCESSING, resolver_cr.data_source.name)
         eq_(CoverageRecord.RESOLVE_IDENTIFIER_OPERATION, resolver_cr.operation)
@@ -1363,7 +1371,7 @@ class TestCanonicalizationController(ControllerTest):
             # And it returned the predefined right answer.
             eq_(200, response.status_code)
             eq_("text/plain", response.headers['Content-Type'])
-            eq_(output_name, response.data)
+            eq_(output_name, response.data.decode("utf8"))
 
         # Now test the failure case.
         with self.app.test_request_context('/?urn=error&display_name=nobody'):
@@ -1377,4 +1385,4 @@ class TestCanonicalizationController(ControllerTest):
             # Since there was no predefined right answer for (None, "nobody"),
             # we get a 404 error.
             eq_(404, response.status_code)
-            eq_("", response.data)
+            eq_("", response.data.decode("utf8"))

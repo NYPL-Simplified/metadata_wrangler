@@ -1005,7 +1005,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         oclc_number = unicode(edition_tag.get('oclc'))
         try:
             int(oclc_number)
-        except ValueError, e:
+        except ValueError as e:
             # This record does not have a valid OCLC number.
             return None, False
 
@@ -1072,12 +1072,8 @@ class OCLCClassifyAPI(object):
         return DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
-        args = dict()
-        for k, v in kwargs.items():
-            if isinstance(v, unicode):
-                v = v.encode("utf8")
-            args[k] = v
-        return urllib.urlencode(sorted(args.items()))
+        # TODO PYTHON3 this will be urllib.parse.urlencode
+        return urllib.urlencode(sorted(kwargs.items()))
 
     def lookup_by(self, **kwargs):
         """Perform an OCLC Classify lookup."""
@@ -1163,7 +1159,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             return identifier
 
         except IOError as e:
-            return self.failure(identifier, e.message)
+            return self.failure(identifier, unicode(e))
 
     def _single(self, tree, metadata):
         """In the case of a single work response, annotate
@@ -1258,11 +1254,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
 
         # Log the info
         def _f(s):
-            if not s:
-                return ''
-            if isinstance(s, unicode):
-                return s.encode("utf8")
-            return s
+            return s or ''
         self.log.info(
             '%s "%s" "%s" %r', _f(edition.primary_identifier.identifier),
             _f(title), _f(author), _f(language)
@@ -1370,7 +1362,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
         try:
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
-            return self.failure(identifier, e.message)
+            return self.failure(identifier, unicode(e))
 
         self.merge_contributors(edition, records)
         self.log.info("Created %s records(s).", len(records))
