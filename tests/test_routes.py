@@ -29,13 +29,16 @@ class MockMetadataWrangler(object):
         self.authenticated = False
 
     def __getattr__(self, controller_name):
+        """Look up a MockController or create a new one."""
         return self._cache.setdefault(
             controller_name, MockController(controller_name)
         )
 
     def authenticated_client_from_request(self, required=True):
+        """Mock authenticated_client_from_request based on
+        whether this method has .authenticated set.
+        """
         if self.authenticated:
-            flask.request.authenticated_client = self.AUTHENTICATED_CLIENT
             return self.AUTHENTICATED_CLIENT
         else:
             if required:
@@ -107,16 +110,6 @@ class RouteTest(ControllerTest):
     routes we've registered with Flask.
     """
 
-    # The first time setup() is called, it will instantiate a real
-    # MetadataWrangler object and store it here. We only do this
-    # once because it takes about a second to instantiate this object.
-    # Calling any of this object's methods could be problematic, since
-    # it's probably left over from a previous test, but we won't be
-    # calling any methods -- we just want to verify the _existence_,
-    # in a real CirculationManager, of the methods called in
-    # routes.py.
-    REAL_CIRCULATION_MANAGER = None
-
     def setup(self):
         super(RouteTest, self).setup()
 
@@ -126,6 +119,10 @@ class RouteTest(ControllerTest):
 
         # Create a real MetadataWrangler -- we'll use this to check
         # whether the controllers we're accessing really exist.
+        #
+        # Unlike with the circulation manager, creating a
+        # MetadataWrangler is really cheap and we can do a fresh one
+        # for every test.
         self.real_wrangler = MetadataWrangler(self._db)
 
         # Swap out any existing MetadataWrangler in the Flask app for
@@ -137,25 +134,21 @@ class RouteTest(ControllerTest):
         # real app will.
         self.resolver = routes.app.url_map.bind('', '/')
 
-        # For convenience, set self.controller to a specific controller
-        # whose routes are being tested.
-        controller_name = getattr(self, 'CONTROLLER_NAME', None)
-        if controller_name:
-            self.controller = getattr(self.mock_wrangler, controller_name)
+        # Set self.controller to a mocked version of the controller
+        # whose routes are being tested in this class.
+        controller_name = self.CONTROLLER_NAME
+        self.controller = getattr(self.mock_wrangler, controller_name)
 
-            # Make sure there's a controller by this name in the real
-            # CirculationManager.
-            self.real_controller = getattr(
-                self.real_wrangler, controller_name
-            )
-        else:
-            self.real_controller = None
-
-        routes.app = app
+        # Make sure there's a controller by that name in the real
+        # MetadataWrangler.
+        self.real_controller = getattr(self.real_wrangler, controller_name)
+        if not self.real_controller:
+            raise Exception("No such controller: %s" % controller_name)
 
     def teardown(self):
         super(RouteTest, self).teardown()
-        # Restore app.wrangler to its original state (possibly not yet initialized)
+        # Restore app.wrangler to its original state (possibly not yet
+        # initialized)
         if self.old_wrangler:
             app.wrangler = self.old_wrangler
         else:
@@ -298,19 +291,22 @@ class TestCatalog(RouteTest):
     CONTROLLER_NAME = "catalog"
 
     def test_add(self):
+        url = "/<metadata_identifier>/add"
         self.assert_authenticated_request_calls(
-            "/<metadata_identifier>/add", self.controller.add_items,
+            url, self.controller.add_items,
             metadata_identifier="<metadata_identifier>",
             http_method="POST"
         )
+        self.assert_supported_methods(url, 'POST')
 
     def test_add_with_metadata(self):
+        url = "/<metadata_identifier>/add_with_metadata"
         self.assert_authenticated_request_calls(
-            "/<metadata_identifier>/add_with_metadata",
-            self.controller.add_with_metadata,
+            url, self.controller.add_with_metadata,
             metadata_identifier="<metadata_identifier>",
             http_method="POST"
         )
+        self.assert_supported_methods(url, 'POST')
 
     def test_metadata_needed(self):
         self.assert_authenticated_request_calls(
@@ -327,12 +323,13 @@ class TestCatalog(RouteTest):
         )
 
     def test_remove(self):
+        url = "/<metadata_identifier>/remove"
         self.assert_authenticated_request_calls(
-            "/<metadata_identifier>/remove",
-            self.controller.remove_items,
+            url, self.controller.remove_items,
             metadata_identifier="<metadata_identifier>",
             http_method="POST"
         )
+        self.assert_supported_methods(url, 'POST')
 
 
 class TestIntegrationClient(RouteTest):
@@ -341,8 +338,8 @@ class TestIntegrationClient(RouteTest):
     CONTROLLER_NAME = "integration"
 
     def test_register(self):
+        url = "/register"
         self.assert_request_calls(
-            "/register",
-            self.controller.register,
-            http_method="POST"
+            url, self.controller.register, http_method="POST"
         )
+        self.assert_supported_methods(url, 'POST')
