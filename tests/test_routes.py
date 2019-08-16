@@ -12,10 +12,9 @@ from werkzeug.exceptions import MethodNotAllowed
 from core.app_server import ErrorHandler
 from core.opds import VerboseAnnotator
 
-from app import (
-    app,
-    MetadataWrangler,
-)
+from app import app
+from controller import MetadataWrangler
+from problem_details import INVALID_CREDENTIALS
 import routes
 
 from test_controller import ControllerTest
@@ -23,13 +22,26 @@ from test_controller import ControllerTest
 class MockMetadataWrangler(object):
     """Pretends to be a MetadataWrangler with configured controllers."""
 
+    AUTHENTICATED_CLIENT = "I'm an IntegrationClient"
+
     def __init__(self):
         self._cache = {}
+        self.authenticated = False
 
     def __getattr__(self, controller_name):
         return self._cache.setdefault(
             controller_name, MockController(controller_name)
         )
+
+    def authenticated_client_from_request(self, required=True):
+        if self.authenticated:
+            flask.request.authenticated_client = self.AUTHENTICATED_CLIENT
+            return self.AUTHENTICATED_CLIENT
+        else:
+            if required:
+                return INVALID_CREDENTIALS
+            return None
+
 
 class MockControllerMethod(object):
     """Pretends to be one of the methods of a controller class."""
@@ -110,12 +122,16 @@ class RouteTest(ControllerTest):
 
         # Create a MockMetadataWrangler -- this is the one we'll be
         # using in the tests.
-        mock_wrangler = MockMetadataWrangler()
+        self.mock_wrangler = MockMetadataWrangler()
+
+        # Create a real MetadataWrangler -- we'll use this to check
+        # whether the controllers we're accessing really exist.
+        self.real_wrangler = MetadataWrangler(self._db)
 
         # Swap out any existing MetadataWrangler in the Flask app for
         # our mock.  It'll be restored in teardown.
         self.old_wrangler = getattr(app, 'wrangler', None)
-        routes.app.wrangler = mock_wrangler
+        routes.app.wrangler = self.mock_wrangler
 
         # Use the resolver to parse incoming URLs the same way the
         # real app will.
@@ -125,13 +141,12 @@ class RouteTest(ControllerTest):
         # whose routes are being tested.
         controller_name = getattr(self, 'CONTROLLER_NAME', None)
         if controller_name:
-            self.controller = getattr(mock_wrangler, controller_name)
+            self.controller = getattr(self.mock_wrangler, controller_name)
 
             # Make sure there's a controller by this name in the real
             # CirculationManager.
-            real_wrangler = MetadataWrangler(self._db)
             self.real_controller = getattr(
-                real_wrangler, controller_name
+                self.real_wrangler, controller_name
             )
         else:
             self.real_controller = None
@@ -184,6 +199,27 @@ class RouteTest(ControllerTest):
             # the mock method. This might remove the need to call the
             # mock method at all.
 
+    def assert_authenticated_request_calls(self, url, method, *args, **kwargs):
+        """First verify that an unauthenticated request fails. Then make an
+        authenticated request to `url` and verify the results, as with
+        assert_request_calls
+        """
+        http_method = kwargs.pop('http_method', 'GET')
+        body, status_code, headers = self.request(url, http_method)
+        eq_(401, status_code)
+
+        # Set a variable so that our mocked
+        # _authenticated_patron_from_request will succeed, and try
+        # again.
+        self.mock_wrangler.authenticated = True
+        try:
+            kwargs['http_method'] = http_method
+            self.assert_request_calls(url, method, *args, **kwargs)
+        finally:
+            # Un-set authentication for the benefit of future
+            # assertions in this test function.
+            self.mock_wrangler.authenticated = False
+
     def assert_supported_methods(self, url, *methods):
         """Verify that the given HTTP `methods` are the only ones supported
         on the given `url`.
@@ -205,6 +241,7 @@ class RouteTest(ControllerTest):
 
 
 class TestIndex(RouteTest):
+    """Test routes that end up in the IndexController."""
 
     CONTROLLER_NAME = "index"
 
@@ -214,6 +251,7 @@ class TestIndex(RouteTest):
 
 
 class TestHeartbeat(RouteTest):
+    """Test routes that end up in the HeartbeatController."""
 
     CONTROLLER_NAME = "heartbeat"
 
@@ -222,6 +260,7 @@ class TestHeartbeat(RouteTest):
 
 
 class TestCanonicalize(RouteTest):
+    """Test routes that end up in the CanonicalizationController."""
 
     CONTROLLER_NAME = "canonicalization"
 
@@ -230,6 +269,7 @@ class TestCanonicalize(RouteTest):
 
 
 class TestURNLookup(RouteTest):
+    """Test routes that end up in the URNLookupController."""
 
     CONTROLLER_NAME = "urn_lookup"
 
@@ -249,13 +289,60 @@ class TestURNLookup(RouteTest):
             metadata_identifier="<metadata_identifier>"
         )
 
+    # TODO: We're running accepts_auth but we're only testing the case
+    # where no auth is provided.
+
 class TestCatalog(RouteTest):
+    """Test routes that end up in the CatalogController."""
 
     CONTROLLER_NAME = "catalog"
 
     def test_add(self):
-        self.assert_request_calls(
-            "/<metadata_identifier>/add", self.controller.add,
+        self.assert_authenticated_request_calls(
+            "/<metadata_identifier>/add", self.controller.add_items,
             metadata_identifier="<metadata_identifier>",
+            http_method="POST"
+        )
+
+    def test_add_with_metadata(self):
+        self.assert_authenticated_request_calls(
+            "/<metadata_identifier>/add_with_metadata",
+            self.controller.add_with_metadata,
+            metadata_identifier="<metadata_identifier>",
+            http_method="POST"
+        )
+
+    def test_metadata_needed(self):
+        self.assert_authenticated_request_calls(
+            "/<metadata_identifier>/metadata_needed",
+            self.controller.metadata_needed_for,
+            metadata_identifier="<metadata_identifier>",
+        )
+
+    def test_updates(self):
+        self.assert_authenticated_request_calls(
+            "/<metadata_identifier>/updates",
+            self.controller.updates_feed,
+            metadata_identifier="<metadata_identifier>",
+        )
+
+    def test_remove(self):
+        self.assert_authenticated_request_calls(
+            "/<metadata_identifier>/remove",
+            self.controller.remove_items,
+            metadata_identifier="<metadata_identifier>",
+            http_method="POST"
+        )
+
+
+class TestIntegrationClient(RouteTest):
+    """Test routes that end up in the IntegrationClientController."""
+
+    CONTROLLER_NAME = "integration"
+
+    def test_register(self):
+        self.assert_request_calls(
+            "/register",
+            self.controller.register,
             http_method="POST"
         )

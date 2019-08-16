@@ -72,7 +72,6 @@ from controller import (
     HTTP_UNAUTHORIZED,
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
-    authenticated_client_from_request,
 )
 from coverage_provider import (
     IdentifierResolutionCoverageProvider,

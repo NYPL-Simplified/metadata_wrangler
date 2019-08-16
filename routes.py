@@ -9,14 +9,14 @@ from core.app_server import (
 from core.opds import VerboseAnnotator
 from core.util.problem_detail import ProblemDetail
 
-from controller import authenticated_client_from_request
-
 from app import app
 
 def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        client = authenticated_client_from_request(app._db, required=False)
+        client = app.wrangler.authenticated_client_from_request(
+            required=False
+        )
         if isinstance(client, ProblemDetail):
             return client.response
         return f(*args, **kwargs)
@@ -25,7 +25,7 @@ def accepts_auth(f):
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        client = authenticated_client_from_request(app._db)
+        client = app.wrangler.authenticated_client_from_request(required=True)
         if isinstance(client, ProblemDetail):
             return client.response
         return f(*args, **kwargs)

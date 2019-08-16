@@ -24,6 +24,7 @@ from core.app_server import (
     cdn_url_for,
     feed_response,
     load_pagination_from_request,
+    HeartbeatController,
     Pagination,
     URNLookupController as CoreURNLookupController,
 )
@@ -82,67 +83,83 @@ HTTP_INTERNAL_SERVER_ERROR = 500
 
 OPDS_2_MEDIA_TYPE = 'application/opds+json'
 
-def authenticated_client_from_request(_db, required=True):
-    """Look up the IntegrationClient that's making the active
-    request.
+class MetadataWrangler(object):
+    """The metadata wrangler itself.
 
-    This function is used by controller code and by a decorator
-    applied to Flask routes.
-
-    :param required: True if a lack of authentication or bad
-                     authentication is an error condition.
-
-    :return: An IntegrationClient if one could be authenticated;
-             otherwise None (if authentication is not required)
-             or a ProblemDetail.
+    A simple grouping of controllers.
     """
-    # Start with the assumption that there is no authenticated
-    # IntegrationClient.
-    flask.request.authenticated_client = None
 
-    header = flask.request.headers.get('Authorization')
-    if header:
-        if not 'bearer' in header.lower():
-            # No authentication mechanism other than a bearer token
-            # is supported
+    def __init__(self,_db):
+        self._db = _db
+        self.heartbeat = HeartbeatController()
+        self.canonicalization =  CanonicalizationController(self)
+        self.index = IndexController(self)
+        self.urn_lookup = URNLookupController(self)
+        self.catalog = CatalogController(self)
+        self.integration = IntegrationClientController(self)
+
+    def authenticated_client_from_request(self, required=True):
+        """Look up the IntegrationClient that's making the active
+        request.
+
+        This function is used by controller code and by a decorator
+        applied to Flask routes.
+
+        :param required: True if a lack of authentication or bad
+                         authentication is an error condition.
+
+        :return: An IntegrationClient if one could be authenticated;
+                 otherwise None (if authentication is not required)
+                 or a ProblemDetail.
+        """
+        # Start with the assumption that there is no authenticated
+        # IntegrationClient.
+        flask.request.authenticated_client = None
+
+        header = flask.request.headers.get('Authorization')
+        if header:
+            if not 'bearer' in header.lower():
+                # No authentication mechanism other than a bearer token
+                # is supported
+                return INVALID_CREDENTIALS
+
+            # We can hopefully use the provided bearer token to
+            # authenticate an IntegrationClient.
+            try:
+                shared_secret = base64.b64decode(header.split(' ')[1])
+            except TypeError, e:
+                # The bearer token is ill-formed.
+                return INVALID_CREDENTIALS
+            client = IntegrationClient.authenticate(self._db, shared_secret)
+
+            if client:
+                # Success!
+                flask.request.authenticated_client = client
+                return client
+            else:
+                # The bearer token doesn't identify any particular
+                # IntegrationClient.
+                return INVALID_CREDENTIALS
+
+        if required:
+            # No authentication was provided -- unfortuntely,
+            # it's required.
             return INVALID_CREDENTIALS
 
-        # We can hopefully use the provided bearer token to
-        # authenticate an IntegrationClient.
-        try:
-            shared_secret = base64.b64decode(header.split(' ')[1])
-        except TypeError, e:
-            # The bearer token is ill-formed.
-            return INVALID_CREDENTIALS
-        client = IntegrationClient.authenticate(_db, shared_secret)
-
-        if client:
-            # Success!
-            flask.request.authenticated_client = client
-            return client
-        else:
-            # The bearer token doesn't identify any particular
-            # IntegrationClient.
-            return INVALID_CREDENTIALS
-
-    if required:
-        # No authentication was provided -- unfortuntely,
-        # it's required.
-        return INVALID_CREDENTIALS
-
-    # No credentials were provided, but authentication is optional.
-    return None
+        # No credentials were provided, but authentication is optional.
+        return None
 
 
 class Controller(object):
     """A generic controller superclass for the metadata wrangler."""
 
-    def __init__(self, _db):
+    def __init__(self, metadata_wrangler):
         """Generic constructor.
 
         :param _db: A scoped-session database connection.
         """
-        self._db = _db
+        self.metadata_wrangler = metadata_wrangler
+        self._db = metadata_wrangler._db
         self._default_collection_id = None
 
     @property
@@ -175,7 +192,9 @@ class Controller(object):
         """
         # Only an authenticated IntegrationClient has any reason to
         # look at a specific collection.
-        client = authenticated_client_from_request(self._db, authentication_required)
+        client = self.metadata_wrangler.authenticated_client_from_request(
+            self._db, authentication_required
+        )
         if isinstance(client, ProblemDetail):
             return client
 

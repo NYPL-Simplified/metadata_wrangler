@@ -15,33 +15,10 @@ from core.config import Configuration
 from core.log import LogConfiguration
 from core.model import SessionManager
 
-from controller import (
-    CatalogController,
-    CanonicalizationController,
-    IndexController,
-    IntegrationClientController,
-    URNLookupController
-)
-
 app = Flask(__name__)
 app._db = None
 app.debug = None
 babel = Babel(app)
-
-class MetadataWrangler(object):
-    """The metadata wrangler itself.
-
-    A simple grouping of controllers.
-    """
-
-    def __init__(self,_db):
-        self._db = _db
-        self.heartbeat = HeartbeatController()
-        self.canonicalization =  CanonicalizationController(self._db)
-        self.index = IndexController(self._db)
-        self.urn_lookup = URNLookupController(self._db)
-        self.catalog = CatalogController(self._db)
-        self.integration = IntegrationClientController(self._db)
 
 
 @app.before_first_request
