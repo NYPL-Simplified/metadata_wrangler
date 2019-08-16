@@ -42,7 +42,9 @@ class FASTNames(dict):
             # so next time will go more quickly.
             names.write_consolidated_file(consolidated_file)
         b = time.time()
-        logging.info("Done loading %s names in %.1f sec", cls.SUBDIR, (b-a))
+        logging.info(
+            "Loaded %d %s names in %.1f sec", len(names), cls.SUBDIR, (b-a)
+        )
         return names
 
     def load_triples_file(self, path):
