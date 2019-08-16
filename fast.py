@@ -25,6 +25,12 @@ class FASTNames(dict):
     def from_data_directory(cls, data_directory):
         """Load names from a directory that either contains a bunch of
         files in N-Triples format or a single consolidated CSV file.
+
+        The first call will run very slowly because it involves a lot
+        of regular expression work. Once that completes, a CSV file
+        containing consolidated data will be written to
+        `data_directory`. Subsequent calls will read from that file
+        and run much more quickly.
         """
         my_directory = os.path.join(data_directory, cls.SUBDIR)
         consolidated_file = os.path.join(my_directory, "consolidated.csv.gz")
