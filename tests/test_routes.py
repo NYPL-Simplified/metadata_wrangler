@@ -197,7 +197,7 @@ class RouteTest(ControllerTest):
         authenticated request to `url` and verify the results, as with
         assert_request_calls
         """
-        http_method = kwargs.pop('http_method', 'GET')
+        http_method = kwargs.get('http_method', 'GET')
         body, status_code, headers = self.request(url, http_method)
         eq_(401, status_code)
 
@@ -206,7 +206,6 @@ class RouteTest(ControllerTest):
         # again.
         self.mock_wrangler.authenticated = True
         try:
-            kwargs['http_method'] = http_method
             self.assert_request_calls(url, method, *args, **kwargs)
         finally:
             # Un-set authentication for the benefit of future
@@ -258,7 +257,9 @@ class TestCanonicalize(RouteTest):
     CONTROLLER_NAME = "canonicalization"
 
     def test_canonicalize(self):
-        self.assert_request_calls("/canonical-author-name", self.controller.canonicalize_author_name)
+        self.assert_request_calls(
+            "/canonical-author-name", self.controller.canonicalize_author_name
+        )
 
 
 class TestURNLookup(RouteTest):
