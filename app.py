@@ -20,6 +20,7 @@ app._db = None
 app.debug = None
 babel = Babel(app)
 
+from controller import MetadataWrangler
 
 @app.before_first_request
 def initialize_database(autoinitialize=True):

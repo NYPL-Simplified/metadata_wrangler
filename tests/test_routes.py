@@ -34,7 +34,7 @@ class MockMetadataWrangler(object):
             controller_name, MockController(controller_name)
         )
 
-    def authenticated_client_from_request(self, required=True):
+    def authenticated_client_from_request(self, _db, required=True):
         """Mock authenticated_client_from_request based on
         whether this method has .authenticated set.
         """

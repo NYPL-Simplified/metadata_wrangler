@@ -15,7 +15,7 @@ def accepts_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         client = app.wrangler.authenticated_client_from_request(
-            required=False
+            _db=app._db, required=False
         )
         if isinstance(client, ProblemDetail):
             return client.response
@@ -25,7 +25,9 @@ def accepts_auth(f):
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        client = app.wrangler.authenticated_client_from_request(required=True)
+        client = app.wrangler.authenticated_client_from_request(
+            app._db, required=True
+        )
         if isinstance(client, ProblemDetail):
             return client.response
         return f(*args, **kwargs)
