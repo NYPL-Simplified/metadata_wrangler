@@ -60,6 +60,7 @@ from content_cafe import (
     MockContentCafeAPI,
 )
 from controller import (
+    MetadataWrangler,
     CanonicalizationController,
     CatalogController,
     Controller,
@@ -150,20 +151,21 @@ class ControllerTest(DatabaseTest):
             yield c
 
 
-class TestAuthenticatedClientFromRequest(ControllerTest):
-    """Tests of the authenticated_client_from_request function."""
+class TestMetadataWrangler(ControllerTest):
+    """Tests of the MetadataWrangler class."""
 
     @authenticated_request_context
     def test_valid_authentication(self):
         # If the credentials are valid, an IntegrationClient is
         # returned and set to flask.request.authenticated_client.
-        result = authenticated_client_from_request(self._db)
+        result = MetadataWrangler.authenticated_client_from_request(self._db)
         eq_(result, self.client)
         eq_(self.client, flask.request.authenticated_client)
 
     def test_invalid_authentication(self):
         # If the credentials are missing or invalid, but
         # authentication is required, a ProblemDetail is returned.
+        m = MetadataWrangler.authenticated_client_from_request
 
         # Test various invalid authentications.
         invalid_bearer = 'Bearer ' + base64.b64encode('wrong_secret')
@@ -179,7 +181,7 @@ class TestAuthenticatedClientFromRequest(ControllerTest):
         for invalid_auth in invalid:
             with self.app.test_request_context('/', headers=invalid_auth):
                 for required in True, False:
-                    result = authenticated_client_from_request(self._db, required)
+                    result = m(self._db, required)
                     eq_(INVALID_CREDENTIALS, result)
                     eq_(None, flask.request.authenticated_client)
 
@@ -187,15 +189,11 @@ class TestAuthenticatedClientFromRequest(ControllerTest):
         # authentication is required. If authentication is not
         # required, authenticated_client_from_request returns None.
         with self.app.test_request_context('/', headers={}):
-            result = authenticated_client_from_request(
-                self._db, required=True
-            )
+            result = m(self._db, required=True)
             eq_(INVALID_CREDENTIALS, result)
             eq_(None, flask.request.authenticated_client)
 
-            result = authenticated_client_from_request(
-                self._db, required=False
-            )
+            result = m(self._db, required=False)
             eq_(None, result)
             eq_(None, flask.request.authenticated_client)
 

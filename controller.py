@@ -92,13 +92,14 @@ class MetadataWrangler(object):
     def __init__(self,_db):
         self._db = _db
         self.heartbeat = HeartbeatController()
-        self.canonicalization =  CanonicalizationController(self)
-        self.index = IndexController(self)
-        self.urn_lookup = URNLookupController(self)
-        self.catalog = CatalogController(self)
-        self.integration = IntegrationClientController(self)
+        self.canonicalization =  CanonicalizationController(self._db)
+        self.index = IndexController(self._db)
+        self.urn_lookup = URNLookupController(self._db)
+        self.catalog = CatalogController(self._db)
+        self.integration = IntegrationClientController(self._db)
 
-    def authenticated_client_from_request(self, required=True):
+    @classmethod
+    def authenticated_client_from_request(cls, _db, required=True):
         """Look up the IntegrationClient that's making the active
         request.
 
@@ -130,7 +131,7 @@ class MetadataWrangler(object):
             except TypeError, e:
                 # The bearer token is ill-formed.
                 return INVALID_CREDENTIALS
-            client = IntegrationClient.authenticate(self._db, shared_secret)
+            client = IntegrationClient.authenticate(_db, shared_secret)
 
             if client:
                 # Success!
@@ -153,13 +154,12 @@ class MetadataWrangler(object):
 class Controller(object):
     """A generic controller superclass for the metadata wrangler."""
 
-    def __init__(self, metadata_wrangler):
+    def __init__(self, _db):
         """Generic constructor.
 
         :param _db: A scoped-session database connection.
         """
-        self.metadata_wrangler = metadata_wrangler
-        self._db = metadata_wrangler._db
+        self._db = _db
         self._default_collection_id = None
 
     @property
@@ -192,7 +192,7 @@ class Controller(object):
         """
         # Only an authenticated IntegrationClient has any reason to
         # look at a specific collection.
-        client = self.metadata_wrangler.authenticated_client_from_request(
+        client = MetadataWrangler.authenticated_client_from_request(
             self._db, authentication_required
         )
         if isinstance(client, ProblemDetail):
