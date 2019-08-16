@@ -202,7 +202,7 @@ class RouteTest(ControllerTest):
         eq_(401, status_code)
 
         # Set a variable so that our mocked
-        # _authenticated_patron_from_request will succeed, and try
+        # authenticated_client_from_request will succeed, and try
         # again.
         self.mock_wrangler.authenticated = True
         try:
