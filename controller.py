@@ -971,7 +971,7 @@ class URNLookupController(CoreURNLookupController, Controller):
             collection = self.default_collection
             limit = 1
 
-        resolve_now = flask.request.args.get("resolve_now") == "True"
+        resolve_now = flask.request.args.get("resolve_now", None) is not None
         if resolve_now:
             # You can't force-resolve more than one Identifier at a time.
             limit = 1
