@@ -1,11 +1,14 @@
+from contextlib import contextmanager
 import gzip
 import csv
+from io import BytesIO
 import logging
 import os
 import re
 from nose.tools import set_trace
 import time
-logging.getLogger().setLevel("DEBUG")
+import zipfile
+
 class FASTNames(dict):
 
     SUBDIR = "FAST"
@@ -27,9 +30,7 @@ class FASTNames(dict):
         else:
             # We have to go through a bunch of N-Triples files.
             names = cls()
-            for i in os.listdir(my_directory):
-                if not i.endswith(".nt.gz") and not i.endswith(".nt"):
-                    continue
+            for i in sorted(os.listdir(my_directory)):
                 path = os.path.join(my_directory, i)
                 logging.info("Loading %s names from %s", cls.SUBDIR, path)
                 names.load_triples_file(path)
@@ -46,15 +47,41 @@ class FASTNames(dict):
 
     def load_triples_file(self, path):
         """Load classifications from an N-Triples file."""
-        fh = gzip.open(path, 'rb')
+        if path.endswith(".nt.gz"):
+            # This is a single GZipped N-Triples file.
+            self.load_triples_filehandle(gzip.open(path, 'rb'))
+        elif path.endswith(".nt.zip"):
+            # This is a ZIP file containing one or more (probably just
+            # one) N-Triples files. Load each one the zip.
+            for fh in self.triples_filehandles_from_zip(path):
+                self.load_triples_filehandle(fh)
+        else:
+            # This is some other kind of file. Do nothing.
+            pass
+
+    def triples_filehandles_from_zip(self, path):
+        """Open up `path` as a ZIP file and find one or more (probably just
+        one) N-Triples files inside.
+
+        :yield: A BytesIO for each N-Triples file in the ZIP.
+        """
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                if name.endswith(".nt"):
+                    yield BytesIO(archive.read(name))
+
+    def load_triples_filehandle(self, fh):
+        """Load a number of N-Triples from a filehandle, and
+        keep track of any identifier-name mappings found.
+        """
         for triple in fh:
             identifier, name = self.extract_identifier_and_name(triple)
             if identifier and name:
                 self[identifier] = name
 
     def extract_identifier_and_name(self, triple):
-        """Extract an identifier and a name from
-        a single line of an N-Triples file.
+        """Extract an identifier and a name from a single line of an N-Triples
+        file.
         """
         triple = triple.strip()
         g = self.triple_re.search(triple)
@@ -73,19 +100,27 @@ class FASTNames(dict):
         names = cls()
         fh = gzip.open(path, 'rb')
         reader = csv.reader(fh)
-        for k, v in reader:
-            names[k] = v
+        for identifier, name in reader:
+            names[identifier] = name
         return names
 
     def write_consolidated_file(self, path):
         """Write a CSV file containing information consolidated
         from several N-Triples files.
         """
-        output = gzip.open(path, "wb")
-        writer = csv.writer(output)
-        for k,v in self.items():
-            writer.writerow([k, v])
-        output.close()
+        with self.consolidated_output_filehandle(path) as output:
+            writer = csv.writer(output)
+            for k,v in self.items():
+                writer.writerow([k, v])
+
+    @contextmanager
+    def consolidated_output_filehandle(self, path):
+        """Open a write filehandle to the given path.
+
+        This method is designed to be mocked in unit tests.
+        """
+        with gzip.open(path, "wb") as out:
+            yield out
 
 
 class LCSHNames(FASTNames):
