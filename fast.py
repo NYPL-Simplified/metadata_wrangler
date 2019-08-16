@@ -1,3 +1,9 @@
+"""Load English-language names for FAST and LCSH subject classifications
+from N-Triple files acquired from data dumps.
+
+This is how we know, e.g. that FAST classification 1750175 means
+"Short stories, American".
+"""
 from contextlib import contextmanager
 import gzip
 import csv
