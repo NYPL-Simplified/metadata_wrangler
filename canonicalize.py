@@ -52,7 +52,6 @@ class AuthorNameCanonicalizer(object):
         "Bill O'Reilly with Martin Dugard".
 
         TODO: Cases we can't handle:
-         van Damme, Jean Claude
          Madonna, Cher
          Ryan and Josh Shook
         """
@@ -127,17 +126,57 @@ class AuthorNameCanonicalizer(object):
         shortened_name = self.primary_author_name(display_name)
         return display_name_to_sort_name(shortened_name)
 
-
     def _canonicalize(self, identifier, display_name):
         if not ' ' in display_name:
             # This is a one-named entity, like 'Cher' or 'Various'.
             # The display name and sort name are identical.
             return display_name
 
-        # The best outcome would be that we already have a Contributor
-        # with this exact display name and a known sort name.
         self.log.debug("Attempting to canonicalize %s", display_name)
 
+        # The best outcome would be that we already have a Contributor
+        # with this exact display name and a known sort name. Then we
+        # can reuse the information.
+        sort_name = self.sort_name_from_database(
+            identifier, display_name
+        )
+        if sort_name:
+            return sort_name
+
+        # Looking in the database didn't work. Let's ask OCLC
+        # Linked Data about this ISBN and see if it gives us an
+        # author.
+        uris = None
+        if identifier:
+            sort_name, uris = self.sort_name_from_oclc_linked_data(
+                identifier, display_name)
+        if sort_name:
+            return sort_name
+
+        # Nope. If OCLC Linked Data gave us any VIAF IDs, look them up
+        # and see if we can get a sort name out of them.
+        if uris:
+            for uri in uris:
+                m = self.VIAF_ID.search(uri)
+                if m:
+                    viaf_id = m.groups()[0]
+                    contributor_data = self.viaf.lookup_by_viaf(
+                        viaf_id, working_display_name=display_name
+                    )[0]
+                    if contributor_data.sort_name:
+                        return sort_name
+
+        # Nope. If we were given a display name, let's ask VIAF about it
+        # and see what it says.
+        if display_name:
+            sort_name = self.sort_name_from_viaf(display_name, known_titles)
+
+        return sort_name
+
+    def sort_name_from_database(self, identifier, display_name):
+        """Try to find an author sort name for this book from
+        data already in the database.
+        """
         # can we infer any titles we know this person wrote?
         known_titles = []
         if identifier:
@@ -177,37 +216,6 @@ class AuthorNameCanonicalizer(object):
                 display_name, sort_name
             )
             return sort_name
-
-        # Looking in the database didn't work. Let's ask OCLC
-        # Linked Data about this ISBN and see if it gives us an
-        # author.
-        uris = None
-        if identifier:
-            sort_name, uris = self.sort_name_from_oclc_linked_data(
-                identifier, display_name)
-        if sort_name:
-            return sort_name
-
-        # Nope. If OCLC Linked Data gave us any VIAF IDs, look them up
-        # and see if we can get a sort name out of them.
-        if uris:
-            for uri in uris:
-                m = self.VIAF_ID.search(uri)
-                if m:
-                    viaf_id = m.groups()[0]
-                    contributor_data = self.viaf.lookup_by_viaf(
-                        viaf_id, working_display_name=display_name
-                    )[0]
-                    if contributor_data.sort_name:
-                        return sort_name
-
-        # Nope. If we were given a display name, let's ask VIAF about it
-        # and see what it says.
-        if display_name:
-            sort_name = self.sort_name_from_viaf(display_name, known_titles)
-
-        return sort_name
-
 
     def sort_name_from_oclc_linked_data(
             self, identifier, display_name):
