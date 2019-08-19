@@ -9,21 +9,12 @@ from sqlalchemy.orm import (
     aliased,
 )
 
-from fast import (
-    FASTNames,
-    LCSHNames,
-)
-
 from core.config import Configuration
-from core.overdrive import OverdriveBibliographicCoverageProvider
 from core.classifier import Classifier
-from core.metadata_layer import ReplacementPolicy
 from core.monitor import (
-    IdentifierResolutionMonitor as CoreIdentifierResolutionMonitor,
-    SubjectAssignmentMonitor,
+    SubjectSweepMonitor,
     IdentifierSweepMonitor,
     WorkSweepMonitor,
-    ResolutionFailed,
 )
 from core.model import (
     DataSource,
@@ -37,23 +28,32 @@ from core.model import (
 from content_cafe import ContentCafeAPI
 
 
-class FASTAwareSubjectAssignmentMonitor(SubjectAssignmentMonitor):
+class FASTNameAssignmentMonitor(SubjectSweepMonitor):
 
-    def __init__(self, _db):
-        data_dir = Configuration.data_directory()
-        self.fast = FASTNames.from_data_directory(data_dir)
-        self.lcsh = LCSHNames.from_data_directory(data_dir)
-        self.fast = self.lcsh = {}
-        super(FASTAwareSubjectAssignmentMonitor, self).__init__(_db)
+    SERVICE_NAME = "FAST/LCSH Name Assignment Monitor"
 
-    def process_batch(self, batch):
-        for subject in batch:
-            if subject.type == Subject.FAST and subject.identifier:
-                subject.name = self.fast.get(subject.identifier, subject.name)
-            elif subject.type == Subject.LCSH and subject.identifier:
-                subject.name = self.lcsh.get(subject.identifier, subject.name)
-        super(FASTAwareSubjectAssignmentMonitor, self).process_batch(batch)
+    def __init__(self, _db, collection=None, fast=None, lcsh=None):
+        self.fast = fast or dict()
+        self.lcsh = lcsh or dict()
+        super(FASTNameAssignmentMonitor, self).__init__(_db)
 
+    def item_query(self):
+        """Find only FAST or LCSH subjects with identifiers but no names."""
+        qu = super(FASTNameAssignmentMonitor, self).item_query()
+        qu = qu.filter(Subject.type.in_([Subject.FAST, Subject.LCSH]))
+        qu = qu.filter(Subject.name == None)
+        qu = qu.filter(Subject.identifier != None)
+        return qu
+
+    def process_item(self, subject):
+        if not subject.identifier:
+            return
+        if subject.name:
+            return
+        if subject.type == Subject.FAST:
+            subject.name = self.fast.get(subject.identifier)
+        elif subject.type == Subject.LCSH:
+            subject.name = self.lcsh.get(subject.identifier)
 
 class ContentCafeDemandMeasurementSweep(IdentifierSweepMonitor):
     """Ensure that every ISBN directly associated with a commercial
