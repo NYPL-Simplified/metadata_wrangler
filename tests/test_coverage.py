@@ -15,8 +15,11 @@ from core.s3 import S3Uploader
 from core.coverage import CollectionCoverageProvider
 from core.overdrive import MockOverdriveAPI
 
-from content_cafe import ContentCafeCoverageProvider
-from coverage import IdentifierResolutionCoverageProvider
+from content_cafe import (
+    ContentCafeCoverageProvider,
+    MockContentCafeAPI,
+)
+from coverage_provider import IdentifierResolutionCoverageProvider
 from integration_client import IntegrationClientCoverImageCoverageProvider
 from oclc.classify import IdentifierLookupCoverageProvider
 from overdrive import OverdriveBibliographicCoverageProvider
@@ -142,7 +145,14 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         )
 
         # The OCLC provider was already configured; now there is also a ContentCafeCoverageProvider.
-        provider = IdentifierResolutionCoverageProvider(self._default_collection)
+
+        # Instantiating a real ContentCafeAPI will make an HTTP
+        # requests to get a WSDL file, and we don't want that in a
+        # unit test.
+        provider_kwargs = {
+            ContentCafeCoverageProvider : dict(api=MockContentCafeAPI())
+        }
+        provider = IdentifierResolutionCoverageProvider(self._default_collection, provider_kwargs=provider_kwargs)
         eq_(len(provider.providers), 2)
         [content_cafe] = [x for x in provider.providers if isinstance(x, ContentCafeCoverageProvider)]
         assert content_cafe

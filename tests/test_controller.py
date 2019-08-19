@@ -1,4 +1,5 @@
 # encoding: utf-8
+from contextlib import contextmanager
 import base64 as stdlib_base64
 import os
 import feedparser
@@ -13,6 +14,9 @@ from io import BytesIO
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt
+
+import flask
+
 from lxml import etree
 from nose.tools import set_trace, eq_
 
@@ -56,9 +60,12 @@ from content_cafe import (
     MockContentCafeAPI,
 )
 from controller import (
+    MetadataWrangler,
     CanonicalizationController,
     CatalogController,
+    Controller,
     IndexController,
+    IntegrationClientController,
     URNLookupController,
     HTTP_OK,
     HTTP_CREATED,
@@ -66,10 +73,8 @@ from controller import (
     HTTP_UNAUTHORIZED,
     HTTP_NOT_FOUND,
     HTTP_INTERNAL_SERVER_ERROR,
-    authenticated_client_from_request,
-    collection_from_details,
 )
-from coverage import (
+from coverage_provider import (
     IdentifierResolutionCoverageProvider,
 )
 from integration_client import IntegrationClientCoverImageCoverageProvider
@@ -80,6 +85,39 @@ from overdrive import (
 from problem_details import *
 from viaf import MockVIAFClient
 
+def unauthenticated_request_context(f):
+    """A decorator for a test that runs in a simple request context
+    with no authentication.
+
+    This is useful if a test runs in one unauthenticated request that
+    does nothing special.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        from app import app
+        with app.test_request_context('/'):
+            return f(*args, **kwargs)
+    return decorated
+
+def authenticated_request_context(f):
+    """A decorator for a test that runs in a simple request context
+    with valid authentication.
+
+    This is useful if a test runs in one authenticated request that
+    does nothing special.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        from app import app
+
+        secret = args[0].client.shared_secret.encode('utf8')
+        valid_auth = 'Bearer '+ base64.urlsafe_b64encode(secret)
+        headers = { 'Authorization' : valid_auth }
+        with app.test_request_context('/', headers=headers):
+            return f(*args, **kwargs)
+    return decorated
+
+
 class ControllerTest(DatabaseTest):
 
     def setup(self):
@@ -88,90 +126,194 @@ class ControllerTest(DatabaseTest):
         from app import app
         self.app = app
 
+        # Set up an IntegrationClient and a sample set of HTTP headers
+        # for authenticating as that client.
         self.client = self._integration_client()
-        valid_auth = 'Bearer ' + base64.b64encode(self.client.shared_secret)
-        self.valid_auth = dict(Authorization=valid_auth)
+        self.valid_auth = 'Bearer ' + base64.b64encode(self.client.shared_secret)
 
     def sample_data(self, filename):
         return sample_data(filename, 'controller')
 
+    @contextmanager
+    def authenticated_request(self, *args, **kwargs):
+        """Set up a test request context with an Authentication
+        header that identifies the IntegrationClient initialized in
+        setup().
 
-class TestIntegrationClientAuthentication(ControllerTest):
+        This is useful when you need something more complicated than
+        authenticated_request_context.
+        """
+        headers = kwargs.pop("headers", {})
+        headers['Authorization'] = self.valid_auth
+        with self.app.test_request_context(
+            *args, headers=headers, **kwargs
+        ) as c:
+            yield c
 
-    def test_authenticated_client_required(self):
-        # Returns catalog if authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
-            result = authenticated_client_from_request(self._db)
-            eq_(result, self.client)
 
-        # Returns error if authentication is invalid.
-        invalid_auth = 'Bearer ' + base64.b64encode('wrong_secret')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = authenticated_client_from_request(self._db)
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
+class TestMetadataWrangler(ControllerTest):
+    """Tests of the MetadataWrangler class."""
 
-        # Returns errors without authentication.
-        with self.app.test_request_context('/'):
-            result = authenticated_client_from_request(self._db)
-            eq_(True, isinstance(result, ProblemDetail))
+    @authenticated_request_context
+    def test_valid_authentication(self):
+        # If the credentials are valid, an IntegrationClient is
+        # returned and set to flask.request.authenticated_client.
+        result = MetadataWrangler.authenticated_client_from_request(self._db)
+        eq_(result, self.client)
+        eq_(self.client, flask.request.authenticated_client)
 
-    def test_authenticated_client_optional(self):
-        # Returns catalog of authentication is valid.
-        with self.app.test_request_context('/', headers=self.valid_auth):
-            result = authenticated_client_from_request(self._db, required=False)
-            eq_(result, self.client)
+    def test_invalid_authentication(self):
+        # If the credentials are missing or invalid, but
+        # authentication is required, a ProblemDetail is returned.
+        m = MetadataWrangler.authenticated_client_from_request
 
-        # Returns error if attempted authentication is invalid.
-        invalid_auth = 'Basic ' + base64.b64encode('abc:defg')
-        with self.app.test_request_context('/',
-                headers=dict(Authorization=invalid_auth)):
-            result = authenticated_client_from_request(self._db, required=False)
-            eq_(True, isinstance(result, ProblemDetail))
-            eq_(HTTP_UNAUTHORIZED, result.status_code)
+        # Test various invalid authentications.
+        invalid_bearer = 'Bearer ' + base64.b64encode('wrong_secret')
+        invalid_basic = 'Basic ' + base64.b64encode('abc:defg')
+        not_base64_encoded = 'Bearer ' + self.client.shared_secret
+        invalid = [
+            dict(Authorization=x)
+            for x in invalid_bearer, invalid_basic, not_base64_encoded
+        ]
 
-        # Returns none if no authentication.
-        with self.app.test_request_context('/'):
-            result = authenticated_client_from_request(self._db, required=False)
+        # Invalid credentials result in INVALID_CREDENTIALS whether or
+        # not authentication is required.
+        for invalid_auth in invalid:
+            with self.app.test_request_context('/', headers=invalid_auth):
+                for required in True, False:
+                    result = m(self._db, required)
+                    eq_(INVALID_CREDENTIALS, result)
+                    eq_(None, flask.request.authenticated_client)
+
+        # Missing credentials result in INVALID_CREDENTIALS only if
+        # authentication is required. If authentication is not
+        # required, authenticated_client_from_request returns None.
+        with self.app.test_request_context('/', headers={}):
+            result = m(self._db, required=True)
+            eq_(INVALID_CREDENTIALS, result)
+            eq_(None, flask.request.authenticated_client)
+
+            result = m(self._db, required=False)
             eq_(None, result)
+            eq_(None, flask.request.authenticated_client)
 
 
-class TestCollectionHandling(ControllerTest):
+class TestController(ControllerTest):
 
-    def test_collection_from_details(self):
-        mirrored_collection = self._collection(external_account_id=self._url)
-        details = mirrored_collection.metadata_identifier
+    def setup(self):
+        super(TestController, self).setup()
+        self.controller = Controller(self._db)
+
+    def test_default_collection(self):
+        # The default collection is the "unaffiliated" collection associated with
+        # the IdentifierResolutionCoverageProvider.
+        unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
+        eq_(unaffiliated, self.controller.default_collection)
+
+    def test_load_collection_success(self):
+        # Over on a circulation manager, we have an Overdrive collection.
+        remote_collection = self._collection(
+            external_account_id=self._str,
+            protocol=ExternalIntegration.OVERDRIVE
+        )
+        # A metadata_identifier can be calculated for it.
+        metadata_identifier = remote_collection.metadata_identifier
+
+        # Let's look up the corresponding Collection on this metadata
+        # wrangler.
+        url = '/?data_source=Some%20data%20source'
+        with self.authenticated_request(url):
+
+            # A new collection is created, named after the metadata identifier.
+            collection = self.controller.load_collection(metadata_identifier)
+            eq_(collection.name, remote_collection.metadata_identifier)
+
+            # The metadata wrangler collection has the same protocol as the
+            # one on the circulation manager.
+            eq_(remote_collection.protocol, collection.protocol)
+
+            # But it has no external_account_id, because it uses the
+            # Overdrive protocol, and we only care when the protocol
+            # is "OPDS Import".
+            eq_(None, collection.external_account_id)
+
+            # Its data_source is Overdrive -- that's where Overdrive
+            # collections are from -- not the string we passed in as
+            # the data_source request parameter.
+            eq_(DataSource.OVERDRIVE, collection.data_source.name)
+
+            # This is a brand new collection. It's not
+            # remote_collection. That's because remote_collection
+            # isn't _named_ after its metadata identifier. This isn't
+            # ideal, but it doesn't matter -- remember that
+            # remote_collection is 'really' on another server, a
+            # circulation manager.
+            assert remote_collection != collection
+
+        with self.authenticated_request(url):
+            # Look up the metadata identifier again, and the previously
+            # created collection is reused.
+            collection2 = self.controller.load_collection(metadata_identifier)
+            eq_(collection2, collection)
+
+        with self.authenticated_request(url):
+            # Now try to look up an OPDS Import collection -- those are
+            # handled a little differently.
+            remote_collection = self._collection(
+                external_account_id=self._url,
+                protocol=ExternalIntegration.OPDS_IMPORT
+            )
+            metadata_identifier = remote_collection.metadata_identifier
+
+            collection = self.controller.load_collection(metadata_identifier)
+
+        # Here, external_account_id is set to the value found on the
+        # remote collection, and data_source is set to a new DataSource based on
+        # the argument passed through the URL.
+        eq_(metadata_identifier, collection.name)
+        eq_(ExternalIntegration.OPDS_IMPORT, collection.protocol)
+        eq_(remote_collection.external_account_id, collection.external_account_id)
+        eq_("Some data source", collection.data_source.name)
+
+    @unauthenticated_request_context
+    def test_load_collection_unauthenticated(self):
+        # If no authentication is provided, then you can't look up a
+        # specific collection.
+
+        remote_collection = self._collection(
+            external_account_id=self._str,
+            protocol=ExternalIntegration.OVERDRIVE
+        )
+        metadata_identifier = remote_collection.metadata_identifier
+
+        # load_collection() will return a ProblemDetail if called with
+        # authentication_required=True, and the default collection if
+        # called with authentication_required=False.
+        collection = self.controller.load_collection(metadata_identifier)
+        eq_(INVALID_CREDENTIALS, collection)
+
+        collection = self.controller.load_collection(
+            metadata_identifier, authentication_required=False
+        )
+        eq_(self.controller.default_collection, collection)
+
+    @authenticated_request_context
+    def test_load_collection_failure(self):
+        # If you don't provide a valid metadata identifier, you get a
+        # ProblemDetail.
 
         collection = None
-        with self.app.test_request_context('/'):
-            # Without a information, nothing is returned.
-            result = collection_from_details(self._db, None, None)
-            eq_(None, result)
 
-            result = collection_from_details(self._db, self.client, None)
-            eq_(None, result)
+        # No input.
+        result = self.controller.load_collection("")
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_("No metadata identifier provided.", result.detail)
 
-            result = collection_from_details(self._db, None, details)
-            eq_(None, result)
-
-            # It creates a collection if it doesn't exist.
-            result = collection_from_details(self._db, self.client, details)
-            assert isinstance(result, Collection)
-            collection = result
-
-        # The DataSource can also be set via arguments.
-        eq_(None, collection.data_source)
-        # TODO PYTHON3 this will be urllib.parse.quote
-        source = 'data_source=%s' % urllib.quote(DataSource.OA_CONTENT_SERVER)
-        with self.app.test_request_context('/?%s' % source):
-            result = collection_from_details(self._db, self.client, details)
-
-            # The previously-created collection is returned.
-            eq_(collection, result)
-
-            # It has a DataSource.
-            eq_(DataSource.OA_CONTENT_SERVER, collection.data_source.name)
+        # Invalid input.
+        result = self.controller.load_collection("not a real metadata identifier")
+        eq_(INVALID_INPUT.uri, result.uri)
+        eq_("Metadata identifier 'not a real metadata identifier' is invalid: Incorrect padding",
+            result.detail)
 
 
 class TestIndexController(ControllerTest):
@@ -224,7 +366,6 @@ class TestCatalogController(ControllerTest):
     def setup(self):
         super(TestCatalogController, self).setup()
         self.controller = CatalogController(self._db)
-        self.http = DummyHTTPClient()
 
         # The collection as it exists on the circulation manager.
         remote_collection = self._collection(
@@ -236,8 +377,14 @@ class TestCatalogController(ControllerTest):
             protocol=remote_collection.protocol
         )
 
+        # Create two works to use in tests.
         self.work1 = self._work(with_open_access_download=True)
         self.work2 = self._work(with_open_access_download=True)
+
+        # Clear the cached OPDS entries for one of these works -- this
+        # verifies that OPDS entries are created when needed.
+        self.work1.verbose_opds_entry = None
+        self.work1.simple_opds_entry = None
 
     @classmethod
     def get_root(cls, raw_feed):
@@ -271,20 +418,19 @@ class TestCatalogController(ControllerTest):
         eq_(str(status_code), cls.xml_value(message, 'simplified:status_code'))
         eq_(description, cls.xml_value(message, 'schema:description'))
 
+    @unauthenticated_request_context
     def test_collection_feed_url(self):
         # A basic url can be created with the collection details.
-        with self.app.test_request_context('/'):
-            result = self.controller.collection_feed_url(
-                'add', self.collection
-            )
+        result = self.controller.collection_feed_url(
+            'add', self.collection
+        )
         assert result.endswith('/%s/add' % self.collection.name)
 
         # A url with parameters includes them in the url.
-        with self.app.test_request_context('/'):
-            result = self.controller.collection_feed_url(
-                'add', self.collection, urn=['bananas', 'lol'],
-                last_update_time='what'
-            )
+        result = self.controller.collection_feed_url(
+            'add', self.collection, urn=['bananas', 'lol'],
+            last_update_time='what'
+        )
         assert '/%s/add?' % self.collection.name in result
         assert 'urn=bananas' in result
         assert 'urn=lol' in result
@@ -292,10 +438,9 @@ class TestCatalogController(ControllerTest):
 
         # If a Pagination object is provided, its details are included.
         page = Pagination(offset=3, size=25)
-        with self.app.test_request_context('/'):
-            result = self.controller.collection_feed_url(
-                'remove', self.collection, page=page, urn='unicorn',
-            )
+        result = self.controller.collection_feed_url(
+            'remove', self.collection, page=page, urn='unicorn',
+        )
         assert '/%s/remove?' % self.collection.name in result
         assert 'urn=unicorn' in result
         assert 'after=3' in result
@@ -350,9 +495,14 @@ class TestCatalogController(ControllerTest):
         identifier = self.work1.license_pools[0].identifier
         self.collection.catalog_identifier(identifier)
 
-        # Ask for updates as though we had no information about what's in
-        # our catalog.
-        with self.app.test_request_context('/', headers=self.valid_auth):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.updates_feed(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
+        # Ask for updates as though the circulation manager had no
+        # information about what's in its catalog.
+        with self.authenticated_request('/'):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
             eq_(HTTP_OK, response.status_code)
@@ -379,9 +529,8 @@ class TestCatalogController(ControllerTest):
 
         # If we ask for updates since before work1 was created,
         # we'll get work1.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -396,9 +545,8 @@ class TestCatalogController(ControllerTest):
 
         # If we ask for updates from a time later than work1 was created,
         # we'll get no results.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s' % tomorrow_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -408,9 +556,8 @@ class TestCatalogController(ControllerTest):
         # The feed can be paginated.
         identifier2 = self.work2.license_pools[0].identifier
         self.collection.catalog_identifier(identifier2)
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s&size=1' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -421,9 +568,8 @@ class TestCatalogController(ControllerTest):
             eq_(identifier.urn, entry['id'])
 
         # Page two contains work2.
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?last_update_time=%s&size=1&after=1' % yesterday_timestamp,
-                headers=self.valid_auth
         ):
             response = self.controller.updates_feed(self.collection.name)
             eq_(HTTP_OK, response.status_code)
@@ -434,17 +580,14 @@ class TestCatalogController(ControllerTest):
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
             self.collection.catalog_identifier(work.license_pools[0].identifier)
-        with self.app.test_request_context('/?size=1',
-            headers=self.valid_auth):
+        with self.authenticated_request('/?size=1'):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'next' for link in links])
             assert not any([link['rel'] == 'previous' for link in links])
             assert not any([link['rel'] == 'first' for link in links])
 
-        with self.app.test_request_context('/?size=1&after=1',
-            headers=self.valid_auth
-        ):
+        with self.authenticated_request('/?size=1&after=1'):
             response = self.controller.updates_feed(self.collection.name)
             links = feedparser.parse(response.get_data())['feed']['links']
             assert any([link['rel'] == 'previous' for link in links])
@@ -455,9 +598,7 @@ class TestCatalogController(ControllerTest):
         """Passing in a malformed timestamp for last_update_time
         results in a problem detail document.
         """
-        with self.app.test_request_context(
-                '/?last_update_time=wrong format', headers=self.valid_auth
-        ):
+        with self.authenticated_request('/?last_update_time=wrong format'):
             response = self.controller.updates_feed(self.collection.name)
             assert isinstance(response, ProblemDetail)
             eq_(400, response.status_code)
@@ -472,10 +613,15 @@ class TestCatalogController(ControllerTest):
 
         other_collection = self._collection()
 
-        with self.app.test_request_context(
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.add_items(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s&urn=%s' % (
                 catalogued_id.urn, uncatalogued_id.urn, invalid_urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             response = self.controller.add_items(self.collection.name)
 
@@ -504,6 +650,11 @@ class TestCatalogController(ControllerTest):
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
 
     def test_add_with_metadata(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.add_with_metadata(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         # Pretend this OPDS came from a circulation manager.
         base_path = os.path.split(__file__)[0]
         resource_path = os.path.join(base_path, "files", "opds")
@@ -517,7 +668,7 @@ class TestCatalogController(ControllerTest):
         # And here's some OPDS with an invalid identifier.
         invalid_opds = "<feed><entry><id>invalid</id></entry></feed>"
 
-        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+        with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
         eq_(HTTP_OK, response.status_code)
@@ -551,7 +702,7 @@ class TestCatalogController(ControllerTest):
         assert isinstance(data_source, DataSource)
 
         # If we make the same request again, the identifier stays in the catalog.
-        with self.app.test_request_context(headers=self.valid_auth, data=opds):
+        with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
         eq_(HTTP_OK, response.status_code)
@@ -568,7 +719,7 @@ class TestCatalogController(ControllerTest):
         self.assert_message(catalogued, identifier, '200', 'Already in catalog')
 
         # The invalid identifier returns a 400 error message.
-        with self.app.test_request_context(headers=self.valid_auth, data=invalid_opds):
+        with self.authenticated_request(data=invalid_opds):
             response = self.controller.add_with_metadata(self.collection.name)
         eq_(HTTP_OK, response.status_code)
 
@@ -579,6 +730,11 @@ class TestCatalogController(ControllerTest):
         )
 
     def test_metadata_needed_for(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.metadata_needed_for(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         # A regular schmegular identifier: untouched, pure.
         pure_id = self._identifier()
 
@@ -621,16 +777,21 @@ class TestCatalogController(ControllerTest):
             metadata_already_id,
         ])
 
-        with self.app.test_request_context(headers=self.valid_auth):
+        with self.authenticated_request():
             response = self.controller.metadata_needed_for(self.collection.name)
 
-        m = messages = self.get_messages(response.get_data())
+        [m] = self.get_messages(response.get_data())
 
         # Only the failing identifier that doesn't have metadata submitted yet
         # is in the feed.
         self.assert_message(m, unresolved_id, 202, 'Metadata needed.')
 
     def test_remove_items(self):
+        # Unauthenticated requests are rejected.
+        with self.app.test_request_context('/'):
+            response = self.controller.remove_items(self.collection.name)
+            eq_(INVALID_CREDENTIALS, response)
+
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
         unaffected_id = self._identifier()
@@ -642,9 +803,9 @@ class TestCatalogController(ControllerTest):
         other_collection.catalog_identifier(catalogued_id)
         other_collection.catalog_identifier(uncatalogued_id)
 
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s' % (catalogued_id.urn, uncatalogued_id.urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
@@ -680,9 +841,9 @@ class TestCatalogController(ControllerTest):
 
         # Try again, this time including an invalid URN.
         self.collection.catalog_identifier(catalogued_id)
-        with self.app.test_request_context(
+        with self.authenticated_request(
                 '/?urn=%s&urn=%s' % (invalid_urn, catalogued_id.urn),
-                method='POST', headers=self.valid_auth
+                method='POST'
         ):
             response = self.controller.remove_items(self.collection.name)
             eq_(HTTP_OK, int(response.status_code))
@@ -700,6 +861,15 @@ class TestCatalogController(ControllerTest):
 
         # The catalogued identifier is still removed.
         assert catalogued_id not in self.collection.catalog
+
+
+class TestIntegrationClientController(ControllerTest):
+
+    def setup(self):
+        super(TestIntegrationClientController, self).setup()
+        self.controller = IntegrationClientController(self._db)
+
+        self.http = DummyHTTPClient()
 
     def create_register_request_args(self, url, token=None):
         data = dict(url=url)
@@ -1009,26 +1179,6 @@ class TestURNLookupController(ControllerTest):
         )
         self.source = DataSource.lookup(self._db, DataSource.INTERNAL_PROCESSING)
 
-    def basic_request_context(f):
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            from app import app
-            with app.test_request_context('/'):
-                return f(*args, **kwargs)
-        return decorated
-
-    def authenticated_request_context(f):
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            from app import app
-
-            secret = args[0].client.shared_secret.encode('utf8')
-            valid_auth = 'Bearer '+ base64.urlsafe_b64encode(secret)
-            headers = { 'Authorization' : valid_auth }
-            with app.test_request_context('/', headers=headers):
-                return f(*args, **kwargs)
-        return decorated
-
     def authenticated_request_context_resolve_now(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -1067,7 +1217,7 @@ class TestURNLookupController(ControllerTest):
         urn = identifier.urn.replace('changeme', 'abc-123-xyz')
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1109,7 +1259,7 @@ class TestURNLookupController(ControllerTest):
 
         # Processing the URN a second time will give the same result.
         self.controller.precomposed_entries = []
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1123,7 +1273,7 @@ class TestURNLookupController(ControllerTest):
         urn = self.ISBN_URN
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
             URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
@@ -1143,10 +1293,10 @@ class TestURNLookupController(ControllerTest):
 
     @authenticated_request_context_resolve_now
     def test_process_urn_immediate_resolution_success(self):
-        """A start-to-finish test showing immediate and complete
-        resolution of an Overdrive identifier from within
-        this controller.
-        """
+        # A start-to-finish test showing immediate and complete
+        # resolution of an Overdrive identifier from within
+        # this controller.
+
         # Create an Overdrive URN, then modify it to the one the mock
         # Overdrive API will expect, without actually inserting the
         # corresponding Identifier into the database.
@@ -1165,7 +1315,7 @@ class TestURNLookupController(ControllerTest):
 
         cover = self.data_file("covers/test-book-cover.png")
         self.http.queue_response(200, "image/jpeg", content=cover)
-        self.controller.process_urns([urn], collection_details=name)
+        self.controller.process_urns([urn], metadata_identifier=name)
 
         # A presentation-ready work with a LicensePool was immediately
         # created.
@@ -1194,37 +1344,35 @@ class TestURNLookupController(ControllerTest):
 
     @authenticated_request_context
     def test_process_urn_registration_failure(self):
-        """There are limits on how many URNs you can register at once, even if
-        you authenticate, but the limit depends on whether you
-        specified a collection.
-        """
+        # There are limits on how many URNs you can register at once, even if
+        # you authenticate, but the limit depends on whether you
+        # specified a collection.
         urn = self._identifier(identifier_type=Identifier.ISBN).urn
         name = self.overdrive_collection.metadata_identifier
 
         # Failure -- we didn't specify a collection.
         result = self.controller.process_urns([urn])
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"No collection provided.", result.detail)
+        eq_(u"No metadata identifier provided.", result.detail)
 
         # Failure - we sent too many URNs.
-        result = self.controller.process_urns([urn] * 31, collection_details=name)
+        result = self.controller.process_urns([urn] * 31, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
             result.detail)
 
     @authenticated_request_context_resolve_now
     def test_process_urn_registration_failure_resolving_too_much(self):
-        """Even when you authenticate, you can only ask that one identifier at
-        a time be immediately resolved.
-        """
+        # Even when you authenticate, you can only ask that one identifier at
+        # a time be immediately resolved.
         urn = self._identifier(identifier_type=Identifier.ISBN).urn
         name = self.overdrive_collection.metadata_identifier
-        result = self.controller.process_urns([urn] * 2, collection_details=name)
+        result = self.controller.process_urns([urn] * 2, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
         eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
-    @basic_request_context
+    @unauthenticated_request_context
     def test_process_urn_default_collection(self):
         # It's possible to look up individual URNs anonymously.
         urn = self.ISBN_URN
@@ -1251,7 +1399,7 @@ class TestURNLookupController(ControllerTest):
         name = remote_collection.metadata_identifier
         urn2 = Identifier.URN_SCHEME_PREFIX + "Overdrive%20ID/nosuchidentifier2"
         identifier2 = Identifier.parse_urn(self._db, urn)[0]
-        self.controller.process_urns([urn2], collection_details=name)
+        self.controller.process_urns([urn2], metadata_identifier=name)
         assert identifier2 in self.controller.default_collection.catalog
 
         # Failure -- we sent more than one URN with an unauthenticated request.
@@ -1260,7 +1408,7 @@ class TestURNLookupController(ControllerTest):
         eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
-    @basic_request_context
+    @unauthenticated_request_context
     def test_process_urns_unresolvable_type(self):
         # We won't even parse a Bibliotheca identifier because we
         # know we can't resolve it.
