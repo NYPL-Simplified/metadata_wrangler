@@ -1,10 +1,21 @@
 #!/usr/bin/env python
-"""Assign subjects to genres."""
+"""Assign names to FAST and LCSH Subjects that lack them."""
 import os
 import sys
 bin_dir = os.path.split(__file__)[0]
 package_dir = os.path.join(bin_dir, "..")
 sys.path.append(os.path.abspath(package_dir))
-from monitor import FASTAwareSubjectAssignmentMonitor
+
+from monitor import FASTNameAssignmentMonitor
 from core.scripts import RunMonitorScript
-RunMonitorScript(FASTAwareSubjectAssignmentMonitor).run()
+from fast import (
+    FASTNames,
+    LCSHNames,
+)
+
+# Load FAST and LCSH names from disk.
+fast = FASTNames.from_data_directory(package_dir)
+lcsh = FASTNames.from_data_directory(package_dir)
+
+# Use them to assign names to Subjects.
+RunMonitorScript(FASTNameAssignmentMonitor, fast=fast, lcsh=lcsh).run()
