@@ -14,7 +14,7 @@ from monitor import (
 
 class TestFASTNameAssignmentMonitor(DatabaseTest):
 
-    def test_process_batch(self):
+    def test_process_item(self):
 
         # Create some Subjects -- some of them have names and some
         # don't.
@@ -44,7 +44,7 @@ class TestFASTNameAssignmentMonitor(DatabaseTest):
             "lcsh2" : "LCSH Name 2 (not used)",
         }
 
-        monitor = FASTNameAssignmentMonitor(self._db, fast, lcsh)
+        monitor = FASTNameAssignmentMonitor(self._db, fast=fast, lcsh=lcsh)
 
         # item_query() finds only the FAST and LCSH subjects with an
         # identifier but no name.
