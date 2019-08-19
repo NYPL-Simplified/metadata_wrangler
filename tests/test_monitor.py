@@ -26,7 +26,7 @@ class TestFASTNameAssignmentMonitor(DatabaseTest):
         lcsh2 = self._subject(Subject.LCSH, "lcsh2")
         lcsh2.name = "Existing LCSH name."
 
-        # This Subject has a name but no identifier -- this probably
+        # This Subject has neither name nor identifier -- this
         # shouldn't happen.
         missing_identifier = self._subject(Subject.LCSH, "")
         missing_identifier.identifier = None
