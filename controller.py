@@ -312,7 +312,7 @@ class CanonicalizationController(Controller):
 
         display_name = flask.request.args.get('display_name')
         author_name = self.canonicalizer.canonicalize_author_name(
-            identifier, display_name
+            display_name, identifier
         )
         self.log.info(
             "Incoming display name/identifier: %r/%s. Canonicalizer said: %s",

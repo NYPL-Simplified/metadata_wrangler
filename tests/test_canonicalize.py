@@ -13,12 +13,14 @@ from . import (
 )
 
 from core.metadata_layer import ContributorData
+from core.model import DataSource
 
 from .test_viaf import MockVIAFClientLookup
 
 from canonicalize import (
     AuthorNameCanonicalizer,
     CanonicalizationError,
+    SimpleMockAuthorNameCanonicalizer,
 )
 
 
@@ -105,15 +107,20 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         # people are from the same family.
         eq_("Ryan", m('Ryan and Josh Shook'))
 
+        # TODO: This is wrong -- we see two names where there's only
+        # one.
+        eq_("van Damme", m('van Damme, Jean Claude'))
+
     def test_canonicalize_author_name(self):
 
         class Mock(AuthorNameCanonicalizer):
+            """Mock sort_name_from_services."""
 
             def __init__(self, correct_answers=None):
                 self.attempts = []
                 self.correct_answers = correct_answers or dict()
 
-            def _canonicalize(self, identifier, name):
+            def sort_name_from_services(self, identifier, name):
                 """If there's a known correct answer for this identifier
                 and name, return it; otherwise return None.
                 """
@@ -121,9 +128,9 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
                 self.attempts.append(key)
                 return self.correct_answers.get(key, None)
 
-            def default_name(self, name):
-                """Overriding this method makes it clear whether an answer
-                came out of a _canonicalize() call or whether it
+            def default_sort_name(self, name):
+                """Mocking this method makes it clear whether an answer
+                came out of a sort_name_from_services() call or whether it
                 is a default answer.
                 """
                 return "Default " + name
@@ -139,39 +146,39 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         # know any answers.
         c = Mock()
 
-        # We call _canonicalize once and when that fails we call
+        # We call sort_name_from_services once and when that fails we call
         # default_name.
         eq_("Default Jim Davis",
-            c.canonicalize_author_name("An ISBN", "Jim Davis"))
-        eq_([("An ISBN", "Jim Davis")], c.attempts)
+            c.canonicalize_author_name("Jim Davis", "An ISBN"))
+        eq_([("Jim Davis", "An ISBN")], c.attempts)
         c.attempts = []
 
         # When it looks like there are two authors, we call
-        # _canonicalize twice -- once with what appears to be the
+        # sort_name_from_services twice -- once with what appears to be the
         # author's first name, and again with the entire author
         # string.
         eq_("Default Jim Davis and Matt Groening",
             c.canonicalize_author_name(
-                "An ISBN", "Jim Davis and Matt Groening"
+                "Jim Davis and Matt Groening", "An ISBN"
             )
         )
         eq_(
-            [("An ISBN", "Jim Davis"),
-             ("An ISBN", "Jim Davis and Matt Groening"),
+            [("Jim Davis", "An ISBN"),
+             ("Jim Davis and Matt Groening", "An ISBN"),
             ],
             c.attempts
         )
 
         # Now try a canonicalizer that knows about one correct answer.
-        c = Mock({("An ISBN", "Jim Davis") : "Davis, Funky Jim"})
+        c = Mock({("Jim Davis", "An ISBN") : "Davis, Funky Jim"})
 
-        # This time the _canonicalize() call succeeds and the default
+        # This time the sort_name_from_services() call succeeds and the default
         # code is not triggered.
         eq_("Davis, Funky Jim",
-            c.canonicalize_author_name("An ISBN", "Jim Davis")
+            c.canonicalize_author_name("Jim Davis", "An ISBN")
         )
         eq_(
-            [("An ISBN", "Jim Davis")],
+            [("Jim Davis", "An ISBN")],
              c.attempts
         )
         c.attempts = []
@@ -180,24 +187,36 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         # author name, we don't try again with the whole author name.
         eq_("Davis, Funky Jim",
             c.canonicalize_author_name(
-                "An ISBN", "Jim Davis and Matt Groening"
+                "Jim Davis and Matt Groening", "An ISBN"
             )
         )
         eq_(
-            [("An ISBN", "Jim Davis")],
+            [("Jim Davis", "An ISBN")],
              c.attempts
         )
 
         # If we don't pass in the key piece of information necessary
         # to unlock the correct answer, we still get the default answer.
         eq_("Default Jim Davis",
-            c.canonicalize_author_name("A Different ISBN", "Jim Davis"))
+            c.canonicalize_author_name("Jim Davis", "A Different ISBN"))
 
-    def test__canonicalize_single_name(self):
+    def test_sort_name_from_services_single_name(self):
         # For single-named entities, the sort name and display name
-        # are identical. We don't need to ask VIAF.
-        self.canonicalizer.viaf.queue_lookup("bad data")
+        # are identical. We don't need to ask any external services.
 
+        class Mock(AuthorNameCanonicalizer):
+            """sort_name_from_services will raise an exception
+            if it tries to access any external services.
+            """
+            def explode(self):
+                raise Exception("boom!")
+
+            sort_name_from_database = explode
+            sort_name_from_oclc_linked_data = explode
+            sort_name_from_viaf_urls = explode
+            sort_name_from_viaf = explode
+
+        # We can check these names without causing an exception.
         for one_name in (
             'Various',
             'Anonymous',
@@ -205,13 +224,205 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         ):
             eq_(
                 one_name,
-                self.canonicalizer._canonicalize(
+                self.canonicalizer.sort_name_from_services(
                     identifier=None, display_name=one_name
                 )
             )
 
-        # We didn't ask the mock VIAF about anything.
-        eq_(["bad data"], self.canonicalizer.viaf.results)
+    def test_sort_name_from_services(self):
+        """Verify that sort_name_from_services calls a number of other
+        methods trying to get a sort name.
+        """
+        class Mock(AuthorNameCanonicalizer):
+            def __init__(self):
+                # Some placeholder objects that will be passed around.
+                self.titles_from_database = object()
+                self.uris_from_oclc = object()
+
+                self.log = logging.getLogger("unit test")
+
+                # We start out with good return values available from
+                # every service. We'll delete these one at a time, to
+                # show how sort_name_from_services falls back to one
+                # service when another fails to get results.
+                self.return_values = dict(
+                    sort_name_from_database="good value from database",
+                    sort_name_from_oclc_linked_data="good value from OCLC",
+                    sort_name_from_viaf_urls="good value from VIAF URLs",
+                    sort_name_from_viaf_display_name="good value from VIAF display name",
+                )
+                self.calls = []
+
+            def sort_name_from_database(self, display_name, identifier):
+                m = "sort_name_from_database"
+                self.calls.append((m, display_name, identifier))
+                return self.return_values.get(m), self.titles_from_database
+
+            def sort_name_from_oclc_linked_data(self, display_name, identifier):
+                m = "sort_name_from_oclc_linked_data"
+                self.calls.append((m, display_name, identifier))
+                return self.return_values.get(m), self.uris_from_oclc
+
+            def sort_name_from_viaf_urls(self, display_name, urls):
+                m = "sort_name_from_viaf_urls"
+                self.calls.append((m, display_name, urls))
+                return self.return_values.get(m)
+
+            def sort_name_from_viaf_display_name(
+                self, display_name, known_titles
+            ):
+                m = "sort_name_from_viaf_display_name"
+                self.calls.append((m, display_name, known_titles))
+                return self.return_values.get(m)
+
+        # First, verify that sort_name_from_services returns the first
+        # usable value returned by one of these methods.
+        c = Mock()
+        m = c.sort_name_from_services
+        args = ("Jim Davis", "An ISBN")
+        eq_("good value from database", m(*args))
+
+        del c.return_values['sort_name_from_database']
+        eq_("good value from OCLC", m(*args))
+
+        del c.return_values['sort_name_from_oclc_linked_data']
+        eq_("good value from VIAF URLs", m(*args))
+
+        del c.return_values['sort_name_from_viaf_urls']
+        eq_("good value from VIAF display name", m(*args))
+
+        del c.return_values['sort_name_from_viaf_display_name']
+
+        # This whole time we've been accumulating data in this
+        # list. This is the last time we're going to call
+        # sort_name_from_services(), so clear it out beforehand. That
+        # way we can see a complete list of what methods get called by
+        # sort_name_from_services().
+        c.calls = []
+
+        # All our attempts fail, so the final result is None.
+        eq_(None, m(*args))
+
+        # Let's see the journey we took on the way to this failure.
+        (from_database, from_oclc, from_viaf_urls,
+         from_viaf_display_name) = c.calls
+
+        # We passed the name and identifier into sort_name_from_database.
+        eq_(('sort_name_from_database', 'Jim Davis', 'An ISBN'),
+            from_database)
+
+        # Then we passed the same information into
+        # sort_name_from_oclc_linked_data.
+        eq_(('sort_name_from_oclc_linked_data', 'Jim Davis', 'An ISBN'),
+            from_oclc)
+
+        # That returned a bunch of URLs, which we passed into
+        # sort_name_from_viaf_urls.
+        eq_(('sort_name_from_viaf_urls', 'Jim Davis', c.uris_from_oclc),
+            from_viaf_urls)
+
+        # Finally, we called from_viaf_display_name, using the book
+        # titles returned by sort_name_from_database.
+        eq_(('sort_name_from_viaf_display_name', 'Jim Davis', 
+             c.titles_from_database), from_viaf_display_name)
+
+    def test_sort_name_from_database(self):
+        # Verify that sort_name_from_database grabs titles and
+        # Contributors from the database, then passes them into
+        # _sort_name_from_contributor_and_titles.
+        
+        class Mock(AuthorNameCanonicalizer):
+
+            def __init__(self, _db):
+                self._db = _db
+                self.calls = []
+                self.right_answer = None
+
+            def _sort_name_from_contributor_and_titles(
+                self, contributor, known_titles
+            ):
+                self.calls.append((contributor, known_titles))
+                return self.right_answer
+
+        canonicalizer = Mock(self._db)
+
+        input_name = "Display Name"
+
+        # Create a number of contributors with the same display_name
+        c1, ignore = self._contributor(sort_name="Zebra, Ant")
+        c1.display_name = input_name
+
+        c2, ignore = self._contributor(sort_name="Yarrow, Bloom")
+        c2.display_name = input_name
+
+        # These contributors will be ignored -- c3 beacuse it doesn't
+        # have a sort name (which is what we're trying to find) and v4
+        # because its display name doesn't match.
+        c3, ignore = self._contributor(sort_name="will be deleted")
+        c3.display_name = input_name
+        c3.sort_name = None
+
+        c4, ignore = self._contributor(sort_name="Author, Another")
+        c4.display_name = "A Different Display Name"
+
+        # Create two Editions with the same primary Identifier.
+        edition = self._edition(
+            title="Title 1",
+            data_source_name=DataSource.GUTENBERG
+        )
+        identifier = edition.primary_identifier
+        edition2 = self._edition(
+            title="Title 2", identifier_type=identifier.type,
+            identifier_id=identifier.identifier,
+            data_source_name=DataSource.OVERDRIVE
+        )
+
+        # Our mocked _sort_name_from_contributor_and_titles will
+        # return the answer we specify.
+        canonicalizer.right_answer = "Sort Name, The Real"
+        answer, titles = canonicalizer.sort_name_from_database(
+            input_name, identifier
+        )
+        eq_("Sort Name, The Real", answer)
+
+        # It also returned all titles associated with the identifier
+        # we passed in.
+        eq_(set(["Title 1", "Title 2"]), titles)
+
+        # If we don't pass in an Identifier, we get the same answer
+        # but no titles.
+        answer, titles = canonicalizer.sort_name_from_database(
+            input_name, None
+        )
+        eq_("Sort Name, The Real", answer)
+        eq_(set(), titles)
+        
+        # Now let's get rid of the 'right answer' so we can see
+        # everything sort_name_from_database goes through before
+        # giving up.
+        canonicalizer.right_answer = None
+        canonicalizer.calls = []
+        answer, titles = canonicalizer.sort_name_from_database(
+            input_name, identifier
+        )
+
+        # _sort_name_from_contributor_and_titles was called twice, one
+        # for each Contributor that looked like it might be a match
+        # based on the display_name.
+        call1, call2 = canonicalizer.calls
+        eq_((c1, titles), call1)
+        eq_((c2, titles), call2)
+
+        # Since neither call to _sort_name_from_contributor_and_titles
+        # turned up anything, the sort name of the first matching
+        # Contributor was used as the answer.
+        eq_(c1.sort_name, answer)
+        eq_(set(["Title 1", "Title 2"]), titles)
+
+        # If there are no matching Contributors at all,
+        # sort_name_from_database returns None.
+        eq_((None, set()),
+            canonicalizer.sort_name_from_database("Jim Davis", None))
 
     def test_found_contributor(self):
         # If we find a matching contributor already in our database, 
@@ -221,11 +432,11 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         contributor_2, made_new = self._contributor(sort_name="Yarrow, Bloom")
         contributor_2.display_name = "Bloom Yarrow"
 
-        # _canonicalize shouldn't try to contact viaf or oclc, but in case it does, make sure 
+        # sort_name_from_services shouldn't try to contact viaf or oclc, but in case it does, make sure 
         # the contact brings wrong results.
         self.canonicalizer.viaf.queue_lookup([])
         #self.canonicalizer.oclcld.queue_lookup([])
-        canonicalized_author = self.canonicalizer._canonicalize(identifier=None, display_name="Ant Zebra")
+        canonicalized_author = self.canonicalizer.sort_name_from_services(identifier=None, display_name="Ant Zebra")
         eq_(canonicalized_author, contributor_1.sort_name)
 
 
@@ -238,13 +449,14 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         # TODO: make sure non-isbn ids get directed to VIAF
         pass
 
-    def test_default_name(self):
-        # default_name() does a reasonable job of guessing at an
+    def test_default_sort_name(self):
+        # default_sort_name() does a reasonable job of guessing at an
         # author name.
         #
         # It does this primarily by deferring to
-        # display_name_to_short_name, though we don't test this.
-        m = self.canonicalizer.default_name
+        # display_name_to_short_name, though we don't test this
+        # explicitly.
+        m = self.canonicalizer.default_sort_name
         eq_("Davis, Jim", m("Jim Davis"))
         eq_("Davis, Jim", m("Jim Davis and Matt Groening"))
         eq_("Vassar College", m("Vassar College"))

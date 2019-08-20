@@ -85,7 +85,7 @@ class AuthorNameCanonicalizer(object):
             author_name = author_name[:-1]
         return author_name
 
-    def canonicalize_author_name(self, identifier, display_name):
+    def canonicalize_author_name(self, display_name, identifier=None):
         """Canonicalize a book's primary author given an identifier and a
         display name.
 
@@ -112,33 +112,44 @@ class AuthorNameCanonicalizer(object):
         if display_name != shortened_name:
             candidates.append(display_name)
 
+        # Run each potential name through various services that might
+        # give us a sort name.
         for n in candidates:
-            v = self._canonicalize(identifier, n)
+            v = self.sort_name_from_services(n, identifier)
             if v:
                 return v
 
-        # All our techniques have failed. Woe! Let's just try to finagle
-        # this provided display name into a sort name.
-        return self.default_name(display_name)
+        # All our techniques have failed. Woe! Let's just make a best
+        # guess at the sort name.
+        return self.default_sort_name(display_name)
 
-
-    def default_name(self, display_name):
+    def default_sort_name(self, display_name):
+        """Make a guess at the sort name for the given `display_name."""
         shortened_name = self.primary_author_name(display_name)
         return display_name_to_sort_name(shortened_name)
 
-    def _canonicalize(self, identifier, display_name):
+    def sort_name_from_services(self, display_name, identifier=None):
+        """Try to find a sort name for the given author by asking various
+        knowledgeable sources: our own database, OCLC Linked Data,
+        and VIAF.
+
+        :param display_name: The display name for which we're trying
+            to find a sort name.
+
+        :param identifier: An Identifier corresponding to a book we
+            know this person wrote.
+        """
+        self.log.debug("Attempting to canonicalize %s", display_name)
         if not ' ' in display_name:
             # This is a one-named entity, like 'Cher' or 'Various'.
             # The display name and sort name are identical.
             return display_name
 
-        self.log.debug("Attempting to canonicalize %s", display_name)
-
         # The best outcome would be that we already have a Contributor
         # with this exact display name and a known sort name. Then we
         # can reuse the information.
-        sort_name = self.sort_name_from_database(
-            identifier, display_name
+        sort_name, known_titles = self.sort_name_from_database(
+            display_name, identifier
         )
         if sort_name:
             return sort_name
@@ -149,87 +160,113 @@ class AuthorNameCanonicalizer(object):
         uris = None
         if identifier:
             sort_name, uris = self.sort_name_from_oclc_linked_data(
-                identifier, display_name)
+                display_name, identifier
+            )
         if sort_name:
             return sort_name
 
         # Nope. If OCLC Linked Data gave us any VIAF IDs, look them up
         # and see if we can get a sort name out of them.
-        if uris:
-            for uri in uris:
-                m = self.VIAF_ID.search(uri)
-                if m:
-                    viaf_id = m.groups()[0]
-                    contributor_data = self.viaf.lookup_by_viaf(
-                        viaf_id, working_display_name=display_name
-                    )[0]
-                    if contributor_data.sort_name:
-                        return sort_name
+        sort_name = self.sort_name_from_viaf_urls(display_name, uris)
+        if sort_name:
+            return sort_name
 
-        # Nope. If we were given a display name, let's ask VIAF about it
-        # and see what it says.
+        # Nope. If we were given a display name, let's ask VIAF about
+        # _that_ and see what it says.
         if display_name:
-            sort_name = self.sort_name_from_viaf(display_name, known_titles)
+            sort_name = self.sort_name_from_viaf_display_name(
+                display_name, known_titles
+            )
 
         return sort_name
 
-    def sort_name_from_database(self, identifier, display_name):
+    def sort_name_from_database(self, display_name, identifier=None):
         """Try to find an author sort name for this book from
         data already in the database.
+
+        :param display_name: The display name for which we're trying
+            to find a sort name.
+
+        :param identifier: An Identifier corresponding to a book we
+            know this person wrote.
+
+        :return: A 2-tuple (sort_name, known_titles). `sort_name` is a
+            known sort name for this person; known_titles is a set
+            containing the titles of books we know they wrote.
         """
-        # can we infer any titles we know this person wrote?
-        known_titles = []
+        sort_name = None
+        known_titles = set()
+
+        # Look up the names of books associated with `identifier.
+        # This might help us distinguish between two people with
+        # similar names.
         if identifier:
             editions = identifier.primarily_identifies
-            # only choose one version of the title
-            if editions and editions[0].title:
-                known_titles.append(editions[0].title)
+            for edition in editions:
+                if edition.title:
+                    known_titles.add(edition.title)
 
-        contributors = self._db.query(Contributor).filter(
-            Contributor.display_name==display_name).filter(
-                Contributor.sort_name != None).all()
-        sort_name = None
-        if contributors:
-            # Yes, awesome. Let's gild this lily -- are there any contributors
-            # who have sort_names and also have written titles similar to the 
-            # identifier's?  If not, no worries, choose any sort_name, and it's 
-            # probably good.
-            for contributor in contributors:
-                # did we just find the sort_name in a previous iteration?
-                if sort_name:
-                    break
+        # Find all Contributors with this display name.
+        contributors = self._db.query(
+            Contributor
+        ).filter(
+            Contributor.display_name==display_name
+        ).filter(
+            Contributor.sort_name != None
+        ).order_by(
+            Contributor.id
+        )
 
-                for contribution in contributor.contributions:
-                    if (contribution.edition and contribution.edition.title and 
-                        known_titles and 
-                        (title_match_ratio(known_titles[0], contribution.edition.title) > 80)):
-                        # whew! 
-                        sort_name = contributor.sort_name
-                        break
-
-            else:
-                # we have contributors, but none of their titles matched what we know
-                sort_name = contributors[0].sort_name
-
-            self.log.debug(
-                "Found existing contributor for %s: %s",
-                display_name, sort_name
+        fallback_sort_name = None
+        for contributor in contributors:
+            sort_name = self._sort_name_from_contributor_and_titles(
+                contributor, known_titles
             )
-            return sort_name
+            if sort_name:
+                # We've found a sort_name based on display_name
+                # and a title match!
+                break
+            elif not fallback_sort_name:
+                # If we can't match on name + title, we'll pick an
+                # author based solely on name.
+                fallback_sort_name = contributor.sort_name
+        sort_name = sort_name or fallback_sort_name
+        return sort_name, known_titles
 
-    def sort_name_from_oclc_linked_data(
-            self, identifier, display_name):
+    def _sort_name_from_contributor_and_titles(self, contributor, known_titles):
+        """Return `contributor.sort_name` only if the Contributor is
+        associated with an Edition whose title is similar to one of
+        the `known_titles`.
+        """
+        for contribution in contributor.contributions:
+            if (contribution.edition and known_titles):
+                check_against_title = contribution.edition.title
+                if not check_against_title:
+                    continue
+                max_title_match_ratio = max(
+                    title_match_ratio(title, check_against_title)
+                    for title in known_titles
+                )
+                if max_title_match_ratio >= 80:
+                    # 80% similarity -- close enough.
+                    return contributor.sort_name
+
+    def sort_name_from_oclc_linked_data(self, display_name, identifier):
         """Try to find an author sort name for this book from
         OCLC Linked Data.
 
-        :param identifier: Must be of Identifier.ISBN type.
+        :param display_name: The display name for which we're trying
+            to find a sort name.        
+
+        :param identifier: An Identifier for a book we know was
+            written by this person. Must be of Identifier.ISBN type.
         """
         if display_name:
             test_working_display_name = name_tidy(display_name)
         else:
             test_working_display_name = None
 
-        if ((not identifier) or (identifier.type != Identifier.ISBN)):
+        if (not identifier or identifier.type != Identifier.ISBN):
             # We have no way of telling OCLC Linked Data which book
             # we're talking about. Don't bother.
             return None, None
@@ -270,6 +307,20 @@ class AuthorNameCanonicalizer(object):
                             shortest_candidate = test_name
 
         return shortest_candidate, uris
+
+    def sort_name_from_viaf_urls(self, working_display_name, viaf_urls):
+        if not viaf_urls:
+            return None
+        for uri in uris:
+            m = self.VIAF_ID.search(uri)
+            if not m:
+                continue
+            [viaf_id] = m.groups()
+            contributor_data = self.viaf.lookup_by_viaf(
+                viaf_id, working_display_name=working_display_name
+            )[0]
+            if contributor_data.sort_name:
+                return sort_name
 
 
     def sort_name_from_viaf(self, display_name, known_titles=None):
@@ -382,9 +433,9 @@ class SimpleMockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
         """
         self.mapping[(identifier, display_name)] = value
 
-    def canonicalize_author_name(self, identifier, display_name):
+    def canonicalize_author_name(self, display_name, identifier):
         """Record the fact that the method was called, and return
         the predefined 'correct' answer.
         """
-        self.canonicalize_author_name_calls.append((identifier, display_name))
-        return self.mapping.get((identifier, display_name), None)
+        self.canonicalize_author_name_calls.append((display_name, identifier))
+        return self.mapping.get((display_name, identifier), None)

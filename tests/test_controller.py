@@ -1514,7 +1514,7 @@ class TestCanonicalizationController(ControllerTest):
             # The mock canonicalizer was asked about this
             # Identifier/name pair.
             call = self.canonicalizer.canonicalize_author_name_calls.pop()
-            eq_((identifier, input_name), call)
+            eq_((input_name, identifier), call)
 
             # And it returned the predefined right answer.
             eq_(200, response.status_code)
