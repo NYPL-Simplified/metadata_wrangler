@@ -233,11 +233,14 @@ class AuthorNameCanonicalizer(object):
         sort_name = sort_name or fallback_sort_name
         return sort_name, known_titles
 
-    def _sort_name_from_contributor_and_titles(self, contributor, known_titles):
+    @classmethod
+    def _sort_name_from_contributor_and_titles(cls, contributor, known_titles):
         """Return `contributor.sort_name` only if the Contributor is
         associated with an Edition whose title is similar to one of
         the `known_titles`.
         """
+        if not contributor or not known_titles:
+            return
         for contribution in contributor.contributions:
             if (contribution.edition and known_titles):
                 check_against_title = contribution.edition.title

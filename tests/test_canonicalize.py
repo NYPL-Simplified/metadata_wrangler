@@ -424,6 +424,50 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         eq_((None, set()),
             canonicalizer.sort_name_from_database("Jim Davis", None))
 
+    def test__sort_name_from_contributor_and_titles(self):
+        # Verify that _sort_name_from_contributor_and_titles returns a
+        # contributor's sort_name only if it looks like they wrote a
+        # book with one of the given titles.
+        m = AuthorNameCanonicalizer._sort_name_from_contributor_and_titles
+
+        # No contributor -> failure
+        eq_(None, m(None, None))
+        eq_(None, m(None, ["Title 1", "Title 2"]))
+
+        # This contributor has no contributions at all -> failure
+        no_contributions, ignore = self._contributor()
+        eq_(None, m(no_contributions, ["Title 1"]))
+
+        # This contributor has an associated edition.
+        edition = self._edition(
+            title="Adventures of Huckleberry Finn",
+            authors="A Display Name"
+        )
+        [contributor] = edition.contributors
+        contributor.sort_name = "Sort Name, An"
+
+        # We'll get None unless we pass in a title that's a
+        # substantial match.
+        eq_(None, m(contributor, None))
+        eq_(None, m(contributor, []))
+        eq_(None, m(contributor, ["Title 1", "Title 2"]))
+
+        # If there is a match, we get the answer.
+        eq_("Sort Name, An", 
+            m(
+                contributor,
+                ["Adventures of Huckleberry Finn", "Some Other Book"]
+            )
+        )
+
+        # It doesn't have to be an exact match, but it must be close.
+        eq_("Sort Name, An", 
+            m(
+                contributor,
+                ["The Adventures of Huckleberry Finn"]
+            )
+        )
+
     def test_found_contributor(self):
         # If we find a matching contributor already in our database, 
         # then don't bother looking at OCLC or VIAF.
