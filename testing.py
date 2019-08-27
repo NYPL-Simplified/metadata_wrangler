@@ -27,12 +27,16 @@ class MockVIAFClient(object):
 
     def __init__(self):
         self.results = []
+        self.viaf_lookups = []
+        self.name_lookups = []
 
     def queue_lookup(self, *results):
         self.results += results
 
     def lookup_by_viaf(self, *args, **kwargs):
+        self.viaf_lookups.append((args, kwargs))
         return self.results.pop(0)
     
     def lookup_by_name(self, *args, **kwargs):
+        self.name_lookups.append((args, kwargs))
         return self.results.pop(0)

@@ -468,30 +468,76 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
             )
         )
 
-    def test_found_contributor(self):
-        # If we find a matching contributor already in our database, 
-        # then don't bother looking at OCLC or VIAF.
-        contributor_1, made_new = self._contributor(sort_name="Zebra, Ant")
-        contributor_1.display_name = "Ant Zebra"
-        contributor_2, made_new = self._contributor(sort_name="Yarrow, Bloom")
-        contributor_2.display_name = "Bloom Yarrow"
-
-        # sort_name_from_services shouldn't try to contact viaf or oclc, but in case it does, make sure 
-        # the contact brings wrong results.
-        self.canonicalizer.viaf.queue_lookup([])
-        #self.canonicalizer.oclcld.queue_lookup([])
-        canonicalized_author = self.canonicalizer.sort_name_from_services(identifier=None, display_name="Ant Zebra")
-        eq_(canonicalized_author, contributor_1.sort_name)
-
-
-    def test_oclc_contributor(self):
-        # TODO: make sure isbn ids get directed to OCLC
+    def test_sort_name_from_oclc_linked_data(self):
+        # We may be able to use OCLC Linked Data to find an author sort
+        # name for a given book.
+        #
+        # TODO Implement as general strategy to bring back OCLC Linked
+        # Data.
         pass
 
+    def test_sort_name_from_viaf_urls(self):
+        # We may be able to use VIAF lookups to find an author sort name.
 
-    def test_non_isbn_identifier(self):
-        # TODO: make sure non-isbn ids get directed to VIAF
-        pass
+        m = self.canonicalizer.sort_name_from_viaf_urls
+
+        # If no VIAF URLs are provided, there's nothing we can do.
+        eq_(None, m("Jim Davis", None))
+        eq_(
+            None,
+            m(
+                "Jim Davis", ["http://not-a-viaf/", "http://still-not-a-viaf/"]
+            )
+        )
+
+        # If a VIAF URL is provided, it's passed into the VIAF client.
+        # First let's test the success case where we the request gets
+        # a good answer.
+        davis = ContributorData(sort_name="Davis, Jim (from VIAF)")
+        self.viaf_client.queue_lookup([davis, "some other contributor"])
+        result = m(
+            "Jim Davis",
+            [
+                "http://not-a-viaf/",
+                "http://viaf.org/viaf/1234",
+                "http://still-not-a-viaf/"
+            ]
+        )
+
+        # We ran a VIAF lookup on the ID (derived from the URL) and
+        # the working display name (passed in to
+        # sort_name_from_viaf_urls).
+        lookup = self.viaf_client.viaf_lookups.pop()
+        eq_([], self.viaf_client.viaf_lookups)
+        ((viaf_id,), kwargs) = lookup
+        eq_("1234", viaf_id)
+        eq_(dict(working_display_name="Jim Davis"), kwargs)
+
+        # We got the right answer.
+        eq_("Davis, Jim (from VIAF)", result)
+
+        # Now test failure cases.
+        #
+
+        # VIAF gave some info but it didn't include the sort name.
+        davis = ContributorData(display_name="Jim Davis (but you knew that)")
+        self.viaf_client.queue_lookup([davis])
+        result = m("Jim Davis", ["http://viaf.org/viaf/1234"])
+
+        # The same arguments were passed into lookup_by_viaf().
+        lookup = self.viaf_client.viaf_lookups.pop()
+        eq_([], self.viaf_client.viaf_lookups)
+        ((viaf_id,), kwargs) = lookup
+        eq_("1234", viaf_id)
+        eq_(dict(working_display_name="Jim Davis"), kwargs)
+
+        # But we didn't get an answer for sort name.
+        eq_(None, result)
+
+        # VIAF didn't return any info.
+        self.viaf_client.queue_lookup([])
+        result = m("Jim Davis", ["http://viaf.org/viaf/1234"])
+        eq_(None, result)
 
     def test_default_sort_name(self):
         # default_sort_name() does a reasonable job of guessing at an

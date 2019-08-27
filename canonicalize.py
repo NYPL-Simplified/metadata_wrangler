@@ -159,9 +159,21 @@ class AuthorNameCanonicalizer(object):
         # author.
         uris = None
         if identifier:
-            sort_name, uris = self.sort_name_from_oclc_linked_data(
-                display_name, identifier
-            )
+            # TODO: We don't have good test coverage from
+            # sort_name_from_oclc_linked_data, because it brings in
+            # all the complexity of our OCLC Linked Data client. If
+            # there is some kind of problem in there, we don't want it
+            # to crash this whole method, so we catch and ignore
+            # exceptions.
+            try:
+                sort_name, uris = self.sort_name_from_oclc_linked_data(
+                    display_name, identifier
+                )
+            except Exception as e:
+                self.log.error(
+                    "Exception in sort_name_from_oclc_linked_data",
+                    exc_info=e
+                )
         if sort_name:
             return sort_name
 
@@ -264,7 +276,7 @@ class AuthorNameCanonicalizer(object):
         :param identifier: An Identifier for a book we know was
             written by this person. Must be of Identifier.ISBN type.
 
-        TODO test coverage leaves off here.
+        TODO This method is missing test coverage.
         """
         if display_name:
             test_working_display_name = name_tidy(display_name)
@@ -316,17 +328,18 @@ class AuthorNameCanonicalizer(object):
     def sort_name_from_viaf_urls(self, working_display_name, viaf_urls):
         if not viaf_urls:
             return None
-        for uri in uris:
+        for uri in viaf_urls:
             m = self.VIAF_ID.search(uri)
             if not m:
                 continue
             [viaf_id] = m.groups()
-            contributor_data = self.viaf.lookup_by_viaf(
+            contributors = self.viaf.lookup_by_viaf(
                 viaf_id, working_display_name=working_display_name
-            )[0]
-            if contributor_data.sort_name:
-                return sort_name
-
+            )
+            if contributors:
+                contributor = contributors[0]
+                return contributor.sort_name
+        return None
 
     def sort_name_from_viaf(self, display_name, known_titles=None):
         """
