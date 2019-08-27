@@ -263,6 +263,8 @@ class AuthorNameCanonicalizer(object):
 
         :param identifier: An Identifier for a book we know was
             written by this person. Must be of Identifier.ISBN type.
+
+        TODO test coverage leaves off here.
         """
         if display_name:
             test_working_display_name = name_tidy(display_name)
