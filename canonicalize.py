@@ -446,11 +446,11 @@ class SimpleMockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
         self.mapping = {}
         self.canonicalize_author_name_calls = []
 
-    def register(self, identifier, display_name, value):
+    def register(self, display_name, identifier, value):
         """Register the canonical author name for an
         (identifier, display_name) pair.
         """
-        self.mapping[(identifier, display_name)] = value
+        self.mapping[(display_name, identifier)] = value
 
     def canonicalize_author_name(self, display_name, identifier):
         """Record the fact that the method was called, and return

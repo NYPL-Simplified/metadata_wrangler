@@ -9,7 +9,6 @@ from nose.tools import (
 from . import (
     DatabaseTest,
     DummyHTTPClient,
-    sample_data,
 )
 
 from core.metadata_layer import ContributorData
@@ -20,9 +19,7 @@ from .test_viaf import MockVIAFClientLookup
 from canonicalize import (
     AuthorNameCanonicalizer,
     CanonicalizationError,
-    SimpleMockAuthorNameCanonicalizer,
 )
-
 
 
 class TestAuthorNameCanonicalizer(DatabaseTest):
@@ -35,23 +32,6 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         self.canonicalizer.viaf = self.viaf_client
         #self.oclc_client = MockOCLCLinkedData()
         #self.canonicalizer.oclcld = self.oclc_client
-
-
-    def sample_data(self, filename):
-        return sample_data(filename=filename, sample_data_dir="viaf")
-
-
-    def queue_file_in_mock_http(self, filename):
-        h = DummyHTTPClient()
-        xml = self.sample_data(filename)
-        h.queue_response(200, media_type='text/xml', content=xml)
-        return h
-
-
-    #def queue_viaf_lookup_result():
-    #    http = self.queue_file_in_mock_http("mindy_kaling.xml")
-    #    lookup = self.viaf_client.lookup_by_viaf(viaf="9581122", do_get=http.do_get)
-    #    client.results = [lookup]
 
 
     def test_primary_author_name(self):
