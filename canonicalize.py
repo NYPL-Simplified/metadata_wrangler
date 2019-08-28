@@ -354,7 +354,8 @@ class AuthorNameCanonicalizer(object):
         sort_name = None
         
         viaf_contributor = self.viaf.lookup_by_name(
-            sort_name=None, display_name=display_name, known_titles=known_titles
+            sort_name=None, display_name=display_name,
+            known_titles=known_titles
         )
 
         if viaf_contributor:

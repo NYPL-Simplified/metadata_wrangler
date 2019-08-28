@@ -539,6 +539,38 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         result = m("Jim Davis", ["http://viaf.org/viaf/1234"])
         eq_(None, result)
 
+    def test_sort_name_from_viaf(self):
+        # We may be able to get a sort name by asking VIAF
+        # about a display name.
+
+        # Queue up an answer from VIAF.
+        davis = ContributorData(sort_name="Davis, Jim (from VIAF)")
+        self.viaf_client.queue_lookup([davis, "some other contributor"])
+
+        # Calling sort_name_from_viaf gives us that answer.
+        m = self.canonicalizer.sort_name_from_viaf
+        eq_("Davis, Jim (from VIAF)",
+            m("Jim Davis", ["Garfield Hates Mondays"]))
+
+        # How'd we get it? We called lookup_by_name() with the
+        # sort name and a list of titles.
+        lookup = self.viaf_client.name_lookups.pop()
+        args, kwargs = lookup
+        eq_(dict(known_titles=['Garfield Hates Mondays'],
+                 display_name='Jim Davis', sort_name=None),
+            kwargs
+        )
+
+        # If VIAF doesn't give an answer, the result is None.
+        self.viaf_client.queue_lookup(None)
+        eq_(None, m("Jim Davis", None))
+
+        # Similarly if VIAF gives an answer but it doesn't include a
+        # sort_name.
+        davis = ContributorData(display_name="Jim Davis (but you knew that)")
+        self.viaf_client.queue_lookup([davis])
+        eq_(None, m("Jim Davis", None))
+
     def test_default_sort_name(self):
         # default_sort_name() does a reasonable job of guessing at an
         # author name.
