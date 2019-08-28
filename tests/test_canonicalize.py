@@ -196,6 +196,8 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
             sort_name_from_viaf_urls = explode
             sort_name_from_viaf = explode
 
+        canonicalizer = Mock(self._db)
+
         # We can check these names without causing an exception.
         for one_name in (
             'Various',
@@ -204,7 +206,7 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         ):
             eq_(
                 one_name,
-                self.canonicalizer.sort_name_from_services(
+                canonicalizer.sort_name_from_services(
                     identifier=None, display_name=one_name
                 )
             )
