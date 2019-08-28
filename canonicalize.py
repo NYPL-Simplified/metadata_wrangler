@@ -342,7 +342,7 @@ class AuthorNameCanonicalizer(object):
                 return contributor.sort_name
         return None
 
-    def sort_name_from_viaf(self, display_name, known_titles=None):
+    def sort_name_from_viaf_display_name(self, display_name, known_titles=None):
         """
         Ask VIAF about the contributor, looking them up by name, 
         rather than any numeric id.
@@ -428,7 +428,7 @@ class MockAuthorNameCanonicalizer(AuthorNameCanonicalizer):
             return None, uris
 
 
-    def sort_name_from_viaf(self, display_name, known_titles=None):
+    def sort_name_from_viaf_display_name(self, display_name, known_titles=None):
         """
         Skip calling parent sort_name_from_viaf for now.  It contains http 
         calls it'd be hard to mock.  Return a dummy response.

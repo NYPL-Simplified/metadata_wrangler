@@ -519,7 +519,7 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         result = m("Jim Davis", ["http://viaf.org/viaf/1234"])
         eq_(None, result)
 
-    def test_sort_name_from_viaf(self):
+    def test_sort_name_from_viaf_display_name(self):
         # We may be able to get a sort name by asking VIAF
         # about a display name.
 
@@ -528,7 +528,7 @@ class TestAuthorNameCanonicalizer(DatabaseTest):
         self.viaf_client.queue_lookup([davis, "some other contributor"])
 
         # Calling sort_name_from_viaf gives us that answer.
-        m = self.canonicalizer.sort_name_from_viaf
+        m = self.canonicalizer.sort_name_from_viaf_display_name
         eq_("Davis, Jim (from VIAF)",
             m("Jim Davis", ["Garfield Hates Mondays"]))
 
