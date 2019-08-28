@@ -256,7 +256,8 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
             # we can ask OCLC Linked Data about this ISBN
             uris = None
             sort_name, uris = self.canonicalizer.sort_name_from_oclc_linked_data(
-                isbn_identifier, contributor.display_name)
+                contributor.display_name, isbn_identifier
+            )
             if sort_name:
                 # see it's in correct format and not too far off from display_name
                 name_ok = self.verify_sort_name(sort_name, contributor)
