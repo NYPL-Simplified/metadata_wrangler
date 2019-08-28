@@ -54,6 +54,7 @@ class AuthorNameCanonicalizer(object):
         TODO: Cases we can't handle:
          Madonna, Cher
          Ryan and Josh Shook
+         van Damme, Jean Claude
         """
         if not author_name:
             return None
