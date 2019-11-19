@@ -162,6 +162,14 @@ class TestMetadataWrangler(ControllerTest):
         eq_(result, self.client)
         eq_(self.client, flask.request.authenticated_client)
 
+    @authenticated_request_context
+    def test_disabled_client(self):
+        self.client.enabled = False
+        # If the credentials are valid but the IntegrationClient is
+        # disabled, DISABLED_CLIENT is returned.
+        result = MetadataWrangler.authenticated_client_from_request(self._db)
+        eq_(DISABLED_CLIENT, result)
+
     def test_invalid_authentication(self):
         # If the credentials are missing or invalid, but
         # authentication is required, a ProblemDetail is returned.

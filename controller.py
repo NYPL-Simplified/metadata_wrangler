@@ -135,6 +135,10 @@ class MetadataWrangler(object):
 
             if client:
                 # Success!
+                if not client.enabled:
+                    # But the client has been disabled.
+                    return DISABLED_CLIENT
+
                 flask.request.authenticated_client = client
                 return client
             else:
