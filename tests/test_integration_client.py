@@ -166,6 +166,22 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
             replacement_policy=replacement_policy, collection=self.collection
         )
 
+    def test_default_replacement_policy(self):
+        # In setup() we provide a replacement policy for use in the
+        # test.  If you don't provide a replacement policy, a
+        # MetadataWranglerReplacementPolicy is automatically created.
+        provider = IntegrationClientCoverImageCoverageProvider(
+            collection=self.collection
+        )
+        assert isinstance(
+            provider.replacement_policy, MetadataWranglerReplacementPolicy
+        )
+
+        # Verify that links are replaced. This automatically happens
+        # because of the from_metadata_source() call but we test it
+        # because we used to have code that explicitly set this.
+        eq_(True, provider.replacement_policy.links)
+
     def test_data_source_is_collection_specific(self):
         eq_(self.collection.name, self.provider.data_source.name)
 
