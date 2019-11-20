@@ -180,7 +180,8 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
     def test_set_equivalence(self):
         edition = self._edition()
         edition.title = "The House on Mango Street"
-        edition.add_contributor(Contributor(viaf="112460612"), Contributor.AUTHOR_ROLE)
+        contributor, ignore = self._contributor(viaf="112460612")
+        edition.add_contributor(contributor, Contributor.AUTHOR_ROLE)
         identifier = edition.primary_identifier
 
         i1 = self._identifier()

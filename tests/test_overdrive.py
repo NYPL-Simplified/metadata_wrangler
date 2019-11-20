@@ -11,9 +11,11 @@ from core.testing import (
 )
 from core.model import (
     ExternalIntegration,
+    ExternalIntegrationLink,
     Identifier,
 )
 from core.overdrive import MockOverdriveAPI
+from coverage_utils import MetadataWranglerReplacementPolicy
 from overdrive import OverdriveBibliographicCoverageProvider
 
 class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
@@ -28,8 +30,8 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
     def test_replacement_policy_uses_provided_mirror(self):
         collection = MockOverdriveAPI.mock_collection(self._db)
         mirror = MockS3Uploader()
-        replacement_policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror
+        replacement_policy = MetadataWranglerReplacementPolicy.from_db(
+            self._db, mirror=mirror
         )
         api = MockOverdriveAPI(self._db, collection)
         api.queue_collection_token()
@@ -38,9 +40,12 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
             api_class=api
         )
         
-        # Any resources discovered by Overdrive will be
+        # Any book covers discovered by Overdrive will be
         # sent through this mirror.
-        eq_(mirror, provider.replacement_policy.mirror)
+        eq_(
+            mirror,
+            provider.replacement_policy.mirrors[ExternalIntegrationLink.COVERS]
+        )
 
         http = DummyHTTPClient()
         provider.replacement_policy.http_get = http.do_get

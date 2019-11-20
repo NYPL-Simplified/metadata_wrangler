@@ -9,7 +9,6 @@ from . import (
 )
 
 from core.coverage import CoverageFailure
-from core.metadata_layer import ReplacementPolicy
 from core.model import (
     CoverageRecord,
     ExternalIntegration,
@@ -19,6 +18,7 @@ from core.model import (
 from core.s3 import MockS3Uploader
 from core.testing import AlwaysSuccessfulCoverageProvider
 
+from coverage_utils import MetadataWranglerReplacementPolicy
 from integration_client import (
     CalculatesWorkPresentation,
     IntegrationClientCoverImageCoverageProvider,
@@ -155,8 +155,8 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
     def setup(self):
         super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
         mirror = MockS3Uploader()
-        replacement_policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror
+        replacement_policy = MetadataWranglerReplacementPolicy.from_db(
+            self._db, mirror=mirror
         )
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS

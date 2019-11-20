@@ -9,6 +9,7 @@ from core.model import (
     CoverageRecord,
     DataSource,
     ExternalIntegration,
+    ExternalIntegrationLink,
 )
 
 from core.s3 import S3Uploader
@@ -71,7 +72,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # Since no storage integration is configured, we will not be mirroring
         # content anywhere.
-        eq_(None, policy.mirror)
+        assert all([x == None for x in policy.mirrors.values()])
 
         # A VIAFClient was instantiated as well.
         assert isinstance(provider.viaf, VIAFClient)
@@ -93,8 +94,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # and stored in the ReplacementPolicy used by this
         # CoverageProvider.
         policy = provider.replacement_policy
-        assert isinstance(policy.mirror, S3Uploader)
-        eq_("b", policy.mirror.client._request_signer._credentials.secret_key)
+
+        mirror = policy.mirrors[ExternalIntegrationLink.COVERS]
+        assert isinstance(mirror, S3Uploader)
 
     def test_unaffiliated_collection(self):
         """A special collection exists to track Identifiers not affiliated
