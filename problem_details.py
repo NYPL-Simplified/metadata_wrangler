@@ -21,3 +21,10 @@ INVALID_INTEGRATION_DOCUMENT = pd(
     400,
     title=_("Invalid integration document")
 )
+
+DISABLED_CLIENT = pd(
+    "http://librarysimplified.org/terms/problem/client-disabled",
+    403,
+    _("Disabled client"),
+    _("This client's access to the metadata wrangler has been disabled. Please contact the server administrator to work this out."),
+)

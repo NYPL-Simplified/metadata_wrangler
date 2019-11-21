@@ -30,11 +30,11 @@ from core.model import (
 
 from core.overdrive import OverdriveAPI
 
-from core.mirror import MirrorUploader
-
 from core.util import fast_query_count
 
 from oclc.classify import IdentifierLookupCoverageProvider
+
+from coverage_utils import MetadataWranglerReplacementPolicy
 
 from overdrive import (
     OverdriveBibliographicCoverageProvider,
@@ -95,7 +95,8 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         that were previously registered with this CoverageProvider.
 
         :param mirror: A MirrorUploader to use if coverage requires
-        uploading any cover images to external storage.
+        uploading any cover images to external storage. This should
+        only be used when mocking mirror functionality for tests.
 
         :param http_get: A drop-in replacement for
         Representation.simple_http_get, to be used if any information
@@ -126,27 +127,16 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
         """
         _db = Session.object_session(collection)
 
-        # Since we are the metadata wrangler, any resources we find,
-        # we mirror using the sitewide MirrorUploader.
-        if not mirror:
-            try:
-                mirror = MirrorUploader.sitewide(_db)
-            except CannotLoadConfiguration, e:
-                logging.error(
-                    "No storage integration is configured. Cover images will not be stored anywhere.",
-                    exc_info=e
-                )
-        self.mirror = mirror
-
         # We're going to be aggressive about recalculating the presentation
         # for this work because either the work is currently not set up
         # at all, or something went wrong trying to set it up.
         presentation = PresentationCalculationPolicy(
             regenerate_opds_entries=True
         )
-        replacement_policy = ReplacementPolicy.from_metadata_source(
-            presentation_calculation_policy=presentation, mirror=self.mirror,
-            http_get=http_get,
+
+        replacement_policy = MetadataWranglerReplacementPolicy.from_db(
+            _db, presentation_calculation_policy=presentation,
+            http_get=http_get, mirror=mirror
         )
         super(IdentifierResolutionCoverageProvider, self).__init__(
             collection, replacement_policy=replacement_policy,

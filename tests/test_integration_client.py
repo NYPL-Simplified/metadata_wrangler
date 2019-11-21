@@ -9,7 +9,6 @@ from . import (
 )
 
 from core.coverage import CoverageFailure
-from core.metadata_layer import ReplacementPolicy
 from core.model import (
     CoverageRecord,
     ExternalIntegration,
@@ -19,6 +18,7 @@ from core.model import (
 from core.s3 import MockS3Uploader
 from core.testing import AlwaysSuccessfulCoverageProvider
 
+from coverage_utils import MetadataWranglerReplacementPolicy
 from integration_client import (
     CalculatesWorkPresentation,
     IntegrationClientCoverImageCoverageProvider,
@@ -155,8 +155,8 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
     def setup(self):
         super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
         mirror = MockS3Uploader()
-        replacement_policy = ReplacementPolicy.from_metadata_source(
-            mirror=mirror
+        replacement_policy = MetadataWranglerReplacementPolicy.from_db(
+            self._db, mirror=mirror
         )
         self.collection = self._collection(
             protocol=ExternalIntegration.OPDS_FOR_DISTRIBUTORS
@@ -165,6 +165,22 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
         self.provider = IntegrationClientCoverImageCoverageProvider(
             replacement_policy=replacement_policy, collection=self.collection
         )
+
+    def test_default_replacement_policy(self):
+        # In setup() we provide a replacement policy for use in the
+        # test.  If you don't provide a replacement policy, a
+        # MetadataWranglerReplacementPolicy is automatically created.
+        provider = IntegrationClientCoverImageCoverageProvider(
+            collection=self.collection
+        )
+        assert isinstance(
+            provider.replacement_policy, MetadataWranglerReplacementPolicy
+        )
+
+        # Verify that links are replaced. This automatically happens
+        # because of the from_metadata_source() call but we test it
+        # because we used to have code that explicitly set this.
+        eq_(True, provider.replacement_policy.links)
 
     def test_data_source_is_collection_specific(self):
         eq_(self.collection.name, self.provider.data_source.name)

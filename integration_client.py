@@ -12,9 +12,9 @@ from core.coverage import (
 )
 from core.metadata_layer import (
     Metadata,
-    ReplacementPolicy,
 )
 from core.mirror import MirrorUploader
+from coverage_utils import MetadataWranglerReplacementPolicy
 
 
 class WorkPresentationCoverageProvider(WorkCoverageProvider):
@@ -143,10 +143,7 @@ class IntegrationClientCoverImageCoverageProvider(CatalogCoverageProvider,
 
         replacement_policy = kwargs.pop('replacement_policy', None)
         if not replacement_policy:
-            mirror = MirrorUploader.sitewide(_db)
-            replacement_policy = ReplacementPolicy(
-                mirror=mirror, links=True
-            )
+            replacement_policy = MetadataWranglerReplacementPolicy.from_db(_db)
 
         # Only process identifiers that have been registered for coverage.
         kwargs['registered_only'] = kwargs.get('registered_only', True)

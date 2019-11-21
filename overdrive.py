@@ -10,7 +10,6 @@ from core.model import (
     ExternalIntegration,
     Identifier,
 )
-from core.metadata_layer import ReplacementPolicy
 from core.overdrive import (
     OverdriveBibliographicCoverageProvider as BaseOverdriveBibliographicCoverageProvider,
     OverdriveAPI

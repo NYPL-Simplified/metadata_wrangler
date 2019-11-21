@@ -11,6 +11,8 @@ from core.coverage import CoverageFailure
 
 from core.model import (
     DataSource,
+    ExternalIntegration,
+    ExternalIntegrationLink,
     Work,
 )
 from core.mirror import MirrorUploader
@@ -18,6 +20,7 @@ from core.tests.test_s3 import S3UploaderTest
 
 from coverage_utils import (
     MetadataWranglerBibliographicCoverageProvider,
+    MetadataWranglerReplacementPolicy,
     ResolveVIAFOnSuccessCoverageProvider,
 )
 
@@ -28,29 +31,63 @@ class MockProvider(MetadataWranglerBibliographicCoverageProvider):
     SERVICE_NAME = "Mock"
     DATA_SOURCE_NAME = DataSource.GUTENBERG
 
+class TestMetadataWranglerReplacementPolicy(DatabaseTest):
 
-class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
-
-    def test__default_replacement_policy(self):
+    def test_from_db(self):
         """The default replacement policy for all metadata wrangler
         bibliographic coverage providers treats the data source
         as a source of metadata, and knows about any
         configured site-wide MirrorUploader.
         """
 
-        # Configure an S3 integration so MirrorUploader.sitewide()
-        # will find something.
-        integration = self._integration()
-
-        provider = MockProvider(self._default_collection)
-        policy = provider._default_replacement_policy(self._db)
+        # First, try with no storage integration configured.
+        m = MetadataWranglerReplacementPolicy.from_db
+        policy = m(self._db)
 
         # The sort of thing you expect from a metadata source.
         eq_(True, policy.subjects)
         eq_(True, policy.contributions)
 
-        # The mirror was created and associated with the policy.
-        assert isinstance(policy.mirror, MirrorUploader)
+        # But no configured MirrorUploaders.
+        assert all([x==None for x in policy.mirrors.values()])
+
+        # Now configure a storage integration and try again.
+        integration = self._external_integration(
+            goal=ExternalIntegration.STORAGE_GOAL,
+            protocol=ExternalIntegration.S3,
+            username="username", password="password"
+        )
+
+        # A MirrorUploader for that integration was created and
+        # associated with the policy.
+        policy = m(self._db)
+        mirrors = policy.mirrors
+        uploader = mirrors[ExternalIntegrationLink.COVERS]
+        assert isinstance(uploader, MirrorUploader)
+
+        # The MirrorUploader has been properly configured with the
+        # secret key from the integration.
+        eq_("password", uploader.client._request_signer._credentials.secret_key)
+
+        # But the MirrorUploader is only to be used for book covers. The
+        # metadata wrangler ignores the books themselves.
+        eq_(None, mirrors[ExternalIntegrationLink.BOOKS])
+
+
+class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
+
+    def test__default_replacement_policy(self):
+        # The default replacement policy is a
+        # MetadataWranglerReplacementPolicy.
+        mock_mirror = object()
+        provider = MockProvider(self._default_collection)
+        policy = provider._default_replacement_policy(
+            self._db, mirror=mock_mirror
+        )
+        assert isinstance(
+            policy, MetadataWranglerReplacementPolicy
+        )
+        eq_(mock_mirror, policy.mirrors[ExternalIntegrationLink.COVERS])
 
     def test_work_created_with_internal_processing_licensepool(self):
         class Mock(MetadataWranglerBibliographicCoverageProvider):

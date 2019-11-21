@@ -1,3 +1,4 @@
+import logging
 from nose.tools import set_trace
 
 from sqlalchemy.orm.session import Session
@@ -10,26 +11,54 @@ from core.coverage import (
 from core.metadata_layer import ReplacementPolicy
 from core.mirror import MirrorUploader
 from core.model import (
+    get_one,
     DataSource,
+    ExternalIntegration,
+    ExternalIntegrationLink,
     Work,
 )
 
+class MetadataWranglerReplacementPolicy(ReplacementPolicy):
+    """A ReplacementPolicy that uses the only configured storage
+    integration as its cover mirror.
+    """
+    @classmethod
+    def from_db(cls, _db, **kwargs):
+        """Create a MetadataWranglerReplacementPolicy based on
+        database settings -- specifically, with the configured
+        MirrorUploader for cover images.
+
+        :param mirror: Pass in a mock MirrorUploader to use it
+        instead of creating a real one.
+        """
+        mirror = kwargs.pop('mirror', None)
+        if not mirror:
+            integration = get_one(
+                _db, ExternalIntegration, goal=ExternalIntegration.STORAGE_GOAL
+            )
+            if integration:
+                mirror = MirrorUploader.implementation(integration)
+            else:
+                logging.error(
+                    "No storage integration is configured. Cover images will not be mirrored. You really ought to set up a storage integration."
+                )
+                mirror = None
+        mirrors = { ExternalIntegrationLink.COVERS : mirror,
+                    ExternalIntegrationLink.BOOKS : None }
+        return cls.from_metadata_source(
+            mirrors=mirrors, **kwargs
+        )
+
+
 class MetadataWranglerBibliographicCoverageProvider(BibliographicCoverageProvider):
 
-    def _default_replacement_policy(self, _db):
+    def _default_replacement_policy(self, _db, **kwargs):
         """In general, data used by the metadata wrangler is a reliable source
         of metadata but not of licensing information. We always
         provide the MirrorUploader in case a data source has cover
         images available.
         """
-        try:
-            mirror = MirrorUploader.sitewide(_db)
-        except CannotLoadConfiguration, e:
-            # It's not a problem if there's no MirrorUploader
-            # configured -- it just means we can't mirror cover images
-            # when they show up.
-            mirror = None
-        return ReplacementPolicy.from_metadata_source(mirror=mirror)
+        return MetadataWranglerReplacementPolicy.from_db(_db, **kwargs)
 
     def work(self, identifier):
         """Create or find a Work for the given Identifier.
