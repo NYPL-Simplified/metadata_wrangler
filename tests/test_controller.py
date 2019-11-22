@@ -575,6 +575,9 @@ class TestCatalogController(ControllerTest):
             # work1 shows up first since it was created earlier.
             eq_(identifier.urn, entry['id'])
 
+            # The first page lists the total number of items in the catalog.
+            eq_('2', feed['feed']['opensearch_totalresults'])
+
         # Page two contains work2.
         with self.authenticated_request(
                 '/?last_update_time=%s&size=1&after=1' % yesterday_timestamp,
@@ -584,6 +587,10 @@ class TestCatalogController(ControllerTest):
             feed = feedparser.parse(response.get_data())
             [entry] = feed['entries']
             eq_(identifier2.urn, entry['id'])
+
+            # Subsequent pages don't bother listing the total number
+            # of items.
+            assert 'opensearch_totalresults' not in feed['feed']
 
     def test_updates_feed_is_paginated(self):
         for work in [self.work1, self.work2]:
