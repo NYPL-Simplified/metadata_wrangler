@@ -43,6 +43,7 @@ from core.model import (
     LicensePool,
     PresentationCalculationPolicy,
     Representation,
+    Session,
     Work,
     create,
     get_one,
@@ -466,12 +467,31 @@ class CatalogController(Controller):
             precomposed_entries=precomposed_entries
         )
 
+        # If this is the first page of the updates feed, list the
+        # total number of items in the feed.
+        if pagination.offset == 0:
+            self.add_catalog_size_to_feed(update_feed, collection)
+
         self.add_pagination_links_to_feed(
             pagination, updated_works, update_feed, 'updates', collection,
             **url_params
         )
 
         return feed_response(update_feed)
+
+    def add_catalog_size_to_feed(self, feed, collection):
+        """Add an <opensearch:totalResults> tag to `feed`
+        representing the size of the catalog in `collection`.
+        """
+        _db = Session.object_session(collection)
+        size = _db.query(collections_identifiers).filter(
+            collections_identifiers.c.collection_id==collection.id
+        ).count()
+        total_results_tag = LookupAcquisitionFeed.makeelement(
+            "{%s}totalResults" % LookupAcquisitionFeed.OPENSEARCH_NS,
+        )
+        total_results_tag.text = str(size)
+        feed.feed.append(total_results_tag)
 
     def add_items(self, metadata_identifier):
         """Adds identifiers to a Collection's catalog"""
