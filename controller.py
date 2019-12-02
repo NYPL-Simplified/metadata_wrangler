@@ -427,13 +427,19 @@ class CatalogController(Controller):
 
         precomposed_entries = []
         # Add entries for Works associated with the collection's catalog.
-        updated_works = collection.works_updated_since(self._db, last_update_time)
-        works = pagination.modify_database_query(
-            self._db, updated_works
-        ).all()
+
+        # Get all the LicensePools with an updated Work.
+        updated_licensepools = collection.licensepools_with_works_updated_since(
+            self._db, last_update_time
+        )
+        lps = pagination.modify_database_query(self._db, updated_licensepools)
         annotator = VerboseAnnotator()
         works_for_feed = []
-        for work, licensepool, identifier in works:
+        for licensepool in lps:
+            # .work and .identifier were loaded when the query ran, so
+            # there's no extra work here.
+            work = licensepool.work
+            identifier = licensepool.identifier
             entry = work.verbose_opds_entry or work.simple_opds_entry
             if entry:
                 # A cached OPDS entry for this Work already
@@ -473,8 +479,8 @@ class CatalogController(Controller):
             self.add_catalog_size_to_feed(update_feed, collection)
 
         self.add_pagination_links_to_feed(
-            pagination, updated_works, update_feed, 'updates', collection,
-            **url_params
+            pagination, updated_licensepools, update_feed, 'updates',
+            collection, **url_params
         )
 
         return feed_response(update_feed)
