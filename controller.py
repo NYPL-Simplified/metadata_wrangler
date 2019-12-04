@@ -27,6 +27,7 @@ from core.app_server import (
     HeartbeatController,
     Pagination,
     URNLookupController as CoreURNLookupController,
+    URNLookupHandler as CoreURNLookupHandler
 )
 from core.config import Configuration
 from core.model import (
@@ -923,8 +924,7 @@ class IntegrationClientController(Controller):
 
         return make_response(content, status_code, headers)
 
-
-class URNLookupController(CoreURNLookupController, Controller):
+class URNLookupHandler(CoreURNLookupHandler):
 
     WORKING_TO_RESOLVE_IDENTIFIER = "I don't have enough information about this Identifier yet.\nDetailed work log:\n "
 
@@ -943,22 +943,16 @@ class URNLookupController(CoreURNLookupController, Controller):
 
     log = logging.getLogger("URN lookup controller")
 
-    def __init__(
-            self, _db, identifier_resolver_class=IdentifierResolutionCoverageProvider,
-            coverage_provider_kwargs=None,
-    ):
-        """Constructor.
-
-        :param identifier_resolver_class: A class to instantiate instead
-            of IdentifierResolutionCoverageProvider during tests.
-        :param coverage_provider_kwargs: When instantiating
-            identifier_resolver_class, pass in these keyword
-            arguments. Used only in testing.
+    def __init__(self, _db, resolver, collection):
         """
-        self._default_collection_id = None
-        super(URNLookupController, self).__init__(_db)
-        self.identifier_resolver_class = identifier_resolver_class
-        self.coverage_provider_kwargs = dict(coverage_provider_kwargs or {})
+        :param collection: All identifiers will be registered with this collection.
+        :param resolver: An IdentifierResolutionCoverageProvider which
+            will either create a presentation-ready Work immediately, or
+            make sure that one eventually gets created.
+        """
+        super(URNLookupHandler, self).__init__(_db)
+        self.resolver = resolver
+        self.collection = collection
 
     def presentation_ready_work_for(self, identifier):
         """Either return an existing presentation-ready work associated with
@@ -969,74 +963,31 @@ class URNLookupController(CoreURNLookupController, Controller):
             return work
         return None
 
-    def process_urns(self, urns, metadata_identifier=None, **kwargs):
-        """Processes URNs submitted via lookup request
-
-        An authenticated request can process up to 30 URNs at once,
-        but must specify a collection under which to catalog the
-        URNs. This is used when initially recording the fact that
-        certain URNs are in a collection, to get a baseline set of
-        metadata. Updates on the books should be obtained through the
-        CatalogController.
-
-        An unauthenticated request is used for testing. Such a request
-        does not have to specify a collection (the "Unaffiliated"
-        collection is used), but can only process one URN at a time.
-
-        :return: None or ProblemDetail
-
-        """
-        collection = self.load_collection(
-            metadata_identifier, authentication_required=False
-        )
-        if isinstance(collection, ProblemDetail):
-            return collection
-
-        if flask.request.authenticated_client:
-            # Authenticated access -- .authenticated_client was set
-            # inside load_collection().
-            limit = 30
-        else:
-            # Anonymous access.
-            collection = self.default_collection
-            limit = 1
-
-        resolve_now = flask.request.args.get("resolve_now", None) is not None
-        if resolve_now:
-            # You can't force-resolve more than one Identifier at a time.
-            limit = 1
-
-        if len(urns) > limit:
-            return INVALID_INPUT.detailed(
-                _("The maximum number of URNs you can provide at once is %d. (You sent %d)") % (limit, len(urns))
-            )
+    def process_urns(self, urns, **kwargs):
+        """Processes URNs submitted via lookup request"""
         identifiers_by_urn, failures = Identifier.parse_urns(
             self._db, urns, allowed_types=self.VALID_TYPES
         )
         self.add_urn_failure_messages(failures)
 
         # Catalog all identifiers.
-        collection.catalog_identifiers(identifiers_by_urn.values())
+        self.collection.catalog_identifiers(identifiers_by_urn.values())
 
         # Load all coverage records in a single query to speed up the
         # code that reports on the status of Identifiers that aren't
         # ready.
         self.bulk_load_coverage_records(identifiers_by_urn.values())
 
-        resolver = self.identifier_resolver_class(
-            collection, provide_coverage_immediately=resolve_now,
-            **self.coverage_provider_kwargs
-        )
         for urn, identifier in identifiers_by_urn.items():
             self.process_identifier(
-                identifier, urn, resolver=resolver
+                identifier, urn, 
             )
 
-    def process_identifier(self, identifier, urn, resolver):
+    def process_identifier(self, identifier, urn):
         """If there is a presentation-ready Work for the given Identifier,
         add its OPDS entry to the feed.
 
-        Otherwise, use the `resolver` to either do all the work
+        Otherwise, use the `self.resolver` to either do all the work
         immediately, or to lay the groundwork that will eventually
         give us a presentation-ready Work. Add to the OPDS feed a
         status message indicating that we're working on it.
@@ -1045,10 +996,6 @@ class URNLookupController(CoreURNLookupController, Controller):
         :param urn: The original URN provided by the client. This
             might be different from Identifier.urn, e.g. because of
             ISBN normalization.
-        :param collection: The Identifier was registered with this collection.
-        :param resolver: An IdentifierResolutionCoverageProvider which
-            will either create a presentation-ready Work immediately, or
-            make sure that one eventually gets created.
         :return: None.
         """
         work = self.presentation_ready_work_for(identifier)
@@ -1065,7 +1012,7 @@ class URNLookupController(CoreURNLookupController, Controller):
         # refresh the registration every time someone asks. (A given
         # library shouldn't ask more than once, and this code will
         # stop running once a presentation-ready Work is created.)
-        result = resolver.ensure_coverage(identifier, force=True)
+        result = self.resolver.ensure_coverage(identifier, force=True)
 
         work = self.presentation_ready_work_for(identifier)
         if work:
@@ -1116,3 +1063,73 @@ class URNLookupController(CoreURNLookupController, Controller):
         created.
         """
         self._db.commit()
+
+class URNLookupController(CoreURNLookupController, Controller):
+
+    def __init__(
+            self, _db, identifier_resolver_class=IdentifierResolutionCoverageProvider,
+            coverage_provider_kwargs=None,
+    ):
+        """Constructor.
+
+        :param identifier_resolver_class: A class to instantiate instead
+            of IdentifierResolutionCoverageProvider during tests.
+        :param coverage_provider_kwargs: When instantiating
+            identifier_resolver_class, pass in these keyword
+            arguments. Used only in testing.
+        """
+        self._default_collection_id = None
+        super(URNLookupController, self).__init__(_db)
+        self.identifier_resolver_class = identifier_resolver_class
+        self.coverage_provider_kwargs = dict(coverage_provider_kwargs or {})
+
+    def process_urns(self, urns, metadata_identifier=None, **kwargs):
+        """Processes URNs submitted via lookup request
+
+        An authenticated request can process up to 30 URNs at once,
+        but must specify a collection under which to catalog the
+        URNs. This is used when initially recording the fact that
+        certain URNs are in a collection, to get a baseline set of
+        metadata. Updates on the books should be obtained through the
+        CatalogController.
+
+        An unauthenticated request is used for testing. Such a request
+        does not have to specify a collection (the "Unaffiliated"
+        collection is used), but can only process one URN at a time.
+
+        :return: URNLookupHandler or ProblemDetail
+
+        """
+        collection = self.load_collection(
+            metadata_identifier, authentication_required=False
+        )
+        if isinstance(collection, ProblemDetail):
+            return collection
+
+        if flask.request.authenticated_client:
+            # Authenticated access -- .authenticated_client was set
+            # inside load_collection().
+            limit = 30
+        else:
+            # Anonymous access.
+            collection = self.default_collection
+            limit = 1
+
+        resolve_now = flask.request.args.get("resolve_now", None) is not None
+        if resolve_now:
+            # You can't force-resolve more than one Identifier at a time.
+            limit = 1
+
+        if len(urns) > limit:
+            return INVALID_INPUT.detailed(
+                _("The maximum number of URNs you can provide at once is %d. (You sent %d)") % (limit, len(urns))
+            )
+
+        resolver = self.identifier_resolver_class(
+            collection, provide_coverage_immediately=resolve_now,
+            **self.coverage_provider_kwargs
+        )
+        handler = URNLookupHandler(self._db, resolver, collection)
+        handler.process_urns(urns, **kwargs)
+
+        return handler

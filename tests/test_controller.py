@@ -67,6 +67,7 @@ from controller import (
     IndexController,
     IntegrationClientController,
     URNLookupController,
+    URNLookupHandler,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_ACCEPTED,
@@ -1144,6 +1145,55 @@ class TestIntegrationClientController(ControllerTest):
             eq_("Error decoding JWT: Signature has expired", response.detail)
 
 
+class TestURNLookupHandler(DatabaseTest):
+    def test_process_identifier(self):
+        class MockHandler(URNLookupHandler):
+            ready_work = None
+            def presentation_ready_work_for(self, identifier):
+                return self.ready_work
+
+            def add_status_message(self, urn, identifier):
+                self.status_message = (urn, identifier)
+
+        # If a work is already presentation-ready, it is used immediately.
+        # No other code runs.
+        handler = MockHandler(self._db, object(), object())
+        work = object()
+        handler.ready_work = work
+        identifier = object()
+        urn = object()
+        handler.process_identifier(identifier, urn)
+        eq_([(identifier, work)], handler.works)
+
+        # If a work is not presentation-ready, but calling
+        # resolver.ensure_coverage makes it presentation ready, it is
+        # used immediately.
+        class SuccessfulResolver(object):
+            force = False
+            def ensure_coverage(self, identifier, force):
+                handler.ready_work = work
+
+        handler = MockHandler(self._db, SuccessfulResolver(), object())
+        handler.ready_work = None
+        handler.works = []
+        handler.process_identifier(identifier, urn)
+        eq_([(identifier, work)], handler.works)
+
+        # If a work is not presentation-ready, and calling
+        # resolver.ensure_coverage does not make it presentation
+        # ready, handler.add_status_message is called
+        class UnsuccessfulResolver(object):
+            force = False
+            def ensure_coverage(self, identifier, force):
+                handler.ready_work = None
+
+        handler = MockHandler(self._db, UnsuccessfulResolver(), object())
+        handler.ready_work = None
+        handler.works = []
+        handler.process_identifier(identifier, urn)
+        eq_([], handler.works)
+        eq_((urn, identifier), handler.status_message)
+
 class TestURNLookupController(ControllerTest):
 
     ISBN_URN = 'urn:isbn:9781449358068'
@@ -1206,18 +1256,18 @@ class TestURNLookupController(ControllerTest):
                 return f(*args, **kwargs)
         return decorated
 
-    def one_message(self, urn, status_code, message_prefix):
+    def one_message(self, urn, status_code, message_prefix, handler):
         """Assert that a <message> with the given status code and URN is the
         only thing in the feed.
 
         Return the string associated with the message, which can be
         used in further assertions.
         """
-        [obj] = self.controller.precomposed_entries
+        [obj] = handler.precomposed_entries
         assert isinstance(obj, OPDSMessage)
         eq_(urn, obj.urn)
         eq_(status_code, obj.status_code)
-        eq_([], self.controller.works)
+        eq_([], handler.works)
         if message_prefix:
             assert obj.message.startswith(message_prefix)
         return obj.message
@@ -1232,10 +1282,10 @@ class TestURNLookupController(ControllerTest):
         urn = identifier.urn.replace('changeme', 'abc-123-xyz')
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], metadata_identifier=name)
+        handler = self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
-            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+            URNLookupHandler.WORKING_TO_RESOLVE_IDENTIFIER, handler
         )
 
         # The Identifier was successfully resolved, that is, it was
@@ -1274,10 +1324,10 @@ class TestURNLookupController(ControllerTest):
 
         # Processing the URN a second time will give the same result.
         self.controller.precomposed_entries = []
-        self.controller.process_urns([urn], metadata_identifier=name)
+        handler = self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
-            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+            URNLookupHandler.WORKING_TO_RESOLVE_IDENTIFIER, handler
         )
         assert 'operation="resolve-identifier" status=success' in message
         assert 'Overdrive - status=registered' in message
@@ -1288,10 +1338,10 @@ class TestURNLookupController(ControllerTest):
         urn = self.ISBN_URN
         name = self.overdrive_collection.metadata_identifier
 
-        self.controller.process_urns([urn], metadata_identifier=name)
+        handler = self.controller.process_urns([urn], metadata_identifier=name)
         message = self.one_message(
             urn, 202,
-            URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+            URNLookupHandler.WORKING_TO_RESOLVE_IDENTIFIER, handler
         )
 
         # The Identifier was not registered with the CoverageProvider
@@ -1330,11 +1380,11 @@ class TestURNLookupController(ControllerTest):
 
         cover = self.data_file("covers/test-book-cover.png")
         self.http.queue_response(200, "image/jpeg", content=cover)
-        self.controller.process_urns([urn], metadata_identifier=name)
+        handler = self.controller.process_urns([urn], metadata_identifier=name)
 
         # A presentation-ready work with a LicensePool was immediately
         # created.
-        [(identifier, work)] = self.controller.works
+        [(identifier, work)] = handler.works
         [lp] = work.license_pools
         eq_(urn, lp.identifier.urn)
         eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
@@ -1393,9 +1443,9 @@ class TestURNLookupController(ControllerTest):
         urn = self.ISBN_URN
 
         # Test success.
-        self.controller.process_urns([urn])
+        handler = self.controller.process_urns([urn])
         message = self.one_message(
-            urn, 202, URNLookupController.WORKING_TO_RESOLVE_IDENTIFIER
+            urn, 202, URNLookupHandler.WORKING_TO_RESOLVE_IDENTIFIER, handler
         )
 
         # The ISBN was registered with the Content Cafe coverage provider,
@@ -1429,56 +1479,8 @@ class TestURNLookupController(ControllerTest):
         # know we can't resolve it.
         identifier = self._identifier(Identifier.BIBLIOTHECA_ID)
         response = self.controller.process_urns([identifier.urn])
-        [message] = self.controller.precomposed_entries
+        [message] = response.precomposed_entries
         eq_("Could not parse identifier.", message.message)
-
-    def test_process_identifier(self):
-        class MockController(URNLookupController):
-            ready_work = None
-            def presentation_ready_work_for(self, identifier):
-                return self.ready_work
-
-            def add_status_message(self, urn, identifier):
-                self.status_message = (urn, identifier)
-
-        # If a work is already presentation-ready, it is used immediately.
-        # No other code runs.
-        controller = MockController(self._db)
-        work = object()
-        controller.ready_work = work
-        identifier = object()
-        urn = object()
-        controller.process_identifier(identifier, urn, object())
-        eq_([(identifier, work)], controller.works)
-
-        # If a work is not presentation-ready, but calling
-        # resolver.ensure_coverage makes it presentation ready, it is
-        # used immediately.
-        class SuccessfulResolver(object):
-            force = False
-            def ensure_coverage(self, identifier, force):
-                controller.ready_work = work
-
-        controller.ready_work = None
-        controller.works = []
-        controller.process_identifier(
-            identifier, urn, SuccessfulResolver()
-        )
-        eq_([(identifier, work)], controller.works)
-
-        # If a work is not presentation-ready, and calling
-        # resolver.ensure_coverage does not make it presentation
-        # ready, controller.add_status_message is called
-        class UnsuccessfulResolver(object):
-            force = False
-            def ensure_coverage(self, identifier, force):
-                controller.ready_work = None
-
-        controller.ready_work = None
-        controller.works = []
-        controller.process_identifier(identifier, urn, UnsuccessfulResolver())
-        eq_([], controller.works)
-        eq_((urn, identifier), controller.status_message)
 
 
 class TestCanonicalizationController(ControllerTest):
