@@ -11,7 +11,6 @@ urllib3<1.24 # Travis problem introduced 20181016 - check to see when we can rem
 lxml
 flask
 flask-sqlalchemy-session
-textblob
 isbnlib
 feedparser
 uwsgi
@@ -27,11 +26,15 @@ accept-types
 watchtower # for cloudwatch logging
 pyspellchecker
 
+# nltk is a textblob dependency, and this is the last release that supports Python 2
+nltk==3.4.5
+textblob
+
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
 
 # Used only by metadata
-pyld
+pyld==1.0.5
 beautifulsoup4
 zeep
 py-bcrypt
