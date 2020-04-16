@@ -34,7 +34,7 @@ textblob
 ndg-httpsclient
 
 # Used only by metadata
-pyld
+pyld==1.0.5
 beautifulsoup4
 zeep
 py-bcrypt
