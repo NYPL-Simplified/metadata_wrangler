@@ -18,7 +18,7 @@ pycrypto
 python-dateutil
 loggly-python-handler
 mock
-cairosvg==1.0.22
+cairosvg==2.5.1
 Flask-Babel
 money
 pymarc
