@@ -44,7 +44,7 @@ class MetadataWranglerReplacementPolicy(ReplacementPolicy):
                 )
                 mirror = None
         mirrors = { ExternalIntegrationLink.COVERS : mirror,
-                    ExternalIntegrationLink.BOOKS : None }
+                    ExternalIntegrationLink.OPEN_ACCESS_BOOKS : None }
         return cls.from_metadata_source(
             mirrors=mirrors, **kwargs
         )

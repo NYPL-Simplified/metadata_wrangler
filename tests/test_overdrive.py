@@ -3,6 +3,7 @@ from nose.tools import (
     eq_,
     set_trace,
 )
+import urllib
 from core.metadata_layer import ReplacementPolicy
 from core.s3 import MockS3Uploader
 from core.testing import (
@@ -52,9 +53,9 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
 
         # Now let's try looking up a specific identifier through 'Overdrive'.
         identifier = self._identifier(
-            Identifier.OVERDRIVE_ID, "3896665d-9d81-4cac-bd43-ffc5066de1f5"
+            identifier_type=Identifier.OVERDRIVE_ID,
+            foreign_id="3896665d-9d81-4cac-bd43-ffc5066de1f5"
         )
-
 
         body = self.data_file("overdrive/overdrive_metadata.json")
         provider.api.queue_response(200, {}, body)
@@ -79,9 +80,9 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
 
         # The URLs for the Resource objects are our S3 URLs, not Overdrive's
         # URLs.
-        expect = "Overdrive/Overdrive+ID/%s" % identifier.identifier
+        expect = "Overdrive/Overdrive ID/%s" % identifier.identifier
         for url in [full.mirror_url, thumbnail.mirror_url]:
-            assert expect in url
+            assert urllib.quote(expect) in url
         assert "/scaled/" in thumbnail.mirror_url
         assert "/scaled/" not in full.mirror_url
 

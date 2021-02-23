@@ -22,7 +22,6 @@ import urlparse
 
 from core.app_server import (
     cdn_url_for,
-    feed_response,
     load_pagination_from_request,
     HeartbeatController,
     Pagination,
@@ -68,6 +67,7 @@ from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.util.string_helpers import base64
+from core.util.flask_util import OPDSFeedResponse
 
 from coverage_provider import (
     IdentifierResolutionCoverageProvider,
@@ -484,7 +484,7 @@ class CatalogController(Controller):
             collection, **url_params
         )
 
-        return feed_response(update_feed)
+        return OPDSFeedResponse(update_feed)
 
     def add_catalog_size_to_feed(self, feed, collection):
         """Add an <opensearch:totalResults> tag to `feed`
@@ -547,7 +547,7 @@ class CatalogController(Controller):
             precomposed_entries=messages
         )
 
-        return feed_response(addition_feed)
+        return OPDSFeedResponse(addition_feed)
 
     def add_with_metadata(self, metadata_identifier):
         """Adds identifiers with their metadata to a Collection's catalog"""
@@ -636,7 +636,7 @@ class CatalogController(Controller):
             precomposed_entries=messages
         )
 
-        return feed_response(addition_feed)
+        return OPDSFeedResponse(addition_feed)
 
     def metadata_needed_for(self, metadata_identifier):
         """Returns identifiers in the collection that could benefit from
@@ -696,7 +696,7 @@ class CatalogController(Controller):
             'metadata_needed_for', collection
         )
 
-        return feed_response(request_feed)
+        return OPDSFeedResponse(request_feed)
 
     def remove_items(self, metadata_identifier):
         """Removes identifiers from a Collection's catalog"""
@@ -749,7 +749,7 @@ class CatalogController(Controller):
             precomposed_entries=messages
         )
 
-        return feed_response(removal_feed)
+        return OPDSFeedResponse(removal_feed)
 
     def _in_catalog_subset(self, collection, identifiers_by_urn):
         """Helper method to find a subset of identifiers that

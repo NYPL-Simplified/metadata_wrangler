@@ -71,7 +71,7 @@ class TestMetadataWranglerReplacementPolicy(DatabaseTest):
 
         # But the MirrorUploader is only to be used for book covers. The
         # metadata wrangler ignores the books themselves.
-        eq_(None, mirrors[ExternalIntegrationLink.BOOKS])
+        eq_(None, mirrors[ExternalIntegrationLink.OPEN_ACCESS_BOOKS])
 
 
 class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
