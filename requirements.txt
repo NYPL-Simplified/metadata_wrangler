@@ -25,6 +25,7 @@ pymarc
 accept-types
 watchtower # for cloudwatch logging
 pyspellchecker==0.5.6
+parameterized
 
 # nltk is a textblob dependency, and this is the last release that supports Python 2
 nltk==3.4.5
