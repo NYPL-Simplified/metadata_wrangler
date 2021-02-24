@@ -1,35 +1,11 @@
-# Core requirements
-boto3
-elasticsearch>6.0.0,<7.0.0
-elasticsearch-dsl>6.0.0,<7.0.0
-pillow
-psycopg2
-requests==2.20.0
-sqlalchemy==1.1.15
-nose
-urllib3<1.24 # Travis problem introduced 20181016 - check to see when we can remove
-lxml
-flask
-flask-sqlalchemy-session
-isbnlib
-feedparser
-uwsgi
-pycrypto
-python-dateutil
-loggly-python-handler
-mock
-cairosvg==1.0.22
-Flask-Babel
-money
-pymarc
-accept-types
-watchtower # for cloudwatch logging
-pyspellchecker==0.5.6
-parameterized
+-r core/requirements.txt
 
-# nltk is a textblob dependency, and this is the last release that supports Python 2
-nltk==3.4.5
-textblob
+urllib3<1.24 # Travis problem introduced 20181016 - check to see when we can remove
+flask-sqlalchemy-session
+pycrypto
+cairosvg==1.0.22
+accept-types
+# pyspellchecker==0.5.6
 
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
@@ -38,10 +14,7 @@ ndg-httpsclient
 pyld==1.0.5
 beautifulsoup4
 zeep
-py-bcrypt
 pyjwt==1.4.2
 
 # for author name matching
-nameparser
-fuzzywuzzy
 python-Levenshtein
