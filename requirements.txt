@@ -5,7 +5,7 @@ flask-sqlalchemy-session
 pycrypto
 cairosvg==1.0.22
 accept-types
-# pyspellchecker==0.5.6
+pyspellchecker==0.5.6
 
 # Ensure that we support SNI-based SSL
 ndg-httpsclient
