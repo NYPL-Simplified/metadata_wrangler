@@ -72,7 +72,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # Since no storage integration is configured, we will not be mirroring
         # content anywhere.
-        assert all([x == None for x in policy.mirrors.values()])
+        assert all([x == None for x in list(policy.mirrors.values())])
 
         # A VIAFClient was instantiated as well.
         assert isinstance(provider.viaf, VIAFClient)

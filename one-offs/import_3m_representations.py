@@ -26,7 +26,7 @@ def imp(db, data_source, path, url):
     representation.content = data
     representation.media_type = 'application/xml'
     representation.fetched_at = modified
-    print url
+    print(url)
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]

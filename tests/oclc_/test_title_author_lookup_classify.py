@@ -164,12 +164,12 @@ class TestParser(DatabaseTest):
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
         eq_(
-            ['', '', u'n50025038', u'n50050335', u'n79006936',
-             u'n79059764'],
+            ['', '', 'n50025038', 'n50050335', 'n79006936',
+             'n79059764'],
             sorted([x.lc or '' for x in work.contributors])
         )
         eq_(
-            ['', '', u'27068555', u'34482742', u'4947338', u'51716047'],
+            ['', '', '27068555', '34482742', '4947338', '51716047'],
             sorted([x.viaf or '' for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
@@ -276,8 +276,8 @@ class TestAuthorParser(DatabaseTest):
             "1882", "1971")
 
         self.assert_parse(
-            u"Карролл, Лувис, 1832-1898.",
-            u"Карролл, Лувис", Contributor.PRIMARY_AUTHOR_ROLE,
+            "Карролл, Лувис, 1832-1898.",
+            "Карролл, Лувис", Contributor.PRIMARY_AUTHOR_ROLE,
             birthdate="1832", deathdate="1898")
 
         kerry, melville = OCLCTitleAuthorLookupXMLParser.parse_author_string(
@@ -325,16 +325,16 @@ class TestAuthorParser(DatabaseTest):
         # These are titles we don't parse as well as we ought, but
         # we are able to handle them without crashing.
         self.assert_parse(
-            u"梅爾維爾 (Melville, Herman), 1819-1891",
-            u"梅爾維爾 (Melville, Herman)", Contributor.PRIMARY_AUTHOR_ROLE,
+            "梅爾維爾 (Melville, Herman), 1819-1891",
+            "梅爾維爾 (Melville, Herman)", Contributor.PRIMARY_AUTHOR_ROLE,
             birthdate="1819", deathdate="1891")
 
         self.assert_parse(
-            u"卡洛爾 (Carroll, Lewis), (英), 1832-1898",
-            u"卡洛爾 (Carroll, Lewis), (英)", Contributor.PRIMARY_AUTHOR_ROLE,
+            "卡洛爾 (Carroll, Lewis), (英), 1832-1898",
+            "卡洛爾 (Carroll, Lewis), (英)", Contributor.PRIMARY_AUTHOR_ROLE,
             birthdate="1832", deathdate="1898")
 
-        s = u"杜格孫 (Dodgson, Charles Lutwidge,1832-1896)"
+        s = "杜格孫 (Dodgson, Charles Lutwidge,1832-1896)"
         self.assert_parse(s, s, Contributor.PRIMARY_AUTHOR_ROLE)
 
 
@@ -379,7 +379,7 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
         eq_(True, result.exception.endswith('title and author!'))
 
         # Create an edition without an author
-        self.edition.title = u"Jane Eyre"
+        self.edition.title = "Jane Eyre"
         self._db.delete(self.edition.contributions[0])
         self._db.commit()
 

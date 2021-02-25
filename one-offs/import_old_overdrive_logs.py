@@ -58,10 +58,10 @@ def process_file(_db, filename):
         for i in gzip.open(filename):
             data = json.loads(i.strip())
             process_item(_db, data)
-    except zlib.error, e:
-        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
-    except IOError, e:
-        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
+    except zlib.error as e:
+        print("DATA CORRUPTION, GIVING UP ON THIS FILE")
+    except IOError as e:
+        print("DATA CORRUPTION, GIVING UP ON THIS FILE")
 
 
 done = set()
@@ -76,9 +76,9 @@ for filename in os.listdir(data_dir):
         continue
     path = os.path.join(data_dir, filename)
     if path in done:
-        print "Already did %s" % path
+        print("Already did %s" % path)
         continue
     process_file(database, path)
-    print "DONE with %s! DONE!" % path
+    print("DONE with %s! DONE!" % path)
     database.commit()
     done_out.write(path + "\n")

@@ -411,7 +411,7 @@ class ContentCafeSOAPClient(object):
             return None
         if isinstance(cutoff, datetime.timedelta):
             cutoff = as_of - cutoff
-        for k, v in by_year_and_month.items():
+        for k, v in list(by_year_and_month.items()):
             lifetime.append(v)
             if not cutoff or k >= cutoff:
                 recent.append(v)

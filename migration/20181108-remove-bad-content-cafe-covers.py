@@ -29,11 +29,11 @@ policy = PresentationCalculationPolicy(
     choose_summary=False, calculate_quality=False
 )
 for rep in qu:
-    print rep.id
+    print(rep.id)
     identifiers = [h.identifier for h in rep.resource.links]
     fix_editions = []
     for identifier in identifiers:
-        print identifier
+        print(identifier)
         for edition in identifier.primarily_identifies:
             if (edition.cover_thumbnail_url and 'Content' in edition.cover_thumbnail_url) or (edition.cover_full_url and 'Content' in edition.cover_full_url):
                 fix_editions.append(edition)

@@ -1,6 +1,6 @@
 import logging
 import re
-import urllib
+from six.moves.urllib.parse import urlparse
 
 from lxml import etree
 from nose.tools import set_trace
@@ -209,7 +209,7 @@ class OCLCClassifyXMLParser(XMLParser):
         :param work_tag: A preparsed <work> tag.
         :param data: A dictionary containing totals.
         """
-        for key, rel in cls.MEASUREMENT_MAPPING.items():
+        for key, rel in list(cls.MEASUREMENT_MAPPING.items()):
             if work_tag.get(key):
                 data[rel] += int(work_tag.get(key))
 
@@ -259,7 +259,7 @@ class OCLCClassifyXMLParser(XMLParser):
         tags representing subjects for that classifier.
         """
         mapping = dict()
-        for name in cls.CLASSIFIERS.keys():
+        for name in list(cls.CLASSIFIERS.keys()):
             tags = cls._xpath(tree, "//oclc:%s" % name)
             if tags:
                 mapping[name] = tags
@@ -280,7 +280,7 @@ class OCLCClassifyXMLParser(XMLParser):
         than having to extract them every time.
         """
         subjects = []
-        for classifier_name, classifier_tags in classifiers.items():
+        for classifier_name, classifier_tags in list(classifiers.items()):
             for tag in classifier_tags:
                 subtags = cls._extract_subtags(classifier_name, tag)
                 subjects.extend(
@@ -809,7 +809,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         author_string = tag.get('author')
         authors_and_roles = cls.parse_author_string(
             _db, author_string, existing_authors)
-        if 'language' in tag.keys():
+        if 'language' in list(tag.keys()):
             language = tag.get('language')
         else:
             language = None
@@ -901,7 +901,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         """
         # TODO: 'pswid' is what it's called in older representations.
         # That code can be removed once we replace all representations.
-        oclc_work_id = unicode(work_tag.get('owi') or work_tag.get('pswid'))
+        oclc_work_id = str(work_tag.get('owi') or work_tag.get('pswid'))
         # if oclc_work_id:
         #     print " owi: %s" % oclc_work_id
         # else:
@@ -1002,7 +1002,7 @@ class OCLCTitleAuthorLookupXMLParser(XMLParser):
         """Create a new Edition object with information about an
         edition of a book (identified by OCLC Number).
         """
-        oclc_number = unicode(edition_tag.get('oclc'))
+        oclc_number = str(edition_tag.get('oclc'))
         try:
             int(oclc_number)
         except ValueError as e:
@@ -1072,8 +1072,7 @@ class OCLCClassifyAPI(object):
         return DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
-        # TODO PYTHON3 this will be urllib.parse.urlencode
-        return urllib.urlencode(sorted(kwargs.items()))
+        return urlparse.urlencode(sorted(kwargs.items()))
 
     def lookup_by(self, **kwargs):
         """Perform an OCLC Classify lookup."""
@@ -1159,7 +1158,7 @@ class IdentifierLookupCoverageProvider(OCLCLookupCoverageProvider):
             return identifier
 
         except IOError as e:
-            return self.failure(identifier, unicode(e))
+            return self.failure(identifier, str(e))
 
     def _single(self, tree, metadata):
         """In the case of a single work response, annotate
@@ -1362,7 +1361,7 @@ class TitleAuthorLookupCoverageProvider(IdentifierCoverageProvider):
         try:
             records = self.parse_edition_data(xml, edition, title, language)
         except IOError as e:
-            return self.failure(identifier, unicode(e))
+            return self.failure(identifier, str(e))
 
         self.merge_contributors(edition, records)
         self.log.info("Created %s records(s).", len(records))

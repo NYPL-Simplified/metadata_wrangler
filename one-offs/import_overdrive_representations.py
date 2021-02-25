@@ -33,7 +33,7 @@ def imp(db, data_source, identifier, cache, library):
     representation.content = data
     representation.media_type = 'application/json'
     representation.fetched_at = modified
-    print identifier
+    print(identifier)
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]

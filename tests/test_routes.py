@@ -17,7 +17,7 @@ from controller import MetadataWrangler
 from problem_details import INVALID_CREDENTIALS
 import routes
 
-from test_controller import ControllerTest
+from .test_controller import ControllerTest
 
 class MockMetadataWrangler(object):
     """Pretends to be a MetadataWrangler with configured controllers."""

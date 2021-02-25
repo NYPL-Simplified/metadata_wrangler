@@ -147,7 +147,7 @@ class ResolveVIAFOnSuccessCoverageProvider(MetadataWranglerBibliographicCoverage
         work.set_presentation_ready()
         try:
             self.resolve_viaf(work)
-        except Exception, e:
+        except Exception as e:
             message = "Exception updating VIAF coverage: %r" % e
             return self.failure(identifier, message, transient=True)
         return identifier

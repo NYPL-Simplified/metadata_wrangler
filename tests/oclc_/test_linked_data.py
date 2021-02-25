@@ -98,8 +98,8 @@ class TestOCLCLinkedData(DatabaseTest):
          example_uris) = OCLCLinkedData.extract_useful_data(subgraph, book)
 
         eq_(Identifier.OCLC_NUMBER, oclc_id_type)
-        eq_(u"11866009", oclc_id)
-        eq_([u"Galápagos : a novel"], titles)
+        eq_("11866009", oclc_id)
+        eq_(["Galápagos : a novel"], titles)
         eq_(1, len(descriptions))
 
         # Even though there are 11 links in the books "about" list,
@@ -131,11 +131,11 @@ class TestOCLCLinkedData(DatabaseTest):
         # A metadata object is returned, with the proper OCLC identifier.
         eq_(True, isinstance(metadata_obj, Metadata))
         eq_(Identifier.OCLC_NUMBER, metadata_obj.primary_identifier.type)
-        eq_(u"11866009", metadata_obj.primary_identifier.identifier)
+        eq_("11866009", metadata_obj.primary_identifier.identifier)
 
         # It has publication information & ISBNs
-        eq_(u"Galápagos : a novel", metadata_obj.title)
-        eq_(u'Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
+        eq_("Galápagos : a novel", metadata_obj.title)
+        eq_('Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
         eq_(1985, metadata_obj.published.year)
         eq_(1, len(metadata_obj.links))
         assert "ghost of a shipbuilder" in metadata_obj.links[0].content
@@ -143,7 +143,7 @@ class TestOCLCLinkedData(DatabaseTest):
 
         eq_(1, len(metadata_obj.contributors))
         [viaf] = [c.viaf for c in metadata_obj.contributors]
-        eq_(u"71398958", viaf)
+        eq_("71398958", viaf)
         eq_(10, len(metadata_obj.subjects))
 
         # Make sure a book with no English title doesn't break anything.
@@ -280,7 +280,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             DataSource.OCLC_LINKED_DATA,
             contributors=[contributor1, contributor2, contributor3],
             primary_identifier=idata,
-            title=u"foo"
+            title="foo"
         )
         oclc.queue_info_for(metadata)
 
@@ -305,9 +305,9 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
              for x in edition.contributors]
         )
         eq_(
-            [(u'Jordan, Robert', None, u'2', u'Robert_Jordan_(Author)', u'That guy.'),
-            (u'Name, Sort', u'Display Name', u'1', u'Wikipedia_Name', None),
-            (u'Rice, Anne', u'Anne Rice', None, None, None)],
+            [('Jordan, Robert', None, '2', 'Robert_Jordan_(Author)', 'That guy.'),
+            ('Name, Sort', 'Display Name', '1', 'Wikipedia_Name', None),
+            ('Rice, Anne', 'Anne Rice', None, None, None)],
             filled_in
         )
         # The author without VIAF data didn't request a VIAF lookup.

@@ -5,7 +5,6 @@ import os
 import feedparser
 import json
 import re
-import urllib
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA
 from Crypto.Signature import PKCS1_v1_5
@@ -182,7 +181,7 @@ class TestMetadataWrangler(ControllerTest):
         not_base64_encoded = 'Bearer ' + self.client.shared_secret
         invalid = [
             dict(Authorization=x)
-            for x in invalid_bearer, invalid_basic, not_base64_encoded
+            for x in (invalid_bearer, invalid_basic, not_base64_encoded)
         ]
 
         # Invalid credentials result in INVALID_CREDENTIALS whether or
@@ -467,7 +466,7 @@ class TestCatalogController(ControllerTest):
             )
 
         # The feed has the expected links.
-        links = feedparser.parse(unicode(feed)).feed.links
+        links = feedparser.parse(str(feed)).feed.links
         eq_(2, len(links))
         eq_(['next', 'self'], sorted([l.rel for l in links]))
         [next_href] = [l.href for l in links if l.rel=='next']
@@ -486,7 +485,7 @@ class TestCatalogController(ControllerTest):
                 thing='whatever'
             )
 
-        links = feedparser.parse(unicode(feed)).feed.links
+        links = feedparser.parse(str(feed)).feed.links
         eq_(3, len(links))
         eq_(['first', 'previous', 'self'], sorted([l.rel for l in links]))
 
@@ -517,7 +516,7 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed.feed.title,
-                u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
+                "%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The feed has information on the only work in our
             # catalog.
@@ -545,7 +544,7 @@ class TestCatalogController(ControllerTest):
             eq_(HTTP_OK, response.status_code)
             feed = feedparser.parse(response.get_data())
             eq_(feed.feed.title,
-                u"%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
+                "%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The timestamp is included in the url.
             linkified_timestamp = yesterday_timestamp.replace(":", "%3A")
@@ -1388,7 +1387,7 @@ class TestURNLookupController(ControllerTest):
         [lp] = work.license_pools
         eq_(urn, lp.identifier.urn)
         eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
-        eq_(u"Agile Documentation", work.title)
+        eq_("Agile Documentation", work.title)
 
         # After processing the Overdrive data, we asked VIAF to
         # improve the author information.
@@ -1418,12 +1417,12 @@ class TestURNLookupController(ControllerTest):
         # Failure -- we didn't specify a collection.
         result = self.controller.process_urns([urn])
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"No metadata identifier provided.", result.detail)
+        eq_("No metadata identifier provided.", result.detail)
 
         # Failure - we sent too many URNs.
         result = self.controller.process_urns([urn] * 31, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"The maximum number of URNs you can provide at once is 30. (You sent 31)",
+        eq_("The maximum number of URNs you can provide at once is 30. (You sent 31)",
             result.detail)
 
     @authenticated_request_context_resolve_now
@@ -1434,7 +1433,7 @@ class TestURNLookupController(ControllerTest):
         name = self.overdrive_collection.metadata_identifier
         result = self.controller.process_urns([urn] * 2, metadata_identifier=name)
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
+        eq_("The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
     @unauthenticated_request_context
@@ -1470,7 +1469,7 @@ class TestURNLookupController(ControllerTest):
         # Failure -- we sent more than one URN with an unauthenticated request.
         result = self.controller.process_urns([urn, urn2])
         eq_(INVALID_INPUT.uri, result.uri)
-        eq_(u"The maximum number of URNs you can provide at once is 1. (You sent 2)",
+        eq_("The maximum number of URNs you can provide at once is 1. (You sent 2)",
             result.detail)
 
     @unauthenticated_request_context

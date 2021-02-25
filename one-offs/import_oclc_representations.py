@@ -44,7 +44,7 @@ def imp(db, data_source, identifier, cache):
         url=url, data_source=data_source, identifier=identifier,
         )
     if not new:
-        print "Already did", identifier
+        print("Already did", identifier)
         return False
 
     if not cache.exists(i):
@@ -91,6 +91,6 @@ if __name__ == '__main__':
                 processed += 1
         if processed > 0:
             a = "%d sec, %d cached/%d, final" % (time.time()-first_time, processed, batch_size)
-            print a, identifier
+            print(a, identifier)
             db.commit()
         cursor = max_batch

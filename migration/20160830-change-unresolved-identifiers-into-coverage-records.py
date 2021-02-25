@@ -24,7 +24,7 @@ _db = production_session()
 source = DataSource.lookup(_db, DataSource.INTERNAL_PROCESSING)
 unresolved_identifiers = _db.query(UnresolvedIdentifier).all()
 
-print "Replacing %d UnresolvedIdentifiers with CoverageRecords" % len(unresolved_identifiers)
+print("Replacing %d UnresolvedIdentifiers with CoverageRecords" % len(unresolved_identifiers))
 
 for unresolved in unresolved_identifiers:
     identifier = unresolved.identifier
@@ -48,7 +48,7 @@ for unresolved in unresolved_identifiers:
             # We'll give it the default lookup message.
             record.exception = URNLookupController.NO_WORK_DONE_EXCEPTION
 
-        print "Resolution Coverage Record created for %r" % identifier
+        print("Resolution Coverage Record created for %r" % identifier)
     else:
-        print "Resolution Coverage Record already exists for %r" % identifier
+        print("Resolution Coverage Record already exists for %r" % identifier)
 _db.commit()

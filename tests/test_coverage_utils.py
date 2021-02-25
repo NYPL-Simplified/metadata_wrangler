@@ -49,7 +49,7 @@ class TestMetadataWranglerReplacementPolicy(DatabaseTest):
         eq_(True, policy.contributions)
 
         # But no configured MirrorUploaders.
-        assert all([x==None for x in policy.mirrors.values()])
+        assert all([x==None for x in list(policy.mirrors.values())])
 
         # Now configure a storage integration and try again.
         integration = self._external_integration(

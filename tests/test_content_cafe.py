@@ -89,19 +89,19 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         integration = self._external_integration(
             ExternalIntegration.CONTENT_CAFE,
             goal=ExternalIntegration.METADATA_GOAL,
-            username=u'yup'
+            username='yup'
         )
         assert_raises(
             CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
         integration.username = None
-        integration.password = u'yurp'
+        integration.password = 'yurp'
         assert_raises(
             CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
-        integration.username = u'yup'
+        integration.username = 'yup'
         result = ContentCafeAPI.from_config(
             self._db, soap_client=object()
         )

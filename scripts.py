@@ -85,12 +85,12 @@ class CheckContributorTitles(Script):
         contributors = True
         offset = 0
         output = "ContributorID|\tSortName|\tTitle"
-        print output.encode("utf8")
+        print(output.encode("utf8"))
         from core.model import dump_query
         while contributors:
             my_query = query.offset(offset).limit(batch_size)
 
-            print "query=%s" % dump_query(my_query)
+            print("query=%s" % dump_query(my_query))
             contributors = my_query.all()
 
             for contributor in contributors:
@@ -106,7 +106,7 @@ class CheckContributorTitles(Script):
         contributor_titles = self.viaf.lookup_name_title(contributor.viaf)
         if contributor_titles:
             output = "%s|\t%s|\t%r" % (contributor.id, contributor.sort_name, contributor_titles)
-            print output.encode("utf8")
+            print(output.encode("utf8"))
 
 
 class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
@@ -156,7 +156,7 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         editions = True
         offset = 0
         output = "ContributorID|\tSortName|\tDisplayName|\tComputedSortName|\tResolution|\tComplaintSource"
-        print output.encode("utf8")
+        print(output.encode("utf8"))
 
         while editions:
             my_query = self.query.offset(offset).limit(batch_size)
@@ -315,7 +315,7 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
             # any port in a storm is an acceptable sort name
             return True
 
-        computed_sort_name = unicodedata.normalize("NFKD", unicode(sort_name))
+        computed_sort_name = unicodedata.normalize("NFKD", str(sort_name))
 
         if (contributor.sort_name.strip().lower() == computed_sort_name.strip().lower()):
             # no change is good change
@@ -386,7 +386,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
         self.out.close()
 
     def ready(self, x):
-        if isinstance(x, unicode):
+        if isinstance(x, str):
             return x.encode("utf8")
         elif x:
             return x
@@ -399,7 +399,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
             normalized_title, normalized_author, format)
         row = [title, author, normalized_title, normalized_author,
                format, permanent_id]
-        self.writer.writerow(map(self.ready, row))
+        self.writer.writerow(list(map(self.ready, row)))
 
     def process_edition(self, edition):
         contributors = edition.author_contributors
@@ -410,7 +410,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
             primary_author_name = None
         author = WorkIDCalculator.normalize_author(primary_author_name)
         if edition.subtitle:
-            original_title = edition.title + u": " + edition.subtitle
+            original_title = edition.title + ": " + edition.subtitle
         else:
             original_title = edition.title
         title = WorkIDCalculator.normalize_title(original_title)
@@ -432,7 +432,7 @@ class CatalogCategorizationOverviewScript(Script):
              "Fiction", "Audience", "Genre"])
 
     def ready(self, x):
-        if isinstance(x, unicode):
+        if isinstance(x, str):
             return x.encode("utf8")
         elif x:
             return x
@@ -453,7 +453,7 @@ class CatalogCategorizationOverviewScript(Script):
             else:
                 fiction = ''
             o = [type, identifier, name, fiction, audience, genre, ct]
-            self.writer.writerow(map(self.ready, o))
+            self.writer.writerow(list(map(self.ready, o)))
 
 
 class PermanentWorkIDStressTestScript(PermanentWorkIDStressTestGenerationScript):
@@ -499,9 +499,9 @@ class RedoOCLC(Explain):
 
     def fix_identifier_with_equivalents(self, primary_identifier, equivalent_ids):
         for edition in primary_identifier.primarily_identifies:
-            print "BEFORE"
+            print("BEFORE")
             self.explain(self._db, edition)
-            print "-" * 80
+            print("-" * 80)
 
         t1 = self._db.begin_nested()
 
@@ -509,10 +509,10 @@ class RedoOCLC(Explain):
             Equivalency.data_source == self.oclcld).filter(
                 Equivalency.input_id.in_(equivalent_ids)
             )
-        print "DELETING %d" % equivalencies.count()
+        print("DELETING %d" % equivalencies.count())
         for e in equivalencies:
             if e.strength == 0:
-                print "DELETING %r" % e
+                print("DELETING %r" % e)
             self._db.delete(e)
         t1.commit()
 
@@ -522,7 +522,7 @@ class RedoOCLC(Explain):
             if edition.work:
                 edition.work.calculate_presentation()
             self.explain(self._db, edition)
-        print "I WOULD NOW EXPECT EVERYTHING TO BE FINE."
+        print("I WOULD NOW EXPECT EVERYTHING TO BE FINE.")
 
 
 class InstanceInitializationScript(DatabaseMigrationInitializationScript):
@@ -548,15 +548,15 @@ class IntegrationClientGeneratorScript(Script):
             ValueError("No url provided. Could not create IntegrationClient.")
 
         url = " ".join(url)
-        print "Creating IntegrationClient for '%s'" % url
+        print("Creating IntegrationClient for '%s'" % url)
         client, plaintext_secret = IntegrationClient.register(self._db, url)
 
-        print client
+        print(client)
         print ("RECORD THE FOLLOWING AUTHENTICATION DETAILS. "
                "The client secret cannot be recovered.")
-        print "-" * 40
-        print "CLIENT KEY: %s" % client.key
-        print "CLIENT SECRET: %s" % plaintext_secret
+        print("-" * 40)
+        print("CLIENT KEY: %s" % client.key)
+        print("CLIENT SECRET: %s" % plaintext_secret)
         self._db.commit()
 
 
@@ -603,10 +603,10 @@ class DashboardScript(Script):
         types = set()
         for collection in self._db.query(Collection).order_by(Collection.id):
             done, not_done = self.report_backlog(collection)
-            for type, count in done.items():
+            for type, count in list(done.items()):
                 total_done[type] += count
                 types.add(type)
-            for type, count in not_done.items():
+            for type, count in list(not_done.items()):
                 total_not_done[type] += count
                 types.add(type)
         self.write("\n Totals:")
@@ -628,7 +628,7 @@ class DashboardScript(Script):
             qu = qu.group_by(Identifier.type)
             def format(d):
                 return d.strftime("%Y-%m-%d")
-            print format(start)
+            print(format(start))
             for count, type in qu:
                 self.write(" %s - %s" % (type, count))
             end = start
@@ -643,11 +643,11 @@ class DashboardScript(Script):
         """
         try:
             combined = base64.decodestring(collection.name)
-            return map(base64.decodestring, combined.split(':', 2))
-        except Exception, e:
+            return list(map(base64.decodestring, combined.split(':', 2)))
+        except Exception as e:
             try:
                 unique_id = collection.unique_account_id
-            except Exception, e:
+            except Exception as e:
                 unique_id = None
 
         # Just show it as-is.
@@ -661,9 +661,9 @@ class DashboardScript(Script):
         not_done_for_type = not_done[type]
         total_for_type = done_for_type + not_done_for_type
         percentage_complete = (float(done_for_type) / total_for_type) * 100
-        print "  %s %d/%d (%d%%)" % (
+        print("  %s %d/%d (%d%%)" % (
             type, done_for_type, total_for_type, percentage_complete
-        )
+        ))
 
     def report_backlog(self, collection):
         done = Counter()

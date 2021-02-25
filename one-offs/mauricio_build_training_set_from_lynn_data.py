@@ -22,7 +22,7 @@ class ReviewParser(object):
                     yield current_review
                     c += 1
                     if not c % 1000:
-                        print "%d reviews" % c
+                        print("%d reviews" % c)
                 current_review = None
                 continue
             if line.startswith("product/productId"):
@@ -188,7 +188,7 @@ class ReviewAnnotator(object):
 
         for review in self.reviews.parse(self.all_isbns):
             if isbn in self.missing_isbns:
-                print isbn
+                print(isbn)
                 self.missing_isbns.remove(isbn)
             isbn = review['product/productId']
             line_number = self.line_number_for_isbn[isbn]
@@ -202,7 +202,7 @@ class ReviewAnnotator(object):
     def annotate(self, output_path):
         writer = csv.writer(open(output_path, "w"), quoting=csv.QUOTE_NONNUMERIC)
         #writer.writerow(self.headers)
-        for line_number, isbns in self.isbns_for_line_number.items():
+        for line_number, isbns in list(self.isbns_for_line_number.items()):
             
             scores = []
             words = []
@@ -228,5 +228,5 @@ if __name__ == '__main__':
     output_path = os.path.join(data_dir, "Interest Vocabulary", "training set with reviews.csv")
     annotator = ReviewAnnotator(reviews_path, input_path)
     annotator.annotate(output_path)
-    print "Missing ISBNs:"
-    print annotator.missing_isbns
+    print("Missing ISBNs:")
+    print(annotator.missing_isbns)

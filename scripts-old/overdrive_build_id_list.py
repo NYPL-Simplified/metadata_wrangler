@@ -3,7 +3,7 @@ import sys
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print "Usage: %s [data storage directory]" % sys.argv[0]
+        print("Usage: %s [data storage directory]" % sys.argv[0])
         sys.exit()
     path = sys.argv[1]      
     bibliographic_path = os.path.join(path, "Overdrive", "bibliographic")
@@ -22,5 +22,5 @@ if __name__ == '__main__':
                 output.flush()
                 counter += 1
                 if not counter % 1000:
-                    print counter
+                    print(counter)
     

@@ -124,7 +124,7 @@ class FASTNames(dict):
         """
         with self.consolidated_output_filehandle(path) as output:
             writer = csv.writer(output)
-            for k,v in self.items():
+            for k,v in list(self.items()):
                 writer.writerow([k, v])
 
     @contextmanager
