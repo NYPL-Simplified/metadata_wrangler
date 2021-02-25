@@ -867,7 +867,7 @@ class IntegrationClientController(Controller):
 
         submitted_secret = None
         auth_header = flask.request.headers.get('Authorization')
-        if auth_header and isinstance(auth_header, str) and 'bearer' in auth_header.lower():
+        if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
             token = auth_header.split(' ')[1]
             submitted_secret = base64.b64decode(token)
 

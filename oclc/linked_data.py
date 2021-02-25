@@ -64,17 +64,17 @@ class ldq(object):
 
     @classmethod
     def restrict_to_language(self, values, code_2):
-        if isinstance(values, (str, dict)):
+        if isinstance(values, (unicode, dict)):
             values = [values]
         for v in values:
-            if isinstance(v, str):
+            if isinstance(v, unicode):
                 yield v
             elif v and (not '@language' in v or v['@language'] == code_2):
                 yield v
 
     @classmethod
     def values(self, vs):
-        if isinstance(vs, str):
+        if isinstance(vs, unicode):
             yield vs
             return
         if isinstance(vs, dict) and '@value' in vs:
@@ -82,7 +82,7 @@ class ldq(object):
             return
 
         for v in vs:
-            if isinstance(v, str):
+            if isinstance(v, unicode):
                 yield v
             elif '@value' in v:
                 yield v['@value']
@@ -155,9 +155,9 @@ class OCLCLinkedData(object):
     POINTLESS_TAGS = set([
         'large type', 'large print', '(binding)', 'movable books',
         'electronic books', 'braille books', 'board books',
-        'electronic resource', 'états-unis', 'etats-unis',
+        'electronic resource', u'états-unis', 'etats-unis',
         'ebooks',
-        ])
+    ])
 
     # These tags indicate that the record as a whole is useless
     # for our purposes.
@@ -189,7 +189,7 @@ class OCLCLinkedData(object):
         identifier = None
         if isinstance(identifier_or_uri, bytes):
             identifier_or_uri = identifier_or_uri.decode("utf8")
-        if isinstance(identifier_or_uri, str):
+        if isinstance(identifier_or_uri, unicode):
             # e.g. http://experiment.worldcat.org/oclc/1862341597.json
             match = self.URI_WITH_OCLC_NUMBER.search(identifier_or_uri)
             if match:
@@ -374,7 +374,7 @@ class OCLCLinkedData(object):
             # a single name. (This is really fun, of course!)
             names = list()
             for name in name_list:
-                if isinstance(name, str):
+                if isinstance(name, unicode):
                     names.append(name)
                 if isinstance(name, dict):
                     more_names = list(ldq.restrict_to_language(name, 'en'))
@@ -443,7 +443,7 @@ class OCLCLinkedData(object):
             if isinstance(name_obj, dict):
                 if name_obj.get('@language', None) == 'en':
                     name_obj = name_obj.get('@value', None)
-            if isinstance(name_obj, str):
+            if isinstance(name_obj, unicode):
                 # Sometimes names in character-based languages are included,
                 # without indication. They're being removed below by ensuring
                 # some number of alphanumeric are present.
@@ -526,7 +526,7 @@ class OCLCLinkedData(object):
         subjects[Subject.TAG] = [dict(id=genre) for genre in genres]
 
         for uri in book.get('about', []):
-            if not isinstance(uri, str):
+            if not isinstance(uri, unicode):
                 continue
 
             subject_id = subject_type = subject_name = None
@@ -559,7 +559,7 @@ class OCLCLinkedData(object):
                     for potential_type in potential_types:
                         if isinstance(potential_type, dict):
                             type_objs.append(potential_type)
-                        elif isinstance(potential_type, str):
+                        elif isinstance(potential_type, unicode):
                             type_objs.append({'@id': potential_type})
                 for type_obj in type_objs:
                     type_id = type_obj['@id']
@@ -759,7 +759,7 @@ class OCLCLinkedData(object):
             for this_type_obj in these_type_objs:
                 if isinstance(this_type_obj, dict):
                     type_objs.append(this_type_obj)
-                elif isinstance(this_type_obj, str):
+                elif isinstance(this_type_obj, unicode):
                     type_objs.append({"@id": this_type_obj})
         types = [i['@id'] for i in type_objs if
                  i['@id'] not in self.UNUSED_TYPES]

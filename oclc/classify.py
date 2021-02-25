@@ -1,6 +1,6 @@
 import logging
 import re
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlencode
 
 from lxml import etree
 from nose.tools import set_trace
@@ -1072,7 +1072,7 @@ class OCLCClassifyAPI(object):
         return DataSource.lookup(self._db, DataSource.OCLC)
 
     def query_string(self, **kwargs):
-        return urlparse.urlencode(sorted(kwargs.items()))
+        return urlencode(sorted(kwargs.items()))
 
     def lookup_by(self, **kwargs):
         """Perform an OCLC Classify lookup."""

@@ -410,7 +410,7 @@ class PermanentWorkIDStressTestGenerationScript(Script):
             primary_author_name = None
         author = WorkIDCalculator.normalize_author(primary_author_name)
         if edition.subtitle:
-            original_title = edition.title + ": " + edition.subtitle
+            original_title = edition.title + u": " + edition.subtitle
         else:
             original_title = edition.title
         title = WorkIDCalculator.normalize_title(original_title)
