@@ -2,7 +2,7 @@ from nose.tools import set_trace
 import os
 import logging
 import sys
-from six.moves.urllib.parse import urlparse
+from urllib.parse import urlparse
 
 from flask import Flask
 from flask_babel import Babel

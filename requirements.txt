@@ -5,7 +5,7 @@ beautifulsoup4==4.9.1
 cairosvg==1.0.22
 # Ensure that we support SNI-based SSL
 ndg-httpsclient==0.5.1
-pycrypto
+pycrypto==2.6.1
 PyJWT==1.4.2
 # Used only by metadata
 PyLD==1.0.5

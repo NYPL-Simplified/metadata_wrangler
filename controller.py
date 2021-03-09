@@ -17,7 +17,7 @@ import feedparser
 import json
 import jwt
 import logging
-from six.moves.urllib.parse import urlparse
+from urllib.parse import urlparse
 
 from core.app_server import (
     cdn_url_for,
@@ -127,8 +127,11 @@ class MetadataWrangler(object):
 
             # We can hopefully use the provided bearer token to
             # authenticate an IntegrationClient.
+            shared_secret = None
             try:
                 shared_secret = base64.b64decode(header.split(' ')[1])
+            except stdlib_base64.binascii.Error as e:
+                return INVALID_CREDENTIALS
             except TypeError as e:
                 # The bearer token is ill-formed.
                 return INVALID_CREDENTIALS
@@ -867,7 +870,7 @@ class IntegrationClientController(Controller):
 
         submitted_secret = None
         auth_header = flask.request.headers.get('Authorization')
-        if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
+        if auth_header and isinstance(auth_header, str) and 'bearer' in auth_header.lower():
             token = auth_header.split(' ')[1]
             submitted_secret = base64.b64decode(token)
 
