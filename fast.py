@@ -7,7 +7,7 @@ This is how we know, e.g. that FAST classification 1750175 means
 from contextlib import contextmanager
 import gzip
 import csv
-from io import BytesIO
+from io import StringIO
 import logging
 import os
 import re
@@ -63,7 +63,7 @@ class FASTNames(dict):
         """Load classifications from an N-Triples file."""
         if path.endswith(".nt.gz"):
             # This is a single GZipped N-Triples file.
-            self.load_triples_filehandle(gzip.open(path, 'rb'))
+            self.load_triples_filehandle(gzip.open(path, 'rt', encoding="utf-8"))
         elif path.endswith(".nt.zip"):
             # This is a ZIP file containing one or more (probably just
             # one) N-Triples files. Load each one the zip.
@@ -77,12 +77,12 @@ class FASTNames(dict):
         """Open up `path` as a ZIP file and find one or more (probably just
         one) N-Triples files inside.
 
-        :yield: A BytesIO for each N-Triples file in the ZIP.
+        :yield: A StringIO for each N-Triples file in the ZIP.
         """
-        with zipfile.ZipFile(path) as archive:
+        with zipfile.ZipFile(path, mode="r") as archive:
             for name in archive.namelist():
                 if name.endswith(".nt"):
-                    yield BytesIO(archive.read(name))
+                    yield StringIO(archive.read(name).decode("utf-8"))
 
     def load_triples_filehandle(self, fh):
         """Load a number of N-Triples from a filehandle, and
@@ -112,7 +112,7 @@ class FASTNames(dict):
             "Reading cached %s names from %s", cls.SUBDIR, path
         )
         names = cls()
-        fh = gzip.open(path, 'rb')
+        fh = gzip.open(path, 'rt', encoding="utf-8")
         reader = csv.reader(fh)
         for identifier, name in reader:
             names[identifier] = name
@@ -124,16 +124,16 @@ class FASTNames(dict):
         """
         with self.consolidated_output_filehandle(path) as output:
             writer = csv.writer(output)
-            for k,v in list(self.items()):
+            for k, v in list(self.items()):
                 writer.writerow([k, v])
 
     @contextmanager
     def consolidated_output_filehandle(self, path):
         """Open a write filehandle to the given path.
-
         This method is designed to be mocked in unit tests.
         """
-        with gzip.open(path, "wb") as out:
+        with gzip.open(path, "w") as out:
+            set_trace()
             yield out
 
 

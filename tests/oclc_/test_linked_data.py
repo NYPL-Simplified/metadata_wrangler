@@ -99,7 +99,7 @@ class TestOCLCLinkedData(DatabaseTest):
 
         eq_(Identifier.OCLC_NUMBER, oclc_id_type)
         eq_("11866009", oclc_id)
-        eq_([u"Galápagos : a novel"], titles)
+        eq_(["Galápagos : a novel"], titles)
         eq_(1, len(descriptions))
 
         # Even though there are 11 links in the books "about" list,
@@ -134,7 +134,7 @@ class TestOCLCLinkedData(DatabaseTest):
         eq_("11866009", metadata_obj.primary_identifier.identifier)
 
         # It has publication information & ISBNs
-        eq_(u"Galápagos : a novel", metadata_obj.title)
+        eq_("Galápagos : a novel", metadata_obj.title)
         eq_('Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
         eq_(1985, metadata_obj.published.year)
         eq_(1, len(metadata_obj.links))
@@ -280,7 +280,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             DataSource.OCLC_LINKED_DATA,
             contributors=[contributor1, contributor2, contributor3],
             primary_identifier=idata,
-            title=u"foo"
+            title="foo"
         )
         oclc.queue_info_for(metadata)
 

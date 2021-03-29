@@ -150,7 +150,7 @@ class MarcTag(object):
 
 class Representation(object):
 
-    from collections import Counter
+    from .collections import Counter
     tag_type = Counter()
 
     @classmethod

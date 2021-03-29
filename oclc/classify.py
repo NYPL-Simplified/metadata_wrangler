@@ -1,6 +1,6 @@
 import logging
 import re
-from six.moves.urllib.parse import urlencode
+from urllib.parse import urlencode
 
 from lxml import etree
 from nose.tools import set_trace

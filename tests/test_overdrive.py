@@ -3,7 +3,7 @@ from nose.tools import (
     eq_,
     set_trace,
 )
-import urllib
+import urllib.request, urllib.parse, urllib.error
 from core.metadata_layer import ReplacementPolicy
 from core.s3 import MockS3Uploader
 from core.testing import (
@@ -82,7 +82,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # URLs.
         expect = "Overdrive/Overdrive ID/%s" % identifier.identifier
         for url in [full.mirror_url, thumbnail.mirror_url]:
-            assert urllib.quote(expect) in url
+            assert urllib.parse.quote(expect) in url
         assert "/scaled/" in thumbnail.mirror_url
         assert "/scaled/" not in full.mirror_url
 

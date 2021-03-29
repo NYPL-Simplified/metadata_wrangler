@@ -466,7 +466,7 @@ class TestCatalogController(ControllerTest):
             )
 
         # The feed has the expected links.
-        links = feedparser.parse(unicode(feed)).feed.links
+        links = feedparser.parse(str(feed)).feed.links
         eq_(2, len(links))
         eq_(['next', 'self'], sorted([l.rel for l in links]))
         [next_href] = [l.href for l in links if l.rel=='next']
@@ -485,7 +485,7 @@ class TestCatalogController(ControllerTest):
                 thing='whatever'
             )
 
-        links = feedparser.parse(unicode(feed)).feed.links
+        links = feedparser.parse(str(feed)).feed.links
         eq_(3, len(links))
         eq_(['first', 'previous', 'self'], sorted([l.rel for l in links]))
 

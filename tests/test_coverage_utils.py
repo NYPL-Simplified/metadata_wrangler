@@ -194,7 +194,7 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
         provider = MockResolveVIAF(self._default_collection)
 
     def test_handle_success_failures(self):
-        """Test failures that can happen during handle_success."""
+        # Test failures that can happen during handle_success.
 
         class Mock(MockResolveVIAF):
             def resolve_viaf(self, work):
