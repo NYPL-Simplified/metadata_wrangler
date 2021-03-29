@@ -1,8 +1,3 @@
-from nose.tools import (
-    eq_,
-    set_trace,
-)
-
 from . import DatabaseTest
 
 from core.model import Subject
@@ -49,7 +44,7 @@ class TestFASTNameAssignmentMonitor(DatabaseTest):
         # item_query() finds only the FAST and LCSH subjects with an
         # identifier but no name.
         qu = monitor.item_query().order_by(Subject.id)
-        eq_([fast1, lcsh1], qu.all())
+        assert [fast1, lcsh1] == qu.all()
 
         # Pass every Subject into process_item().
         for i in self._db.query(Subject):
@@ -58,16 +53,16 @@ class TestFASTNameAssignmentMonitor(DatabaseTest):
         # The Subjects that already have names were left alone, even
         # though the name in the FAST data differs from what's in the
         # database.
-        eq_("Existing LCSH name.", lcsh2.name)
-        eq_("Existing FAST name.", fast2.name)
+        assert "Existing LCSH name." == lcsh2.name
+        assert "Existing FAST name." == fast2.name
 
         # The Subject with no identifier was ignored.
-        eq_(None, missing_identifier.name)
+        assert None == missing_identifier.name
 
         # The 'tag:' Subject was ignored.
-        eq_(None, tag.name)
+        assert None == tag.name
 
         # The Subjects that would have shown up in item_query() have
         # been processed.
-        eq_("FAST Name 1", fast1.name)
-        eq_("LCSH Name 1", lcsh1.name)
+        assert "FAST Name 1" == fast1.name
+        assert "LCSH Name 1" == lcsh1.name

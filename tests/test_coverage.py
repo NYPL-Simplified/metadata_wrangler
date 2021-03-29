@@ -1,8 +1,3 @@
-from nose.tools import (
-    eq_,
-    set_trace,
-)
-
 from . import DatabaseTest
 
 from core.model import (
@@ -37,8 +32,8 @@ class MockProvider(IdentifierResolutionCoverageProvider):
 
 class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
-    def setup(self):
-        super(TestIdentifierResolutionCoverageProvider, self).setup()
+    def setup_method(self):
+        super(TestIdentifierResolutionCoverageProvider, self).setup_method()
 
     def test_constructor(self):
         """Test that the constructor does the right thing when
@@ -53,20 +48,20 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             force=force, batch_size=93
         )
         # We aim to resolve all the identifiers in a given collection.
-        eq_(self._default_collection, provider.collection)
+        assert self._default_collection == provider.collection
 
-        eq_(immediate, provider.provide_coverage_immediately)
-        eq_(force, provider.force)
+        assert immediate == provider.provide_coverage_immediately
+        assert force == provider.force
 
         # A random extra keyword argument was propagated to the
         # super-constructor.
-        eq_(93, provider.batch_size)
+        assert 93 == provider.batch_size
 
         policy = provider.replacement_policy
         # We will be taking extra care to regenerate the OPDS entries
         # of the Works we deal with.
-        eq_(
-            True,
+        assert (
+            True ==
             policy.presentation_calculation_policy.regenerate_opds_entries
         )
 
@@ -78,7 +73,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         assert isinstance(provider.viaf, VIAFClient)
 
         # The sub-providers were set up by calling gather_providers().
-        eq_(["a provider"], provider.providers)
+        assert ["a provider"] == provider.providers
 
     def test_constructor_with_storage_configuration(self):
         # Set up a sitewide storage integration.
@@ -104,13 +99,13 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         """
         m = IdentifierResolutionCoverageProvider.unaffiliated_collection
         unaffiliated, is_new = m(self._db)
-        eq_(True, is_new)
-        eq_("Unaffiliated Identifiers", unaffiliated.name)
-        eq_(DataSource.INTERNAL_PROCESSING, unaffiliated.protocol)
+        assert True == is_new
+        assert "Unaffiliated Identifiers" == unaffiliated.name
+        assert DataSource.INTERNAL_PROCESSING == unaffiliated.protocol
 
         unaffiliated2, is_new = m(self._db)
-        eq_(unaffiliated, unaffiliated2)
-        eq_(False, is_new)
+        assert unaffiliated == unaffiliated2
+        assert False == is_new
 
     def test_all(self):
         class Mock(IdentifierResolutionCoverageProvider):
@@ -127,8 +122,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # the unaffiliated collection is always last.
         providers = Mock.all(self._db, mirror=object())
         providers = list(providers)
-        eq_(4, len(providers))
-        eq_(unaffiliated, providers[-1].collection)
+        assert 4 == len(providers)
+        assert unaffiliated == providers[-1].collection
 
     def test_gather_providers_no_credentials(self):
         # The OCLC provider should be there from the beginning, but the other CoverageProviders
@@ -155,7 +150,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
             ContentCafeCoverageProvider : dict(api=MockContentCafeAPI())
         }
         provider = IdentifierResolutionCoverageProvider(self._default_collection, provider_kwargs=provider_kwargs)
-        eq_(len(provider.providers), 2)
+        assert len(provider.providers) == 2
         [content_cafe] = [x for x in provider.providers if isinstance(x, ContentCafeCoverageProvider)]
         assert content_cafe
 
@@ -172,7 +167,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         )
 
         # The OCLC provider was already configured; now there is also an OverdriveBibliographicCoverageProvider.
-        eq_(len(provider.providers), 2)
+        assert len(provider.providers) == 2
         [overdrive] = [x for x in provider.providers if isinstance(x, OverdriveBibliographicCoverageProvider)]
         assert overdrive
         # The MockOverdriveAPI we passed in as part of provider_kwargs
@@ -183,14 +178,14 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # Since the Overdrive coverage provider checks with VIAF after
         # adding author information to the database, it's been given a
         # reference to our VIAF client.
-        eq_(provider.viaf, overdrive.viaf)
+        assert provider.viaf == overdrive.viaf
 
         # All subproviders are associated with the collection used in the
         # main provider, and they all have the same replacement policy.
         # (And thus the same MirrorUploader.)
         for subprovider in provider.providers:
-            eq_(provider.collection, subprovider.collection)
-            eq_(provider.replacement_policy, subprovider.replacement_policy)
+            assert provider.collection == subprovider.collection
+            assert provider.replacement_policy == subprovider.replacement_policy
 
     def test_gather_providers_opds_for_distributors(self):
         collection = self._default_collection
@@ -198,7 +193,7 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         provider = IdentifierResolutionCoverageProvider(collection)
 
         # The OCLC provider was already configured; now there is also an IntegrationClientCoverImageCoverageProvider.
-        eq_(len(provider.providers), 2)
+        assert len(provider.providers) == 2
         [integration_client] = [x for x in provider.providers if isinstance(x, IntegrationClientCoverImageCoverageProvider)]
         assert integration_client
 
@@ -206,8 +201,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # main provider, and they all have the same replacement policy.
         # (And thus the same MirrorUploader.)
         for subprovider in provider.providers:
-            eq_(provider.collection, subprovider.collection)
-            eq_(provider.replacement_policy, subprovider.replacement_policy)
+            assert provider.collection == subprovider.collection
+            assert provider.replacement_policy == subprovider.replacement_policy
 
     def test_process_item(self):
         """We handle an Identifier by making sure it's handle by all
@@ -231,17 +226,17 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         result = provider.process_item(identifier)
 
         # Success!
-        eq_(identifier, result)
+        assert identifier == result
 
         # A dummy LicensePool was created for this Identifier.
         [lp] = identifier.licensed_through
-        eq_(provider.collection, lp.collection)
-        eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
-        eq_(1, lp.licenses_owned)
-        eq_(1, lp.licenses_available)
+        assert provider.collection == lp.collection
+        assert DataSource.INTERNAL_PROCESSING == lp.data_source.name
+        assert 1 == lp.licenses_owned
+        assert 1 == lp.licenses_available
 
         # process_one_provider was called on every known sub-provider.
-        eq_([(identifier, provider1), (identifier, provider2)],
+        assert ([(identifier, provider1), (identifier, provider2)] ==
             provider.processed)
 
         # If there already is a LicensePool, no new LicensePool is
@@ -249,9 +244,9 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         lp.licenses_owned = 10
         lp.licenses_available = 5
         result = provider.process_item(identifier)
-        eq_([lp], identifier.licensed_through)
-        eq_(10, lp.licenses_owned)
-        eq_(5, lp.licenses_available)
+        assert [lp] == identifier.licensed_through
+        assert 10 == lp.licenses_owned
+        assert 5 == lp.licenses_available
 
     def test_process_item_creates_work_object_if_any_work_was_done(self):
 
@@ -291,16 +286,16 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # The IdentifierResolutionCoverageProvider completed
         # successfully.
-        eq_(result, identifier)
+        assert result == identifier
 
         # Because JustAddMetadata created a CoverageRecord with the status
         # of SUCCESS, process_item decided to try and create a Work for
         # the Identifier, and was successful.
         work = identifier.work
-        eq_(True, work.presentation_ready)
-        eq_("A great book", work.title)
-        eq_(None, work.fiction)
-        eq_(None, work.audience)
+        assert True == work.presentation_ready
+        assert "A great book" == work.title
+        assert None == work.fiction
+        assert None == work.audience
 
         #
         # But what if that CoverageRecord hadn't been created with the
@@ -315,8 +310,8 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
         # actually done.
         identifier = self._identifier()
         result = provider.process_item(identifier)
-        eq_(result, identifier)
-        eq_(None, identifier.work)
+        assert result == identifier
+        assert None == identifier.work
 
     def test_process_one_provider(self):
         """Test what happens when IdentifierResolutionCoverageProvider
@@ -357,13 +352,13 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # The subprovider's register method was called, with no
         # collection being provided.
-        eq_([i1, None, provider.force], subprovider.register_called_with)
+        assert [i1, None, provider.force] == subprovider.register_called_with
 
         # If the main provider requires that coverage happen immediately,
         # then ensure_coverage_called_with is called instead.
         provider.provide_coverage_immediately = True
         provider.process_one_provider(i1, subprovider)
-        eq_([i1, provider.force], subprovider.ensure_coverage_called_with)
+        assert [i1, provider.force] == subprovider.ensure_coverage_called_with
 
         # Try again with a subprovider that _does_ need separate coverage
         # for every collection.
@@ -385,14 +380,14 @@ class TestIdentifierResolutionCoverageProvider(DatabaseTest):
 
         # The subprovider's register method was called, with the
         # collection we're covering being provided.
-        eq_([i1, provider.collection, provider.force],
+        assert ([i1, provider.collection, provider.force] ==
             subprovider.register_called_with)
 
         # If the main provider requires that coverage happen immediately,
         # then ensure_coverage_called_with is called instead.
         provider.provide_coverage_immediately = True
         provider.process_one_provider(i1, subprovider)
-        eq_([i1, provider.force], subprovider.ensure_coverage_called_with)
+        assert [i1, provider.force] == subprovider.ensure_coverage_called_with
 
         # In this case, collection is not provided, because
         # ensure_coverage has its own code to check

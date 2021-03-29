@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 from core.model import (
     CoverageRecord,

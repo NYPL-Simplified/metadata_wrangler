@@ -1,12 +1,6 @@
 from bs4 import BeautifulSoup
 import datetime
-
-from nose.tools import (
-    set_trace,
-    eq_,
-    assert_raises,
-)
-
+import pytest
 import os
 
 from zeep.transports import Transport
@@ -68,8 +62,8 @@ class ContentCafeAPITest(object):
 
 class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
-    def setup(self):
-        super(TestContentCafeAPI, self).setup()
+    def setup_method(self):
+        super(TestContentCafeAPI, self).setup_method()
         self.http = DummyHTTPClient()
         self.soap = MockSOAPClient(popularity_value=5)
         self.api = ContentCafeAPI(
@@ -81,7 +75,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
     def test_from_config(self):
         # Without an integration, an error is raised.
-        assert_raises(
+        pytest.raises(
             CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
@@ -91,13 +85,13 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
             goal=ExternalIntegration.METADATA_GOAL,
             username='yup'
         )
-        assert_raises(
+        pytest.raises(
             CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
         integration.username = None
         integration.password = 'yurp'
-        assert_raises(
+        pytest.raises(
             CannotLoadConfiguration, ContentCafeAPI.from_config, self._db
         )
 
@@ -105,7 +99,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         result = ContentCafeAPI.from_config(
             self._db, soap_client=object()
         )
-        eq_(True, isinstance(result, ContentCafeAPI))
+        assert True == isinstance(result, ContentCafeAPI)
 
         # NOTE: We can't test the case where soap_client is not
         # mocked, because the ContentCafeSOAPClient constructor makes
@@ -114,7 +108,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         # mocking ContentCafeAPISOAPClient.WSDL_URL as a file:// URL.
 
     def test_data_source(self):
-        eq_(DataSource.CONTENT_CAFE, self.api.data_source.name)
+        assert DataSource.CONTENT_CAFE == self.api.data_source.name
 
     def test_create_metadata(self):
 
@@ -150,11 +144,11 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         # gives a 404 error, we return nothing and don't bother making
         # any more requests.
         self.http.queue_requests_response(404)
-        eq_(None, m(self.identifier))
+        assert None == m(self.identifier)
         request_url = self.http.requests.pop()
         image_url = api.image_url % self.args
-        eq_(image_url, request_url)
-        eq_([], self.http.requests)
+        assert image_url == request_url
+        assert [] == self.http.requests
 
         # If the cover image request succeeds, we turn it into a LinkData
         # and add it to a new Metadata object. We then pass the
@@ -170,17 +164,17 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         # Here's the image LinkData.
         [image] = metadata.links
-        eq_(Hyperlink.IMAGE, image.rel)
-        eq_(image_url, image.href)
-        eq_('image/png', image.media_type)
-        eq_('an image!', image.content)
+        assert Hyperlink.IMAGE == image.rel
+        assert image_url == image.href
+        assert 'image/png' == image.media_type
+        assert 'an image!' == image.content
 
         # We ran the image through our mocked version of is_suitable_image,
         # and it said it was fine.
-        eq_(image.content, api.is_suitable_image_called_with)
+        assert image.content == api.is_suitable_image_called_with
 
         # Here's the popularity measurement.
-        eq_([api.popularity_measurement], metadata.measurements)
+        assert [api.popularity_measurement] == metadata.measurements
 
         # Confirm that the mock methods were called with the right
         # arguments -- their functionality is tested individually
@@ -190,8 +184,8 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
             api.add_reviews_called_with, api.add_descriptions_called_with,
             api.add_author_notes_called_with, api.add_excerpt_called_with,
         ):
-            eq_(expected_args, called_with)
-        eq_((self.identifier, api.ONE_YEAR_AGO),
+            assert expected_args == called_with
+        assert ((self.identifier, api.ONE_YEAR_AGO),
             api.measure_popularity_called_with)
 
         # If measure_popularity returns nothing, metadata.measurements
@@ -199,7 +193,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         api.popularity_measurement = None
         self.http.queue_requests_response(200, 'image/png', content='an image!')
         metadata = m(self.identifier)
-        eq_([], metadata.measurements)
+        assert [] == metadata.measurements
 
     def test_annotate_with_web_resources(self):
         metadata = Metadata(DataSource.CONTENT_CAFE)
@@ -234,29 +228,29 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
           scrapers.explode)
         # We made the request but nothing happened.
         expect_url = url_template % args
-        eq_(expect_url, self.http.requests.pop())
-        eq_(False, scrapers.explode_called)
-        eq_(None, metadata.title)
-        eq_([], metadata.links)
+        assert expect_url == self.http.requests.pop()
+        assert False == scrapers.explode_called
+        assert None == metadata.title
+        assert [] == metadata.links
 
         # Otherwise, we try to scrape.
         good_content = '<html><span class="PageHeader2">Book title</span><content>Here you go</content>'
         http.queue_requests_response(200, 'text/html', content=good_content)
         m(metadata, self.identifier, args, url_template, "no data!", rel,
           scrapers.scrape)
-        eq_(True, scrapers.scrape_called)
+        assert True == scrapers.scrape_called
 
         # We called _extract_title and took a Content Cafe title out
         # for the Metadata object.
-        eq_("Book title", metadata.title)
+        assert "Book title" == metadata.title
 
         # Then we called mock_scrape, which gave us the content for
         # one LinkData.
         [link] = metadata.links
-        eq_(rel, link.rel)
-        eq_(None, link.href)
-        eq_("text/html", link.media_type)
-        eq_("Here you go", link.content)
+        assert rel == link.rel
+        assert None == link.href
+        assert "text/html" == link.media_type
+        assert "Here you go" == link.content
 
     def test__extract_title(self):
         # Standalone test of the _extract_title helper method.
@@ -264,7 +258,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         def assert_title(title, expect):
             markup = '<html><span class="PageHeader2">%s</span><content>Description</content>' % title
             soup = BeautifulSoup(markup, 'lxml')
-            eq_(expect, ContentCafeAPI._extract_title(soup))
+            assert expect == ContentCafeAPI._extract_title(soup)
 
 
         # A normal book title is successfully extracted.
@@ -282,12 +276,12 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         # We extracted six reviews from the sample file.
         reviews = metadata.links
-        eq_(6, len(reviews))
+        assert 6 == len(reviews)
         assert all([x.rel==Hyperlink.REVIEW for x in reviews])
         assert "isn't a myth!" in reviews[0].content.decode("utf8")
 
         # We incidentally figured out the book's title.
-        eq_("Shadow Thieves", metadata.title)
+        assert "Shadow Thieves" == metadata.title
 
     def test_add_author_notes(self):
         """Verify that add_author_notes works in a real case."""
@@ -297,11 +291,11 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         self.api.add_author_notes(metadata, self.identifier, self.args)
 
         [notes] = metadata.links
-        eq_(Hyperlink.AUTHOR, notes.rel)
+        assert Hyperlink.AUTHOR == notes.rel
         assert 'Brenda researched turtles' in notes.content.decode("utf8")
 
         # We incidentally figured out the book's title.
-        eq_("Franklin's Christmas Gift", metadata.title)
+        assert "Franklin's Christmas Gift" == metadata.title
 
     def test_add_excerpt(self):
         """Verify that add_excerpt works in a real case."""
@@ -311,11 +305,11 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         self.api.add_excerpt(metadata, self.identifier, self.args)
 
         [excerpt] = metadata.links
-        eq_(Hyperlink.SAMPLE, excerpt.rel)
+        assert Hyperlink.SAMPLE == excerpt.rel
         assert 'Franklin loved his marbles.' in excerpt.content.decode("utf8")
 
         # We incidentally figured out the book's title.
-        eq_("Franklin's Christmas Gift", metadata.title)
+        assert "Franklin's Christmas Gift" == metadata.title
 
     def test_measure_popularity(self):
         """Verify that measure_popularity turns the output of
@@ -328,19 +322,19 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
 
         # The SOAP client's estimated_popularity method was called.
         expect = (self.identifier.identifier, cutoff)
-        eq_(expect, self.soap.estimated_popularity_calls.pop())
+        assert expect == self.soap.estimated_popularity_calls.pop()
 
         # The result was turned into a MeasurementData.
         assert isinstance(result, MeasurementData)
-        eq_(Measurement.POPULARITY, result.quantity_measured)
-        eq_(self.soap.popularity_value, result.value)
+        assert Measurement.POPULARITY == result.quantity_measured
+        assert self.soap.popularity_value == result.value
 
         # If the SOAP API doesn't return a popularity value, no
         # MeasurementData is created.
         self.soap.popularity_value = None
         result = self.api.measure_popularity(self.identifier, cutoff)
-        eq_(expect, self.soap.estimated_popularity_calls.pop())
-        eq_(None, result)
+        assert expect == self.soap.estimated_popularity_calls.pop()
+        assert None == result
 
     def test_is_suitable_image(self):
         # Images are rejected if we can tell they are Content Cafe's
@@ -348,11 +342,11 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         m = ContentCafeAPI.is_suitable_image
 
         content = self.data_file("stand-in-image.png")
-        eq_(False, m(content))
+        assert False == m(content)
 
         # Otherwise, it's fine. We don't check that the image is
         # valid, only that it's not a stand-in image.
-        eq_(True, m(b"I'm not a stand-in image."))
+        assert True == m(b"I'm not a stand-in image.")
 
 
 class TestContentCafeCoverageProvider(DatabaseTest):
@@ -365,9 +359,9 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         provider = ContentCafeCoverageProvider(
             self._default_collection, api=mock_api, replacement_policy=policy
         )
-        eq_(self._default_collection, provider.collection)
-        eq_(policy, provider.replacement_policy)
-        eq_(mock_api, provider.content_cafe)
+        assert self._default_collection == provider.collection
+        assert policy == provider.replacement_policy
+        assert mock_api == provider.content_cafe
 
         # If no ContentCafeAPI is provided, the output of
         # ContentCafeAPI.from_config is used.
@@ -380,7 +374,7 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         # Now we can invoke the constructor with no special arguments
         # and our mocked default will be used.
         provider = ContentCafeCoverageProvider(self._default_collection)
-        eq_(mock_api, provider.content_cafe)
+        assert mock_api == provider.content_cafe
 
         # Restore mocked classes
         content_cafe.ContentCafeAPI = ContentCafeAPI
@@ -407,23 +401,23 @@ class TestContentCafeCoverageProvider(DatabaseTest):
 
         # process_item indicates success by returning the Identifier
         # it was given.
-        eq_(identifier, provider.process_item(identifier))
+        assert identifier == provider.process_item(identifier)
 
         # An Edition has been created representing Content Cafe's
         # take on this book.
         [edition] = identifier.primarily_identifies
-        eq_(DataSource.CONTENT_CAFE, edition.data_source.name)
+        assert DataSource.CONTENT_CAFE == edition.data_source.name
 
         # MockContentCafeAPI.create_metadata(identifier) was called.
         metadata = api.metadata
-        eq_(identifier, metadata.identifier)
+        assert identifier == metadata.identifier
 
         # And then apply() was called on the resulting MockMetadata
         # object.
         args, kwargs = metadata.apply_called_with
-        eq_((edition,), args)
-        eq_(None, kwargs['collection'])
-        eq_(provider.replacement_policy, kwargs['replace'])
+        assert (edition,) == args
+        assert None == kwargs['collection']
+        assert provider.replacement_policy == kwargs['replace']
 
     def test_process_item_failure_not_found(self):
         """Test what happens when Content Cafe hasn't heard of
@@ -440,9 +434,9 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)
-        eq_(True, isinstance(result, CoverageFailure))
-        eq_(identifier, result.obj)
-        eq_("Content Cafe has no knowledge of this identifier.",
+        assert True == isinstance(result, CoverageFailure)
+        assert identifier == result.obj
+        assert ("Content Cafe has no knowledge of this identifier." ==
             result.exception)
 
     def test_process_item_exception(self):
@@ -459,8 +453,8 @@ class TestContentCafeCoverageProvider(DatabaseTest):
         )
         identifier = self._identifier()
         result = provider.process_item(identifier)
-        eq_(True, isinstance(result, CoverageFailure))
-        eq_(identifier, result.obj)
+        assert True == isinstance(result, CoverageFailure)
+        assert identifier == result.obj
         assert "Oh no!" in result.exception
 
 
@@ -485,7 +479,7 @@ class MockSession(DummyHTTPClient):
 
 class TestContentCafeSOAPClient(ContentCafeAPITest):
 
-    def setup(self):
+    def setup_method(self):
         wsdl = self.data_file("service.wsdl")
         self.session = MockSession(wsdl)
         self.transport = Transport(session=self.session)
@@ -517,11 +511,11 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         # Apart from the initial request to get the WSDL, a single
         # POST request was made.
         endpoint, post_data = self.session.requests.pop()
-        eq_([], self.session.requests)
+        assert [] == self.session.requests
 
         # The target of the POST request was the endpoint specified in
         # the WSDL file.
-        eq_('http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx',
+        assert ('http://contentcafe2.btol.com/ContentCafe/ContentCafe.asmx' ==
             endpoint)
 
         # The entity-body was an XML document invoking the
@@ -537,7 +531,7 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         # The answer given is the maximum total demand for a book in a
         # single recent month.
         base_popularity = 1347
-        eq_(base_popularity, popularity)
+        assert base_popularity == popularity
 
         # Now let's imagine that it's six months later and no further
         # popularity data has been gathered. This takes the period of
@@ -554,7 +548,7 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         popularity = self.client.estimated_popularity(
             "an isbn", as_of=six_months_later, cutoff=three_months
         )
-        eq_(base_popularity/2.0, popularity)
+        assert base_popularity/2.0 == popularity
 
         # If our period of relevancy was longer, then six-month-old
         # data would still be relevant, and that number would be used
@@ -564,7 +558,7 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         popularity = self.client.estimated_popularity(
             "an isbn", as_of=six_months_later, cutoff=two_years
         )
-        eq_(base_popularity, popularity)
+        assert base_popularity == popularity
 
     def test_estimated_popularity_demand_when_info_absent(self):
         # When demand info is missing, the book's popularity is given
@@ -574,5 +568,5 @@ class TestContentCafeSOAPClient(ContentCafeAPITest):
         self.session.queue_requests_response(
             200, "application/xml", content=info
         )
-        eq_(None, self.client.estimated_popularity("an isbn"))
+        assert None == self.client.estimated_popularity("an isbn")
 

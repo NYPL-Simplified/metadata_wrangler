@@ -3,7 +3,6 @@ import datetime
 import os
 import requests
 import logging
-from nose.tools import set_trace
 from bs4 import BeautifulSoup
 from zeep import Client as SOAPClient
 

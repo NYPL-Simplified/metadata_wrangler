@@ -3,7 +3,6 @@ import re
 from urllib.parse import urlencode
 
 from lxml import etree
-from nose.tools import set_trace
 from sqlalchemy.orm.session import Session
 
 from core.coverage import (

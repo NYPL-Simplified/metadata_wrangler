@@ -11,7 +11,7 @@ from io import StringIO
 import logging
 import os
 import re
-from nose.tools import set_trace
+from pdb import set_trace
 import time
 import zipfile
 

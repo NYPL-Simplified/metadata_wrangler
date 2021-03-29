@@ -3,7 +3,6 @@ from collections import defaultdict
 import json
 import requests
 import re
-from nose.tools import set_trace
 
 from core.config import CannotLoadConfiguration
 from core.model import (

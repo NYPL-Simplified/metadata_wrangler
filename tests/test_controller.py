@@ -17,7 +17,6 @@ import jwt
 import flask
 
 from lxml import etree
-from nose.tools import set_trace, eq_
 
 from . import (
     DatabaseTest,
@@ -120,8 +119,8 @@ def authenticated_request_context(f):
 
 class ControllerTest(DatabaseTest):
 
-    def setup(self):
-        super(ControllerTest, self).setup()
+    def setup_method(self):
+        super(ControllerTest, self).setup_method()
 
         from app import app
         self.app = app
@@ -138,7 +137,7 @@ class ControllerTest(DatabaseTest):
     def authenticated_request(self, *args, **kwargs):
         """Set up a test request context with an Authentication
         header that identifies the IntegrationClient initialized in
-        setup().
+        setup_method().
 
         This is useful when you need something more complicated than
         authenticated_request_context.
@@ -159,8 +158,8 @@ class TestMetadataWrangler(ControllerTest):
         # If the credentials are valid, an IntegrationClient is
         # returned and set to flask.request.authenticated_client.
         result = MetadataWrangler.authenticated_client_from_request(self._db)
-        eq_(result, self.client)
-        eq_(self.client, flask.request.authenticated_client)
+        assert result == self.client
+        assert self.client == flask.request.authenticated_client
 
     @authenticated_request_context
     def test_disabled_client(self):
@@ -168,7 +167,7 @@ class TestMetadataWrangler(ControllerTest):
         # If the credentials are valid but the IntegrationClient is
         # disabled, DISABLED_CLIENT is returned.
         result = MetadataWrangler.authenticated_client_from_request(self._db)
-        eq_(DISABLED_CLIENT, result)
+        assert DISABLED_CLIENT == result
 
     def test_invalid_authentication(self):
         # If the credentials are missing or invalid, but
@@ -190,33 +189,33 @@ class TestMetadataWrangler(ControllerTest):
             with self.app.test_request_context('/', headers=invalid_auth):
                 for required in True, False:
                     result = m(self._db, required)
-                    eq_(INVALID_CREDENTIALS, result)
-                    eq_(None, flask.request.authenticated_client)
+                    assert INVALID_CREDENTIALS == result
+                    assert None == flask.request.authenticated_client
 
         # Missing credentials result in INVALID_CREDENTIALS only if
         # authentication is required. If authentication is not
         # required, authenticated_client_from_request returns None.
         with self.app.test_request_context('/', headers={}):
             result = m(self._db, required=True)
-            eq_(INVALID_CREDENTIALS, result)
-            eq_(None, flask.request.authenticated_client)
+            assert INVALID_CREDENTIALS == result
+            assert None == flask.request.authenticated_client
 
             result = m(self._db, required=False)
-            eq_(None, result)
-            eq_(None, flask.request.authenticated_client)
+            assert None == result
+            assert None == flask.request.authenticated_client
 
 
 class TestController(ControllerTest):
 
-    def setup(self):
-        super(TestController, self).setup()
+    def setup_method(self):
+        super(TestController, self).setup_method()
         self.controller = Controller(self._db)
 
     def test_default_collection(self):
         # The default collection is the "unaffiliated" collection associated with
         # the IdentifierResolutionCoverageProvider.
         unaffiliated, ignore = IdentifierResolutionCoverageProvider.unaffiliated_collection(self._db)
-        eq_(unaffiliated, self.controller.default_collection)
+        assert unaffiliated == self.controller.default_collection
 
     def test_load_collection_success(self):
         # Over on a circulation manager, we have an Overdrive collection.
@@ -234,21 +233,21 @@ class TestController(ControllerTest):
 
             # A new collection is created, named after the metadata identifier.
             collection = self.controller.load_collection(metadata_identifier)
-            eq_(collection.name, remote_collection.metadata_identifier)
+            assert collection.name == remote_collection.metadata_identifier
 
             # The metadata wrangler collection has the same protocol as the
             # one on the circulation manager.
-            eq_(remote_collection.protocol, collection.protocol)
+            assert remote_collection.protocol == collection.protocol
 
             # But it has no external_account_id, because it uses the
             # Overdrive protocol, and we only care when the protocol
             # is "OPDS Import".
-            eq_(None, collection.external_account_id)
+            assert None == collection.external_account_id
 
             # Its data_source is Overdrive -- that's where Overdrive
             # collections are from -- not the string we passed in as
             # the data_source request parameter.
-            eq_(DataSource.OVERDRIVE, collection.data_source.name)
+            assert DataSource.OVERDRIVE == collection.data_source.name
 
             # This is a brand new collection. It's not
             # remote_collection. That's because remote_collection
@@ -262,7 +261,7 @@ class TestController(ControllerTest):
             # Look up the metadata identifier again, and the previously
             # created collection is reused.
             collection2 = self.controller.load_collection(metadata_identifier)
-            eq_(collection2, collection)
+            assert collection2 == collection
 
         with self.authenticated_request(url):
             # Now try to look up an OPDS Import collection -- those are
@@ -278,10 +277,10 @@ class TestController(ControllerTest):
         # Here, external_account_id is set to the value found on the
         # remote collection, and data_source is set to a new DataSource based on
         # the argument passed through the URL.
-        eq_(metadata_identifier, collection.name)
-        eq_(ExternalIntegration.OPDS_IMPORT, collection.protocol)
-        eq_(remote_collection.external_account_id, collection.external_account_id)
-        eq_("Some data source", collection.data_source.name)
+        assert metadata_identifier == collection.name
+        assert ExternalIntegration.OPDS_IMPORT == collection.protocol
+        assert remote_collection.external_account_id == collection.external_account_id
+        assert "Some data source" == collection.data_source.name
 
     @unauthenticated_request_context
     def test_load_collection_unauthenticated(self):
@@ -298,12 +297,12 @@ class TestController(ControllerTest):
         # authentication_required=True, and the default collection if
         # called with authentication_required=False.
         collection = self.controller.load_collection(metadata_identifier)
-        eq_(INVALID_CREDENTIALS, collection)
+        assert INVALID_CREDENTIALS == collection
 
         collection = self.controller.load_collection(
             metadata_identifier, authentication_required=False
         )
-        eq_(self.controller.default_collection, collection)
+        assert self.controller.default_collection == collection
 
     @authenticated_request_context
     def test_load_collection_failure(self):
@@ -314,13 +313,13 @@ class TestController(ControllerTest):
 
         # No input.
         result = self.controller.load_collection("")
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("No metadata identifier provided.", result.detail)
+        assert INVALID_INPUT.uri == result.uri
+        assert "No metadata identifier provided." == result.detail
 
         # Invalid input.
         result = self.controller.load_collection("not a real metadata identifier")
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("Metadata identifier 'not a real metadata identifier' is invalid: Incorrect padding",
+        assert INVALID_INPUT.uri == result.uri
+        assert ("Metadata identifier 'not a real metadata identifier' is invalid: Incorrect padding" ==
             result.detail)
 
 
@@ -332,12 +331,12 @@ class TestIndexController(ControllerTest):
         with self.app.test_request_context(request_url):
             response = controller.opds_catalog()
 
-        eq_(200, response.status_code)
+        assert 200 == response.status_code
         catalog = json.loads(response.data)
 
         # In the absence of a configured BASE_URL, the ID of the
         # OPDS catalog is the request URL.
-        eq_(request_url, catalog.get('id'))
+        assert request_url == catalog.get('id')
 
         urls = [l.get('href') for l in catalog.get('links')]
         # Use flask endpoint syntax for path variables
@@ -364,15 +363,15 @@ class TestIndexController(ControllerTest):
 
         # Unlike the previous test, the ID of the OPDS catalog is the
         # BASE_URL, not the URL used in the request.
-        eq_(app_url, catalog.get('id'))
+        assert app_url == catalog.get('id')
 
 
 class TestCatalogController(ControllerTest):
 
     XML_PARSE = OPDSXMLParser()._xpath
 
-    def setup(self):
-        super(TestCatalogController, self).setup()
+    def setup_method(self):
+        super(TestCatalogController, self).setup_method()
         self.controller = CatalogController(self._db)
 
         # The collection as it exists on the circulation manager.
@@ -423,8 +422,8 @@ class TestCatalogController(ControllerTest):
     def assert_message(cls, message, identifier, status_code, description):
         if isinstance(message, list):
             message = cls.get_message_for(identifier, message)
-        eq_(str(status_code), cls.xml_value(message, 'simplified:status_code'))
-        eq_(description, cls.xml_value(message, 'schema:description'))
+        assert str(status_code) == cls.xml_value(message, 'simplified:status_code')
+        assert description == cls.xml_value(message, 'schema:description')
 
     @unauthenticated_request_context
     def test_collection_feed_url(self):
@@ -467,8 +466,8 @@ class TestCatalogController(ControllerTest):
 
         # The feed has the expected links.
         links = feedparser.parse(str(feed)).feed.links
-        eq_(2, len(links))
-        eq_(['next', 'self'], sorted([l.rel for l in links]))
+        assert 2 == len(links)
+        assert ['next', 'self'], sorted([l.rel for l in links])
         [next_href] = [l.href for l in links if l.rel=='next']
         assert 'after=1' in next_href
         assert 'size=1' in next_href
@@ -486,8 +485,8 @@ class TestCatalogController(ControllerTest):
             )
 
         links = feedparser.parse(str(feed)).feed.links
-        eq_(3, len(links))
-        eq_(['first', 'previous', 'self'], sorted([l.rel for l in links]))
+        assert 3 == len(links)
+        assert ['first', 'previous', 'self'] == sorted([l.rel for l in links])
 
         [first_href] = [l.href for l in links if l.rel=='first']
         [previous_href] = [l.href for l in links if l.rel=='previous']
@@ -506,24 +505,24 @@ class TestCatalogController(ControllerTest):
         # Unauthenticated requests are rejected.
         with self.app.test_request_context('/'):
             response = self.controller.updates_feed(self.collection.name)
-            eq_(INVALID_CREDENTIALS, response)
+            assert INVALID_CREDENTIALS == response
 
         # Ask for updates as though the circulation manager had no
         # information about what's in its catalog.
         with self.authenticated_request('/'):
             response = self.controller.updates_feed(self.collection.name)
             # The catalog's updates feed is returned.
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
             feed = feedparser.parse(response.get_data())
-            eq_(feed.feed.title,
+            assert (feed.feed.title ==
                 "%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The feed has information on the only work in our
             # catalog.
-            eq_(1, len(feed['entries']))
+            assert 1 == len(feed['entries'])
             [entry] = feed['entries']
-            eq_(self.work1.title, entry['title'])
-            eq_(identifier.urn, entry['id'])
+            assert self.work1.title == entry['title']
+            assert identifier.urn == entry['id']
 
         # We can ask for updates since a given time.
         yesterday = datetime.utcnow() - timedelta(days=1)
@@ -541,15 +540,15 @@ class TestCatalogController(ControllerTest):
                 '/?last_update_time=%s' % yesterday_timestamp,
         ):
             response = self.controller.updates_feed(self.collection.name)
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
             feed = feedparser.parse(response.get_data())
-            eq_(feed.feed.title,
+            assert (feed.feed.title ==
                 "%s Collection Updates for %s" % (self.collection.protocol, self.client.url))
 
             # The timestamp is included in the url.
             linkified_timestamp = yesterday_timestamp.replace(":", "%3A")
             assert feed['feed']['id'].endswith(linkified_timestamp)
-            eq_(1, len(feed['entries']))
+            assert 1 == len(feed['entries'])
 
         # If we ask for updates from a time later than work1 was created,
         # we'll get no results.
@@ -557,9 +556,9 @@ class TestCatalogController(ControllerTest):
                 '/?last_update_time=%s' % tomorrow_timestamp,
         ):
             response = self.controller.updates_feed(self.collection.name)
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
             feed = feedparser.parse(response.get_data())
-            eq_(0, len(feed['entries']))
+            assert 0 == len(feed['entries'])
 
         # The feed can be paginated.
         identifier2 = self.work2.license_pools[0].identifier
@@ -568,25 +567,25 @@ class TestCatalogController(ControllerTest):
                 '/?last_update_time=%s&size=1' % yesterday_timestamp,
         ):
             response = self.controller.updates_feed(self.collection.name)
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
             feed = feedparser.parse(response.get_data())
             [entry] = feed['entries']
 
             # work1 shows up first since it was created earlier.
-            eq_(identifier.urn, entry['id'])
+            assert identifier.urn == entry['id']
 
             # The first page lists the total number of items in the catalog.
-            eq_('2', feed['feed']['opensearch_totalresults'])
+            assert '2' == feed['feed']['opensearch_totalresults']
 
         # Page two contains work2.
         with self.authenticated_request(
                 '/?last_update_time=%s&size=1&after=1' % yesterday_timestamp,
         ):
             response = self.controller.updates_feed(self.collection.name)
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
             feed = feedparser.parse(response.get_data())
             [entry] = feed['entries']
-            eq_(identifier2.urn, entry['id'])
+            assert identifier2.urn == entry['id']
 
             # Subsequent pages don't bother listing the total number
             # of items.
@@ -616,9 +615,9 @@ class TestCatalogController(ControllerTest):
         with self.authenticated_request('/?last_update_time=wrong format'):
             response = self.controller.updates_feed(self.collection.name)
             assert isinstance(response, ProblemDetail)
-            eq_(400, response.status_code)
+            assert 400 == response.status_code
             expect_error = 'The timestamp "wrong format" is not in the expected format (%s)' % self.controller.TIMESTAMP_FORMAT
-            eq_(expect_error, response.detail)
+            assert expect_error == response.detail
 
     def test_add_items(self):
         invalid_urn = "FAKE AS I WANNA BE"
@@ -631,7 +630,7 @@ class TestCatalogController(ControllerTest):
         # Unauthenticated requests are rejected.
         with self.app.test_request_context('/'):
             response = self.controller.add_items(self.collection.name)
-            eq_(INVALID_CREDENTIALS, response)
+            assert INVALID_CREDENTIALS == response
 
         with self.authenticated_request(
                 '/?urn=%s&urn=%s&urn=%s' % (
@@ -641,11 +640,11 @@ class TestCatalogController(ControllerTest):
             response = self.controller.add_items(self.collection.name)
 
         # None of the identifiers raise or return an error.
-        eq_(HTTP_OK, response.status_code)
+        assert HTTP_OK == response.status_code
 
         # It sends three messages.
         m = messages = self.get_messages(response.get_data())
-        eq_(3, len(messages))
+        assert 3 == len(messages)
 
         # The uncatalogued identifier is now in the catalog.
         assert uncatalogued_id in self.collection.catalog
@@ -659,7 +658,7 @@ class TestCatalogController(ControllerTest):
         self.assert_message(m, catalogued_id, 200, 'Already in catalog')
 
         # The other catalog is not affected.
-        eq_([], other_collection.catalog)
+        assert [] == other_collection.catalog
 
         # Invalid identifier return 400 errors.
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
@@ -668,7 +667,7 @@ class TestCatalogController(ControllerTest):
         # Unauthenticated requests are rejected.
         with self.app.test_request_context('/'):
             response = self.controller.add_with_metadata(self.collection.name)
-            eq_(INVALID_CREDENTIALS, response)
+            assert INVALID_CREDENTIALS == response
 
         # Pretend this OPDS came from a circulation manager.
         base_path = os.path.split(__file__)[0]
@@ -686,7 +685,7 @@ class TestCatalogController(ControllerTest):
         with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
-        eq_(HTTP_OK, response.status_code)
+        assert HTTP_OK == response.status_code
 
         # It sends one message.
         [catalogued] = self.get_messages(response.get_data())
@@ -699,18 +698,18 @@ class TestCatalogController(ControllerTest):
         self.assert_message(catalogued, identifier, '201', 'Successfully added')
 
         # The identifier has links for the cover images from the feed.
-        eq_(set(["http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png",
-                 "http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png"]),
+        assert (set(["http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png",
+                 "http://s3.amazonaws.com/book-covers.nypl.org/Gutenberg%20Illustrated/20201/cover_20201_0.png"]) ==
             set([link.resource.url for link in identifier.links]))
-        eq_(set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE]),
+        assert (set([Hyperlink.IMAGE, Hyperlink.THUMBNAIL_IMAGE]) ==
             set([link.rel for link in identifier.links]))
 
         # The identifier also has an Edition with title, author, and language.
         edition = get_one(self._db, Edition, primary_identifier=identifier)
-        eq_("Mary Gray", edition.title)
+        assert "Mary Gray" == edition.title
         [author] = edition.contributors
-        eq_(Edition.UNKNOWN_AUTHOR, author.sort_name)
-        eq_("eng", edition.language)
+        assert Edition.UNKNOWN_AUTHOR == author.sort_name
+        assert "eng" == edition.language
 
         # A DataSource was created for the collection.
         data_source = DataSource.lookup(self._db, self.collection.name)
@@ -720,7 +719,7 @@ class TestCatalogController(ControllerTest):
         with self.authenticated_request(data=opds):
             response = self.controller.add_with_metadata(self.collection.name)
 
-        eq_(HTTP_OK, response.status_code)
+        assert HTTP_OK == response.status_code
 
         # It sends one message.
         root = etree.parse(BytesIO(response.data))
@@ -736,7 +735,7 @@ class TestCatalogController(ControllerTest):
         # The invalid identifier returns a 400 error message.
         with self.authenticated_request(data=invalid_opds):
             response = self.controller.add_with_metadata(self.collection.name)
-        eq_(HTTP_OK, response.status_code)
+        assert HTTP_OK == response.status_code
 
         # It sends one message.
         [invalid] = self.get_messages(response.get_data())
@@ -748,7 +747,7 @@ class TestCatalogController(ControllerTest):
         # Unauthenticated requests are rejected.
         with self.app.test_request_context('/'):
             response = self.controller.metadata_needed_for(self.collection.name)
-            eq_(INVALID_CREDENTIALS, response)
+            assert INVALID_CREDENTIALS == response
 
         # A regular schmegular identifier: untouched, pure.
         pure_id = self._identifier()
@@ -805,7 +804,7 @@ class TestCatalogController(ControllerTest):
         # Unauthenticated requests are rejected.
         with self.app.test_request_context('/'):
             response = self.controller.remove_items(self.collection.name)
-            eq_(INVALID_CREDENTIALS, response)
+            assert INVALID_CREDENTIALS == response
 
         invalid_urn = "FAKE AS I WANNA BE"
         catalogued_id = self._identifier()
@@ -824,12 +823,12 @@ class TestCatalogController(ControllerTest):
         ):
             # The uncatalogued identifier doesn't raise or return an error.
             response = self.controller.remove_items(self.collection.name)
-            eq_(HTTP_OK, response.status_code)
+            assert HTTP_OK == response.status_code
 
         # It sends two <simplified:message> tags.
         root = self.get_root(response.get_data())
         m = messages = self.get_messages(root)
-        eq_(2, len(messages))
+        assert 2 == len(messages)
 
         # The catalogued Identifier has been removed.
         assert catalogued_id not in self.collection.catalog
@@ -839,12 +838,12 @@ class TestCatalogController(ControllerTest):
         self.assert_message(m, uncatalogued_id, 404, 'Not in catalog')
 
         # It sends no <entry> tags.
-        eq_([], self.XML_PARSE(root, "//atom:entry"))
+        assert [] == self.XML_PARSE(root, "//atom:entry")
 
         # The catalogued identifier isn't in the catalog.
         assert catalogued_id not in self.collection.catalog
         # But it's still in the database.
-        eq_(catalogued_id, self._db.query(Identifier).filter_by(
+        assert (catalogued_id == self._db.query(Identifier).filter_by(
             id=catalogued_id.id).one())
 
         # The catalog's other contents are not affected.
@@ -861,18 +860,18 @@ class TestCatalogController(ControllerTest):
                 method='POST'
         ):
             response = self.controller.remove_items(self.collection.name)
-            eq_(HTTP_OK, int(response.status_code))
+            assert HTTP_OK == int(response.status_code)
 
         # Once again we get two <simplified:message> tags.
         root = self.get_root(response.get_data())
         m = messages = self.get_messages(root)
-        eq_(2, len(messages))
+        assert 2 == len(messages)
 
         self.assert_message(m, invalid_urn, 400, 'Could not parse identifier.')
         self.assert_message(m, catalogued_id, 200, 'Successfully removed')
 
         # We have no <entry> tags.
-        eq_([], self.XML_PARSE(root, "//atom:entry"))
+        assert [] == self.XML_PARSE(root, "//atom:entry")
 
         # The catalogued identifier is still removed.
         assert catalogued_id not in self.collection.catalog
@@ -880,8 +879,8 @@ class TestCatalogController(ControllerTest):
 
 class TestIntegrationClientController(ControllerTest):
 
-    def setup(self):
-        super(TestIntegrationClientController, self).setup()
+    def setup_method(self):
+        super(TestIntegrationClientController, self).setup_method()
         self.controller = IntegrationClientController(self._db)
 
         self.http = DummyHTTPClient()
@@ -902,7 +901,7 @@ class TestIntegrationClientController(ControllerTest):
         request_args['data'] = ''
         with self.app.test_request_context('/', method='POST'):
             response = self.controller.register()
-        eq_(NO_AUTH_URL, response)
+        assert NO_AUTH_URL == response
 
     def test_register_fails_if_error_is_raised_fetching_document(self):
         def error_get(*args, **kwargs):
@@ -913,17 +912,17 @@ class TestIntegrationClientController(ControllerTest):
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=error_get)
 
-        eq_(REMOTE_INTEGRATION_ERROR.uri, response.uri)
-        eq_("Could not retrieve public key URL %s" % url, response.detail)
+        assert REMOTE_INTEGRATION_ERROR.uri == response.uri
+        assert "Could not retrieve public key URL %s" % url == response.detail
 
     def test_register_fails_when_public_key_document_is_invalid(self):
         document_url = 'https://test.org/'
         mock_public_key_doc = json.loads(self.sample_data('public_key_document.json'))
 
         def assert_invalid_key_document(response, message=None):
-            eq_(True, isinstance(response, ProblemDetail))
-            eq_(400, response.status_code)
-            eq_('Invalid integration document', str(response.title))
+            assert True == isinstance(response, ProblemDetail)
+            assert 400 == response.status_code
+            assert 'Invalid integration document' == str(response.title)
             assert response.uri.endswith('/invalid-integration-document')
             if message:
                 assert message in response.detail
@@ -1018,7 +1017,7 @@ class TestIntegrationClientController(ControllerTest):
             response = self.controller.register(do_get=self.http.do_get)
 
         # An IntegrationClient has been created for this website.
-        eq_(201, response.status_code)
+        assert 201 == response.status_code
         client_qu = self._db.query(IntegrationClient).filter(
             IntegrationClient.url == 'test.org'
         )
@@ -1026,20 +1025,20 @@ class TestIntegrationClientController(ControllerTest):
 
         # The appropriate login details are in the response.
         catalog = json.loads(response.data)
-        eq_(url, catalog.get('id'))
+        assert url == catalog.get('id')
         shared_secret = catalog.get('metadata').get('shared_secret')
         decrypted_secret = encryptor.decrypt(
             stdlib_base64.b64decode(shared_secret)
         ).decode("utf8")
-        eq_(client.shared_secret, decrypted_secret)
+        assert client.shared_secret == decrypted_secret
 
         # If the client already has a shared_secret, a request cannot
         # succeed without providing it.
         self.http.responses.append(mock_doc_response)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-            eq_(INVALID_CREDENTIALS.uri, response.uri)
-            eq_('Cannot update existing IntegratedClient without valid shared_secret',
+            assert INVALID_CREDENTIALS.uri == response.uri
+            assert ('Cannot update existing IntegratedClient without valid shared_secret' ==
                 response.detail)
 
         # If the existing shared secret is provided, the shared_secret
@@ -1052,7 +1051,7 @@ class TestIntegrationClientController(ControllerTest):
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
 
-        eq_(200, response.status_code)
+        assert 200 == response.status_code
         catalog = json.loads(response.data)
         # There's still only one IntegrationClient with this URL.
         client = client_qu.one()
@@ -1062,7 +1061,7 @@ class TestIntegrationClientController(ControllerTest):
         decrypted_secret = encryptor.decrypt(
             stdlib_base64.b64decode(shared_secret)
         ).decode("utf8")
-        eq_(client.shared_secret, decrypted_secret)
+        assert client.shared_secret == decrypted_secret
 
     def test_register_with_jwt(self):
         # Create an encryptor so we can compare secrets later. :3
@@ -1099,7 +1098,7 @@ class TestIntegrationClientController(ControllerTest):
             response = self.controller.register(do_get=self.http.do_get)
 
         # An IntegrationClient has been created for test.org.
-        eq_(201, response.status_code)
+        assert 201 == response.status_code
         client_qu = self._db.query(IntegrationClient).filter(
             IntegrationClient.url == 'test.org'
         )
@@ -1108,12 +1107,12 @@ class TestIntegrationClientController(ControllerTest):
         # The IntegrationClient's shared secret is in the response,
         # encrypted with the public key provided.
         catalog = json.loads(response.data)
-        eq_(url, catalog.get('id'))
+        assert url == catalog.get('id')
         shared_secret = catalog.get('metadata').get('shared_secret')
         decrypted_secret = encryptor.decrypt(
             stdlib_base64.b64decode(shared_secret)
         ).decode("utf8")
-        eq_(client.shared_secret, decrypted_secret)
+        assert client.shared_secret == decrypted_secret
 
         # Since a JWT always proves ownership of test.org, we allow
         # clients who provide a JWT to modify an existing shared
@@ -1129,8 +1128,8 @@ class TestIntegrationClientController(ControllerTest):
         request_args = self.create_register_request_args(url, "bad token")
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-            eq_(INVALID_CREDENTIALS.uri, response.uri)
-            eq_("Error decoding JWT: Not enough segments", response.detail)
+            assert INVALID_CREDENTIALS.uri == response.uri
+            assert "Error decoding JWT: Not enough segments" == response.detail
 
         # Same if the client provides a valid but expired JWT.
         five_seconds_ago = datetime.utcnow() - timedelta(seconds=5)
@@ -1140,8 +1139,8 @@ class TestIntegrationClientController(ControllerTest):
         request_args = self.create_register_request_args(url, token)
         with self.app.test_request_context('/', **request_args):
             response = self.controller.register(do_get=self.http.do_get)
-            eq_(INVALID_CREDENTIALS.uri, response.uri)
-            eq_("Error decoding JWT: Signature has expired", response.detail)
+            assert INVALID_CREDENTIALS.uri == response.uri
+            assert "Error decoding JWT: Signature has expired" == response.detail
 
 
 class TestURNLookupHandler(DatabaseTest):
@@ -1162,7 +1161,7 @@ class TestURNLookupHandler(DatabaseTest):
         identifier = object()
         urn = object()
         handler.process_identifier(identifier, urn)
-        eq_([(identifier, work)], handler.works)
+        assert [(identifier, work)] == handler.works
 
         # If a work is not presentation-ready, but calling
         # resolver.ensure_coverage makes it presentation ready, it is
@@ -1176,7 +1175,7 @@ class TestURNLookupHandler(DatabaseTest):
         handler.ready_work = None
         handler.works = []
         handler.process_identifier(identifier, urn)
-        eq_([(identifier, work)], handler.works)
+        assert [(identifier, work)] == handler.works
 
         # If a work is not presentation-ready, and calling
         # resolver.ensure_coverage does not make it presentation
@@ -1190,8 +1189,8 @@ class TestURNLookupHandler(DatabaseTest):
         handler.ready_work = None
         handler.works = []
         handler.process_identifier(identifier, urn)
-        eq_([], handler.works)
-        eq_((urn, identifier), handler.status_message)
+        assert [] == handler.works
+        assert (urn, identifier) == handler.status_message
 
 class TestURNLookupController(ControllerTest):
 
@@ -1204,8 +1203,8 @@ class TestURNLookupController(ControllerTest):
         """Return the contents of a test data file."""
         return open(os.path.join(self.resource_path, path), 'rb').read()
 
-    def setup(self):
-        super(TestURNLookupController, self).setup()
+    def setup_method(self):
+        super(TestURNLookupController, self).setup_method()
 
         self.mirror = MockS3Uploader()
         self.content_cafe = MockContentCafeAPI()
@@ -1264,9 +1263,9 @@ class TestURNLookupController(ControllerTest):
         """
         [obj] = handler.precomposed_entries
         assert isinstance(obj, OPDSMessage)
-        eq_(urn, obj.urn)
-        eq_(status_code, obj.status_code)
-        eq_([], handler.works)
+        assert urn == obj.urn
+        assert status_code == obj.status_code
+        assert [] == handler.works
         if message_prefix:
             assert obj.message.startswith(message_prefix)
         return obj.message
@@ -1306,20 +1305,20 @@ class TestURNLookupController(ControllerTest):
         [overdrive_cr, resolver_cr] = sorted(
             identifier.coverage_records, key=lambda x: x.operation or ""
         )
-        eq_(DataSource.INTERNAL_PROCESSING, resolver_cr.data_source.name)
-        eq_(CoverageRecord.RESOLVE_IDENTIFIER_OPERATION, resolver_cr.operation)
-        eq_(CoverageRecord.SUCCESS, resolver_cr.status)
+        assert DataSource.INTERNAL_PROCESSING == resolver_cr.data_source.name
+        assert CoverageRecord.RESOLVE_IDENTIFIER_OPERATION == resolver_cr.operation
+        assert CoverageRecord.SUCCESS == resolver_cr.status
 
-        eq_(DataSource.OVERDRIVE, overdrive_cr.data_source.name)
-        eq_(None, overdrive_cr.operation)
-        eq_(CoverageRecord.REGISTERED, overdrive_cr.status)
+        assert DataSource.OVERDRIVE == overdrive_cr.data_source.name
+        assert None == overdrive_cr.operation
+        assert CoverageRecord.REGISTERED == overdrive_cr.status
 
         # A LicensePool has been associated with the Identifier.
         [lp] = identifier.licensed_through
 
         # However, there is no Work associated with the Identifier, because
         # no CoverageProvider has run that would create one.
-        eq_(None, identifier.work)
+        assert None == identifier.work
 
         # Processing the URN a second time will give the same result.
         self.controller.precomposed_entries = []
@@ -1385,9 +1384,9 @@ class TestURNLookupController(ControllerTest):
         # created.
         [(identifier, work)] = handler.works
         [lp] = work.license_pools
-        eq_(urn, lp.identifier.urn)
-        eq_(DataSource.INTERNAL_PROCESSING, lp.data_source.name)
-        eq_("Agile Documentation", work.title)
+        assert urn == lp.identifier.urn
+        assert DataSource.INTERNAL_PROCESSING == lp.data_source.name
+        assert "Agile Documentation" == work.title
 
         # After processing the Overdrive data, we asked VIAF to
         # improve the author information.
@@ -1398,13 +1397,13 @@ class TestURNLookupController(ControllerTest):
         #
         # This indicates that the VIAF client needs work.
         # [contributor] = work.presentation_edition.contributors
-        # eq_(u"Andreas R&#252;ping", contributor.display_name)
-        # eq_(u"Kaling, Mindy", contributor.sort_name)
+        # assert u"Andreas R&#252;ping", contributor.display_name)
+        # assert u"Kaling, Mindy", contributor.sort_name)
 
         # We 'downloaded' a cover image, thumbnailed it, and 'uploaded'
         # cover and thumbnail to S3.
-        eq_(1, len(self.http.requests))
-        eq_(2, len(self.mirror.uploaded))
+        assert 1 == len(self.http.requests)
+        assert 2 == len(self.mirror.uploaded)
 
     @authenticated_request_context
     def test_process_urn_registration_failure(self):
@@ -1416,13 +1415,13 @@ class TestURNLookupController(ControllerTest):
 
         # Failure -- we didn't specify a collection.
         result = self.controller.process_urns([urn])
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("No metadata identifier provided.", result.detail)
+        assert INVALID_INPUT.uri == result.uri
+        assert "No metadata identifier provided." == result.detail
 
         # Failure - we sent too many URNs.
         result = self.controller.process_urns([urn] * 31, metadata_identifier=name)
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("The maximum number of URNs you can provide at once is 30. (You sent 31)",
+        assert INVALID_INPUT.uri == result.uri
+        assert ("The maximum number of URNs you can provide at once is 30. (You sent 31)" ==
             result.detail)
 
     @authenticated_request_context_resolve_now
@@ -1432,8 +1431,8 @@ class TestURNLookupController(ControllerTest):
         urn = self._identifier(identifier_type=Identifier.ISBN).urn
         name = self.overdrive_collection.metadata_identifier
         result = self.controller.process_urns([urn] * 2, metadata_identifier=name)
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("The maximum number of URNs you can provide at once is 1. (You sent 2)",
+        assert INVALID_INPUT.uri == result.uri
+        assert ("The maximum number of URNs you can provide at once is 1. (You sent 2)" ==
             result.detail)
 
     @unauthenticated_request_context
@@ -1468,8 +1467,8 @@ class TestURNLookupController(ControllerTest):
 
         # Failure -- we sent more than one URN with an unauthenticated request.
         result = self.controller.process_urns([urn, urn2])
-        eq_(INVALID_INPUT.uri, result.uri)
-        eq_("The maximum number of URNs you can provide at once is 1. (You sent 2)",
+        assert INVALID_INPUT.uri == result.uri
+        assert ("The maximum number of URNs you can provide at once is 1. (You sent 2)" ==
             result.detail)
 
     @unauthenticated_request_context
@@ -1479,13 +1478,13 @@ class TestURNLookupController(ControllerTest):
         identifier = self._identifier(Identifier.BIBLIOTHECA_ID)
         response = self.controller.process_urns([identifier.urn])
         [message] = response.precomposed_entries
-        eq_("Could not parse identifier.", message.message)
+        assert "Could not parse identifier." == message.message
 
 
 class TestCanonicalizationController(ControllerTest):
 
-    def setup(self):
-        super(TestCanonicalizationController, self).setup()
+    def setup_method(self):
+        super(TestCanonicalizationController, self).setup_method()
         self.canonicalizer = SimpleMockAuthorNameCanonicalizer()
         self.controller = CanonicalizationController(
             self._db, self.canonicalizer
@@ -1501,14 +1500,14 @@ class TestCanonicalizationController(ControllerTest):
     def test_parse_identifier(self):
         # Test our slight specialization of Identifier.parse_urn.
         m = self.controller.parse_identifier
-        eq_(None, m(None))
+        assert None == m(None)
 
         # parse_urn will raise a ValueError here, but we just return None.
-        eq_(None, m('urn:isbn:DBKACX0122823'))
+        assert None == m('urn:isbn:DBKACX0122823')
 
         isbn = m('urn:isbn:9780743593601')
-        eq_("9780743593601", isbn.identifier)
-        eq_(Identifier.ISBN, isbn.type)
+        assert "9780743593601" == isbn.identifier
+        assert Identifier.ISBN == isbn.type
 
     def test_canonicalize_author_name(self):
         m = self.controller.canonicalize_author_name
@@ -1530,12 +1529,12 @@ class TestCanonicalizationController(ControllerTest):
             # The mock canonicalizer was asked about this
             # Identifier/name pair.
             call = self.canonicalizer.canonicalize_author_name_calls.pop()
-            eq_((input_name, identifier), call)
+            assert (input_name, identifier) == call
 
             # And it returned the predefined right answer.
-            eq_(200, response.status_code)
-            eq_("text/plain", response.headers['Content-Type'])
-            eq_(output_name, response.data.decode("utf8"))
+            assert 200 == response.status_code
+            assert "text/plain" == response.headers['Content-Type']
+            assert output_name == response.data.decode("utf8")
 
         # Now test the failure case.
         with self.app.test_request_context('/?urn=error&display_name=nobody'):
@@ -1544,9 +1543,9 @@ class TestCanonicalizationController(ControllerTest):
             call = self.canonicalizer.canonicalize_author_name_calls.pop()
             # We were not able to turn 'error' into a Identifier, so
             # None was passed in instead.
-            eq_(("nobody", None), call)
+            assert ("nobody", None) == call
 
             # Since there was no predefined right answer for ("nobody", None),
             # we get a 404 error.
-            eq_(404, response.status_code)
-            eq_("", response.data.decode("utf8"))
+            assert 404 == response.status_code
+            assert "" == response.data.decode("utf8")

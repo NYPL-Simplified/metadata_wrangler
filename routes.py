@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 from functools import wraps
 
 from core.app_server import (

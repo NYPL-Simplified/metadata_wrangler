@@ -1,8 +1,3 @@
-from nose.tools import (
-    eq_,
-    set_trace,
-)
-
 from . import (
     DatabaseTest,
 )
@@ -45,8 +40,8 @@ class TestMetadataWranglerReplacementPolicy(DatabaseTest):
         policy = m(self._db)
 
         # The sort of thing you expect from a metadata source.
-        eq_(True, policy.subjects)
-        eq_(True, policy.contributions)
+        assert True == policy.subjects
+        assert True == policy.contributions
 
         # But no configured MirrorUploaders.
         assert all([x==None for x in list(policy.mirrors.values())])
@@ -67,11 +62,11 @@ class TestMetadataWranglerReplacementPolicy(DatabaseTest):
 
         # The MirrorUploader has been properly configured with the
         # secret key from the integration.
-        eq_("password", uploader.client._request_signer._credentials.secret_key)
+        assert "password" == uploader.client._request_signer._credentials.secret_key
 
         # But the MirrorUploader is only to be used for book covers. The
         # metadata wrangler ignores the books themselves.
-        eq_(None, mirrors[ExternalIntegrationLink.OPEN_ACCESS_BOOKS])
+        assert None == mirrors[ExternalIntegrationLink.OPEN_ACCESS_BOOKS]
 
 
 class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
@@ -87,7 +82,7 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
         assert isinstance(
             policy, MetadataWranglerReplacementPolicy
         )
-        eq_(mock_mirror, policy.mirrors[ExternalIntegrationLink.COVERS])
+        assert mock_mirror == policy.mirrors[ExternalIntegrationLink.COVERS]
 
     def test_work_created_with_internal_processing_licensepool(self):
         class Mock(MetadataWranglerBibliographicCoverageProvider):
@@ -95,7 +90,7 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
             DATA_SOURCE_NAME = DataSource.OVERDRIVE
 
         provider = Mock(self._default_collection)
-        eq_(DataSource.OVERDRIVE, provider.data_source.name)
+        assert DataSource.OVERDRIVE == provider.data_source.name
 
         # Ordinarily, if an Overdrive CoverageProvider needs to create
         # a work for an Identifier, and there's no LicensePool, it
@@ -108,11 +103,11 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
         edition = self._edition()
         work = provider.work(edition.primary_identifier)
         [pool] = work.license_pools
-        eq_(DataSource.INTERNAL_PROCESSING, pool.data_source.name)
+        assert DataSource.INTERNAL_PROCESSING == pool.data_source.name
 
         # The dummy pool is created as an open-access LicensePool so
         # that multiple LicensePools can share the same work.
-        eq_(True, pool.open_access)
+        assert True == pool.open_access
 
     def test_handle_success_fails_if_work_cant_be_created(self):
 
@@ -131,7 +126,7 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
 
         # ...but were unable to create the Work. The result is failure.
         assert isinstance(failure, CoverageFailure)
-        eq_("Can't create work.", failure.exception)
+        assert "Can't create work." == failure.exception
 
     def test_handle_success_sets_new_work_presentation_ready(self):
         provider = MockProvider(self._default_collection)
@@ -140,11 +135,11 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
         provider.handle_success(pool.identifier)
 
         # The LicensePool was forced to be open-access.
-        eq_(True, pool.open_access)
+        assert True == pool.open_access
 
         # A presentation-ready work was created for it.
         work = pool.work
-        eq_(True, work.presentation_ready)
+        assert True == work.presentation_ready
 
     def test_handle_success_recalculates_presentation_of_existing_work(self):
         """If work() returns a Work that's already presentation-ready,
@@ -178,11 +173,11 @@ class TestMetadataWranglerBibliographicCoverageProvider(S3UploaderTest):
 
         # Since work.presentation_ready was already True,
         # work.calculate_presentation() was called.
-        eq_(True, work.calculate_presentation_called)
+        assert True == work.calculate_presentation_called
 
         # work.set_presentation_ready() was called, just to
         # be safe.
-        eq_(True, work.set_presentation_ready_called)
+        assert True == work.set_presentation_ready_called
 
 class MockResolveVIAF(ResolveVIAFOnSuccessCoverageProvider):
     SERVICE_NAME = "Mock resolve_viaf"
@@ -212,8 +207,8 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
         # However, the Work is still presentation-ready. Even though
         # the VIAF part failed, the Work is still basically usable.
         work = edition.primary_identifier.work
-        eq_(edition.title, work.title)
-        eq_(True, work.presentation_ready)
+        assert edition.title == work.title
+        assert True == work.presentation_ready
 
     def test_resolve_viaf(self):
         class MockVIAF(object):
@@ -229,8 +224,8 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
             work.presentation_edition.contributors,
             key=lambda x: x.sort_name
         )
-        eq_("1, Author", c1.sort_name)
-        eq_("2, Author", c2.sort_name)
+        assert "1, Author" == c1.sort_name
+        assert "2, Author" == c2.sort_name
 
         # However, (let's say) we were not able to find the display
         # names of the contributors, only the sort names.
@@ -244,10 +239,10 @@ class TestResolveVIAFOnSuccessCoverageProvider(DatabaseTest):
 
         # The two contributors associated with the work's presentation edition
         # were run through the MockVIAF().
-        eq_(set([c1, c2]), set(provider.viaf.processed))
+        assert set([c1, c2]) == set(provider.viaf.processed)
 
         # Since it's just a mock, no VIAF anything actually happened.
         # But _because_ nothing happened, we made guesses as to the
         # display names of the two contributors.
-        eq_("Author 1", c1.display_name)
-        eq_("Author 2", c2.display_name)
+        assert "Author 1" == c1.display_name
+        assert "Author 2" == c2.display_name

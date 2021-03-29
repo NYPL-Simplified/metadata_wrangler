@@ -1,5 +1,4 @@
 import base64 as stdlib_base64
-from nose.tools import set_trace
 from datetime import datetime
 import flask
 from flask import make_response

@@ -1,7 +1,5 @@
 # encoding: utf-8
 
-from nose.tools import eq_, set_trace
-
 from .. import (
     DatabaseTest,
     sample_data,
@@ -32,10 +30,10 @@ class TestParser(DatabaseTest):
         xml = self.sample_data("multi_work_response.xml")
 
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(self._db, xml, languages=["eng"])
-        eq_(OCLCTitleAuthorLookupXMLParser.MULTI_WORK_STATUS, status)
+        assert OCLCTitleAuthorLookupXMLParser.MULTI_WORK_STATUS == status
 
-        eq_(25, len(swids))
-        eq_(['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'], sorted(swids))
+        assert 25 == len(swids)
+        assert ['10106023', '10190890', '10360105', '105446800', '10798812', '11065951', '122280617', '12468538', '13206523', '13358012', '13424036', '14135019', '1413894', '153927888', '164732682', '1836574', '22658644', '247734888', '250604212', '26863225', '34644035', '46935692', '474972877', '51088077', '652035540'] == sorted(swids)
 
         # For your convenience in verifying what I say in
         # test_extract_multiple_works_with_author_restriction().
@@ -50,13 +48,13 @@ class TestParser(DatabaseTest):
         # meet that criterion.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=1)
-        eq_(4, len(swids))
+        assert 4 == len(swids)
 
         # Stopwords "a", "an", and "the" are removed before
         # consideration.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="A an the Moby-Dick", title_similarity=1)
-        eq_(4, len(swids))
+        assert 4 == len(swids)
 
         # This is significantly more lax, so it finds more results.
         # The exact number isn't important.
@@ -67,7 +65,7 @@ class TestParser(DatabaseTest):
         # This is so lax as to be meaningless. It accepts everything.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0)
-        eq_(25, len(swids))
+        assert 25 == len(swids)
 
         # This is nearly so lax as to be meaningless, but it does
         # prohibit one work whose title contains ' ; ' (these are
@@ -75,20 +73,20 @@ class TestParser(DatabaseTest):
         # words in common with the title we're looking for.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick Moby", title_similarity=0.00000000001)
-        eq_(21, len(swids))
+        assert 21 == len(swids)
 
         # Add a semicolon to the title we're looking for, and the
         # work whose title contains ' ; ' is acceptable again.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="Dick ; Moby", title_similarity=0.000000001)
-        eq_(22, len(swids))
+        assert 22 == len(swids)
 
         # This isn't particularly strict, but none of the books in
         # this dataset have titles that resemble this title, so none
         # of their SWIDs show up here.
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, title="None Of These Words Show Up Whatsoever")
-        eq_(0, len(swids))
+        assert 0 == len(swids)
 
 
     def test_extract_multiple_works_with_author_restriction(self):
@@ -100,14 +98,14 @@ class TestParser(DatabaseTest):
             self._db, xml, languages=["eng"], authors=[wrong_author])
         # This person is not listed as an author of any work in the dataset,
         # so none of those works were picked up.
-        eq_(0, len(swids))
+        assert 0 == len(swids)
 
         [melville], ignore = Contributor.lookup(self._db, sort_name="Melville, Herman")
         status, swids = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"], authors=[melville])
 
         # We picked up 11 of the 25 works in the dataset.
-        eq_(11, len(swids))
+        assert 11 == len(swids)
 
         # The missing works (as you can verify by looking at
         # oclc_multi_work_response.xml) either don't credit Herman
@@ -120,9 +118,9 @@ class TestParser(DatabaseTest):
 
     def test_primary_author_name(self):
         melville = OCLCTitleAuthorLookupXMLParser.primary_author_from_author_string(self._db, "Melville, Herman, 1819-1891 | Hayford, Harrison [Associated name; Editor] | Parker, Hershel [Editor] | Tanner, Tony [Editor; Commentator for written text; Author of introduction; Author] | Cliffs Notes, Inc. | Kent, Rockwell, 1882-1971 [Illustrator]")
-        eq_("Melville, Herman", melville.sort_name)
+        assert "Melville, Herman" == melville.sort_name
 
-        eq_(None, OCLCTitleAuthorLookupXMLParser.primary_author_from_author_string(
+        assert (None == OCLCTitleAuthorLookupXMLParser.primary_author_from_author_string(
             self._db,
             "Melville, Herman, 1819-1891 [Author] | Hayford, Harrison [Associated name; Editor]"))
 
@@ -134,42 +132,42 @@ class TestParser(DatabaseTest):
 
         status, records = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        assert OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS == status
 
         # We expect 1 work record for the OCLC work. The two
         # edition records do not become work records.
-        eq_(1, len(records))
+        assert 1 == len(records)
 
         # Work and edition both have a primary identifier.
         work = records[0]
         work_id = work.primary_identifier
-        eq_(Identifier.OCLC_WORK, work_id.type)
-        eq_('4687', work_id.identifier)
+        assert Identifier.OCLC_WORK == work_id.type
+        assert '4687' == work_id.identifier
 
-        eq_("Moby Dick", work.title)
+        assert "Moby Dick" == work.title
 
         work_contributors = [x.sort_name for x in work.contributors]
 
         # The work has a ton of contributors, collated from all the
         # editions.
-        eq_(set([
+        assert (set([
             'Cliffs Notes, Inc.',
             'Kent, Rockwell',
             'Hayford, Harrison',
             'Melville, Herman',
             'Parker, Hershel',
             'Tanner, Tony',
-             ]), set(work_contributors))
+             ]) == set(work_contributors))
 
         # Most of the contributors have LC and VIAF numbers, but two
         # (Cliffs Notes and Rockwell Kent) do not.
-        eq_(
+        assert (
             ['', '', 'n50025038', 'n50050335', 'n79006936',
-             'n79059764'],
+             'n79059764'] ==
             sorted([x.lc or '' for x in work.contributors])
         )
-        eq_(
-            ['', '', '27068555', '34482742', '4947338', '51716047'],
+        assert (
+            ['', '', '27068555', '34482742', '4947338', '51716047'] ==
             sorted([x.viaf or '' for x in work.contributors]))
 
         # Only two of the contributors are considered 'authors' by
@@ -182,23 +180,23 @@ class TestParser(DatabaseTest):
             [x.contributor.sort_name for x in work.contributions
              if x.role==Contributor.AUTHOR_ROLE])[0]
 
-        eq_("Melville, Herman", primary_author)
-        eq_("Tanner, Tony", other_author)
+        assert "Melville, Herman" == primary_author
+        assert "Tanner, Tony" == other_author
 
         # The work has no language specified. The edition does have
         # a language specified.
-        eq_(None, work.language)
+        assert None == work.language
 
         classifications = work.primary_identifier.classifications
         [[subject, weight]] = [(c.subject, c.weight) for c in classifications
                              if c.subject.type == Subject.DDC]
-        eq_("813.3", subject.identifier)
-        eq_(21183, weight)
+        assert "813.3" == subject.identifier
+        assert 21183 == weight
 
         [[subject, weight]] = [(c.subject, c.weight) for c in classifications
                         if c.subject.type == Subject.LCC]
-        eq_("PS2384", subject.identifier)
-        eq_(22460, weight)
+        assert "PS2384" == subject.identifier
+        assert 22460 == weight
 
         fast = sorted(
             [(c.subject.name, c.subject.identifier, c.weight)
@@ -214,7 +212,7 @@ class TestParser(DatabaseTest):
             ('Whaling', '1174284', 32058),
             ('Whaling ships', '1174307', 18913)
         ]
-        eq_(expect, fast)
+        assert expect == fast
 
     def test_missing_work_id(self):
 
@@ -224,8 +222,8 @@ class TestParser(DatabaseTest):
 
         status, [record] = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
-        eq_("The Europeans. Washington Square.", record.title)
+        assert OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS == status
+        assert "The Europeans. Washington Square." == record.title
 
     def test_no_contributors(self):
         # This document has no contributors listed.
@@ -233,9 +231,9 @@ class TestParser(DatabaseTest):
 
         status, records = OCLCTitleAuthorLookupXMLParser.parse(
             self._db, xml, languages=["eng"])
-        eq_(OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS, status)
+        assert OCLCTitleAuthorLookupXMLParser.SINGLE_WORK_DETAIL_STATUS == status
         # We parsed the work, but it had no contributors listed.
-        eq_([set()], [r.contributors for r in records])
+        assert [set()] == [r.contributors for r in records]
 
 
 class TestAuthorParser(DatabaseTest):
@@ -245,19 +243,19 @@ class TestAuthorParser(DatabaseTest):
     def assert_author(self, result, name, role=Contributor.AUTHOR_ROLE,
                       birthdate=None, deathdate=None):
         contributor, roles = result
-        eq_(contributor.sort_name, name)
+        assert contributor.sort_name == name
         if role:
             if not isinstance(role, list) and not isinstance(role, tuple):
                 role = [role]
-            eq_(role, roles)
+            assert role == roles
         if birthdate is self.MISSING:
             assert Contributor.BIRTH_DATE not in contributor.extra
         elif birthdate:
-            eq_(birthdate, contributor.extra[Contributor.BIRTH_DATE])
+            assert birthdate == contributor.extra[Contributor.BIRTH_DATE]
         if deathdate is self.MISSING:
             assert Contributor.DEATH_DATE not in contributor.extra
         elif deathdate:
-            eq_(deathdate, contributor.extra[Contributor.DEATH_DATE])
+            assert deathdate == contributor.extra[Contributor.DEATH_DATE]
 
     def assert_parse(self, string, name, role=Contributor.AUTHOR_ROLE,
                      birthdate=None, deathdate=None):
@@ -340,8 +338,8 @@ class TestAuthorParser(DatabaseTest):
 
 class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
 
-    def setup(self):
-        super(TestTitleAuthorLookupCoverageProvider, self).setup()
+    def setup_method(self):
+        super(TestTitleAuthorLookupCoverageProvider, self).setup_method()
         self.edition, ignore = self._edition(
             with_license_pool=True, data_source_name=DataSource.GUTENBERG
         )
@@ -354,16 +352,16 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
 
     def test_oclc_safe_title(self):
         # Returns an empty string when passed None.
-        eq_(self.provider.oclc_safe_title(None), '')
+        assert self.provider.oclc_safe_title(None) == ''
 
         # Returns the original title if it has no special characters.
         title = 'The Curious Incident of the Dog in the Night-Time'
-        eq_(self.provider.oclc_safe_title(title), title)
+        assert self.provider.oclc_safe_title(title) == title
 
         # Returns a title without special characters otherwise.
         title = '3 Blind Mice & Other Tales: A Bedtime Reader'
         expected = '3 Blind Mice  Other Tales A Bedtime Reader'
-        eq_(self.provider.oclc_safe_title(title), expected)
+        assert self.provider.oclc_safe_title(title) == expected
 
     def test_process_item_without_book_information(self):
         def process_item():
@@ -375,8 +373,8 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
         self.edition.title = None
 
         result = process_item()
-        eq_(True, isinstance(result, CoverageFailure))
-        eq_(True, result.exception.endswith('title and author!'))
+        assert True == isinstance(result, CoverageFailure)
+        assert True == result.exception.endswith('title and author!')
 
         # Create an edition without an author
         self.edition.title = "Jane Eyre"
@@ -384,15 +382,15 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
         self._db.commit()
 
         result = process_item()
-        eq_(True, isinstance(result, CoverageFailure))
-        eq_(True, result.exception.endswith('title and author!'))
+        assert True == isinstance(result, CoverageFailure)
+        assert True == result.exception.endswith('title and author!')
 
         # Create an edition with both a title and author
         bronte = self._contributor(sort_name="Bronte, Charlotte")[0]
         self.edition.add_contributor(bronte, Contributor.AUTHOR_ROLE)
 
         result = process_item()
-        eq_(result, self.identifier)
+        assert result == self.identifier
 
     def test_process_item_when_parsing_error_occurs(self):
         class AlwaysErrorsClassifyProvider(TitleAuthorLookupCoverageProvider):
@@ -403,7 +401,7 @@ class TestTitleAuthorLookupCoverageProvider(DatabaseTest):
         self.api.queue_lookup(self.sample_data('jane_eyre.xml'))
         result = provider.process_item(self.identifier)
 
-        eq_(True, isinstance(result, CoverageFailure))
-        eq_(self.identifier, result.obj)
-        eq_('It broke!', result.exception)
-        eq_(provider.data_source, result.data_source)
+        assert True == isinstance(result, CoverageFailure)
+        assert self.identifier == result.obj
+        assert 'It broke!' == result.exception
+        assert provider.data_source == result.data_source

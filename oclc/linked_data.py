@@ -9,7 +9,6 @@ import re
 import isbnlib
 from collections import Counter
 from pyld import jsonld
-from nose.tools import set_trace
 
 from sqlalchemy.orm.session import Session
 

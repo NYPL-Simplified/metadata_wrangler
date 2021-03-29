@@ -3,7 +3,6 @@ import logging
 import os
 import re
 
-from nose.tools import set_trace
 from oclc.linked_data import OCLCLinkedData
 from viaf import VIAFClient, MockVIAFClient
 

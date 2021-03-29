@@ -1,9 +1,3 @@
-from nose.tools import (
-    set_trace,
-    eq_,
-    assert_raises,
-)
-
 from . import (
     DatabaseTest,
 )
@@ -28,45 +22,45 @@ from integration_client import (
 
 class TestWorkPresentationCoverageProvider(DatabaseTest):
 
-    def setup(self):
-        super(TestWorkPresentationCoverageProvider, self).setup()
+    def setup_method(self):
+        super(TestWorkPresentationCoverageProvider, self).setup_method()
         self.provider = WorkPresentationCoverageProvider(self._db)
 
     def test_default_policy(self):
         # By default, the policy regenerates OPDS entries, in addition to
         # the usual metadata calculation items.
         original_policy = self.provider.policy
-        eq_(True, original_policy.regenerate_opds_entries)
-        eq_(True, original_policy.choose_edition)
-        eq_(True, original_policy.set_edition_metadata)
-        eq_(True, original_policy.classify)
-        eq_(True, original_policy.choose_summary)
-        eq_(True, original_policy.calculate_quality)
-        eq_(True, original_policy.choose_cover)
+        assert True == original_policy.regenerate_opds_entries
+        assert True == original_policy.choose_edition
+        assert True == original_policy.set_edition_metadata
+        assert True == original_policy.classify
+        assert True == original_policy.choose_summary
+        assert True == original_policy.calculate_quality
+        assert True == original_policy.choose_cover
 
     def test_policy_can_be_customized(self):
         original_policy = self.provider.policy
         new_policy = PresentationCalculationPolicy.reset_cover()
 
         self.provider._policy = new_policy
-        eq_(new_policy, self.provider.policy)
-        eq_(False, self.provider.policy.regenerate_opds_entries)
-        eq_(False, self.provider.policy.choose_edition)
+        assert new_policy == self.provider.policy
+        assert False == self.provider.policy.regenerate_opds_entries
+        assert False == self.provider.policy.choose_edition
 
     def test_process_item(self):
         work = self._work()
-        eq_(None, work.simple_opds_entry)
-        eq_(None, work.verbose_opds_entry)
-        eq_(False, work.presentation_ready)
+        assert None == work.simple_opds_entry
+        assert None == work.verbose_opds_entry
+        assert False == work.presentation_ready
 
-        eq_(work, self.provider.process_item(work))
+        assert work == self.provider.process_item(work)
 
         # The OPDS entries have been calculated.
         assert work.simple_opds_entry != None
         assert work.verbose_opds_entry != None
 
         # The work has been made presentation-ready.
-        eq_(True, work.presentation_ready)
+        assert True == work.presentation_ready
 
 class TestCalculatesWorkPresentation(DatabaseTest):
 
@@ -76,14 +70,14 @@ class TestCalculatesWorkPresentation(DatabaseTest):
     ):
         pass
 
-    def setup(self):
-        super(TestCalculatesWorkPresentation, self).setup()
+    def setup_method(self):
+        super(TestCalculatesWorkPresentation, self).setup_method()
         self.provider = self.MockProvider(self._db)
 
     def test_get_work(self):
         # Without any means to a work, nothing is returned.
         identifier = self._identifier()
-        eq_(None, self.provider.get_work(identifier))
+        assert None == self.provider.get_work(identifier)
 
         # With a means to a work (LicensePool, Edition), a work is created and
         # returned.
@@ -94,10 +88,10 @@ class TestCalculatesWorkPresentation(DatabaseTest):
         )
         result = self.provider.get_work(identifier)
         assert isinstance(result, Work)
-        eq_(edition.title, result.title)
+        assert edition.title == result.title
 
         # A work that already exists can also be returned.
-        eq_(result, self.provider.get_work(identifier))
+        assert result == self.provider.get_work(identifier)
 
     def test_no_work_found_failure(self):
         identifier = self._identifier()
@@ -105,27 +99,27 @@ class TestCalculatesWorkPresentation(DatabaseTest):
 
         result = self.provider.no_work_found_failure(identifier)
         assert isinstance(result, CoverageFailure)
-        eq_(identifier, result.obj)
-        eq_(expected_msg, result.exception)
+        assert identifier == result.obj
+        assert expected_msg == result.exception
 
     def test_update_work_presentation(self):
         work = self._work()
         identifier = work.presentation_edition.primary_identifier
         # The work is initialized with no coverage records.
-        eq_(0, len(work.coverage_records))
+        assert 0 == len(work.coverage_records)
 
         # It registers a work for presentation calculation.
         result = self.provider.update_work_presentation(work, identifier)
-        eq_(None, result)
+        assert None == result
         [record] = work.coverage_records
-        eq_(WorkPresentationCoverageProvider.OPERATION, record.operation)
-        eq_(CoverageRecord.REGISTERED, record.status)
+        assert WorkPresentationCoverageProvider.OPERATION == record.operation
+        assert CoverageRecord.REGISTERED == record.status
 
         # It returns the record to REGISTERED status, even if it already
         # exists.
         record.status = CoverageRecord.SUCCESS
         self.provider.update_work_presentation(work, identifier)
-        eq_(CoverageRecord.REGISTERED, record.status)
+        assert CoverageRecord.REGISTERED == record.status
 
         # It runs a hook method, if it's defined.
         new_title = "What's Love Gotta Do Wit It? (The 10-Part Saga)"
@@ -135,8 +129,8 @@ class TestCalculatesWorkPresentation(DatabaseTest):
         hook_provider = HookMethodProvider(self._db)
 
         result = hook_provider.update_work_presentation(work, identifier)
-        eq_(None, result)
-        eq_(new_title, work.title)
+        assert None == result
+        assert new_title == work.title
 
         # It returns a CoverageFailure if the hook method errors.
         class FailedHookMethodProvider(self.MockProvider):
@@ -146,14 +140,14 @@ class TestCalculatesWorkPresentation(DatabaseTest):
 
         result = failed_hook_provider.update_work_presentation(work, identifier)
         assert isinstance(result, CoverageFailure)
-        eq_(identifier, result.obj)
+        assert identifier == result.obj
         assert "Ack!" in result.exception
 
 
 class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
 
-    def setup(self):
-        super(TestIntegrationClientCoverImageCoverageProvider, self).setup()
+    def setup_method(self):
+        super(TestIntegrationClientCoverImageCoverageProvider, self).setup_method()
         mirror = MockS3Uploader()
         replacement_policy = MetadataWranglerReplacementPolicy.from_db(
             self._db, mirror=mirror
@@ -167,7 +161,7 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
         )
 
     def test_default_replacement_policy(self):
-        # In setup() we provide a replacement policy for use in the
+        # In setup_method() we provide a replacement policy for use in the
         # test.  If you don't provide a replacement policy, a
         # MetadataWranglerReplacementPolicy is automatically created.
         provider = IntegrationClientCoverImageCoverageProvider(
@@ -180,10 +174,10 @@ class TestIntegrationClientCoverImageCoverageProvider(DatabaseTest):
         # Verify that links are replaced. This automatically happens
         # because of the from_metadata_source() call but we test it
         # because we used to have code that explicitly set this.
-        eq_(True, provider.replacement_policy.links)
+        assert True == provider.replacement_policy.links
 
     def test_data_source_is_collection_specific(self):
-        eq_(self.collection.name, self.provider.data_source.name)
+        assert self.collection.name == self.provider.data_source.name
 
     def test_process_item_registers_work_for_calculation(self):
         edition, lp = self._edition(with_license_pool=True)

@@ -1,5 +1,4 @@
 import logging
-from nose.tools import set_trace
 
 from sqlalchemy.orm.session import Session
 

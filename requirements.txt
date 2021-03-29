@@ -1,14 +1,2 @@
 -r core/requirements.txt
-
-accept-types
-beautifulsoup4==4.9.1
-cairosvg==1.0.22
-# Ensure that we support SNI-based SSL
-ndg-httpsclient==0.5.1
-pycrypto==2.6.1
-PyJWT==1.4.2
-# Used only by metadata
-PyLD==1.0.5
-# for author name matching
-python-Levenshtein==0.12.0
-zeep==3.4.0
+-r requirements-base.txt

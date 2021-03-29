@@ -7,8 +7,6 @@ import os
 import sys
 import unicodedata
 
-from nose.tools import set_trace
-
 from sqlalchemy.sql import select
 from sqlalchemy.sql.functions import func
 from sqlalchemy.sql.expression import or_

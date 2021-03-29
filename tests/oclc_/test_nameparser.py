@@ -1,7 +1,3 @@
-from nose.tools import (
-    eq_,
-    set_trace,
-)
 from oclc.classify import NameParser
 from core.metadata_layer import ContributorData
 from core.model import Contributor
@@ -38,20 +34,20 @@ class TestNameParser(object):
         # The objects are returned in the order they appeared in
         # the original string, with the appropriate roles given.
         p, s, t, i, r = results
-        eq_(primary, p.sort_name)
-        eq_([Contributor.PRIMARY_AUTHOR_ROLE], p.roles)
+        assert primary == p.sort_name
+        assert [Contributor.PRIMARY_AUTHOR_ROLE] == p.roles
 
-        eq_(secondary, s.sort_name)
-        eq_([Contributor.AUTHOR_ROLE], s.roles)
+        assert secondary == s.sort_name
+        assert [Contributor.AUTHOR_ROLE] == s.roles
 
-        eq_(tertiary, t.sort_name)
-        eq_([Contributor.AUTHOR_ROLE], t.roles)
+        assert tertiary == t.sort_name
+        assert [Contributor.AUTHOR_ROLE] == t.roles
 
-        eq_("Illustrator, Anne", i.sort_name)
-        eq_([Contributor.ILLUSTRATOR_ROLE], i.roles)
+        assert "Illustrator, Anne" == i.sort_name
+        assert [Contributor.ILLUSTRATOR_ROLE] == i.roles
 
-        eq_(rando, r.sort_name)
-        eq_([Contributor.UNKNOWN_ROLE], r.roles)
+        assert rando == r.sort_name
+        assert [Contributor.UNKNOWN_ROLE] == r.roles
 
     def _test_default_role_transition(self):
         # Test the state machine that governs changes in the role
@@ -71,21 +67,21 @@ class TestNameParser(object):
 
         # No matter what, the PRIMARY_AUTHOR role can only be used once
         # -- it transitions to AUTHOR.
-        eq_(Contributor.AUTHOR_ROLE, m(primary_author, True))
-        eq_(Contributor.AUTHOR_ROLE, m(primary_author, False))
+        assert Contributor.AUTHOR_ROLE == m(primary_author, True)
+        assert Contributor.AUTHOR_ROLE == m(primary_author, False)
 
         # If the current contributor was given AUTHOR because AUTHOR
         # is the current default, then AUTHOR remains the default.
-        eq_(Contributor.AUTHOR_ROLE, m(primary_author, True))
+        assert Contributor.AUTHOR_ROLE == m(primary_author, True)
 
         # If the current contributor was given AUTHOR and AUTHOR is
         # *not* the current default, then AUTHOR transitions to
         # UNKNOWN.
-        eq_(Contributor.UNKNOWN_ROLE, m(primary_author, False))
+        assert Contributor.UNKNOWN_ROLE == m(primary_author, False)
 
         # Any other role transitions to UNKNOWN.
-        eq_(Contributor.UNKNOWN_ROLE, m(not_an_author, True))
-        eq_(Contributor.UNKNOWN_ROLE, m(not_an_author, False))
+        assert Contributor.UNKNOWN_ROLE == m(not_an_author, True)
+        assert Contributor.UNKNOWN_ROLE == m(not_an_author, False)
 
     def test_parse_multiple_real_case(self):
         # Test parse_multiple in a real, very complicated situation.
@@ -96,38 +92,38 @@ class TestNameParser(object):
         # person, but the parser doesn't know that.
         barrie, unwin, bedford, zallinger, barrie2, mckowen = data
 
-        eq_("Barrie, J. M. (James Matthew)", barrie.sort_name)
-        eq_("1860", barrie.extra[Contributor.BIRTH_DATE])
-        eq_("1937", barrie.extra[Contributor.DEATH_DATE])
-        eq_([Contributor.PRIMARY_AUTHOR_ROLE], barrie.roles)
+        assert "Barrie, J. M. (James Matthew)" == barrie.sort_name
+        assert "1860" == barrie.extra[Contributor.BIRTH_DATE]
+        assert "1937" == barrie.extra[Contributor.DEATH_DATE]
+        assert [Contributor.PRIMARY_AUTHOR_ROLE] == barrie.roles
 
-        eq_("Unwin, Nora S.", unwin.sort_name)
-        eq_("1907", unwin.extra[Contributor.BIRTH_DATE])
-        eq_("1982", unwin.extra[Contributor.DEATH_DATE])
-        eq_([Contributor.ILLUSTRATOR_ROLE], unwin.roles)
+        assert "Unwin, Nora S." == unwin.sort_name
+        assert "1907" == unwin.extra[Contributor.BIRTH_DATE]
+        assert "1982" == unwin.extra[Contributor.DEATH_DATE]
+        assert [Contributor.ILLUSTRATOR_ROLE] == unwin.roles
 
-        eq_("Bedford, F. D.", bedford.sort_name)
-        eq_({}, bedford.extra)
-        eq_([Contributor.ILLUSTRATOR_ROLE], bedford.roles)
+        assert "Bedford, F. D." == bedford.sort_name
+        assert {} == bedford.extra
+        assert [Contributor.ILLUSTRATOR_ROLE] == bedford.roles
 
-        eq_("Barrie, J. M.", barrie2.sort_name)
-        eq_("1860", barrie2.extra[Contributor.BIRTH_DATE])
-        eq_("1937", barrie2.extra[Contributor.DEATH_DATE])
+        assert "Barrie, J. M." == barrie2.sort_name
+        assert "1860" == barrie2.extra[Contributor.BIRTH_DATE]
+        assert "1937" == barrie2.extra[Contributor.DEATH_DATE]
 
         # We're converting to a set to compare without respect to
         # order, but since 'Author', 'Creator' and 'Author of
         # Screenplay' all map to Contributor.AUTHOR_ROLE, we also
         # need to make sure AUTHOR_ROLE doesn't show up three times.
-        eq_(
+        assert (
             set([Contributor.AUTHOR_ROLE, Contributor.CONTRIBUTOR_ROLE,
-                 Contributor.UNKNOWN_ROLE]),
+                 Contributor.UNKNOWN_ROLE]) ==
             set(barrie2.roles)
         )
-        eq_(1, barrie2.roles.count(Contributor.AUTHOR_ROLE))
+        assert 1 == barrie2.roles.count(Contributor.AUTHOR_ROLE)
 
-        eq_("McKowen, Scott", mckowen.sort_name)
-        eq_({}, mckowen.extra)
-        eq_([Contributor.ILLUSTRATOR_ROLE], mckowen.roles)
+        assert "McKowen, Scott" == mckowen.sort_name
+        assert {} == mckowen.extra
+        assert [Contributor.ILLUSTRATOR_ROLE] == mckowen.roles
 
     def test_parse(self):
         # Verify that NameParser.parse handles a single individual.
@@ -139,22 +135,22 @@ class TestNameParser(object):
             "Got No Role", default_role
         )
         assert isinstance(contributor, ContributorData)
-        eq_("Got No Role", contributor.sort_name)
-        eq_([default_role], contributor.roles)
-        eq_(True, default_role_used)
+        assert "Got No Role" == contributor.sort_name
+        assert [default_role] == contributor.roles
+        assert True == default_role_used
 
         # If the author has an explicit role, it's used instead of
         # the default role.
         contributor, default_role_used = NameParser.parse(
             "Illustrator, Anne [Illustrator]", default_role
         )
-        eq_(False, default_role_used)
-        eq_([Contributor.ILLUSTRATOR_ROLE], contributor.roles)
+        assert False == default_role_used
+        assert [Contributor.ILLUSTRATOR_ROLE] == contributor.roles
 
         # If the author has an explicit role that can't be mapped
         # to our mapping, UNKNOWN_ROLE is used.
         contributor, default_role_used = NameParser.parse(
             "Urist Borushdumat [Fish Cleaner]", default_role
         )
-        eq_(False, default_role_used)
-        eq_([Contributor.UNKNOWN_ROLE], contributor.roles)
+        assert False == default_role_used
+        assert [Contributor.UNKNOWN_ROLE] == contributor.roles

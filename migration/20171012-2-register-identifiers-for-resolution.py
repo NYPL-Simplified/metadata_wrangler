@@ -4,7 +4,6 @@
 import os
 import sys
 import logging
-from nose.tools import set_trace
 from sqlalchemy import func, and_
 from sqlalchemy.orm import lazyload
 

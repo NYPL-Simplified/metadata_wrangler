@@ -2,7 +2,6 @@ import isbnlib
 import csv
 import sys
 
-from nose.tools import set_trace
 from psycopg2.extras import NumericRange
 from sqlalchemy import or_
 from sqlalchemy.orm import (

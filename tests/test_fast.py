@@ -1,7 +1,3 @@
-from nose.tools import (
-    eq_,
-    set_trace,
-)
 from contextlib import contextmanager
 from io import StringIO
 import os
@@ -42,19 +38,19 @@ class TestFASTNames(object):
         not_consolidated = MockFASTNames.from_data_directory(
             os.path.join(BASE_DIR, "files/fast/not-consolidated")
         )
-        eq_(
+        assert (
             {
                 '1726280': 'Filmed roundtables',
                 '631903': 'New Yorker (Fireboat)',
                 '1750175': 'Short stories, American'
-            },
+            } ==
             not_consolidated
         )
         
         # A consolidated file was written to "disk" in CSV format.
         output = not_consolidated.output_consolidated_file
         expect = '631903,New Yorker (Fireboat)\r\n1750175,"Short stories, American"\r\n1726280,Filmed roundtables\r\n'
-        eq_(expect, output.getvalue())
+        assert expect == output.getvalue()
 
     def test_from_data_directory_consolidated(self):
         # Load FAST data from a single CSV file created by an earlier call
@@ -62,12 +58,11 @@ class TestFASTNames(object):
         consolidated = MockFASTNames.from_data_directory(
             os.path.join(BASE_DIR, "files/fast/consolidated")
         )
-        eq_({'identifier1': 'name1', 'identifier2': 'name2'},
-            consolidated)
+        assert {'identifier1': 'name1', 'identifier2': 'name2'} == consolidated
 
         # Since data was loaded in from a consolidated file,
         # no new consolidated file was created.
-        eq_(None, consolidated.output_consolidated_file)
+        assert None == consolidated.output_consolidated_file
 
 class TestLCSHNames(object):
 
@@ -77,15 +72,15 @@ class TestLCSHNames(object):
         not_consolidated = MockLCSHNames.from_data_directory(
             os.path.join(BASE_DIR, "files/fast/not-consolidated")
         )
-        eq_(
+        assert (
             {
                 'sj00001253': 'Ceratopsians',
                 'gf2008025611': 'Abstract films'
-            },
+            } ==
             not_consolidated
         )
         
         # A consolidated file was written to "disk" in CSV format.
         output = not_consolidated.output_consolidated_file
         expect = 'sj00001253,Ceratopsians\r\ngf2008025611,Abstract films\r\n'
-        eq_(expect, output.getvalue())
+        assert expect == output.getvalue()
