@@ -133,7 +133,6 @@ class FASTNames(dict):
         This method is designed to be mocked in unit tests.
         """
         with gzip.open(path, "w") as out:
-            set_trace()
             yield out
 
 
