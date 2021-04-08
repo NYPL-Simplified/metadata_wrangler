@@ -65,6 +65,7 @@ from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.util.string_helpers import base64
+from core.util.datetime_helpers import strptime_utc
 from core.util.flask_util import OPDSFeedResponse
 
 from coverage_provider import (
@@ -416,7 +417,7 @@ class CatalogController(Controller):
         last_update_time = flask.request.args.get('last_update_time', None)
         if last_update_time:
             try:
-                last_update_time = datetime.strptime(
+                last_update_time = strptime_utc(
                     last_update_time, self.TIMESTAMP_FORMAT
                 )
             except ValueError as e:

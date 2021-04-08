@@ -36,6 +36,7 @@ from core.util import (
     MetadataSimilarity,
     fast_query_count,
 )
+from core.util.datetime_helpers import strptime_utc
 
 from coverage_utils import ResolveVIAFOnSuccessCoverageProvider
 from viaf import VIAFClient
@@ -662,7 +663,7 @@ class OCLCLinkedData(object):
             metadata.title = titles[0]
         for d in publication_dates:
             try:
-                metadata.published = datetime.datetime.strptime(d[:4], "%Y")
+                metadata.published = strptime_utc(d[:4], "%Y")
             except Exception as e:
                 pass
 

@@ -7,6 +7,7 @@ import time
 import datetime
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
+from core.utils.datetime_helpers import from_timestamp
 from model import (
     production_session,
     DataSource,
@@ -50,7 +51,7 @@ def imp(db, data_source, identifier, cache):
         # print "Not cached", identifier
         return False
     fn = cache._filename(i)
-    modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
+    modified = from_timestamp(os.stat(fn).st_mtime)
     data = open(fn).read()
 
     if type == Identifier.ISBN:

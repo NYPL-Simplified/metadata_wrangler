@@ -20,6 +20,7 @@ from model import (
 )
 import json
 import gzip
+from core.util.datetime_helpers import strptime_utc
 
 database = production_session()
 data_dir = sys.argv[1]
@@ -41,7 +42,7 @@ def process_item(_db, item):
         pass
     elif event_name in ('title_add'):
         old_value = new_value = None
-    start = datetime.datetime.strptime(item['start'], TIME_FORMAT)
+    start = strptime_utc(item['start'], TIME_FORMAT)
     pool, is_new = LicensePool.for_foreign_id(_db, OVERDRIVE, Identifier.OVERDRIVE_ID,
                                       overdrive_id)
     if is_new:
