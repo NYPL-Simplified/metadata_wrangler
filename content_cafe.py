@@ -226,6 +226,7 @@ class ContentCafeAPI(object):
         Generally, this just means adding LinkData objects to .links,
         but in some cases we can also set the title.
 
+        :param phrase_indicating_missing_data: A bytestring.
         :param metadata: Anything found will be used to improve
            this Metadata object.
         """

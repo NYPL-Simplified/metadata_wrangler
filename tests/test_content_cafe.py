@@ -167,7 +167,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         assert Hyperlink.IMAGE == image.rel
         assert image_url == image.href
         assert 'image/png' == image.media_type
-        assert 'an image!' == image.content
+        assert b'an image!' == image.content
 
         # We ran the image through our mocked version of is_suitable_image,
         # and it said it was fine.
@@ -224,7 +224,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         http.queue_requests_response(
             200, 'text/html', content='There is no data!'
         )
-        m(metadata, self.identifier, args, url_template, "no data!", rel,
+        m(metadata, self.identifier, args, url_template, b"no data!", rel,
           scrapers.explode)
         # We made the request but nothing happened.
         expect_url = url_template % args
@@ -236,7 +236,7 @@ class TestContentCafeAPI(ContentCafeAPITest, DatabaseTest):
         # Otherwise, we try to scrape.
         good_content = '<html><span class="PageHeader2">Book title</span><content>Here you go</content>'
         http.queue_requests_response(200, 'text/html', content=good_content)
-        m(metadata, self.identifier, args, url_template, "no data!", rel,
+        m(metadata, self.identifier, args, url_template, b"no data!", rel,
           scrapers.scrape)
         assert True == scrapers.scrape_called
 

@@ -829,9 +829,9 @@ class IntegrationClientController(Controller):
         if not (response.content and content_type == OPDS_2_MEDIA_TYPE):
             # There's no JSON to speak of.
             log.error("Could not find OPDS 2 document: %s/%s",
-                      response.content, content_type)
+                      response.content.decode("utf-8"), content_type)
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                _("Not an integration document: %(doc)s", doc=response.content)
+                _("Not an integration document: %(doc)s", doc=response.content.decode("utf-8"))
             )
 
         public_key_response = response.json()
