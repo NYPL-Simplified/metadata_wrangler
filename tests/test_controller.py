@@ -48,6 +48,7 @@ from core.testing import (
 from core.util.problem_detail import ProblemDetail
 from core.util.opds_writer import OPDSMessage
 from core.util.string_helpers import base64
+from core.util.datetime_helpers import utc_now
 
 from canonicalize import (
     AuthorNameCanonicalizer,
@@ -525,11 +526,11 @@ class TestCatalogController(ControllerTest):
             assert identifier.urn == entry['id']
 
         # We can ask for updates since a given time.
-        yesterday = datetime.utcnow() - timedelta(days=1)
+        yesterday = utc_now() - timedelta(days=1)
         yesterday_timestamp = yesterday.strftime(
             self.controller.TIMESTAMP_FORMAT
         )
-        tomorrow = datetime.utcnow() + timedelta(days=1)
+        tomorrow = utc_now() + timedelta(days=1)
         tomorrow_timestamp = tomorrow.strftime(
             self.controller.TIMESTAMP_FORMAT
         )
@@ -1076,7 +1077,7 @@ class TestIntegrationClientController(ControllerTest):
 
         # Use the private key to sign a JWT proving ownership of
         # the test.org web server.
-        in_five_seconds = datetime.utcnow() + timedelta(seconds=5)
+        in_five_seconds = utc_now() + timedelta(seconds=5)
         payload = {'exp': in_five_seconds}
         token = jwt.encode(payload, private_key, algorithm='RS256')
 
@@ -1132,7 +1133,7 @@ class TestIntegrationClientController(ControllerTest):
             assert "Error decoding JWT: Not enough segments" == response.detail
 
         # Same if the client provides a valid but expired JWT.
-        five_seconds_ago = datetime.utcnow() - timedelta(seconds=5)
+        five_seconds_ago = utc_now() - timedelta(seconds=5)
         payload = {'exp': five_seconds_ago}
         token = jwt.encode(payload, private_key, algorithm='RS256')
         self.http.responses.append(mock_doc_response)

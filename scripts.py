@@ -41,7 +41,7 @@ from core.scripts import (
 )
 from core.util.permanent_work_id import WorkIDCalculator
 from core.util.personal_names import contributor_name_match_ratio
-
+from core.util.datetime_helpers import utc_now
 from oclc.linked_data import LinkedDataCoverageProvider
 from viaf import VIAFClient
 
@@ -362,7 +362,7 @@ class CheckContributorNamesOnWeb(CheckContributorNamesInDB):
         complaints = query.all()
         for complaint in complaints:
             # say that we fixed it
-            complaint.resolved = datetime.datetime.utcnow()
+            complaint.resolved = utc_now()
 
 
 class PermanentWorkIDStressTestGenerationScript(Script):
@@ -614,7 +614,7 @@ class DashboardScript(Script):
         """Go backwards `days` days into the past and execute a
         query for each day.
         """
-        end = datetime.datetime.utcnow()
+        end = utc_now()
         one_day = datetime.timedelta(days=1)
         self.write("=" * len(title))
         self.write(title)
