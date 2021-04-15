@@ -1,6 +1,8 @@
 #!/bin/bash
-# Manages the Metadata Wrangler database (either initializing it, migrating
-# it, or ignoring it) when the container starts and before the app launches.
+# Manages the Metadata Wrangler database by either initializing it, migrating
+# it, or ignoring it when the container starts and before the app launches.
+# The $SIMPLIFIED_DB_TASK variable is set in the each of the container's
+# Dockerfiles.
 
 set -ex
 

@@ -31,15 +31,11 @@ mkdir /var/www && cd /var/www
 git clone https://github.com/${repo}.git metadata
 chown simplified:simplified metadata 
 cd metadata
-# git checkout $version
-# Temporary:
-git checkout "py3-base"
+git checkout $version
 
 # Use https to access submodules.
 git config submodule.core.url https://github.com/NYPL-Simplified/server_core.git
 git submodule update --init --recursive
-# Temporary:
-cd core && git checkout "py3-base" && cd ..
 
 # Add a .version file to the directory. This file
 # supplies an endpoint to check the app's current version.
@@ -56,7 +52,9 @@ echo "if [[ -f $SIMPLIFIED_ENVIRONMENT ]]; then \
 # Install required python libraries.
 set +x && source env/bin/activate && set -x
 
+# Update pip and setuptools.
 python3 -m pip install -U pip setuptools
+# Install the necessary dev requirements.
 python3 -m pip install -r requirements-dev.txt
 
 # Install NLTK.
