@@ -1,6 +1,6 @@
 accept-types
 beautifulsoup4==4.9.1
-cairosvg==1.0.22
+CairoSVG==2.5.2
 # Ensure that we support SNI-based SSL
 ndg-httpsclient==0.5.1
 pycryptodome==3.9.8
