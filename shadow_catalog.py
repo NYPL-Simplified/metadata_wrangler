@@ -3,7 +3,6 @@ from collections import defaultdict
 import json
 import requests
 import re
-from nose.tools import set_trace
 
 from core.config import CannotLoadConfiguration
 from core.model import (
@@ -150,7 +149,7 @@ class MarcTag(object):
 
 class Representation(object):
 
-    from collections import Counter
+    from .collections import Counter
     tag_type = Counter()
 
     @classmethod
@@ -306,7 +305,7 @@ class Representation(object):
         for tag in self.tags('035'):
             potential = tag.a
             identifier = None
-            for r, type in self.marc_035_a_to_identifier_type.items():
+            for r, type in list(self.marc_035_a_to_identifier_type.items()):
                 m = r.search(potential)
                 if m:
                     identifier = m.groups()[0]
@@ -317,7 +316,7 @@ class Representation(object):
                 )
 
         # Keep track of items we haven't seen before.
-        for key, var in self.var.items():
+        for key, var in list(self.var.items()):
             if key not in self.known_vars:
                 self.unrecognized_tags[key] = var
 

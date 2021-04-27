@@ -1,9 +1,5 @@
 import os
-from nose.tools import (
-    eq_,
-    set_trace,
-)
-import urllib
+import urllib.request, urllib.parse, urllib.error
 from core.metadata_layer import ReplacementPolicy
 from core.s3 import MockS3Uploader
 from core.testing import (
@@ -43,8 +39,8 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         
         # Any book covers discovered by Overdrive will be
         # sent through this mirror.
-        eq_(
-            mirror,
+        assert (
+            mirror ==
             provider.replacement_policy.mirrors[ExternalIntegrationLink.COVERS]
         )
 
@@ -71,18 +67,18 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         http.queue_response(200, "image/jpeg", {}, test_small_cover)
 
         record = provider.ensure_coverage(identifier)
-        eq_("success", record.status)
+        assert "success" == record.status
 
         # The full image and the thumbnail have been uploaded to
         # the fake S3.
         full, thumbnail = mirror.uploaded
-        eq_(test_cover, full.content)
+        assert test_cover == full.content
 
         # The URLs for the Resource objects are our S3 URLs, not Overdrive's
         # URLs.
         expect = "Overdrive/Overdrive ID/%s" % identifier.identifier
         for url in [full.mirror_url, thumbnail.mirror_url]:
-            assert urllib.quote(expect) in url
+            assert urllib.parse.quote(expect) in url
         assert "/scaled/" in thumbnail.mirror_url
         assert "/scaled/" not in full.mirror_url
 
@@ -96,7 +92,7 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # ExternalIntegration.
         collection1 = self._collection()
         m = OverdriveBibliographicCoverageProvider.generic_overdrive_api
-        eq_(None, m(self._db, MockOverdriveAPI))
+        assert None == m(self._db, MockOverdriveAPI)
 
         # Now here's a collection that _is_ configured with
         # an Overdrive ExternalIntegration.
@@ -105,4 +101,4 @@ class TestOverdriveBibliographicCoverageProvider(DatabaseTest):
         # It's the one returned by generic_overdrive_api.
         result = m(self._db, MockOverdriveAPI)
         assert isinstance(result, MockOverdriveAPI)
-        eq_(collection2, result.collection)
+        assert collection2 == result.collection

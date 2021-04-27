@@ -1,5 +1,4 @@
 import base64 as stdlib_base64
-from nose.tools import set_trace
 from datetime import datetime
 import flask
 from flask import make_response
@@ -17,8 +16,7 @@ import feedparser
 import json
 import jwt
 import logging
-import urllib
-import urlparse
+from urllib.parse import urlparse
 
 from core.app_server import (
     cdn_url_for,
@@ -67,6 +65,7 @@ from core.util.http import HTTP
 from core.util.opds_writer import OPDSMessage
 from core.util.problem_detail import ProblemDetail
 from core.util.string_helpers import base64
+from core.util.datetime_helpers import strptime_utc
 from core.util.flask_util import OPDSFeedResponse
 
 from coverage_provider import (
@@ -128,9 +127,12 @@ class MetadataWrangler(object):
 
             # We can hopefully use the provided bearer token to
             # authenticate an IntegrationClient.
+            shared_secret = None
             try:
                 shared_secret = base64.b64decode(header.split(' ')[1])
-            except TypeError, e:
+            except stdlib_base64.binascii.Error as e:
+                return INVALID_CREDENTIALS
+            except TypeError as e:
                 # The bearer token is ill-formed.
                 return INVALID_CREDENTIALS
             client = IntegrationClient.authenticate(_db, shared_secret)
@@ -229,7 +231,7 @@ class Controller(object):
         except ValueError as e:
             # This is caused by a problem decoding the metadata
             # identifier.
-            return INVALID_INPUT.detailed(unicode(e))
+            return INVALID_INPUT.detailed(str(e))
         return collection
 
 
@@ -340,7 +342,7 @@ class CanonicalizationController(Controller):
             return None
         try:
             result = Identifier.parse_urn(self._db, urn, False)
-        except ValueError, e:
+        except ValueError as e:
             # The identifier is parseable but invalid, e.g. an
             # ASIN used as an ISBN. Ignore it.
             return None
@@ -378,7 +380,7 @@ class CatalogController(Controller):
         )
         kw.update(param_kwargs)
         if page:
-            kw.update(page.items())
+            kw.update(list(page.items()))
         return cdn_url_for(endpoint, **kw)
 
     @classmethod
@@ -415,10 +417,10 @@ class CatalogController(Controller):
         last_update_time = flask.request.args.get('last_update_time', None)
         if last_update_time:
             try:
-                last_update_time = datetime.strptime(
+                last_update_time = strptime_utc(
                     last_update_time, self.TIMESTAMP_FORMAT
                 )
-            except ValueError, e:
+            except ValueError as e:
                 message = 'The timestamp "%s" is not in the expected format (%s)'
                 return INVALID_INPUT.detailed(
                     message % (last_update_time, self.TIMESTAMP_FORMAT)
@@ -524,12 +526,12 @@ class CatalogController(Controller):
 
         # Everything else needs to be added to the catalog.
         needs_to_be_added = [
-            x for x in identifiers_by_urn.values()
+            x for x in list(identifiers_by_urn.values())
             if x.id not in already_in_catalog
         ]
         collection.catalog_identifiers(needs_to_be_added)
 
-        for urn, identifier in identifiers_by_urn.items():
+        for urn, identifier in list(identifiers_by_urn.items()):
             if identifier.id in already_in_catalog:
                 status = HTTP_OK
                 description = "Already in catalog"
@@ -566,7 +568,7 @@ class CatalogController(Controller):
         entries_by_urn = { entry.get('id') : entry for entry in entries }
 
         identifiers_by_urn, invalid_urns = Identifier.parse_urns(
-            self._db, entries_by_urn.keys()
+            self._db, list(entries_by_urn.keys())
         )
 
         messages = list()
@@ -577,7 +579,7 @@ class CatalogController(Controller):
             ))
 
 
-        for urn, identifier in identifiers_by_urn.items():
+        for urn, identifier in list(identifiers_by_urn.items()):
             entry = entries_by_urn[urn]
             status = HTTP_OK
             description = "Already in catalog"
@@ -731,7 +733,7 @@ class CatalogController(Controller):
 
         # IDs that matched get a 200 message; all others get a 404
         # message.
-        for urn, identifier in identifiers_by_urn.items():
+        for urn, identifier in list(identifiers_by_urn.items()):
             if identifier.id in matching_ids:
                 status = HTTP_OK
                 description = "Successfully removed"
@@ -767,7 +769,7 @@ class CatalogController(Controller):
         to look up the matching subset.
         """
         # Extract the identifier IDs from the dictionary.
-        identifier_ids = [x.id for x in identifiers_by_urn.values()]
+        identifier_ids = [x.id for x in list(identifiers_by_urn.values())]
 
         # Find the IDs for the subset of identifiers that are in the
         # catalog.
@@ -828,9 +830,9 @@ class IntegrationClientController(Controller):
         if not (response.content and content_type == OPDS_2_MEDIA_TYPE):
             # There's no JSON to speak of.
             log.error("Could not find OPDS 2 document: %s/%s",
-                      response.content, content_type)
+                      response.content.decode("utf-8"), content_type)
             return INVALID_INTEGRATION_DOCUMENT.detailed(
-                _("Not an integration document: %(doc)s", doc=response.content)
+                _("Not an integration document: %(doc)s", doc=response.content.decode("utf-8"))
             )
 
         public_key_response = response.json()
@@ -838,12 +840,12 @@ class IntegrationClientController(Controller):
         url = public_key_response.get('id')
         if not url:
             message = _("The public key integration document is missing an id.")
-            log.error(unicode(message))
+            log.error(str(message))
             return INVALID_INTEGRATION_DOCUMENT.detailed(message)
 
         # Remove any library-specific URL elements.
         def base_url(full_url):
-            scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(full_url)
+            scheme, netloc, path, parameters, query, fragment = urlparse(full_url)
             return '%s://%s' % (scheme, netloc)
 
         client_url = base_url(url)
@@ -860,7 +862,7 @@ class IntegrationClientController(Controller):
         public_key = public_key_response.get('public_key')
         if not (public_key and public_key.get('type') == 'RSA' and public_key.get('value')):
             message = _("The public key integration document is missing an RSA public_key.")
-            log.error(unicode(message))
+            log.error(str(message))
             return INVALID_INTEGRATION_DOCUMENT.detailed(message)
         public_key_text = public_key.get('value')
         public_key = RSA.importKey(public_key_text)
@@ -868,7 +870,7 @@ class IntegrationClientController(Controller):
 
         submitted_secret = None
         auth_header = flask.request.headers.get('Authorization')
-        if auth_header and isinstance(auth_header, basestring) and 'bearer' in auth_header.lower():
+        if auth_header and isinstance(auth_header, str) and 'bearer' in auth_header.lower():
             token = auth_header.split(' ')[1]
             submitted_secret = base64.b64decode(token)
 
@@ -879,7 +881,7 @@ class IntegrationClientController(Controller):
                 parsed = jwt.decode(
                     jwt_token, public_key_text, algorithm='RS256'
                 )
-            except Exception, e:
+            except Exception as e:
                 return INVALID_CREDENTIALS.detailed(
                     _("Error decoding JWT: %(message)s", message=str(e))
                 )
@@ -971,14 +973,14 @@ class URNLookupHandler(CoreURNLookupHandler):
         self.add_urn_failure_messages(failures)
 
         # Catalog all identifiers.
-        self.collection.catalog_identifiers(identifiers_by_urn.values())
+        self.collection.catalog_identifiers(list(identifiers_by_urn.values()))
 
         # Load all coverage records in a single query to speed up the
         # code that reports on the status of Identifiers that aren't
         # ready.
-        self.bulk_load_coverage_records(identifiers_by_urn.values())
+        self.bulk_load_coverage_records(list(identifiers_by_urn.values()))
 
-        for urn, identifier in identifiers_by_urn.items():
+        for urn, identifier in list(identifiers_by_urn.items()):
             self.process_identifier(
                 identifier, urn, 
             )

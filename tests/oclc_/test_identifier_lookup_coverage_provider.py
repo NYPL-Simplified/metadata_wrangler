@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 import json
-from nose.tools import set_trace, eq_
 from .. import (
     DatabaseTest,
     sample_data
@@ -96,10 +95,10 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.parser = MockParserSingle()
         id = self._id("single")
         result = provider.process_item(id)
-        eq_(etree.tostring(provider.called_with["tree"]), etree.tostring(provider._get_tree(isbn=self.SINGLE_ISBN)))
+        assert etree.tostring(provider.called_with["tree"]) == etree.tostring(provider._get_tree(isbn=self.SINGLE_ISBN))
         assert isinstance(provider.called_with["metadata"], Metadata)
-        eq_(provider.called_with["metadata"].primary_identifier, id)
-        eq_(result, id)
+        assert provider.called_with["metadata"].primary_identifier == id
+        assert result == id
 
     def test_process_item_multi(self):
         # Testing that, when process_item finds out that a document's status code is 4,
@@ -112,10 +111,10 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         id = self._id("multi")
 
         result = provider.process_item(id)
-        eq_([x.identifier for x in provider.called_with["owi_data"]], ["48446512", "48525129"])
+        assert [x.identifier for x in provider.called_with["owi_data"]] == ["48446512", "48525129"]
         assert isinstance(provider.called_with["metadata"], Metadata)
-        eq_(provider.called_with["metadata"].primary_identifier, id)
-        eq_(result, id)
+        assert provider.called_with["metadata"].primary_identifier == id
+        assert result == id
 
     def test_process_item_failure(self):
         # If the ISBN is not found--i.e. the status code is 102--the provider should throw an error.
@@ -126,11 +125,11 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         failure = provider.process_item(bad_id)
 
         # We asked OCLC about the ISBN...
-        eq_(['http://classify.oclc.org/classify2/Classify?isbn=9781429984171'], api.requests)
+        assert ['http://classify.oclc.org/classify2/Classify?isbn=9781429984171'] == api.requests
 
         # ...but we didn't get anything useful.
         assert isinstance(failure, CoverageFailure)
-        eq_(failure.exception, "The work with ISBN 9781429984171 was not found.")
+        assert failure.exception == "The work with ISBN 9781429984171 was not found."
 
     def test__apply_propagates_replacement_policy(self):
         # When IdentifierLookupCoverageProvider applies metadata
@@ -149,7 +148,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider._apply(metadata)
 
         args, kwargs = metadata.called_with
-        eq_(kwargs['replace'], provider.replacement_policy)
+        assert kwargs['replace'] ==  provider.replacement_policy
 
 
     def test__apply_single(self):
@@ -160,8 +159,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.process_item(id)
 
         result = provider.apply_called_with
-        eq_(result.identifier, id.identifier)
-        eq_(provider.apply_call_count, 1)
+        assert result.identifier == id.identifier
+        assert provider.apply_call_count == 1
 
     def test__apply_multiple(self):
         # Testing that, even in the case of a multi-work response, _apply is only called once;
@@ -172,8 +171,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider.process_item(id)
 
         result = provider.apply_called_with
-        eq_(result, id)
-        eq_(provider.apply_call_count, 1)
+        assert result == id
+        assert provider.apply_call_count == 1
 
     def test__single(self):
         # Testing that _single calls parse, passes in the correct tree and
@@ -187,7 +186,7 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider._single(tree, metadata)
         result = provider.parser.called_with
 
-        eq_((result.primary_identifier.type, result.primary_identifier.identifier), (Identifier.ISBN, self.SINGLE_ISBN))
+        assert (result.primary_identifier.type, result.primary_identifier.identifier) == (Identifier.ISBN, self.SINGLE_ISBN)
 
     def test__multiple(self):
         # Testing that _multiple calls parse, passes in the correct OWIs, and
@@ -209,9 +208,9 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         provider._multiple(owi_data, metadata)
         result = provider.parser.called_with
         # Make sure parse was called twice--once for each of the two OWIs.
-        eq_(provider.parser.call_count, 2)
+        assert provider.parser.call_count == 2
 
-        eq_(result.primary_identifier.identifier, self.MULTI_ISBN)
+        assert result.primary_identifier.identifier == self.MULTI_ISBN
         assert isinstance(result.primary_identifier, Identifier)
 
     def test__single_with_real_parser(self):
@@ -222,13 +221,13 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         result = provider._single(tree, metadata)
 
         assert isinstance(result, Metadata)
-        eq_(result._data_source, "OCLC Classify")
-        eq_(result.primary_identifier, identifier)
+        assert result._data_source == "OCLC Classify"
+        assert result.primary_identifier == identifier
         self._check_measurements(result.measurements, "single")
 
         [author] = result.contributors
         assert isinstance(author, ContributorData)
-        eq_(self._get_contributor_info(author), ("Melville, Herman", "n79006936", "27068555", ["Author"], {"deathDate": "1891", "birthDate": "1819"}))
+        assert self._get_contributor_info(author) == ("Melville, Herman", "n79006936", "27068555", ["Author"], {"deathDate": "1891", "birthDate": "1819"})
 
     def test__multiple_with_real_parser(self):
         # Testing that calling _multiple actually returns the correct metadata object.
@@ -248,25 +247,25 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         # Two requests were made to the mock API -- one for each of the OWIs we had to look up
         # while parsing the multi-OWI document.
-        eq_(
+        assert (
             [
                 'http://classify.oclc.org/classify2/Classify?owi=48446512',
                 'http://classify.oclc.org/classify2/Classify?owi=48525129',
-            ],
+            ] ==
             api.requests
         )
 
         # We ended up with a single Metadata object, which contains
         # information derived from looking up both OWIs.
         assert isinstance(result, Metadata)
-        eq_(result._data_source, "OCLC Classify")
-        eq_(result.primary_identifier, identifier)
+        assert result._data_source == "OCLC Classify"
+        assert result.primary_identifier == identifier
 
         # The author info just comes from the first work.
         expected_author_info = ("Adams, Douglas", "n80076765", "113230702", ["Author"], {"deathDate": "2001", "birthDate": "1952"})
         [author] = result.contributors
         author_info = self._get_contributor_info(author)
-        eq_(author_info, expected_author_info)
+        assert author_info == expected_author_info
 
         # Measurement info is also just from the first work.
         self._check_measurements(result.measurements, "multi")
@@ -275,8 +274,8 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
         # that the list of Fast identifiers consists of the unique union of the Fast identifiers
         # obtained by looking up each of the two <work> tags by its OWI.
         [ddc], [lcc], fast = self._get_subjects(result.subjects)
-        eq_(ddc.identifier, "823.914")
-        eq_(lcc.identifier, "PR6051.D3352")
+        assert ddc.identifier == "823.914"
+        assert lcc.identifier == "PR6051.D3352"
 
         # We got 5 Fast subject classifications from the first <work> tag:
         fast_work_1 = set([
@@ -299,17 +298,17 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
 
         # So, our Metadata object should end up with 7 Fast subject classifications--the 4 shared ones,
         # plus 1 unique one from work #1 and 2 unique ones from work #2.
-        eq_(len(fast), 7)
+        assert len(fast) == 7
         fast_subject_names = set([x.name for x in fast])
-        eq_(fast_subject_names, fast_work_1.union(fast_work_2))
+        assert fast_subject_names == fast_work_1.union(fast_work_2)
 
     def _get_subjects(self, subjects):
         # Everything in the list of subjects should be a SubjectData object.
-        eq_(len([x for x in subjects if isinstance(x, SubjectData)]), len(subjects))
+        assert len([x for x in subjects if isinstance(x, SubjectData)]), len(subjects)
         # Extract a sublist for each type of classifier.
         sublists = [[x for x in subjects if x.type == type] for type in ["DDC", "LCC", "FAST"]]
         # There should always be 1 DDC classification and 1 LCC classification.
-        eq_((len(sublists[0]), len(sublists[1])), (1, 1))
+        assert (len(sublists[0]), len(sublists[1])) == (1, 1)
         return sublists
 
     def _check_measurements(self, measurements, type):
@@ -323,13 +322,13 @@ class TestIdentifierLookupCoverageProvider(DatabaseTest):
                 Measurement.PUBLISHED_EDITIONS: 160
             }
         }
-        eq_(len(measurements), 2)
+        assert len(measurements) == 2
         [holdings], [editions] = [[x for x in measurements if y in x.quantity_measured] for y in ["holdings", "editions"]]
         for m in [holdings, editions]:
             assert isinstance(m, MeasurementData)
             expected_value = values[type][m.quantity_measured]
-            eq_(m.weight, 1)
-            eq_(m.value, expected_value)
+            assert m.weight == 1
+            assert m.value == expected_value
 
     def _get_contributor_info(self, contributor):
         return (

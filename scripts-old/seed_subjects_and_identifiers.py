@@ -21,7 +21,7 @@ def process_file(_db, filename, class_):
             type, identifier = v
             name = None
         else:
-            print "Bad data: %r" % i
+            print("Bad data: %r" % i)
         args = {}
         if class_ == Subject and name:
             args['name'] = name
@@ -32,12 +32,12 @@ def process_file(_db, filename, class_):
         a += 1
         if not a % 1000:
             _db.commit()
-            print a, class_.__name__
+            print(a, class_.__name__)
     _db.commit()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print "Usage: %s [data storage directory]" % sys.argv[0]
+        print("Usage: %s [data storage directory]" % sys.argv[0])
         sys.exit()
     path = sys.argv[1]      
     _db = production_session()

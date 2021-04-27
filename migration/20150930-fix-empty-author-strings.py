@@ -27,7 +27,7 @@ overdrive = OverdriveAPI(_db)
 threem = ThreeMAPI(_db)
 
 q = _db.query(Edition).join(Edition.data_source).filter(DataSource.name.in_([DataSource.OVERDRIVE])).filter(Edition.author=='')
-print "Fixing %s books." % q.count()
+print("Fixing %s books." % q.count())
 for edition in q:
     if edition.data_source.name==DataSource.OVERDRIVE:
         data = overdrive.metadata_lookup(edition.primary_identifier)
@@ -42,8 +42,8 @@ for edition in q:
         edition.calculate_presentation()
 
     for c in edition.contributions:
-        print "%s = %s (%s)" % (
+        print("%s = %s (%s)" % (
             c.role, c.contributor.display_name, c.contributor.name
-        )
-    print edition.author, edition.sort_author
+        ))
+    print(edition.author, edition.sort_author)
     _db.commit()

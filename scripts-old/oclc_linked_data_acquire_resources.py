@@ -13,11 +13,9 @@ from model import (
     DataSource,
     Work,
 )
-from nose.tools import set_trace
-
 
 def f(services):
-    print "Starting coverage provider"
+    print("Starting coverage provider")
     LinkedDataCoverageProvider(production_session(), services).run()
 
 if __name__ == '__main__':

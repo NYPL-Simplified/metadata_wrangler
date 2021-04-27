@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 import os
 import site
 import sys
@@ -21,6 +20,7 @@ from model import (
 )
 import json
 import gzip
+from core.util.datetime_helpers import strptime_utc
 
 database = production_session()
 data_dir = sys.argv[1]
@@ -42,7 +42,7 @@ def process_item(_db, item):
         pass
     elif event_name in ('title_add'):
         old_value = new_value = None
-    start = datetime.datetime.strptime(item['start'], TIME_FORMAT)
+    start = strptime_utc(item['start'], TIME_FORMAT)
     pool, is_new = LicensePool.for_foreign_id(_db, OVERDRIVE, Identifier.OVERDRIVE_ID,
                                       overdrive_id)
     if is_new:
@@ -58,10 +58,10 @@ def process_file(_db, filename):
         for i in gzip.open(filename):
             data = json.loads(i.strip())
             process_item(_db, data)
-    except zlib.error, e:
-        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
-    except IOError, e:
-        print "DATA CORRUPTION, GIVING UP ON THIS FILE"
+    except zlib.error as e:
+        print("DATA CORRUPTION, GIVING UP ON THIS FILE")
+    except IOError as e:
+        print("DATA CORRUPTION, GIVING UP ON THIS FILE")
 
 
 done = set()
@@ -76,9 +76,9 @@ for filename in os.listdir(data_dir):
         continue
     path = os.path.join(data_dir, filename)
     if path in done:
-        print "Already did %s" % path
+        print("Already did %s" % path)
         continue
     process_file(database, path)
-    print "DONE with %s! DONE!" % path
+    print("DONE with %s! DONE!" % path)
     database.commit()
     done_out.write(path + "\n")

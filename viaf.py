@@ -2,7 +2,6 @@ import logging
 import os
 import re
 
-from nose.tools import set_trace
 from lxml import etree
 from fuzzywuzzy import fuzz
 

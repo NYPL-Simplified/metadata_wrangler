@@ -2,7 +2,6 @@ import os
 import site
 import sys
 import datetime
-from nose.tools import set_trace
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 from model import (
@@ -27,12 +26,12 @@ while batch:
             continue
         if work.primary_edition.cover:
             work.primary_edition.set_cover(work.primary_edition.cover)
-            print work.primary_edition.cover_thumbnail_url
+            print(work.primary_edition.cover_thumbnail_url)
         else:
-            print "!COVER %s" % work.primary_edition.primary_identifier
+            print("!COVER %s" % work.primary_edition.primary_identifier)
         if work.summary:
             work.set_summary(work.summary)
-            print work.summary.content[:70]
+            print(work.summary.content[:70])
     db.commit()
     start += batch_size
     batch = base_query.offset(start).all()

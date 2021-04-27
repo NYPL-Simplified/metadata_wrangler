@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 import json
-from nose.tools import set_trace, eq_
 
 from core.model import (
     Contributor,
@@ -43,8 +42,8 @@ class TestOCLCLinkedData(DatabaseTest):
         graph = json.loads(
             self.sample_data("no_author_only_contributor.jsonld"))['@graph']
 
-        eq_(([], []), OCLCLinkedData.creator_names(graph))
-        eq_((['Thug Kitchen LLC.'], []),
+        assert ([], []) == OCLCLinkedData.creator_names(graph)
+        assert ((['Thug Kitchen LLC.'], []) ==
             OCLCLinkedData.creator_names(graph, 'contributor'))
 
     def test_creator_names_gathers_external_uris(self):
@@ -52,34 +51,34 @@ class TestOCLCLinkedData(DatabaseTest):
             self.sample_data("creator_includes_viaf_uris.jsonld"))['@graph']
 
         names, uris = OCLCLinkedData.creator_names(graph)
-        eq_([], names)
-        eq_(set(["http://id.loc.gov/authorities/names/n2013058227",
+        assert [] ==names
+        assert (set(["http://id.loc.gov/authorities/names/n2013058227",
                  "http://viaf.org/viaf/221233754",
-                 "http://viaf.org/viaf/305306689"]),
+                 "http://viaf.org/viaf/305306689"]) ==
             set(uris))
 
     def test_extract_contributor(self):
         # It pulls relevant contributor data out of an OCLC person entity graph.
         sloane_info = json.loads(self.sample_data('sloane_crosley.jsonld'))['@graph'][1]
         result = OCLCLinkedData.extract_contributor(sloane_info)
-        eq_(result['family_name'], 'Crosley')
-        eq_(result['display_name'], 'Sloane Crosley')
+        assert result['family_name'] == 'Crosley'
+        assert result['display_name'] == 'Sloane Crosley'
 
         flanagan_info = json.loads(self.sample_data('john_flanagan_multiname.jsonld'))
         flanagan_info = flanagan_info['@graph'][1]
         result = OCLCLinkedData.extract_contributor(flanagan_info)
-        eq_(result['family_name'], 'Flanagan')
-        eq_(result['display_name'], 'John Anthony Flanagan')
-        eq_(result['extra']['birthDate'], '1944')
+        assert result['family_name'] == 'Flanagan'
+        assert result['display_name'] == 'John Anthony Flanagan'
+        assert result['extra']['birthDate'] == '1944'
 
         # TODO: Modify the contributor extraction to handle cases where
         # maiden names are included and/or multiple name options are the
         # same except for capitalization.
         rice_info = json.loads(self.sample_data('anne_rice.jsonld'))
         result = OCLCLinkedData.extract_contributor(rice_info['@graph'][1])
-        eq_(result['family_name'], "O'Brien Rice")
-        eq_(result['display_name'], "Anne O'Brien Rice")
-        eq_(result['extra']['birthDate'], '1941')
+        assert result['family_name'] == "O'Brien Rice"
+        assert result['display_name'] == "Anne O'Brien Rice"
+        assert result['extra']['birthDate'] == '1941'
 
     def test_extract_useful_data(self):
         subgraph = json.loads(
@@ -97,27 +96,27 @@ class TestOCLCLinkedData(DatabaseTest):
          publication_dates,
          example_uris) = OCLCLinkedData.extract_useful_data(subgraph, book)
 
-        eq_(Identifier.OCLC_NUMBER, oclc_id_type)
-        eq_(u"11866009", oclc_id)
-        eq_([u"Galápagos : a novel"], titles)
-        eq_(1, len(descriptions))
+        assert Identifier.OCLC_NUMBER == oclc_id_type
+        assert "11866009" == oclc_id
+        assert ["Galápagos : a novel"] == titles
+        assert 1 == len(descriptions)
 
         # Even though there are 11 links in the books "about" list,
         # "http://subject.example.wo/internal_lookup" does not get included as
         # a subject because it doesn't have an internal lookup.
-        eq_(1, len(subjects[Subject.DDC]))
-        eq_(1, len(subjects[Subject.FAST]))
-        eq_(4, len(subjects[Subject.TAG]))
-        eq_(1, len(subjects[Subject.PLACE]))
+        assert 1 == len(subjects[Subject.DDC])
+        assert 1 == len(subjects[Subject.FAST])
+        assert 4 == len(subjects[Subject.TAG])
+        assert 1 == len(subjects[Subject.PLACE])
         # Meanwhile, the made-up LCSH subject that also doesn't have an
         # internal lookup is included because its details can be parsed from
         # the url: "http://id.loc.gov/authorities/subjects/sh12345678"
-        eq_(3, len(subjects[Subject.LCSH]))
+        assert 3 == len(subjects[Subject.LCSH])
 
-        eq_(1, len(creator_uris))
-        eq_(["Delacorte Press/Seymour Lawrence"], publishers)
-        eq_(["1985"], publication_dates)
-        eq_(2, len(example_uris))
+        assert 1 == len(creator_uris)
+        assert ["Delacorte Press/Seymour Lawrence"] == publishers
+        assert ["1985"] == publication_dates
+        assert 2 == len(example_uris)
 
     def test_book_info_to_metadata(self):
         oclc = OCLCLinkedData(self._db)
@@ -129,22 +128,22 @@ class TestOCLCLinkedData(DatabaseTest):
         )
 
         # A metadata object is returned, with the proper OCLC identifier.
-        eq_(True, isinstance(metadata_obj, Metadata))
-        eq_(Identifier.OCLC_NUMBER, metadata_obj.primary_identifier.type)
-        eq_(u"11866009", metadata_obj.primary_identifier.identifier)
+        assert True == isinstance(metadata_obj, Metadata)
+        assert Identifier.OCLC_NUMBER == metadata_obj.primary_identifier.type
+        assert "11866009" == metadata_obj.primary_identifier.identifier
 
         # It has publication information & ISBNs
-        eq_(u"Galápagos : a novel", metadata_obj.title)
-        eq_(u'Delacorte Press/Seymour Lawrence', metadata_obj.publisher)
-        eq_(1985, metadata_obj.published.year)
-        eq_(1, len(metadata_obj.links))
+        assert "Galápagos : a novel" == metadata_obj.title
+        assert 'Delacorte Press/Seymour Lawrence' == metadata_obj.publisher
+        assert 1985 == metadata_obj.published.year
+        assert 1 == len(metadata_obj.links)
         assert "ghost of a shipbuilder" in metadata_obj.links[0].content
-        eq_(4, len(metadata_obj.identifiers))
+        assert 4 == len(metadata_obj.identifiers)
 
-        eq_(1, len(metadata_obj.contributors))
+        assert 1 == len(metadata_obj.contributors)
         [viaf] = [c.viaf for c in metadata_obj.contributors]
-        eq_(u"71398958", viaf)
-        eq_(10, len(metadata_obj.subjects))
+        assert "71398958" == viaf
+        assert 10 == len(metadata_obj.subjects)
 
         # Make sure a book with no English title doesn't break anything.
         subgraph[14]['name']['@language'] = 'fr'
@@ -155,13 +154,13 @@ class TestOCLCLinkedData(DatabaseTest):
         )
 
         # The metadata has no title.
-        eq_(None, metadata_obj.title)
+        assert None == metadata_obj.title
 
 
 class TestLinkedDataCoverageProvider(DatabaseTest):
 
-    def setup(self):
-        super(TestLinkedDataCoverageProvider, self).setup()
+    def setup_method(self):
+        super(TestLinkedDataCoverageProvider, self).setup_method()
         self.provider = LinkedDataCoverageProvider(self._default_collection)
 
     def test_new_isbns(self):
@@ -175,7 +174,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             ]
         )
 
-        eq_(2, self.provider.new_isbns(metadata))
+        assert 2 == self.provider.new_isbns(metadata)
 
     def test_set_equivalence(self):
         edition = self._edition()
@@ -207,15 +206,15 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
 
         # The identifier for the bad metadata isn't made equivalent
-        eq_([i1], [x.output for x in equivalencies])
-        eq_([1], [x.strength for x in equivalencies])
+        assert [i1] == [x.output for x in equivalencies]
+        assert [1] == [x.strength for x in equivalencies]
 
         # But if the existing identifier has no editions, they're made equivalent.
         identifier = self._identifier()
         self.provider.set_equivalence(identifier, bad_metadata)
         equivalencies = Equivalency.for_identifiers(self._db, [identifier]).all()
-        eq_([i2], [x.output for x in equivalencies])
-        eq_([1], [x.strength for x in equivalencies])
+        assert [i2] == [x.output for x in equivalencies]
+        assert [1] == [x.strength for x in equivalencies]
 
     def test_process_item_exception(self):
         class DoomedOCLCLinkedData(OCLCLinkedData):
@@ -280,7 +279,7 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             DataSource.OCLC_LINKED_DATA,
             contributors=[contributor1, contributor2, contributor3],
             primary_identifier=idata,
-            title=u"foo"
+            title="foo"
         )
         oclc.queue_info_for(metadata)
 
@@ -304,27 +303,27 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
             [(x.sort_name, x.display_name, x.viaf, x.wikipedia_name, x.biography)
              for x in edition.contributors]
         )
-        eq_(
-            [(u'Jordan, Robert', None, u'2', u'Robert_Jordan_(Author)', u'That guy.'),
-            (u'Name, Sort', u'Display Name', u'1', u'Wikipedia_Name', None),
-            (u'Rice, Anne', u'Anne Rice', None, None, None)],
+        assert (
+            [('Jordan, Robert', None, '2', 'Robert_Jordan_(Author)', 'That guy.'),
+            ('Name, Sort', 'Display Name', '1', 'Wikipedia_Name', None),
+            ('Rice, Anne', 'Anne Rice', None, None, None)] ==
             filled_in
         )
         # The author without VIAF data didn't request a VIAF lookup.
         # Instead, that result is still in the mock VIAF queue.
-        eq_(viaf.results, ["Unrequested lookup"])
+        assert viaf.results == ["Unrequested lookup"]
 
     def test_calculate_work_for_isbn(self):
         identifier = self._identifier()
 
         # With a non-ISBN identifier, nothing happens
         self.provider.calculate_work_for_isbn(identifier)
-        eq_(None, identifier.work)
+        assert None == identifier.work
 
         # With an ISBN identifier without a LicensePool, nothing happens.
         identifier.type = Identifier.ISBN
         self.provider.calculate_work_for_isbn(identifier)
-        eq_(None, identifier.work)
+        assert None == identifier.work
 
         # If there's a LicensePool and an edition, a work is created.
         edition, pool = self._edition(
@@ -335,8 +334,8 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
 
         work = identifier.work
         assert work
-        eq_(edition.title, work.title)
-        eq_(edition.author, work.author)
+        assert edition.title == work.title
+        assert edition.author == work.author
 
         # If there are two LicensePools, all of them get the same work.
         edition, pool = self._edition(
@@ -352,8 +351,8 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
 
         work = identifier.work
         assert work
-        eq_(work, pool.work)
-        eq_(work, other_pool.work)
+        assert work == pool.work
+        assert work == other_pool.work
 
     def test_generate_edition(self):
         # Create an ISBN with a LicensePool.
@@ -400,4 +399,4 @@ class TestLinkedDataCoverageProvider(DatabaseTest):
         self._db.commit()
 
         self.provider.generate_edition(identifier)
-        eq_(number_ed_info, presentation_edition_info())
+        assert number_ed_info == presentation_edition_info()

@@ -1,5 +1,4 @@
 import logging
-from nose.tools import set_trace
 
 from sqlalchemy.orm.session import Session
 
@@ -218,7 +217,7 @@ class IdentifierResolutionCoverageProvider(CatalogCoverageProvider):
             try:
                 provider = cls(**kwargs)
                 add_to.append(provider)
-            except CannotLoadConfiguration, e:
+            except CannotLoadConfiguration as e:
                 logging.error(
                     "Ignoring CoverageProvider which I could not instantiate: %r",
                     cls, exc_info=e,

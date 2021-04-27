@@ -1,13 +1,9 @@
 import sys, os
-from nose.tools import set_trace
 
 from core.testing import (
     DatabaseTest,
     DummyHTTPClient,
-    package_setup,
 )
-
-package_setup()
 
 def sample_data(filename, sample_data_dir):
     base_path = os.path.split(__file__)[0]

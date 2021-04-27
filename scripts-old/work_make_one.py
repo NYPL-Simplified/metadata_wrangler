@@ -3,7 +3,6 @@
 import os
 import site
 import sys
-from nose.tools import set_trace
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
 

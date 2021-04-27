@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 import calendar
 import os
 import site
@@ -7,6 +6,7 @@ import time
 import datetime
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
+from core.utils.datetime_helpers import from_timestamp
 from model import (
     production_session,
     DataSource,
@@ -22,7 +22,7 @@ def imp(db, data_source, identifier, cache, library):
     if not cache.exists(fn):
         return
     fn = cache._filename(fn)
-    modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
+    modified = from_timestamp(os.stat(fn).st_mtime)
     data = cache.open(fn).read()
     a = dict(collection_token=library['collectionToken'],
              item_id=i)
@@ -33,7 +33,7 @@ def imp(db, data_source, identifier, cache, library):
     representation.content = data
     representation.media_type = 'application/json'
     representation.fetched_at = modified
-    print identifier
+    print(identifier)
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]

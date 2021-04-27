@@ -23,17 +23,17 @@ from sqlalchemy.sql import text
 contributors = _db.query(Contributor).filter(
     text("contributors.display_name ~ '^Q[0-9]'")
 ).order_by(Contributor.id)
-print contributors.count()
+print(contributors.count())
 for contributor in contributors:
     if contributor.viaf:
         viaf, display_name, family_name, sort_name, wikipedia_name = viaf_client.lookup_by_viaf(contributor.viaf)
     else:
         viaf, display_name, family_name, sort_name, wikipedia_name = viaf_client.lookup_by_name(contributor.name)
-    print "%s: %s => %s, %s => %s" % (
+    print("%s: %s => %s, %s => %s" % (
         contributor.id, 
         contributor.display_name, display_name,
         contributor.wikipedia_name, wikipedia_name
-    )
+    ))
     contributor.display_name = display_name
     contributor.wikipedia_name = wikipedia_name
     contributor.family_name = family_name

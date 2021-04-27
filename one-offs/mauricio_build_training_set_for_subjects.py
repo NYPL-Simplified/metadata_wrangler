@@ -52,7 +52,7 @@ class SubjectFinder(object):
                 continue
             all_subjects = []
             for s in subjects:
-                r = u"|".join([s.type or "", s.identifier or "", s.name or ""])
+                r = "|".join([s.type or "", s.identifier or "", s.name or ""])
                 r = r.replace(";", ",")
                 all_subjects.append(r)
             for genre in work.genres:
@@ -63,9 +63,9 @@ class SubjectFinder(object):
                      (";".join(all_subjects)).encode("utf8")])
             c += 1
             if not c % 100:
-                print c
+                print(c)
 
-        print "{%s}" % (",".join(sorted(all_genres)))
+        print("{%s}" % (",".join(sorted(all_genres))))
 
 if __name__ == '__main__':
     db = production_session()

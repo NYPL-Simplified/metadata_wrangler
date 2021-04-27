@@ -1,11 +1,11 @@
-FROM phusion/baseimage
-MAINTAINER Library Simplified <info@librarysimplified.org>
+FROM phusion/baseimage:bionic-1.0.0
+LABEL maintainer="Library Simplified <info@librarysimplified.org>"
 
 ARG version
 ARG repo="NYPL-Simplified/metadata_wrangler"
 
 ENV SIMPLIFIED_DB_TASK "auto"
-
+# Set the local timezone in /docker/simplified_cron.sh
 ENV TZ=US/Eastern
 
 # Copy over all Library Simplified build files for this image

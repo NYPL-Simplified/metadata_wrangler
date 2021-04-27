@@ -1,5 +1,3 @@
-from nose.tools import set_trace
-
 class MockOCLCClassifyAPI(object):
     def __init__(self):
         self.results = []

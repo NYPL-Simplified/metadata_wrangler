@@ -6,11 +6,16 @@ set -x
 repo="$1"
 version="$2"
 
-apt-get update && $minimal_apt_get_install python-dev \
-  python2.7 \
+apt-get update && $minimal_apt_get_install \
+  software-properties-common \
+  python3.6 \
+  python3-dev \
+  python3-wheel \
+  python3-setuptools \
+  python3-venv \
+  python3-pip \
   python-cairo \
   python-nose \
-  python-pip \
   gcc \
   git \
   libpcre3 \
@@ -36,10 +41,7 @@ git submodule update --init --recursive
 # supplies an endpoint to check the app's current version.
 printf "$(git describe --tags)" > .version
 
-# Use the latest version of pip to install a virtual environment for the app.
-pip install -U --no-cache-dir pip setuptools
-pip install --no-cache-dir virtualenv virtualenvwrapper
-virtualenv -p /usr/bin/python2.7 env
+python3 -m venv env
 
 # Pass runtime environment variables to the app at runtime.
 touch environment.sh
@@ -49,10 +51,14 @@ echo "if [[ -f $SIMPLIFIED_ENVIRONMENT ]]; then \
 
 # Install required python libraries.
 set +x && source env/bin/activate && set -x
-pip install -r requirements.txt
+
+# Update pip and setuptools.
+python3 -m pip install -U pip setuptools
+# Install the necessary dev requirements.
+python3 -m pip install -r requirements-dev.txt
 
 # Install NLTK.
-python -m textblob.download_corpora
+python3 -m textblob.download_corpora
 mv /root/nltk_data /usr/lib/
 
 # Link the repository code to /home/simplified and change permissions

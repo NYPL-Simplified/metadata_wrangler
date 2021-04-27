@@ -1,8 +1,7 @@
-from nose.tools import set_trace
 import os
 import logging
 import sys
-import urlparse
+from urllib.parse import urlparse
 
 from flask import Flask
 from flask_babel import Babel
@@ -59,7 +58,7 @@ def initialize_metadata_wrangler():
     if getattr(app, 'wrangler', None) is None:
         try:
             app.wrangler = MetadataWrangler(app._db)
-        except Exception, e:
+        except Exception as e:
             logging.error(
                 "Error instantiating metadata wrangler!", exc_info=e
             )
@@ -80,8 +79,8 @@ def shutdown_session(exception):
 from routes import *
 
 def run(self, url=None, debug=False):
-    base_url = url or u'http://localhost:5500/'
-    scheme, netloc, path, parameters, query, fragment = urlparse.urlparse(base_url)
+    base_url = url or 'http://localhost:5500/'
+    scheme, netloc, path, parameters, query, fragment = urlparse(base_url)
     if ':' in netloc:
         host, port = netloc.split(':')
         port = int(port)

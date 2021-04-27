@@ -3,7 +3,6 @@ import datetime
 import os
 import requests
 import logging
-from nose.tools import set_trace
 from bs4 import BeautifulSoup
 from zeep import Client as SOAPClient
 
@@ -227,6 +226,7 @@ class ContentCafeAPI(object):
         Generally, this just means adding LinkData objects to .links,
         but in some cases we can also set the title.
 
+        :param phrase_indicating_missing_data: A bytestring.
         :param metadata: Anything found will be used to improve
            this Metadata object.
         """
@@ -411,7 +411,7 @@ class ContentCafeSOAPClient(object):
             return None
         if isinstance(cutoff, datetime.timedelta):
             cutoff = as_of - cutoff
-        for k, v in by_year_and_month.items():
+        for k, v in list(by_year_and_month.items()):
             lifetime.append(v)
             if not cutoff or k >= cutoff:
                 recent.append(v)

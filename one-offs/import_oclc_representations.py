@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 import calendar
 import os
 import json
@@ -8,6 +7,7 @@ import time
 import datetime
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
+from core.utils.datetime_helpers import from_timestamp
 from model import (
     production_session,
     DataSource,
@@ -44,14 +44,14 @@ def imp(db, data_source, identifier, cache):
         url=url, data_source=data_source, identifier=identifier,
         )
     if not new:
-        print "Already did", identifier
+        print("Already did", identifier)
         return False
 
     if not cache.exists(i):
         # print "Not cached", identifier
         return False
     fn = cache._filename(i)
-    modified = datetime.datetime.fromtimestamp(os.stat(fn).st_mtime)
+    modified = from_timestamp(os.stat(fn).st_mtime)
     data = open(fn).read()
 
     if type == Identifier.ISBN:
@@ -91,6 +91,6 @@ if __name__ == '__main__':
                 processed += 1
         if processed > 0:
             a = "%d sec, %d cached/%d, final" % (time.time()-first_time, processed, batch_size)
-            print a, identifier
+            print(a, identifier)
             db.commit()
         cursor = max_batch

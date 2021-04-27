@@ -1,4 +1,3 @@
-from nose.tools import set_trace
 import calendar
 import os
 import site
@@ -7,6 +6,7 @@ import time
 import datetime
 d = os.path.split(__file__)[0]
 site.addsitedir(os.path.join(d, ".."))
+from core.utils.datetime_helpers import from_timestamp
 from model import (
     production_session,
     DataSource,
@@ -18,7 +18,7 @@ from integration.threem import ThreeMAPI
 from integration import FilesystemCache
 
 def imp(db, data_source, path, url):
-    modified = datetime.datetime.fromtimestamp(os.stat(path).st_mtime)
+    modified = from_timestamp(os.stat(path).st_mtime)
     data = open(path).read()
     representation, ignore = get_one_or_create(db, Representation,
         url=url, data_source=data_source)
@@ -26,7 +26,7 @@ def imp(db, data_source, path, url):
     representation.content = data
     representation.media_type = 'application/xml'
     representation.fetched_at = modified
-    print url
+    print(url)
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]

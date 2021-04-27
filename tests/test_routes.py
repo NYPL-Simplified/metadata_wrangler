@@ -1,10 +1,6 @@
 import contextlib
 import logging
-from nose.tools import (
-    assert_raises,
-    eq_,
-    set_trace,
-)
+import pytest
 import flask
 from flask import Response
 from werkzeug.exceptions import MethodNotAllowed
@@ -17,7 +13,7 @@ from controller import MetadataWrangler
 from problem_details import INVALID_CREDENTIALS
 import routes
 
-from test_controller import ControllerTest
+from .test_controller import ControllerTest
 
 class MockMetadataWrangler(object):
     """Pretends to be a MetadataWrangler with configured controllers."""
@@ -110,8 +106,8 @@ class RouteTest(ControllerTest):
     routes we've registered with Flask.
     """
 
-    def setup(self):
-        super(RouteTest, self).setup()
+    def setup_method(self):
+        super(RouteTest, self).setup_method()
 
         # Create a MockMetadataWrangler -- this is the one we'll be
         # using in the tests.
@@ -145,8 +141,8 @@ class RouteTest(ControllerTest):
         if not self.real_controller:
             raise Exception("No such controller: %s" % controller_name)
 
-    def teardown(self):
-        super(RouteTest, self).teardown()
+    def teardown_method(self):
+        super(RouteTest, self).teardown_method()
         # Restore app.wrangler to its original state (possibly not yet
         # initialized)
         if self.old_wrangler:
@@ -176,9 +172,9 @@ class RouteTest(ControllerTest):
         """
         http_method = kwargs.pop('http_method', 'GET')
         response = self.request(url, http_method)
-        eq_(response.method, method)
-        eq_(response.method.args, args)
-        eq_(response.method.kwargs, kwargs)
+        assert response.method == method
+        assert response.method.args == args
+        assert response.method.kwargs == kwargs
 
         # Make sure the real controller has a method by the name of
         # the mock method that was called. We won't call it, because
@@ -199,7 +195,7 @@ class RouteTest(ControllerTest):
         """
         http_method = kwargs.get('http_method', 'GET')
         body, status_code, headers = self.request(url, http_method)
-        eq_(401, status_code)
+        assert 401 == status_code
 
         # Set a variable so that our mocked
         # authenticated_client_from_request will succeed, and try
@@ -228,7 +224,7 @@ class RouteTest(ControllerTest):
             check.add('HEAD')
         for method in check:
             logging.debug("MethodNotAllowed should be raised on %s", method)
-            assert_raises(MethodNotAllowed, self.request, url, method)
+            pytest.raises(MethodNotAllowed, self.request, url, method)
             logging.debug("And it was.")
 
 
