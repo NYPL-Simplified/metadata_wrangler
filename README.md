@@ -32,6 +32,33 @@ grant all privileges on database simplified_metadata_dev to simplified;
 grant all privileges on database simplified_metadata_test to simplified_test;
 ```
 
+### Python setup
+
+This project uses python 3 for development. Right now, Docker can't be used for local development. Instead, you will need to set up a local virtual environment to install packages and run the project. Start by creating the virutal environment:
+
+```sh
+$ python3 -m venv env
+```
+
+Then include the database URLS as environment variables at the end in `/env/bin/activate`:
+
+```
+export SIMPLIFIED_PRODUCTION_DATABASE="postgres://simplified:[password]@localhost:5432/simplified_metadata_dev"
+export SIMPLIFIED_TEST_DATABASE="postgres://simplified_test:[password]@localhost:5432/simplified_metadata_test"
+```
+
+Activate the virtual environment:
+
+```sh
+$ source env/bin/activate
+```
+
+and install the dependencies:
+
+```sh
+$ pip install -r requirements-dev.txt
+```
+
 ### Data Directory
 
 Clone the Library Simplified data directory to a location of your choice:
@@ -41,19 +68,31 @@ $ git clone https://github.com/NYPL-Simplified/data.git YOUR_DATA_DIRECTORY
 
 In your content server configuration file, your specified "data_directory" should be YOUR_DATA_DIRECTORY.
 
+## Git Branch Workflow
+
+| Branch   | Python Version |
+| -------- | -------------- |
+| develop  | Python 3       | 
+| main     | Python 3       |
+| python2  | Python 2       |
+
+The default branch is `develop` and that's the working branch that should be used when branching off for bug fixes or new features. Once a feature branch pull request is merged into `develop`, the changes can be merged to `main` to create releases.
+
+Python 2 stopped being supported after January 1st, 2020 but there is still a `python2` branch which can be used. As of May 2021, development will be done in the `develop` and `main` branches.
+
 ## Testing
 
 The Github Actions CI service runs the pytest unit tests against Python 3.6, 3.7, 3.8 and 3.9 automatically using [tox](https://tox.readthedocs.io/en/latest/).
 
 To run `pytest` unit tests locally, install `tox`. Make sure you're in the current virtual environment. 
 
-```
+```sh
 $ pip install tox
 ```
 
 Then run `tox` to run the pytests in all Python versions. 
 
-```
+```sh
 $ tox
 ```
 
@@ -74,7 +113,7 @@ All of these environments are tested by default when running tox. To test one sp
 
 To run pytest only with Python 3.8, for example, run:
 
-```
+```sh
 tox -e py38
 ```
 
@@ -182,6 +221,10 @@ $ docker exec -it 56dcb9e3da3b bash
 ```
 
 This will give you bash access to the container to find logs, located at the given directory for each container's `volumes` directory configuration in `docker-compose.yml`. To exit, run `exit`.
+
+## Continuous Integration
+
+This project runs all the unit tests through Github Actions for new pull requests and when merging into the default `develop` branch. The relevant file can be found in `.github/workflows/test.yml`. When contributing updates or fixes, it's required for the test Github Action to pass for all python 3 environments. Run the `tox` command locally before pushing changes to make sure you find any failing tests before committing them.
 
 ## License
 
