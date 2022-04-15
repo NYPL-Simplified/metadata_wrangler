@@ -1,5 +1,7 @@
-# Library Simplified Metadata Wrangler
+# Library Simplified Metadata Wrangler - DEPRECATED
 ![Build Status](https://github.com/nypl-simplified/metadata_wrangler/actions/workflows/test.yml/badge.svg?branch=develop)
+
+This module has been deprecated.
 
 Default Branch: `develop`
 
